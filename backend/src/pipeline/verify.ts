@@ -118,6 +118,64 @@ export const isPlausibleEventDate = (raw: string, publishedAt: Date | null): Dat
   return date;
 };
 
+/**
+ * Город принимается, только если он упомянут в тексте.
+ *
+ * Без этой проверки модель дописывает город «по смыслу»: пост про московский
+ * ЗИЛ получал город Алматы просто потому, что портал про Казахстан. Цена
+ * ошибки выше, чем кажется: город — сильный сигнал при сопоставлении объектов
+ * (несовпадение запрещает автослияние, совпадение добавляет очки), поэтому
+ * выдуманный город тихо разваливает резолвинг.
+ *
+ * Сравниваем по основе слова: в тексте город стоит в падеже («в Астане»),
+ * а модель отдаёт именительный. Отбрасывание двух последних букв покрывает
+ * русские склонения и не трогает несклоняемые названия вроде «Алматы».
+ */
+export const isCityMentionedInBody = (city: string, body: string): boolean => {
+  const normalized = normalizeName(city).norm;
+  if (normalized.length < 3) return false;
+
+  const haystack = normalizeName(body).norm;
+
+  return normalized
+    .split(' ')
+    .filter(token => token.length >= 4)
+    .some(token => haystack.includes(stem(token)));
+};
+
+/**
+ * Основа слова для поиска по тексту.
+ *
+ * В тексте слово стоит в падеже, а модель отдаёт начальную форму: «в Астане»
+ * против «Астана», «на Автозаводской» против «Автозаводская». Точное вхождение
+ * такие пары не находит.
+ *
+ * Отсекаем окончание по длине: у прилагательных оно длиннее (-ая, -ой, -ые),
+ * у существительных короче. Полноценная лемматизация потребовала бы словаря
+ * русской морфологии — для проверки «есть ли это слово в тексте вообще» это
+ * несоразмерно, а ошибка в обе стороны здесь дёшева.
+ */
+const stem = (token: string): string => {
+  if (token.length >= 9) return token.slice(0, -3);
+  if (token.length >= 5) return token.slice(0, -2);
+  return token;
+};
+
+/**
+ * Адрес принимается, если большая часть его значимых слов есть в тексте.
+ * Целиком совпадать он не обязан: модель нормализует «ул.» и порядок частей.
+ */
+export const isAddressGroundedInBody = (address: string, body: string): boolean => {
+  const haystack = normalizeName(body).norm;
+  const tokens = normalizeName(address)
+    .norm.split(' ')
+    .filter(token => token.length >= 3);
+
+  if (tokens.length === 0) return false;
+  const found = tokens.filter(token => haystack.includes(stem(token))).length;
+  return found / tokens.length >= 0.6;
+};
+
 /** Сумма принимается, только если такое число встречается в тексте. */
 export const isAmountInBody = (amount: number, body: string): boolean => {
   const digits = String(Math.round(amount));
@@ -134,7 +192,10 @@ export interface IVerifiedCompany extends ICompanyExtract {
   binAccepted: string | null;
 }
 
-export interface IVerifiedProject extends IProjectExtract {
+export interface IVerifiedProject extends Omit<IProjectExtract, 'city' | 'address'> {
+  /** null, если города нет в тексте: домысел модели в канон не пускаем. */
+  city: string | null;
+  address: string | null;
   quoteVerified: boolean;
   confidenceFinal: number;
 }
@@ -208,8 +269,26 @@ export const verifyExtraction = (
       rejected.push({ kind: 'project', name: project.name, reason: 'имя отсутствует в цитате' });
       continue;
     }
+    const cityAccepted =
+      project.city && isCityMentionedInBody(project.city, body) ? project.city : null;
+    if (project.city && cityAccepted === null) {
+      rejected.push({
+        kind: 'city',
+        name: project.name,
+        reason: `город «${project.city}» отсутствует в тексте`,
+      });
+    }
+
+    const addressAccepted =
+      project.address && isAddressGroundedInBody(project.address, body) ? project.address : null;
+    if (project.address && addressAccepted === null) {
+      rejected.push({ kind: 'address', name: project.name, reason: 'адрес отсутствует в тексте' });
+    }
+
     projects.push({
       ...project,
+      city: cityAccepted,
+      address: addressAccepted,
       quoteVerified,
       confidenceFinal: project.confidence * (quoteVerified ? 1 : UNVERIFIED_QUOTE_FACTOR),
     });

@@ -7,6 +7,8 @@ import {
   isBinPresentInBody,
   isPlausibleEventDate,
   isAmountInBody,
+  isCityMentionedInBody,
+  isAddressGroundedInBody,
 } from './verify.js';
 import { emptyExtraction, type IExtraction } from '../llm/schema.js';
 
@@ -104,6 +106,43 @@ describe('isAmountInBody', () => {
 
   it('отклоняет выдуманную сумму', () => {
     expect(isAmountInBody(777_777, BODY)).toBe(false);
+  });
+});
+
+describe('isCityMentionedInBody', () => {
+  it('принимает город из текста', () => {
+    expect(isCityMentionedInBody('Астана', BODY)).toBe(true);
+  });
+
+  it('принимает город в падеже: в тексте «в Астане», модель отдаёт «Астана»', () => {
+    expect(isCityMentionedInBody('Астана', 'Объект сдан в Астане в прошлом месяце')).toBe(true);
+  });
+
+  it('принимает несклоняемый Алматы', () => {
+    expect(isCityMentionedInBody('Алматы', 'Строительство в Алматы продолжается')).toBe(true);
+  });
+
+  it('отклоняет город, дописанный по смыслу', () => {
+    // Реальный случай: пост про московский ЗИЛ получил город Алматы просто
+    // потому, что портал про Казахстан.
+    const moscow = 'Реконструкция на Автозаводской улице, дом 25, продолжается.';
+    expect(isCityMentionedInBody('Алматы', moscow)).toBe(false);
+  });
+
+  it('не путает разные города с общим началом', () => {
+    expect(isCityMentionedInBody('Астана', 'Работы ведутся в Атырау')).toBe(false);
+  });
+});
+
+describe('isAddressGroundedInBody', () => {
+  it('принимает адрес, слова которого есть в тексте', () => {
+    const body = 'Реконструкция на Автозаводской улице, дом 25, продолжается.';
+    expect(isAddressGroundedInBody('Автозаводская улица, 25', body)).toBe(true);
+  });
+
+  it('отклоняет выдуманный адрес', () => {
+    const body = 'Реконструкция на Автозаводской улице, дом 25, продолжается.';
+    expect(isAddressGroundedInBody('проспект Мангилик Ел, 55', body)).toBe(false);
   });
 });
 
@@ -224,6 +263,30 @@ describe('verifyExtraction', () => {
       PUBLISHED,
     );
     expect(result.events).toHaveLength(0);
+  });
+
+  it('обнуляет город, которого нет в тексте, но объект сохраняет', () => {
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        projects: [project({ city: 'Караганда' })],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.projects).toHaveLength(1);
+    expect(result.projects[0]!.city).toBeNull();
+    expect(result.rejected.some(r => r.kind === 'city')).toBe(true);
+  });
+
+  it('город из текста сохраняется', () => {
+    const result = verifyExtraction(
+      { ...emptyExtraction(), doc_relevant: true, projects: [project({ city: 'Астана' })] },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.projects[0]!.city).toBe('Астана');
   });
 
   it('нерелевантный документ даёт пустой результат', () => {

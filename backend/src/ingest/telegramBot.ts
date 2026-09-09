@@ -88,6 +88,83 @@ const parseAllowedUserIds = (): Set<number> => {
   );
 };
 
+export interface IBotCheck {
+  ok: boolean;
+  /** @username бота — по нему его находят в поиске Telegram. */
+  username: string | null;
+  /** Сколько отправителей в белом списке. Ноль означает «не принимать никого». */
+  allowedCount: number;
+  pendingUpdates: number | null;
+  problems: string[];
+}
+
+/**
+ * Проверка бота без единого секрета в выводе.
+ *
+ * Токен не печатается ни при каких обстоятельствах: ни целиком, ни частями,
+ * ни в тексте ошибки — description от Telegram его не содержит.
+ */
+export const checkBot = async (): Promise<IBotCheck> => {
+  const problems: string[] = [];
+  const allowed = parseAllowedUserIds();
+
+  if (env.TG_BOT_TOKEN === '') {
+    return {
+      ok: false,
+      username: null,
+      allowedCount: 0,
+      pendingUpdates: null,
+      problems: ['TG_BOT_TOKEN не задан в backend/.env'],
+    };
+  }
+
+  if (allowed.size === 0) {
+    problems.push(
+      'TG_BOT_ALLOWED_USER_IDS пуст — бот отклонит ЛЮБОЕ сообщение, включая ваше. ' +
+        'Узнайте свой user id у @userinfobot и впишите его в .env',
+    );
+  }
+
+  let username: string | null = null;
+  try {
+    const me = await callApi<{ username?: string }>('getMe', {});
+    username = me.username ?? null;
+  } catch (err) {
+    problems.push(
+      `Telegram не принял токен: ${err instanceof Error ? err.message : String(err)}. ` +
+        'Проверьте TG_BOT_TOKEN — возможно, при копировании потерялся символ.',
+    );
+    return { ok: false, username: null, allowedCount: allowed.size, pendingUpdates: null, problems };
+  }
+
+  // Сколько сообщений ждёт разбора. Если вы уже писали боту, а бэкенд не был
+  // запущен, они здесь и лежат — увидите ненулевое число.
+  let pendingUpdates: number | null = null;
+  try {
+    const info = await callApi<{ pending_update_count?: number; url?: string }>(
+      'getWebhookInfo',
+      {},
+    );
+    pendingUpdates = info.pending_update_count ?? 0;
+    if (info.url) {
+      problems.push(
+        `У бота настроен webhook (${info.url}). Мы читаем через getUpdates — ` +
+          'пока webhook стоит, сообщения до нас не дойдут. Снимите его: deleteWebhook.',
+      );
+    }
+  } catch {
+    // Некритично: основную проверку getMe мы уже прошли.
+  }
+
+  return {
+    ok: problems.length === 0,
+    username,
+    allowedCount: allowed.size,
+    pendingUpdates,
+    problems,
+  };
+};
+
 const extractBody = (message: ITelegramMessage): string =>
   (message.text ?? message.caption ?? '').trim();
 
