@@ -5,6 +5,7 @@
 //   npm run ingest:once -- --source kzbuild    прогнать один канал
 //   npm run ingest:once                        прогнать все просроченные источники
 //   npm run ingest:once -- --stats             сводка по сырому слою
+//   npm run ingest:once -- --env-check         какие ключи видит программа в .env
 //   npm run ingest:once -- --bot-check         проверить форвард-бота
 //   npm run ingest:once -- --bot-once          разобрать накопленные форварды и выйти
 //
@@ -18,6 +19,7 @@ import { runIngestPass, ingestTelegramSource } from './scheduler.js';
 import { addTelegramSource, getSourceByKey } from './sources.js';
 import { getIngestSummary, getDuplicateRate } from './store.js';
 import { checkBot, pollBotUpdates } from './telegramBot.js';
+import { checkEnvFile, printEnvCheck } from '../config/env-check.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -81,6 +83,13 @@ const main = async (): Promise<void> => {
   if (addChannel) {
     const source = await addTelegramSource(addChannel);
     console.log(`[ingest] добавлен канал ${source.key} (id ${source.id}), статус ${source.status}`);
+    return;
+  }
+
+  if (process.argv.includes('--env-check')) {
+    const check = checkEnvFile();
+    printEnvCheck(check);
+    if (check.problems.length > 0) process.exitCode = 1;
     return;
   }
 
