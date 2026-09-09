@@ -275,12 +275,21 @@ const advanceProjectStage = async (
   const allowRegression = stage === 'suspended' || stage === 'cancelled';
   await client.query(
     `UPDATE projects SET stage = $2, updated_at = now()
-     WHERE id = $1 AND ($3 OR coalesce(
-       CASE stage
-         WHEN 'unknown' THEN 0 WHEN 'announced' THEN 1 WHEN 'design' THEN 2
-         WHEN 'construction' THEN 3 WHEN 'suspended' THEN 3
-         WHEN 'commissioned' THEN 4 WHEN 'cancelled' THEN 4
-       END, 0) < $4`,
+     WHERE id = $1
+       AND (
+         $3::boolean
+         OR coalesce(
+              CASE stage
+                WHEN 'unknown'      THEN 0
+                WHEN 'announced'    THEN 1
+                WHEN 'design'       THEN 2
+                WHEN 'construction' THEN 3
+                WHEN 'suspended'    THEN 3
+                WHEN 'commissioned' THEN 4
+                WHEN 'cancelled'    THEN 4
+              END, 0
+            ) < $4::int
+       )`,
     [projectId, stage, allowRegression, rank],
   );
 };
