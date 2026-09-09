@@ -157,6 +157,7 @@ cd frontend && npm run icons:generate   # иконки PWA из одного SVG
  бот/форма   хэшу            цитат
 ```
 
+Как пользоваться порталом — [docs/USAGE.md](docs/USAGE.md).
 Подробности архитектуры и принятых решений — в [CLAUDE.md](CLAUDE.md),
 промпты — в [docs/PROMPTS.md](docs/PROMPTS.md).
 
