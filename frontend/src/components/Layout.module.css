@@ -1,0 +1,114 @@
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
+}
+
+.headerInner {
+  height: var(--header-h);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  align-items: center;
+}
+
+.navLink {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.92rem;
+  /* Только цвет и фон: анимировать размеры — лейаут-трешинг на смартфонах. */
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.navLink:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.navLinkActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.themeButton {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.themeButton:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 16px calc(32px + env(safe-area-inset-bottom));
+}
+
+/* Ниже 560 px подписи в навигации не помещаются рядом с логотипом. */
+@media (max-width: 559px) {
+  .headerInner {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .navLink {
+    padding: 7px 9px;
+    font-size: 0.85rem;
+  }
+
+  .main {
+    padding: 16px 12px calc(28px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 380px) {
+  .brand {
+    font-size: 0.95rem;
+  }
+}

@@ -1,0 +1,167 @@
+/* Дизайн-токены. Хардкод цветов в компонентах запрещён — только эти переменные. */
+
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #dfe3e8;
+  --border-strong: #c4cad2;
+
+  --text: #16181d;
+  --muted: #646c7a;
+  --faint: #8b93a1;
+
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+  --accent-soft: #e8f0fe;
+
+  /* Светофор риска. Серый — «мало данных», не «всё хорошо»: это разные вещи,
+     и цвет обязан их различать. */
+  --risk-grey: #8b93a1;
+  --risk-green: #1a8a4a;
+  --risk-yellow: #b7791f;
+  --risk-red: #c02a2a;
+
+  --risk-grey-bg: #eef0f3;
+  --risk-green-bg: #e6f4ec;
+  --risk-yellow-bg: #fdf3e2;
+  --risk-red-bg: #fbeaea;
+
+  --danger: #c02a2a;
+  --positive: #1a8a4a;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --header-h: 56px;
+}
+
+:root[data-theme='dark'] {
+  --bg: #12141a;
+  --surface: #1a1d25;
+  --surface-2: #22262f;
+  --border: #2c313b;
+  --border-strong: #3d434f;
+
+  --text: #e8eaee;
+  --muted: #9aa2b1;
+  --faint: #6f7787;
+
+  --accent: #5b8def;
+  --accent-contrast: #0d1117;
+  --accent-soft: #1c2a45;
+
+  --risk-grey: #7d8493;
+  --risk-green: #45b877;
+  --risk-yellow: #d9a441;
+  --risk-red: #e2635f;
+
+  --risk-grey-bg: #23272f;
+  --risk-green-bg: #16301f;
+  --risk-yellow-bg: #332918;
+  --risk-red-bg: #35201f;
+
+  --danger: #e2635f;
+  --positive: #45b877;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 1px 3px rgb(0 0 0 / 40%);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* dvh, не vh: адресная строка мобильного Chrome съедает vh и обрезает низ. */
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  /* 16px минимум: иначе Safari и Chrome на Android зумят форму при фокусе. */
+  font-size: max(16px, 1em);
+  touch-action: manipulation;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+h2 {
+  font-size: 1.15rem;
+}
+h3 {
+  font-size: 1rem;
+}
+
+/* Широкое содержимое (таблицы, длинные названия) скроллится внутри своего
+   контейнера — страница по горизонтали не едет никогда. */
+.scroll-x {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

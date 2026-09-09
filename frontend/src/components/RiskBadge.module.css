@@ -1,0 +1,40 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.grey {
+  color: var(--risk-grey);
+  background: var(--risk-grey-bg);
+}
+.green {
+  color: var(--risk-green);
+  background: var(--risk-green-bg);
+}
+.yellow {
+  color: var(--risk-yellow);
+  background: var(--risk-yellow-bg);
+}
+.red {
+  color: var(--risk-red);
+  background: var(--risk-red-bg);
+}
+
+.large {
+  font-size: 1rem;
+  padding: 7px 14px;
+}

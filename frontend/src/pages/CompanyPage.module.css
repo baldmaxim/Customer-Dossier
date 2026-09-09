@@ -1,0 +1,245 @@
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.titleBlock {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.verdict {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--risk-grey);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.verdictGreen {
+  border-left-color: var(--risk-green);
+}
+.verdictYellow {
+  border-left-color: var(--risk-yellow);
+}
+.verdictRed {
+  border-left-color: var(--risk-red);
+}
+
+.verdictText {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.statValueBad {
+  color: var(--danger);
+}
+
+.statLabel {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.section {
+  margin-bottom: 28px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.projectHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.projectName {
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.tagRole {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.counterparties {
+  margin-top: 8px;
+  font-size: 0.87rem;
+  color: var(--muted);
+}
+
+.mention {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.mentionNegative {
+  border-left: 3px solid var(--risk-red);
+}
+.mentionPositive {
+  border-left: 3px solid var(--risk-green);
+}
+
+.quote {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.mentionMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+/* Неподтверждённая цитата помечается явно: это не придирка, а сигнал, что
+   модель могла пересказать, а не процитировать. */
+.unverified {
+  color: var(--risk-yellow);
+}
+
+.eventRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.eventRow:last-child {
+  border-bottom: none;
+}
+
+.eventType {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.eventSevere {
+  color: var(--danger);
+}
+
+.moreButton {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 500;
+  min-height: 44px;
+}
+
+.moreButton:hover {
+  background: var(--surface-2);
+}
+
+.empty {
+  color: var(--muted);
+  padding: 16px 0;
+}
+
+.similar {
+  background: var(--risk-yellow-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filterButton {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-height: 32px;
+}
+
+.filterButtonActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 559px) {
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+  }
+
+  .statValue {
+    font-size: 1.3rem;
+  }
+}
