@@ -5,6 +5,9 @@ import helmet from 'helmet';
 
 import { env } from './config/env.js';
 import { checkDbConnection } from './db/pool.js';
+import { adminRouter } from './api/admin.routes.js';
+import { companiesRouter } from './api/companies.routes.js';
+import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
 
 export const createApp = (): express.Express => {
@@ -35,6 +38,9 @@ export const createApp = (): express.Express => {
   });
 
   app.use('/api/manual', manualRouter);
+  app.use('/api/companies', companiesRouter);
+  app.use('/api/contractors', contractorsRouter);
+  app.use('/api/admin', adminRouter);
 
   // Обработчик ошибок обязан иметь четыре аргумента — иначе Express считает его
   // обычным middleware и ошибки проходят мимо.

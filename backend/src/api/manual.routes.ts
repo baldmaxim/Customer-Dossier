@@ -1,7 +1,7 @@
 // Ручная вставка текста: третий канал ингеста рядом со скрейпером и форвард-ботом.
 // Нужен для закрытых каналов, PDF-выжимок и просто «увидел на сайте, скопировал».
 
-import { Router } from 'express';
+import { asyncRouter } from '../utils/asyncRouter.js';
 import { z } from 'zod';
 
 import { withTransaction } from '../db/pool.js';
@@ -18,7 +18,7 @@ const manualDocumentSchema = z.object({
   origin: z.string().max(200).nullish(),
 });
 
-export const manualRouter = Router();
+export const manualRouter = asyncRouter();
 
 manualRouter.post('/', async (req, res) => {
   const parsed = manualDocumentSchema.safeParse(req.body);
