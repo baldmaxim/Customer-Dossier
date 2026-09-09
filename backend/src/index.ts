@@ -5,9 +5,14 @@ import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
 import { runBotLoop } from './ingest/telegramBot.js';
+import { startMetricsScheduler } from './metrics/refresh.js';
+import { runPipelinePass } from './pipeline/worker.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
+
+/** Как часто воркер заглядывает в очередь извлечения. */
+const PIPELINE_TICK_MS = 30_000;
 
 const startIngestScheduler = (signal: AbortSignal): void => {
   let running = false;
@@ -36,6 +41,34 @@ const startIngestScheduler = (signal: AbortSignal): void => {
   void tick();
 };
 
+const startPipelineWorker = (signal: AbortSignal): void => {
+  let running = false;
+
+  const tick = async (): Promise<void> => {
+    // Пачка обрабатывается дольше тика: LM Studio на 8 ГБ отдаёт документ за
+    // единицы секунд, и пачка из восьми легко перекрывает 30 с. Наложение
+    // проходов дало бы двойную нагрузку на GPU.
+    if (running || signal.aborted) return;
+    running = true;
+    try {
+      const results = await runPipelinePass();
+      if (results.length > 0) {
+        const extracted = results.filter(r => r.status === 'extracted').length;
+        const failed = results.filter(r => r.status === 'failed').length;
+        console.log(`[pipeline] обработано ${results.length}: успешно ${extracted}, ошибок ${failed}`);
+      }
+    } catch (err) {
+      console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      running = false;
+    }
+  };
+
+  const timer = setInterval(() => void tick(), PIPELINE_TICK_MS);
+  signal.addEventListener('abort', () => clearInterval(timer));
+  void tick();
+};
+
 const main = async (): Promise<void> => {
   if (!(await checkDbConnection())) {
     throw new Error('Нет соединения с БД — проверьте DATABASE_URL и что сервер PostgreSQL запущен');
@@ -48,6 +81,8 @@ const main = async (): Promise<void> => {
   });
 
   startIngestScheduler(controller.signal);
+  startPipelineWorker(controller.signal);
+  startMetricsScheduler(controller.signal);
 
   if (env.TG_BOT_TOKEN !== '') {
     void runBotLoop(controller.signal);
