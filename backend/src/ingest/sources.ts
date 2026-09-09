@@ -145,3 +145,81 @@ export const addTelegramSource = async (channel: string, title?: string): Promis
   if (!row) throw new Error(`Не удалось добавить канал ${key}`);
   return row;
 };
+
+export interface IDeleteSourceResult {
+  deleted: boolean;
+  documentCount: number;
+  /** Почему не удалили, если не удалили. */
+  reason: string | null;
+}
+
+/**
+ * Удаление источника.
+ *
+ * По умолчанию отказываем, если по источнику есть документы. Причина не в
+ * технике (внешний ключ и так не даст), а в сути портала: каждое утверждение
+ * в карточке прослеживается до источника. Удалить источник, оставив документы,
+ * значит разорвать эту цепочку — карточка продолжит показывать факты, про
+ * которые больше нельзя сказать, откуда они.
+ *
+ * Обычно нужен не delete, а статус paused: источник перестаёт опрашиваться,
+ * собранное остаётся.
+ *
+ * withDocuments — для честных ошибок: добавили не тот канал, он натаскал
+ * мусора. Тогда удаляем вместе с документами, а каскад уносит упоминания
+ * и события. Компании и объекты остаются: они могли упоминаться и в других
+ * источниках, а осиротевшие подчистит --recheck.
+ */
+export const deleteSource = async (
+  id: number,
+  withDocuments = false,
+): Promise<IDeleteSourceResult> => {
+  const row = await queryOne<{ n: number }>(
+    'SELECT count(*)::int AS n FROM raw_documents WHERE source_id = $1',
+    [id],
+  );
+  const documentCount = row?.n ?? 0;
+
+  if (documentCount > 0 && !withDocuments) {
+    return {
+      deleted: false,
+      documentCount,
+      reason:
+        `по источнику собрано документов: ${documentCount}. Удаление разорвёт ` +
+        'прослеживаемость фактов в карточках. Поставьте источник на паузу либо ' +
+        'подтвердите удаление вместе с документами.',
+    };
+  }
+
+  if (withDocuments && documentCount > 0) {
+    // Каскад из схемы уносит mentions и events; document_sightings тоже.
+    await execute('DELETE FROM raw_documents WHERE source_id = $1', [id]);
+  }
+
+  const affected = await execute('DELETE FROM sources WHERE id = $1', [id]);
+  return {
+    deleted: affected > 0,
+    documentCount,
+    reason: affected > 0 ? null : 'источник не найден',
+  };
+};
+
+/** Добавление сайта. RSS предпочтительнее: стабильнее любых селекторов. */
+export const addWebsiteSource = async (
+  key: string,
+  title: string,
+  baseUrl: string,
+  config: Record<string, unknown> = {},
+): Promise<ISource> => {
+  const row = await queryOne<ISource>(
+    `INSERT INTO sources (kind, key, title, base_url, status, config)
+     VALUES ('website', $1, $2, $3, 'active', $4::jsonb)
+     ON CONFLICT (kind, key)
+     DO UPDATE SET title = EXCLUDED.title, base_url = EXCLUDED.base_url,
+                   config = EXCLUDED.config, status = 'active', updated_at = now()
+     RETURNING ${SELECT_COLUMNS}`,
+    [key, title, baseUrl, JSON.stringify(config)],
+  );
+  if (!row) throw new Error(`Не удалось добавить сайт ${key}`);
+  return row;
+};

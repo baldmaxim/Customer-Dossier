@@ -4,6 +4,10 @@
 //   npm run ingest:once -- --add kzbuild       добавить канал в источники
 //   npm run ingest:once -- --source kzbuild    прогнать один канал
 //   npm run ingest:once                        прогнать все просроченные источники
+//   npm run ingest:once -- --add-site <url>    добавить сайт (ищет RSS сам)
+//   npm run ingest:once -- --probe-site <url>  проверить сайт, ничего не сохраняя
+//   npm run ingest:once -- --remove <key>      удалить источник
+//   npm run ingest:once -- --remove <key> --with-documents
 //   npm run ingest:once -- --stats             сводка по сырому слою
 //   npm run ingest:once -- --env-check         какие ключи видит программа в .env
 //   npm run ingest:once -- --bot-check         проверить форвард-бота
@@ -16,10 +20,17 @@
 import { closeDb } from '../db/pool.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
 import { runIngestPass, ingestTelegramSource } from './scheduler.js';
-import { addTelegramSource, getSourceByKey } from './sources.js';
+import {
+  addTelegramSource,
+  addWebsiteSource,
+  deleteSource,
+  getSourceByKey,
+} from './sources.js';
 import { getIngestSummary, getDuplicateRate } from './store.js';
 import { checkBot, pollBotUpdates } from './telegramBot.js';
 import { checkEnvFile, printEnvCheck } from '../config/env-check.js';
+import { discoverFeedUrl, fetchSite, parseFeed } from './website.js';
+import { ingestWebsiteSource } from './scheduler.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -86,6 +97,83 @@ const main = async (): Promise<void> => {
     return;
   }
 
+  const siteUrl = argValue('--add-site');
+  if (siteUrl) {
+    const url = new URL(siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`);
+    const key = url.hostname.replace(/^www\./, '');
+    console.log(`[site] ищу RSS-ленту на ${url.origin}…`);
+    const feed = await discoverFeedUrl(url.origin);
+    if (!feed) {
+      console.error('[site] лента не найдена. Найдите её адрес вручную и добавьте так:');
+      console.error(`  npm run ingest:once -- --add-site ${key} --rss https://.../feed`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`[site] лента: ${feed}`);
+    const source = await addWebsiteSource(key, argValue('--title') ?? key, url.origin, {
+      rss: argValue('--rss') ?? feed,
+    });
+    console.log(`[site] добавлен ${source.key} (id ${source.id}), статус ${source.status}`);
+    return;
+  }
+
+  const probeSite = argValue('--probe-site');
+  if (probeSite) {
+    const url = new URL(probeSite.startsWith('http') ? probeSite : `https://${probeSite}`);
+    const rss = argValue('--rss');
+    const feed = rss ?? (await discoverFeedUrl(url.origin));
+    if (!feed) {
+      console.error('[probe-site] RSS-лента не найдена. Укажите её через --rss.');
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`[probe-site] лента: ${feed}`);
+    const result = await fetchSite(url.origin, { rss: feed }, new Set(), 2);
+    console.log(`[probe-site] записей в ленте: ${result.layoutStats.parsed ?? 0}`);
+    console.log(`[probe-site] дозагружено полных текстов: ${result.layoutStats.enriched ?? 0}`);
+    const first = result.articles[0];
+    if (first) {
+      console.log('\n[probe-site] свежая статья:');
+      console.log(`  ${first.title}`);
+      console.log(`  ${first.url}`);
+      console.log(`  дата:  ${first.publishedAt?.toISOString() ?? 'не разобрана'}`);
+      console.log(`  текст: ${first.body.slice(0, 400)}${first.body.length > 400 ? '…' : ''}`);
+      if (first.body.length < 200) {
+        console.warn('\n[probe-site] текст короткий — вероятно, только анонс.');
+        console.warn('[probe-site] Задайте articleSelector в настройках источника.');
+      }
+    } else {
+      console.warn('[probe-site] лента пуста или все записи уже известны.');
+    }
+    return;
+  }
+
+  const removeKey = argValue('--remove');
+  if (removeKey) {
+    const withDocuments = process.argv.includes('--with-documents');
+    const source =
+      (await getSourceByKey('telegram', removeKey)) ?? (await getSourceByKey('website', removeKey));
+    if (!source) {
+      console.error(`[ingest] источник «${removeKey}» не найден`);
+      process.exitCode = 1;
+      return;
+    }
+    const result = await deleteSource(source.id, withDocuments);
+    if (result.deleted) {
+      console.log(
+        `[ingest] удалён ${source.kind}:${source.key}` +
+          (withDocuments && result.documentCount > 0
+            ? ` вместе с ${result.documentCount} документами`
+            : ''),
+      );
+    } else {
+      console.error(`[ingest] не удалён: ${result.reason}`);
+      console.error(`[ingest] удалить вместе с документами: --remove ${removeKey} --with-documents`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (process.argv.includes('--env-check')) {
     const check = checkEnvFile();
     printEnvCheck(check);
@@ -131,13 +219,18 @@ const main = async (): Promise<void> => {
 
   const sourceKey = argValue('--source');
   if (sourceKey) {
-    const source = await getSourceByKey('telegram', sourceKey);
+    const source =
+      (await getSourceByKey('telegram', sourceKey)) ?? (await getSourceByKey('website', sourceKey));
     if (!source) {
-      console.error(`[ingest] источник telegram:${sourceKey} не найден. Добавьте: --add ${sourceKey}`);
+      console.error(`[ingest] источник «${sourceKey}» не найден. Добавьте: --add ${sourceKey}`);
       process.exitCode = 1;
       return;
     }
-    printReports([await ingestTelegramSource(source)]);
+    printReports([
+      source.kind === 'website'
+        ? await ingestWebsiteSource(source)
+        : await ingestTelegramSource(source),
+    ]);
     return;
   }
 

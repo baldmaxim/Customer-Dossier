@@ -315,3 +315,35 @@
     transform: none;
   }
 }
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Удаление источника необратимо, когда по нему уже собраны документы.
+   Цвет предупреждающий, но кнопка не выделяется из ряда: это обычное
+   действие администратора, а не аварийная красная кнопка. */
+.danger {
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  min-height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--danger);
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--risk-red-bg);
+  border-color: var(--risk-red-border, var(--danger));
+}
+
+.danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

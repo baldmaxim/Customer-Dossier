@@ -9,8 +9,9 @@ import { z } from 'zod';
 
 import { query, execute } from '../db/pool.js';
 import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
-import { addTelegramSource } from '../ingest/sources.js';
+import { addTelegramSource, addWebsiteSource, deleteSource } from '../ingest/sources.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
+import { discoverFeedUrl } from '../ingest/website.js';
 
 export const adminRouter = asyncRouter();
 
@@ -75,6 +76,62 @@ adminRouter.post('/sources/telegram', async (req, res) => {
   }
   const source = await addTelegramSource(parsed.data.channel, parsed.data.title);
   res.status(201).json({ source });
+});
+
+const addSiteSchema = z.object({
+  url: z.string().min(4).max(300),
+  title: z.string().max(200).optional(),
+  /** Прямой адрес ленты. Пусто — ищем сами. */
+  rss: z.string().url().max(500).optional(),
+});
+
+adminRouter.post('/sources/website', async (req, res) => {
+  const parsed = addSiteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Укажите адрес сайта' });
+    return;
+  }
+
+  const raw = parsed.data.url.trim();
+  let url: URL;
+  try {
+    url = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+  } catch {
+    res.status(400).json({ error: 'Некорректный адрес' });
+    return;
+  }
+
+  const key = url.hostname.replace(/^www\./, '');
+  const feed = parsed.data.rss ?? (await discoverFeedUrl(url.origin));
+  if (!feed) {
+    res.status(422).json({
+      error:
+        'RSS-лента не найдена. Найдите её адрес на сайте и укажите вручную — ' +
+        'обычно это /rss, /feed или ссылка в подвале.',
+    });
+    return;
+  }
+
+  const source = await addWebsiteSource(key, parsed.data.title ?? key, url.origin, { rss: feed });
+  res.status(201).json({ source, feedUrl: feed });
+});
+
+adminRouter.delete('/sources/:id', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  // Удаление вместе с документами подтверждается явно: оно необратимо и
+  // уносит извлечённые упоминания и события.
+  const withDocuments = req.query.withDocuments === 'true';
+  const result = await deleteSource(id, withDocuments);
+
+  if (!result.deleted) {
+    res.status(409).json({ error: result.reason, documentCount: result.documentCount });
+    return;
+  }
+  res.json({ ok: true, documentCount: withDocuments ? result.documentCount : 0 });
 });
 
 adminRouter.get('/merges', async (_req, res) => {

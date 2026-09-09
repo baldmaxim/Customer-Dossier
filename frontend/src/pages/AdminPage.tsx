@@ -9,6 +9,7 @@ import styles from './AdminPage.module.css';
 export const AdminPage: FC = () => {
   const queryClient = useQueryClient();
   const [channel, setChannel] = useState('');
+  const [site, setSite] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -39,6 +40,26 @@ export const AdminPage: FC = () => {
     onSuccess: () => {
       setChannel('');
       setNotice('Канал добавлен и включён.');
+      invalidate();
+    },
+    onError: (err: Error) => setNotice(err.message),
+  });
+
+  const addSite = useMutation({
+    mutationFn: (url: string) => api.post<{ feedUrl: string }>('/api/admin/sources/website', { url }),
+    onSuccess: result => {
+      setSite('');
+      setNotice(`Сайт добавлен. Лента: ${result.feedUrl}`);
+      invalidate();
+    },
+    onError: (err: Error) => setNotice(err.message),
+  });
+
+  const removeSource = useMutation({
+    mutationFn: ({ id, withDocuments }: { id: number; withDocuments: boolean }) =>
+      api.delete(`/api/admin/sources/${id}${withDocuments ? '?withDocuments=true' : ''}`),
+    onSuccess: () => {
+      setNotice('Источник удалён.');
       invalidate();
     },
     onError: (err: Error) => setNotice(err.message),
@@ -166,6 +187,32 @@ export const AdminPage: FC = () => {
       </section>
 
       <section className={styles.section}>
+        <h2>Добавить сайт</h2>
+        <p className={styles.hint}>
+          Читаем через RSS — он стабильнее вёрстки. Адрес ленты найдётся сам; если нет,
+          портал скажет об этом, и её нужно будет указать вручную (обычно это{' '}
+          <code>/rss</code> или <code>/feed</code>).
+        </p>
+        <form
+          className={styles.inlineForm}
+          onSubmit={e => {
+            e.preventDefault();
+            if (site.trim()) addSite.mutate(site.trim());
+          }}
+        >
+          <input
+            className={styles.input}
+            placeholder="example.ru"
+            value={site}
+            onChange={e => setSite(e.target.value)}
+          />
+          <button type="submit" className={styles.primary} disabled={addSite.isPending}>
+            {addSite.isPending ? 'Ищу ленту…' : 'Добавить'}
+          </button>
+        </form>
+      </section>
+
+      <section className={styles.section}>
         <h2>Источники</h2>
         <div className="scroll-x">
           <table className={styles.table}>
@@ -200,19 +247,48 @@ export const AdminPage: FC = () => {
                   <td className={styles.error}>{s.lastError ?? ''}</td>
                   <td>
                     {s.kind !== 'manual' && (
-                      <button
-                        type="button"
-                        className={styles.secondary}
-                        disabled={setStatus.isPending}
-                        onClick={() =>
-                          setStatus.mutate({
-                            id: s.id,
-                            status: s.status === 'active' ? 'paused' : 'active',
-                          })
-                        }
-                      >
-                        {s.status === 'active' ? 'Пауза' : 'Включить'}
-                      </button>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={styles.secondary}
+                          disabled={setStatus.isPending}
+                          onClick={() =>
+                            setStatus.mutate({
+                              id: s.id,
+                              status: s.status === 'active' ? 'paused' : 'active',
+                            })
+                          }
+                        >
+                          {s.status === 'active' ? 'Пауза' : 'Включить'}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.danger}
+                          disabled={removeSource.isPending}
+                          onClick={() => {
+                            // Сначала пробуем без документов: сервер откажет,
+                            // если они есть, и назовёт их число. Только тогда
+                            // спрашиваем про необратимое удаление.
+                            removeSource.mutate(
+                              { id: s.id, withDocuments: false },
+                              {
+                                onError: () => {
+                                  const ok = window.confirm(
+                                    `По источнику «${s.title}» уже собраны документы.\n\n` +
+                                      'Удалить вместе с ними? Извлечённые упоминания и события ' +
+                                      'исчезнут безвозвратно.\n\n' +
+                                      'Если нужно просто остановить сбор — нажмите «Отмена» ' +
+                                      'и поставьте источник на паузу.',
+                                  );
+                                  if (ok) removeSource.mutate({ id: s.id, withDocuments: true });
+                                },
+                              },
+                            );
+                          }}
+                        >
+                          Удалить
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>

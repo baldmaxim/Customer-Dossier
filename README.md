@@ -121,6 +121,11 @@ cd frontend && npm install && npm run dev   # :5173
 ```bash
 npm run ingest:once -- --probe <канал>    # сверить селекторы с живой страницей
 npm run ingest:once -- --add <канал>      # добавить публичный канал
+npm run ingest:once -- --probe-site <url> # проверить сайт, ничего не сохраняя
+npm run ingest:once -- --add-site <url>   # добавить сайт (RSS ищется сам)
+npm run ingest:once -- --remove <key>     # удалить источник
+npm run ingest:once -- --env-check        # какие ключи видит программа в .env
+npm run ingest:once -- --bot-check        # проверить форвард-бота
 npm run ingest:once -- --source <канал>   # прогнать один источник
 npm run ingest:once                       # все просроченные источники
 npm run ingest:once -- --stats            # документы, очередь, доля дублей
@@ -133,6 +138,11 @@ npm run pipeline:once -- --check      # LM Studio поднят? модель з�
 npm run pipeline:once                 # одна пачка
 npm run pipeline:once -- --loop       # пока очередь не опустеет
 npm run pipeline:once -- --stats      # очередь и доля неудачных вызовов
+npm run pipeline:once -- --errors     # последние отказы с текстом ошибки
+npm run pipeline:once -- --skipped    # тексты, признанные нерелевантными
+npm run pipeline:once -- --doc <id>   # документ целиком: текст, разбор, канон
+npm run pipeline:once -- --retry      # вернуть провалившиеся и застрявшие
+npm run pipeline:once -- --recheck    # снять неподтверждённые города и адреса
 npm run pipeline:once -- --merges     # очередь на ручное слияние
 npm run pipeline:once -- --merge <id> # подтвердить слияние
 npm run pipeline:once -- --reject <id>
@@ -141,7 +151,7 @@ npm run pipeline:once -- --reject <id>
 ### Прочее
 
 ```bash
-npm test                            # 103 теста
+npm test                            # 107 тестов
 npm run migrate                     # миграции
 cd frontend && npm run icons:generate   # иконки PWA из одного SVG
 ```
@@ -153,7 +163,7 @@ cd frontend && npm run icons:generate   # иконки PWA из одного SVG
 ```
 источники → raw_documents → extractions → канонический слой → карточка
  t.me/s/     дедуп по        LM Studio     компании, объекты,   светофор
- сайты       нормализ.       + проверка    роли, события        риска
+ RSS сайтов  нормализ.       + проверка    роли, события        риска
  бот/форма   хэшу            цитат
 ```
 
@@ -186,4 +196,5 @@ cd frontend && npm run icons:generate   # иконки PWA из одного SVG
   Это повод задать вопросы, а не проверка контрагента.
 - Аутентификации нет: MVP рассчитан на локальную сеть. Перед выносом на VPS
   нужен auth-middleware — слияние сущностей необратимо.
-- Парсер сайтов (`kind='website'`) ещё не написан: источники заведены, ветка пропускается.
+- Сайты читаются только через RSS. Если ленты нет, источник придётся добавлять
+  вручную или обходиться Telegram и вставкой текста.
