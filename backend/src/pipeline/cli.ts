@@ -5,7 +5,10 @@
 //   npm run pipeline:once -- --loop           крутить, пока очередь не опустеет
 //   npm run pipeline:once -- --stats          состояние очереди и доля ошибок
 //   npm run pipeline:once -- --errors         последние отказы с текстом ошибки
-//   npm run pipeline:once -- --retry          вернуть провалившиеся документы в очередь
+//   npm run pipeline:once -- --retry          вернуть провалившиеся и застрявшие в очередь
+//   npm run pipeline:once -- --skipped        тексты, признанные нерелевантными
+//   npm run pipeline:once -- --doc <id>       документ целиком: текст, разбор, что легло в канон
+//   npm run pipeline:once -- --retry-skipped  вернуть нерелевантные в очередь (после правки промпта)
 //   npm run pipeline:once -- --merges         очередь на ручное слияние
 //   npm run pipeline:once -- --merge <id>     подтвердить слияние
 //   npm run pipeline:once -- --reject <id>    отклонить пару
@@ -14,7 +17,7 @@ import { closeDb, execute, query, queryOne } from '../db/pool.js';
 import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
 import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
-import { runPipelinePass } from './worker.js';
+import { MAX_ATTEMPTS, runPipelinePass } from './worker.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -68,14 +71,17 @@ const showStats = async (): Promise<void> => {
     extracted: number;
     failed: number;
     skipped: number;
+    stuck: number;
   }>(
     `SELECT
        count(*) FILTER (WHERE status IN ('new','queued'))::int AS new_docs,
        count(*) FILTER (WHERE status = 'extracting')::int      AS extracting,
        count(*) FILTER (WHERE status = 'extracted')::int       AS extracted,
        count(*) FILTER (WHERE status = 'failed')::int          AS failed,
-       count(*) FILTER (WHERE status = 'skipped')::int         AS skipped
+       count(*) FILTER (WHERE status = 'skipped')::int         AS skipped,
+       count(*) FILTER (WHERE status IN ('new','queued') AND attempts >= $1)::int AS stuck
      FROM raw_documents`,
+    [MAX_ATTEMPTS],
   );
   console.log('[pipeline] очередь:');
   console.log(`  ожидают:    ${q?.new_docs ?? 0}`);
@@ -83,6 +89,11 @@ const showStats = async (): Promise<void> => {
   console.log(`  извлечены:  ${q?.extracted ?? 0}`);
   console.log(`  нерелевант: ${q?.skipped ?? 0}`);
   console.log(`  ошибки:     ${q?.failed ?? 0}`);
+  // Документ, исчерпавший попытки, остаётся в статусе queued и в строке
+  // «ожидают» выглядит нормально — а на деле воркер его больше не возьмёт.
+  if ((q?.stuck ?? 0) > 0) {
+    console.log(`  ЗАСТРЯЛИ:   ${q?.stuck} (попытки исчерпаны, лечится --retry)`);
+  }
 
   const e = await queryOne<{ total: number; bad: number }>(
     `SELECT count(*)::int AS total,
@@ -161,12 +172,135 @@ const retryFailed = async (): Promise<void> => {
   const affected = await execute(
     `UPDATE raw_documents
      SET status = 'queued', attempts = 0, last_error = NULL, updated_at = now()
-     WHERE status = 'failed'`,
+     WHERE status = 'failed'
+        OR (status IN ('new','queued') AND attempts >= $1)`,
+    [MAX_ATTEMPTS],
   );
   console.log(`[pipeline] возвращено в очередь: ${affected}`);
   if (affected > 0) {
     console.log('[pipeline] запустите: npm run pipeline:once -- --loop');
   }
+};
+
+/**
+ * Тексты, которые модель признала не относящимися к делу.
+ *
+ * Смотреть обязательно: doc_relevant=false — единственное решение модели,
+ * которое не оставляет за собой никаких следов в канонe. Если она
+ * перестраховывается, портал молча теряет данные, и заметить это можно
+ * только глазами.
+ */
+const showSkipped = async (limit = 10): Promise<void> => {
+  const rows = await query<{
+    id: number;
+    body: string;
+    sourceTitle: string;
+    publishedAt: string | null;
+    url: string | null;
+  }>(
+    `SELECT d.id, d.body, d.url, d.published_at AS "publishedAt", s.title AS "sourceTitle"
+     FROM raw_documents d
+     JOIN sources s ON s.id = d.source_id
+     WHERE d.status = 'skipped'
+     ORDER BY d.fetched_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+
+  if (rows.length === 0) {
+    console.log('[skipped] нерелевантных документов нет');
+    return;
+  }
+
+  console.log(`[skipped] последние ${rows.length} — проверьте, правда ли они не по теме:\n`);
+  for (const r of rows) {
+    console.log(`── док ${r.id} · ${r.sourceTitle} ${r.url ? `· ${r.url}` : ''}`);
+    console.log(`${r.body.slice(0, 600)}${r.body.length > 600 ? '…' : ''}\n`);
+  }
+  console.log(
+    'Если тексты по теме — модель перестраховывается. Смягчите правило 9\n' +
+      'в SYSTEM_PROMPT (src/llm/prompt.ts) и поднимите PROMPT_VERSION в .env,\n' +
+      'иначе документы не переизвлекутся. Затем: --retry-skipped и --loop.',
+  );
+};
+
+/** Документ целиком: исходный текст, что вернула модель, что легло в канон. */
+const showDocument = async (id: number): Promise<void> => {
+  const doc = await queryOne<{
+    id: number;
+    body: string;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    sourceTitle: string;
+    url: string | null;
+  }>(
+    `SELECT d.id, d.body, d.status::text AS status, d.attempts,
+            d.last_error AS "lastError", d.url, s.title AS "sourceTitle"
+     FROM raw_documents d JOIN sources s ON s.id = d.source_id
+     WHERE d.id = $1`,
+    [id],
+  );
+
+  if (!doc) {
+    console.error(`[doc] документ ${id} не найден`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`── док ${doc.id} · ${doc.sourceTitle} · статус ${doc.status} · попыток ${doc.attempts}`);
+  if (doc.url) console.log(`   ${doc.url}`);
+  if (doc.lastError) console.log(`   ошибка: ${doc.lastError}`);
+  console.log(`\n── ТЕКСТ ──\n${doc.body}\n`);
+
+  const extractions = await query<{
+    chunkIndex: number;
+    status: string;
+    promptVersion: string;
+    payload: unknown;
+    rawResponse: string | null;
+    latencyMs: number | null;
+  }>(
+    `SELECT chunk_index AS "chunkIndex", status::text AS status,
+            prompt_version AS "promptVersion", payload,
+            left(raw_response, 600) AS "rawResponse", latency_ms AS "latencyMs"
+     FROM extractions WHERE document_id = $1 ORDER BY prompt_version, chunk_index`,
+    [id],
+  );
+
+  for (const e of extractions) {
+    console.log(`── РАЗБОР · чанк ${e.chunkIndex} · ${e.promptVersion} · ${e.status} · ${e.latencyMs ?? '?'} мс`);
+    if (e.payload) console.log(JSON.stringify(e.payload, null, 2));
+    if (e.rawResponse) console.log(`   ответ/ошибка: ${e.rawResponse}`);
+    console.log();
+  }
+
+  const mentions = await query<{ name: string; role: string | null; verified: boolean }>(
+    `SELECT c.name, m.role, m.quote_verified AS verified
+     FROM mentions m JOIN companies c ON c.id = m.entity_id
+     WHERE m.document_id = $1 AND m.entity_kind = 'company'`,
+    [id],
+  );
+
+  console.log('── В КАНОНЕ ──');
+  if (mentions.length === 0) {
+    console.log('   ничего не записано');
+  } else {
+    for (const m of mentions) {
+      console.log(`   ${m.name}${m.role ? ` (${m.role})` : ''}${m.verified ? '' : '  ЦИТАТА НЕ СВЕРЕНА'}`);
+    }
+  }
+};
+
+/** Вернуть в очередь то, что модель сочла нерелевантным. Для смены промпта. */
+const retrySkipped = async (): Promise<void> => {
+  const affected = await execute(
+    `UPDATE raw_documents
+     SET status = 'queued', attempts = 0, updated_at = now()
+     WHERE status = 'skipped'`,
+  );
+  console.log(`[pipeline] возвращено в очередь: ${affected}`);
+  console.log('[pipeline] помните: без нового PROMPT_VERSION модель ответит то же самое');
 };
 
 const showMerges = async (): Promise<void> => {
@@ -210,6 +344,11 @@ const main = async (): Promise<void> => {
   if (process.argv.includes('--merges')) return showMerges();
   if (process.argv.includes('--errors')) return showErrors();
   if (process.argv.includes('--retry')) return retryFailed();
+  if (process.argv.includes('--skipped')) return showSkipped();
+  if (process.argv.includes('--retry-skipped')) return retrySkipped();
+
+  const docId = argValue('--doc');
+  if (docId) return showDocument(Number(docId));
 
   const mergeId = argValue('--merge');
   if (mergeId) {
