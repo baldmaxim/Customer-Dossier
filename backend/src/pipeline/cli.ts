@@ -4,11 +4,13 @@
 //   npm run pipeline:once                     обработать одну пачку из очереди
 //   npm run pipeline:once -- --loop           крутить, пока очередь не опустеет
 //   npm run pipeline:once -- --stats          состояние очереди и доля ошибок
+//   npm run pipeline:once -- --errors         последние отказы с текстом ошибки
+//   npm run pipeline:once -- --retry          вернуть провалившиеся документы в очередь
 //   npm run pipeline:once -- --merges         очередь на ручное слияние
 //   npm run pipeline:once -- --merge <id>     подтвердить слияние
 //   npm run pipeline:once -- --reject <id>    отклонить пару
 
-import { closeDb, query, queryOne } from '../db/pool.js';
+import { closeDb, execute, query, queryOne } from '../db/pool.js';
 import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
 import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
@@ -105,6 +107,68 @@ const showStats = async (): Promise<void> => {
   for (const row of byFailure) console.log(`  ${row.status}: ${row.n}`);
 };
 
+/** Последние отказы с текстом ошибки — первое, что смотрят, когда «не работает». */
+const showErrors = async (limit = 15): Promise<void> => {
+  const rows = await query<{
+    documentId: number;
+    status: string;
+    createdAt: string;
+    message: string | null;
+    bodyLen: number;
+  }>(
+    `SELECT e.document_id AS "documentId", e.status::text AS status,
+            e.created_at  AS "createdAt",
+            left(e.raw_response, 400) AS message,
+            d.body_len    AS "bodyLen"
+     FROM extractions e
+     JOIN raw_documents d ON d.id = e.document_id
+     WHERE e.status <> 'ok'
+     ORDER BY e.created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+
+  if (rows.length === 0) {
+    console.log('[errors] отказов нет');
+    return;
+  }
+
+  console.log(`[errors] последние ${rows.length}:`);
+  for (const r of rows) {
+    console.log(`\n  док ${r.documentId} · ${r.status} · текст ${r.bodyLen} симв.`);
+    console.log(`  ${r.message ?? 'сообщение не сохранено'}`);
+  }
+
+  console.log(
+    '\nПодсказки:\n' +
+      '  "context" / "token" в тексте — в LM Studio мал контекст. Нужно 8192.\n' +
+      '  "aborted" / "timeout"        — модель не успевает. Поднимите LMSTUDIO_TIMEOUT_MS\n' +
+      '                                 или возьмите модель меньше (Qwen3-4B).\n' +
+      '  "fetch failed" / ECONNREFUSED — сервер LM Studio не запущен (Developer -> Start Server).\n' +
+      '  "model" / "not found"         — LMSTUDIO_MODEL не совпадает с загруженной моделью.',
+  );
+};
+
+/**
+ * Вернуть провалившиеся документы в очередь.
+ *
+ * Нужно после починки причины сбоя: воркер берёт только 'new' и 'queued',
+ * так что документ со статусом 'failed' сам по себе больше не обработается
+ * никогда. Счётчик попыток сбрасываем — иначе упрётся в лимит на первом же
+ * проходе.
+ */
+const retryFailed = async (): Promise<void> => {
+  const affected = await execute(
+    `UPDATE raw_documents
+     SET status = 'queued', attempts = 0, last_error = NULL, updated_at = now()
+     WHERE status = 'failed'`,
+  );
+  console.log(`[pipeline] возвращено в очередь: ${affected}`);
+  if (affected > 0) {
+    console.log('[pipeline] запустите: npm run pipeline:once -- --loop');
+  }
+};
+
 const showMerges = async (): Promise<void> => {
   const pending = await listPendingMerges();
   if (pending.length === 0) {
@@ -144,6 +208,8 @@ const main = async (): Promise<void> => {
 
   if (process.argv.includes('--stats')) return showStats();
   if (process.argv.includes('--merges')) return showMerges();
+  if (process.argv.includes('--errors')) return showErrors();
+  if (process.argv.includes('--retry')) return retryFailed();
 
   const mergeId = argValue('--merge');
   if (mergeId) {

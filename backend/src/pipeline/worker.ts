@@ -167,8 +167,17 @@ export const processDocument = async (doc: IQueuedDocument): Promise<IProcessRes
     } else {
       lastError = result.message;
       // raw_response пишем только при ошибке: иначе таблица распухнет быстрее,
-      // чем сами тексты.
-      await recordExtraction(doc.id, index, result.failure, null, result.rawResponse, result.usage);
+      // чем сами тексты. При llm_error ответа нет вовсе — тогда кладём сюда
+      // текст ошибки, иначе причина сбоя не сохраняется нигде и приходится
+      // лезть в raw_documents.last_error руками.
+      await recordExtraction(
+        doc.id,
+        index,
+        result.failure,
+        null,
+        result.rawResponse ?? result.message,
+        result.usage,
+      );
     }
   }
 
