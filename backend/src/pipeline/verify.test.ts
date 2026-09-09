@@ -9,6 +9,7 @@ import {
   isAmountInBody,
   isCityMentionedInBody,
   isAddressGroundedInBody,
+  nullifyPlaceholder,
 } from './verify.js';
 import { emptyExtraction, type IExtraction } from '../llm/schema.js';
 
@@ -152,6 +153,24 @@ describe('isAddressGroundedInBody', () => {
   });
 });
 
+describe('nullifyPlaceholder', () => {
+  it('превращает заглушки модели в null', () => {
+    // Схема требует строку или null, но модель регулярно пишет «unknown».
+    for (const value of ['unknown', 'UNKNOWN', 'неизвестно', 'не указан', '-', 'n/a', '  ']) {
+      expect(nullifyPlaceholder(value), value).toBeNull();
+    }
+  });
+
+  it('настоящее значение не трогает', () => {
+    expect(nullifyPlaceholder(' Москва ')).toBe('Москва');
+  });
+
+  it('null и undefined остаются null', () => {
+    expect(nullifyPlaceholder(null)).toBeNull();
+    expect(nullifyPlaceholder(undefined)).toBeNull();
+  });
+});
+
 describe('verifyExtraction', () => {
   it('пропускает подтверждённые сущности', () => {
     const result = verifyExtraction(
@@ -284,6 +303,17 @@ describe('verifyExtraction', () => {
     expect(result.projects).toHaveLength(1);
     expect(result.projects[0]!.city).toBeNull();
     expect(result.rejected.some(r => r.kind === 'city')).toBe(true);
+  });
+
+  it('город «unknown» не попадает в отбраковку как ненайденный', () => {
+    const result = verifyExtraction(
+      { ...emptyExtraction(), doc_relevant: true, projects: [project({ city: 'unknown' })] },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.projects[0]!.city).toBeNull();
+    // Заглушка — это отсутствие данных, а не отвергнутое утверждение.
+    expect(result.rejected.some(r => r.kind === 'city')).toBe(false);
   });
 
   it('город из текста сохраняется', () => {

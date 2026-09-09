@@ -9,6 +9,8 @@
 //   npm run pipeline:once -- --skipped        тексты, признанные нерелевантными
 //   npm run pipeline:once -- --doc <id>       документ целиком: текст, разбор, что легло в канон
 //   npm run pipeline:once -- --retry-skipped  вернуть нерелевантные в очередь (после правки промпта)
+//   npm run pipeline:once -- --recheck        снять с объектов города и адреса, не подтверждённые текстом
+//   npm run pipeline:once -- --recheck --dry  то же, но только показать
 //   npm run pipeline:once -- --merges         очередь на ручное слияние
 //   npm run pipeline:once -- --merge <id>     подтвердить слияние
 //   npm run pipeline:once -- --reject <id>    отклонить пару
@@ -18,6 +20,7 @@ import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
 import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
 import { MAX_ATTEMPTS, runPipelinePass } from './worker.js';
+import { recheckProjectFields } from './recheck.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -346,6 +349,28 @@ const main = async (): Promise<void> => {
   if (process.argv.includes('--retry')) return retryFailed();
   if (process.argv.includes('--skipped')) return showSkipped();
   if (process.argv.includes('--retry-skipped')) return retrySkipped();
+
+  if (process.argv.includes('--recheck')) {
+    const dry = process.argv.includes('--dry');
+    const result = await recheckProjectFields(dry);
+    console.log(`[recheck] проверено объектов: ${result.checked}`);
+    if (result.details.length === 0) {
+      console.log('[recheck] все города и адреса подтверждаются текстами');
+      return;
+    }
+    console.log(`[recheck] не подтверждается текстом:`);
+    for (const d of result.details) {
+      console.log(`   объект ${d.id} «${d.name}» — ${d.field}: «${d.value}»`);
+    }
+    console.log(
+      dry
+        ? `
+[recheck] это предпросмотр. Без --dry поля будут очищены (объектов: ${result.cleared}).`
+        : `
+[recheck] очищено объектов: ${result.cleared}`,
+    );
+    return;
+  }
 
   const docId = argValue('--doc');
   if (docId) return showDocument(Number(docId));

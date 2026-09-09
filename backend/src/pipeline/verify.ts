@@ -126,6 +126,26 @@ export const isPlausibleEventDate = (raw: string, publishedAt: Date | null): Dat
 };
 
 /**
+ * Значения-заглушки, которые модель ставит вместо null.
+ *
+ * Схема требует строку или null, но модель регулярно пишет «unknown» — и это
+ * попадает в отбраковку как «города unknown нет в тексте», засоряя разбор
+ * ложными срабатываниями. Приводим к null явно.
+ */
+const PLACEHOLDER_VALUES = new Set([
+  'unknown', 'n/a', 'na', 'none', 'null', '-', '—',
+  'неизвестно', 'не указан', 'не указано', 'нет данных', 'не определено',
+]);
+
+/** null, если значение отсутствует или является заглушкой. */
+export const nullifyPlaceholder = (value: string | null | undefined): string | null => {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  return PLACEHOLDER_VALUES.has(trimmed.toLowerCase()) ? null : trimmed;
+};
+
+/**
  * Город принимается, только если он упомянут в тексте.
  *
  * Без этой проверки модель дописывает город «по смыслу»: пост про московский
@@ -276,19 +296,20 @@ export const verifyExtraction = (
       rejected.push({ kind: 'project', name: project.name, reason: 'имя отсутствует в цитате' });
       continue;
     }
-    const cityAccepted =
-      project.city && isCityMentionedInBody(project.city, body) ? project.city : null;
-    if (project.city && cityAccepted === null) {
+    const cityClaim = nullifyPlaceholder(project.city);
+    const cityAccepted = cityClaim && isCityMentionedInBody(cityClaim, body) ? cityClaim : null;
+    if (cityClaim && cityAccepted === null) {
       rejected.push({
         kind: 'city',
         name: project.name,
-        reason: `город «${project.city}» отсутствует в тексте`,
+        reason: `город «${cityClaim}» отсутствует в тексте`,
       });
     }
 
+    const addressClaim = nullifyPlaceholder(project.address);
     const addressAccepted =
-      project.address && isAddressGroundedInBody(project.address, body) ? project.address : null;
-    if (project.address && addressAccepted === null) {
+      addressClaim && isAddressGroundedInBody(addressClaim, body) ? addressClaim : null;
+    if (addressClaim && addressAccepted === null) {
       rejected.push({ kind: 'address', name: project.name, reason: 'адрес отсутствует в тексте' });
     }
 
