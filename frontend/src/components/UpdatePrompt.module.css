@@ -4,22 +4,22 @@
   transform: translateX(-50%);
   /* Над домашней полоской iPhone и жестовой шторкой Android. */
   bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 100;
+  z-index: 40;
 
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: calc(100vw - 24px);
+  max-width: min(440px, calc(100% - 24px));
 
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 11px 12px 11px 16px;
-  font-size: 0.92rem;
+  box-shadow: var(--shadow-lg);
+  padding: 10px 10px 10px 16px;
+  font-size: 0.9rem;
 
-  animation: rise 200ms ease-out;
+  animation: rise 200ms var(--ease);
 }
 
 /* Анимируем только transform и opacity — остальное вызывает лейаут-трешинг. */
@@ -39,10 +39,16 @@
   color: var(--accent-contrast);
   border: none;
   border-radius: var(--radius-sm);
-  padding: 8px 14px;
+  padding: 0 15px;
   font-weight: 500;
+  font-size: 0.9rem;
   min-height: 40px;
   white-space: nowrap;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.action:hover {
+  background: var(--accent-hover);
 }
 
 .dismiss {
@@ -53,4 +59,33 @@
   line-height: 1;
   min-width: 36px;
   min-height: 36px;
+  border-radius: var(--radius-xs);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.dismiss:hover {
+  color: var(--text);
+}
+
+/* На телефоне тост поднимается над нижней панелью навигации. */
+@media (max-width: 639px) {
+  .toast {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+    bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
+    animation: riseMobile 200ms var(--ease);
+  }
+
+  @keyframes riseMobile {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }

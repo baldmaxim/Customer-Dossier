@@ -1,9 +1,14 @@
-// Генерация растровых иконок из одного SVG. PNG руками не правим.
+// Генерация растровых иконок из SVG-исходников. PNG руками не правим.
 //
 //   npm run icons:generate
 //
+// Источники:
+//   public/favicon.svg           — плитка со скруглением, для вкладки и iOS
+//   public/favicon-maskable.svg  — заливка во весь квадрат, для маски Android
+//
 // Фон непрозрачный: прозрачный PNG на iOS «Домой» даёт чёрный квадрат.
-// Maskable-вариант с полями ~10 %, иначе Android обрежет углы по своей маске.
+// Фон берём фирменный, а не цвет страницы: iOS и Android режут иконку по своей
+// форме, и светлая рамка по краям выглядела бы браком.
 
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,9 +19,10 @@ import sharp from 'sharp';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(HERE, '..', 'public');
 const SOURCE = path.join(PUBLIC_DIR, 'favicon.svg');
+const SOURCE_MASKABLE = path.join(PUBLIC_DIR, 'favicon-maskable.svg');
 
-/** Из background_color манифеста. */
-const BACKGROUND = '#f7f8fa';
+/** Средний тон градиента плитки — им заполняем углы и поля. */
+const BACKGROUND = '#2f5ae4';
 
 const TARGETS = [
   { file: 'favicon-32.png', size: 32 },
@@ -30,6 +36,7 @@ const TARGETS = [
 
 const run = async () => {
   const svg = await readFile(SOURCE);
+  const svgMaskable = await readFile(SOURCE_MASKABLE);
   await mkdir(PUBLIC_DIR, { recursive: true });
 
   for (const target of TARGETS) {
@@ -41,18 +48,14 @@ const run = async () => {
     console.log(`[icons] ${target.file} ${target.size}×${target.size}`);
   }
 
-  // Maskable: рисунок ужимаем до 80 % и центрируем — Android режет по кругу.
-  const inner = Math.round(512 * 0.8);
-  const pad = Math.round((512 - inner) / 2);
-  await sharp({
-    create: { width: 512, height: 512, channels: 4, background: BACKGROUND },
-  })
-    .composite([
-      { input: await sharp(svg, { density: 384 }).resize(inner, inner).png().toBuffer(), top: pad, left: pad },
-    ])
+  // Maskable: рисунок уже сведён в безопасную зону внутри самого SVG, поэтому
+  // заливаем весь квадрат — Android обрежет по своей маске без белых углов.
+  await sharp(svgMaskable, { density: 384 })
+    .resize(512, 512, { fit: 'cover', background: BACKGROUND })
+    .flatten({ background: BACKGROUND })
     .png()
     .toFile(path.join(PUBLIC_DIR, 'icon-512-maskable.png'));
-  console.log('[icons] icon-512-maskable.png 512×512 (поля 10 %)');
+  console.log('[icons] icon-512-maskable.png 512×512 (безопасная зона внутри SVG)');
 };
 
 run().catch(err => {

@@ -7,50 +7,79 @@
 .header {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: var(--surface);
+  z-index: 20;
+  background: var(--surface-glass);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--border);
+  /* «Чёлка» и Dynamic Island: шапка обязана начинаться под ними. */
   padding-top: env(safe-area-inset-top);
 }
 
 .headerInner {
   height: var(--header-h);
-  max-width: 1200px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: var(--text);
-  text-decoration: none;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-right: auto;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--t-fast) var(--ease);
 }
 
 .brand:hover {
+  opacity: 0.82;
   text-decoration: none;
+}
+
+.logoLight,
+.logoDark {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+
+/* Обе версии в DOM, переключаем классом на <html> — без мигания и без
+   повторной загрузки файла при смене темы. */
+.logoDark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoLight {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoDark {
+  display: block;
 }
 
 .nav {
   display: flex;
-  gap: 4px;
-  margin-left: auto;
+  gap: 2px;
   align-items: center;
 }
 
 .navLink {
-  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   /* Только цвет и фон: анимировать размеры — лейаут-трешинг на смартфонах. */
   transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out;
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
 .navLink:hover {
@@ -59,12 +88,14 @@
   text-decoration: none;
 }
 
-.navLinkActive {
+.navLinkActive,
+.navLinkActive:hover {
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 .themeButton {
+  flex: 0 0 auto;
   width: 40px;
   height: 40px;
   display: grid;
@@ -73,42 +104,123 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
-  font-size: 1rem;
-  line-height: 1;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 
 .themeButton:hover {
   background: var(--surface-2);
   color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.themeIcon {
+  width: 18px;
+  height: 18px;
 }
 
 .main {
   flex: 1;
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 20px 16px calc(32px + env(safe-area-inset-bottom));
+  padding: 24px max(16px, env(safe-area-inset-right)) 48px
+    max(16px, env(safe-area-inset-left));
 }
 
-/* Ниже 560 px подписи в навигации не помещаются рядом с логотипом. */
-@media (max-width: 559px) {
-  .headerInner {
-    gap: 8px;
-    padding: 0 12px;
+/* Нижняя панель навигации — только на смартфонах. */
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .nav {
+    display: none;
   }
 
-  .navLink {
-    padding: 7px 9px;
-    font-size: 0.85rem;
+  .headerInner {
+    height: 56px;
+    padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+  }
+
+  .logoLight,
+  .logoDark {
+    height: 24px;
+  }
+
+  .themeButton {
+    width: 44px;
+    height: 44px;
   }
 
   .main {
-    padding: 16px 12px calc(28px + env(safe-area-inset-bottom));
+    padding: 16px max(12px, env(safe-area-inset-right))
+      calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: stretch;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface-glass);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-top: 1px solid var(--border);
+  }
+
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    /* Тап-цель заведомо больше 44 px. */
+    min-height: 48px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    transition:
+      color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
+  }
+
+  .tab:hover {
+    text-decoration: none;
+  }
+
+  .tab:active {
+    transform: scale(0.94);
+  }
+
+  .tabActive {
+    color: var(--accent);
+  }
+
+  .tabIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tabLabel {
+    line-height: 1.1;
   }
 }
 
-@media (max-width: 380px) {
-  .brand {
-    font-size: 0.95rem;
+@media (min-width: 640px) {
+  .logoLight,
+  .logoDark {
+    height: 28px;
   }
 }

@@ -28,6 +28,15 @@ const useDebounced = (value: string, delay = 300): string => {
   return debounced;
 };
 
+const ORDER: RiskLight[] = ['red', 'yellow', 'green', 'grey'];
+
+const BAR_CLASS: Record<RiskLight, string> = {
+  red: styles.barRed ?? '',
+  yellow: styles.barYellow ?? '',
+  green: styles.barGreen ?? '',
+  grey: styles.barGrey ?? '',
+};
+
 export const SearchPage: FC = () => {
   const [input, setInput] = useState('');
   const query = useDebounced(input.trim());
@@ -48,25 +57,45 @@ export const SearchPage: FC = () => {
 
   const items = searchQuery.data?.items ?? [];
   const totals = summaryQuery.data?.totals;
+  const byRisk = (summaryQuery.data?.byRisk ?? [])
+    .slice()
+    .sort((a, b) => ORDER.indexOf(a.riskLight) - ORDER.indexOf(b.riskLight));
+  const riskTotal = byRisk.reduce((sum, r) => sum + r.n, 0);
 
   return (
     <>
-      <h1 className={styles.title}>Как дела у Заказчика?</h1>
-      <p className={styles.lead}>
-        Введите название компании — «BI Group», «БИ Групп» или «Базис-А». Написание значения
-        не имеет.
-      </p>
+      <section className={styles.hero}>
+        <h1 className={styles.title}>Как дела у Заказчика?</h1>
+        <p className={styles.lead}>
+          Введите название компании — «BI Group», «БИ Групп» или «Базис-А». Написание значения не
+          имеет.
+        </p>
 
-      <input
-        type="search"
-        className={styles.input}
-        placeholder="Название компании"
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        autoComplete="off"
-        // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus
-      />
+        <div className={styles.field}>
+          <svg
+            className={styles.fieldIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5" />
+          </svg>
+          <input
+            type="search"
+            className={styles.input}
+            placeholder="Название компании"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            autoComplete="off"
+            enterKeyHint="search"
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
+          />
+        </div>
+      </section>
 
       {query.length >= 2 && (
         <div className={styles.results}>
@@ -79,10 +108,24 @@ export const SearchPage: FC = () => {
           )}
           {items.map(item => (
             <Link key={item.id} to={`/company/${item.id}`} className={styles.resultRow}>
-              <span className={styles.resultName}>{item.name}</span>
-              <span className={styles.resultMeta}>
-                {[item.legalForm, item.city].filter(Boolean).join(' · ')}
+              <span className={styles.resultText}>
+                <span className={styles.resultName}>{item.name}</span>
+                <span className={styles.resultMeta}>
+                  {[item.legalForm, item.city].filter(Boolean).join(' · ')}
+                </span>
               </span>
+              <svg
+                className={styles.chevron}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9.5 5.5 7 6.5-7 6.5" />
+              </svg>
             </Link>
           ))}
         </div>
@@ -97,20 +140,37 @@ export const SearchPage: FC = () => {
             <SummaryStat value={totals.documents} label="разобрано сообщений" />
           </div>
 
-          <div className={styles.riskRow}>
-            {(summaryQuery.data?.byRisk ?? [])
-              .slice()
-              .sort((a, b) => ORDER.indexOf(a.riskLight) - ORDER.indexOf(b.riskLight))
-              .map(r => (
-                <span key={r.riskLight} className={styles.riskItem}>
-                  <RiskBadge light={r.riskLight} />
-                  <span className={styles.riskCount}>{r.n}</span>
-                </span>
-              ))}
-          </div>
+          {riskTotal > 0 && (
+            <div className={styles.riskCard}>
+              <div className={styles.riskTitle}>Компании по светофору риска</div>
+              <div
+                className={styles.bar}
+                role="img"
+                aria-label={byRisk.map(r => `${r.riskLight}: ${r.n}`).join(', ')}
+              >
+                {byRisk
+                  .filter(r => r.n > 0)
+                  .map(r => (
+                    <span
+                      key={r.riskLight}
+                      className={`${styles.barPart} ${BAR_CLASS[r.riskLight]}`}
+                      style={{ width: `${(r.n / riskTotal) * 100}%` }}
+                    />
+                  ))}
+              </div>
+              <div className={styles.riskRow}>
+                {byRisk.map(r => (
+                  <span key={r.riskLight} className={styles.riskItem}>
+                    <RiskBadge light={r.riskLight} />
+                    <span className={styles.riskCount}>{r.n}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {totals.pendingMerges > 0 && (
-            <p className={styles.hint}>
+            <p className={styles.hintPlain}>
               <Link to="/admin">{totals.pendingMerges} пар</Link> ждут решения о слиянии.
             </p>
           )}
@@ -127,8 +187,6 @@ export const SearchPage: FC = () => {
     </>
   );
 };
-
-const ORDER: RiskLight[] = ['red', 'yellow', 'green', 'grey'];
 
 const SummaryStat: FC<{ value: number; label: string }> = ({ value, label }) => (
   <div className={styles.summaryStat}>

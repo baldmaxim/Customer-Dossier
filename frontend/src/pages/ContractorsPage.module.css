@@ -1,78 +1,100 @@
 .lead {
   color: var(--muted);
-  margin: 6px 0 18px;
+  margin: 8px 0 20px;
   max-width: 62ch;
+  font-size: 0.95rem;
 }
 
 .controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  align-items: center;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.controlLabel {
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .tabs {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .tab {
-  padding: 7px 13px;
+  padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--muted);
-  font-size: 0.88rem;
-  /* 44 px — минимальная тап-цель; на десктопе это не мешает. */
-  min-height: 36px;
+  font-size: 0.87rem;
+  font-weight: 500;
+  /* 40 px и выше — уверенная тап-цель на телефоне. */
+  min-height: 40px;
   transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out,
-    border-color 160ms ease-out;
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 
 .tab:hover {
   background: var(--surface-2);
   color: var(--text);
+  border-color: var(--border-strong);
 }
 
-.tabActive {
+.tabActive,
+.tabActive:hover {
   background: var(--accent-soft);
   color: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--muted);
   font-size: 0.88rem;
   cursor: pointer;
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .checkbox input {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   accent-color: var(--accent);
+}
+
+/* ─── Таблица (планшет и десктоп) ──────────────────────────────────────── */
+
+.tableWrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .table {
   width: 100%;
-  min-width: 760px;
+  min-width: 780px;
   border-collapse: collapse;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 
 .table th,
 .table td {
-  padding: 11px 12px;
+  padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
@@ -84,7 +106,9 @@
   background: var(--surface-2);
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   white-space: nowrap;
   z-index: 1;
 }
@@ -93,8 +117,21 @@
   border-bottom: none;
 }
 
+.table tbody tr {
+  transition: background-color var(--t-fast) var(--ease);
+}
+
 .table tbody tr:hover {
   background: var(--surface-2);
+}
+
+.rowName {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.rowName:hover {
+  color: var(--accent);
 }
 
 .num {
@@ -105,17 +142,100 @@
 
 .bad {
   color: var(--danger);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .city {
   display: block;
   color: var(--faint);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  margin-top: 2px;
 }
 
 .empty {
   color: var(--muted);
   padding: 20px 0;
   max-width: 60ch;
+}
+
+/* ─── Карточки (телефон) ───────────────────────────────────────────────── */
+
+.cards {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+}
+
+.cardName {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text);
+  min-width: 0;
+}
+
+.cardCity {
+  color: var(--faint);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.cardStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 8px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.cardStat {
+  min-width: 0;
+}
+
+.cardStatLabel {
+  color: var(--faint);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.cardStatValue {
+  margin: 3px 0 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 719px) {
+  .tableWrap {
+    display: none;
+  }
+
+  .cards {
+    display: flex;
+  }
+}
+
+@media (min-width: 640px) {
+  .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 24px;
+  }
 }

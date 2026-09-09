@@ -12,7 +12,14 @@ import type {
   Sentiment,
 } from '../api/types';
 import { RiskBadge } from '../components/RiskBadge';
-import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, formatDate, formatMoney } from '../lib/labels';
+import {
+  ROLE_LABELS,
+  STAGE_LABELS,
+  EVENT_LABELS,
+  SENTIMENT_LABELS,
+  formatDate,
+  formatMoney,
+} from '../lib/labels';
 import styles from './CompanyPage.module.css';
 
 /**
@@ -52,10 +59,12 @@ const buildVerdict = (risk: IRisk | null): string => {
   return `${lead}: ${parts.join('; ')}.`;
 };
 
-const VERDICT_CLASS: Record<string, string> = {
-  green: styles.verdictGreen ?? '',
-  yellow: styles.verdictYellow ?? '',
-  red: styles.verdictRed ?? '',
+/** Цветная полоса на карточке вердикта — тот же светофор, что и в бейдже. */
+const HERO_CLASS: Record<string, string> = {
+  grey: styles.heroGrey ?? '',
+  green: styles.heroGreen ?? '',
+  yellow: styles.heroYellow ?? '',
+  red: styles.heroRed ?? '',
 };
 
 const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
@@ -111,7 +120,7 @@ export const CompanyPage: FC = () => {
     enabled: Number.isFinite(companyId),
   });
 
-  if (!Number.isFinite(companyId)) return <p>Некорректный адрес карточки.</p>;
+  if (!Number.isFinite(companyId)) return <p className={styles.empty}>Некорректный адрес карточки.</p>;
   if (companyQuery.isLoading) return <p className={styles.empty}>Загрузка…</p>;
   if (companyQuery.isError) return <p className={styles.empty}>Компания не найдена.</p>;
 
@@ -121,35 +130,51 @@ export const CompanyPage: FC = () => {
   if (!data?.company) return <p className={styles.empty}>Компания не найдена.</p>;
 
   const { company, risk, aliases } = data;
+  const light = risk?.riskLight ?? 'grey';
   const projects = projectsQuery.data?.items ?? [];
   const events = eventsQuery.data?.items ?? [];
   const similar = similarQuery.data?.items ?? [];
   const mentions = mentionsQuery.data?.pages.flatMap(p => p.items) ?? [];
+  const facts = [company.legalForm, company.city, company.bin ? `БИН ${company.bin}` : null].filter(
+    (value): value is string => Boolean(value),
+  );
 
   return (
     <>
-      <div className={styles.head}>
-        <div className={styles.titleBlock}>
-          <h1>{company.name}</h1>
-          <div className={styles.subtitle}>
-            {[company.legalForm, company.city, company.bin ? `БИН ${company.bin}` : null]
-              .filter(Boolean)
-              .join(' · ') || 'Реквизиты не установлены'}
+      {/* Шапка карточки. Вердикт и светофор должны читаться до прокрутки. */}
+      <header className={`${styles.hero} ${HERO_CLASS[light] ?? ''}`}>
+        <div className={styles.heroTop}>
+          <div className={styles.heroTitle}>
+            <h1 className={styles.name}>{company.name}</h1>
+            <div className={styles.facts}>
+              {facts.length > 0 ? (
+                facts.map(fact => (
+                  <span key={fact} className={styles.fact}>
+                    {fact}
+                  </span>
+                ))
+              ) : (
+                <span className={styles.factMuted}>Реквизиты не установлены</span>
+              )}
+            </div>
           </div>
+          <RiskBadge light={light} score={risk?.riskScore} large />
         </div>
-        <RiskBadge light={risk?.riskLight ?? 'grey'} score={risk?.riskScore} large />
-      </div>
 
-      <div
-        className={`${styles.verdict} ${risk ? (VERDICT_CLASS[risk.riskLight] ?? '') : ''}`}
-        role="status"
-      >
-        <p className={styles.verdictText}>{buildVerdict(risk)}</p>
-      </div>
+        <p className={styles.verdict} role="status">
+          {buildVerdict(risk)}
+        </p>
+
+        {risk?.lastMentionAt && (
+          <p className={styles.heroFoot}>
+            Последнее упоминание — {formatDate(risk.lastMentionAt)}
+          </p>
+        )}
+      </header>
 
       {similar.length > 0 && (
-        <div className={styles.similar}>
-          Похожие компании — возможно, это дубли:{' '}
+        <div className={styles.callout}>
+          <span className={styles.calloutTitle}>Похожие компании — возможно, это дубли</span>{' '}
           {similar.map((s, i) => (
             <span key={s.id}>
               {i > 0 && ', '}
@@ -166,7 +191,11 @@ export const CompanyPage: FC = () => {
           <Stat value={risk.projectsTotal} label="Всего объектов" />
           <Stat value={risk.activeProjects} label="Активных" />
           <Stat value={risk.doneProjects} label="Сдано" />
-          <Stat value={risk.delayedProjects} label="Со срывом срока" bad={risk.delayedProjects > 0} />
+          <Stat
+            value={risk.delayedProjects}
+            label="Со срывом срока"
+            bad={risk.delayedProjects > 0}
+          />
           <Stat
             value={risk.avgDelayDays === null ? '—' : `${Math.round(risk.avgDelayDays)} дн`}
             label="Средняя задержка"
@@ -181,73 +210,86 @@ export const CompanyPage: FC = () => {
       <section className={styles.section}>
         <div className={styles.sectionHead}>
           <h2>Объекты</h2>
-          <span className={styles.subtitle}>{projects.length}</span>
+          <span className={styles.count}>{projects.length}</span>
         </div>
         {projects.length === 0 ? (
           <p className={styles.empty}>Объекты не найдены.</p>
         ) : (
-          projects.map(p => (
-            <div key={`${p.id}-${p.role}`} className={styles.card}>
-              <div className={styles.projectHead}>
-                <span className={styles.projectName}>{p.name}</span>
-                <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
-                <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
-                {p.city && <span className={styles.tag}>{p.city}</span>}
-                {p.plannedCompletion && (
-                  <span className={styles.tag}>план {formatDate(p.plannedCompletion)}</span>
-                )}
-              </div>
-              {p.counterparties && p.counterparties.length > 0 && (
-                <div className={styles.counterparties}>
-                  Также на объекте:{' '}
-                  {p.counterparties.map((c, i) => (
-                    <span key={c.id}>
-                      {i > 0 && ', '}
-                      <Link to={`/company/${c.id}`}>{c.name}</Link> ({ROLE_LABELS[c.role]})
-                    </span>
-                  ))}
+          <div className={styles.stack}>
+            {projects.map(p => (
+              <article key={`${p.id}-${p.role}`} className={styles.card}>
+                <div className={styles.projectHead}>
+                  <span className={styles.projectName}>{p.name}</span>
+                  <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
+                  <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
+                  {p.city && <span className={styles.tag}>{p.city}</span>}
+                  {p.plannedCompletion && (
+                    <span className={styles.tag}>план {formatDate(p.plannedCompletion)}</span>
+                  )}
                 </div>
-              )}
-            </div>
-          ))
+                {p.counterparties && p.counterparties.length > 0 && (
+                  <div className={styles.counterparties}>
+                    Также на объекте:{' '}
+                    {p.counterparties.map((c, i) => (
+                      <span key={c.id}>
+                        {i > 0 && ', '}
+                        <Link to={`/company/${c.id}`}>{c.name}</Link> ({ROLE_LABELS[c.role]})
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
         )}
       </section>
 
       {events.length > 0 && (
         <section className={styles.section}>
-          <h2>События</h2>
-          <div className={styles.card}>
-            {events.map(e => (
-              <div key={e.id} className={styles.eventRow}>
-                <span className={`${styles.eventType} ${e.severity >= 2 ? styles.eventSevere : ''}`}>
-                  {EVENT_LABELS[e.type] ?? e.type}
-                </span>
-                <span className={styles.tag}>{formatDate(e.occurredOn) || 'дата неизвестна'}</span>
-                {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
-                {e.amountKzt !== null && (
-                  <span className={styles.tag}>{formatMoney(e.amountKzt)}</span>
-                )}
-                {e.url && (
-                  <a href={e.url} target="_blank" rel="noreferrer noopener">
-                    источник
-                  </a>
-                )}
-              </div>
-            ))}
+          <div className={styles.sectionHead}>
+            <h2>События</h2>
+            <span className={styles.count}>{events.length}</span>
           </div>
+          <ol className={styles.timeline}>
+            {events.map(e => (
+              <li
+                key={e.id}
+                className={`${styles.event} ${e.severity >= 2 ? styles.eventSevere : ''}`}
+              >
+                <div className={styles.eventHead}>
+                  <span className={styles.eventType}>{EVENT_LABELS[e.type] ?? e.type}</span>
+                  <span className={styles.eventDate}>
+                    {formatDate(e.occurredOn) || 'дата неизвестна'}
+                  </span>
+                </div>
+                <div className={styles.eventMeta}>
+                  {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
+                  {e.amountKzt !== null && (
+                    <span className={styles.tag}>{formatMoney(e.amountKzt)}</span>
+                  )}
+                  {e.url && (
+                    <a href={e.url} target="_blank" rel="noreferrer noopener">
+                      источник
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 
       <section className={styles.section}>
         <div className={styles.sectionHead}>
           <h2>Упоминания</h2>
-          <div className={styles.filters}>
+          <div className={styles.segmented} role="group" aria-label="Тональность упоминаний">
             {SENTIMENT_FILTERS.map(f => (
               <button
                 key={f.value}
                 type="button"
-                className={`${styles.filterButton} ${
-                  sentiment === f.value ? styles.filterButtonActive : ''
+                aria-pressed={sentiment === f.value}
+                className={`${styles.segment} ${
+                  sentiment === f.value ? styles.segmentActive : ''
                 }`}
                 onClick={() => setSentiment(f.value)}
               >
@@ -258,39 +300,51 @@ export const CompanyPage: FC = () => {
         </div>
 
         {mentions.length === 0 ? (
-          <p className={styles.empty}>
-            {mentionsQuery.isLoading ? 'Загрузка…' : 'Упоминаний нет.'}
-          </p>
+          <p className={styles.empty}>{mentionsQuery.isLoading ? 'Загрузка…' : 'Упоминаний нет.'}</p>
         ) : (
-          mentions.map(m => (
-            <article
-              key={m.id}
-              className={`${styles.mention} ${
-                m.sentiment === 'negative'
-                  ? styles.mentionNegative
-                  : m.sentiment === 'positive'
-                    ? styles.mentionPositive
-                    : ''
-              }`}
-            >
-              <p className={styles.quote}>«{m.quote}»</p>
-              <div className={styles.mentionMeta}>
-                <span>{formatDate(m.publishedAt)}</span>
-                <span>{m.sourceTitle}</span>
-                {m.role && <span>{ROLE_LABELS[m.role]}</span>}
-                {!m.quoteVerified && (
-                  <span className={styles.unverified} title="Цитата не найдена в тексте дословно">
-                    цитата не сверена
+          <div className={styles.stack}>
+            {mentions.map(m => (
+              <article
+                key={m.id}
+                className={`${styles.mention} ${
+                  m.sentiment === 'negative'
+                    ? styles.mentionNegative
+                    : m.sentiment === 'positive'
+                      ? styles.mentionPositive
+                      : ''
+                }`}
+              >
+                <p className={styles.quote}>{m.quote}</p>
+                <div className={styles.mentionMeta}>
+                  {/* Тональность подписана словом: одной полосы у края мало. */}
+                  <span
+                    className={`${styles.sentiment} ${
+                      m.sentiment === 'negative'
+                        ? styles.sentimentNegative
+                        : m.sentiment === 'positive'
+                          ? styles.sentimentPositive
+                          : ''
+                    }`}
+                  >
+                    {SENTIMENT_LABELS[m.sentiment]}
                   </span>
-                )}
-                {m.url && (
-                  <a href={m.url} target="_blank" rel="noreferrer noopener">
-                    оригинал
-                  </a>
-                )}
-              </div>
-            </article>
-          ))
+                  <span>{formatDate(m.publishedAt)}</span>
+                  <span className={styles.source}>{m.sourceTitle}</span>
+                  {m.role && <span>{ROLE_LABELS[m.role]}</span>}
+                  {!m.quoteVerified && (
+                    <span className={styles.unverified} title="Цитата не найдена в тексте дословно">
+                      цитата не сверена
+                    </span>
+                  )}
+                  {m.url && (
+                    <a href={m.url} target="_blank" rel="noreferrer noopener">
+                      оригинал
+                    </a>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
         )}
 
         {mentionsQuery.hasNextPage && (
@@ -307,8 +361,14 @@ export const CompanyPage: FC = () => {
 
       {aliases.length > 1 && (
         <section className={styles.section}>
-          <h3>Варианты написания</h3>
-          <p className={styles.subtitle}>{aliases.map(a => a.alias).join(' · ')}</p>
+          <h3 className={styles.aliasTitle}>Варианты написания</h3>
+          <div className={styles.aliases}>
+            {aliases.map(a => (
+              <span key={a.alias} className={styles.tag}>
+                {a.alias}
+              </span>
+            ))}
+          </div>
         </section>
       )}
     </>
@@ -320,8 +380,8 @@ const Stat: FC<{ value: number | string; label: string; bad?: boolean }> = ({
   label,
   bad = false,
 }) => (
-  <div className={styles.stat}>
-    <div className={`${styles.statValue} ${bad ? styles.statValueBad : ''}`}>{value}</div>
+  <div className={`${styles.stat} ${bad ? styles.statBad : ''}`}>
+    <div className={styles.statValue}>{value}</div>
     <div className={styles.statLabel}>{label}</div>
   </div>
 );

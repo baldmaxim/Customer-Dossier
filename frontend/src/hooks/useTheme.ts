@@ -34,7 +34,8 @@ export const useTheme = (): { theme: Theme; toggle: () => void } => {
     // Шапка PWA красится этим мета-тегом; без синхронизации она останется
     // от предыдущей темы.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#12141a' : '#f7f8fa');
+    // Значения совпадают с --bg в index.css и с инлайн-скриптом в index.html.
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1015' : '#f4f5f8');
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {

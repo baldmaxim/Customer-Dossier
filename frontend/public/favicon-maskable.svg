@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Досье Заказчика">
+  <defs>
+    <linearGradient id="tileMask" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a7bfa"/>
+      <stop offset="1" stop-color="#1b3ccd"/>
+    </linearGradient>
+  </defs>
+  <!-- Maskable-вариант: заливка во весь квадрат без скруглений (форму задаёт
+       маска Android), монограмма ужата в безопасную зону ~62 %. -->
+  <rect width="64" height="64" fill="url(#tileMask)"/>
+  <g transform="translate(32 32) scale(0.78) translate(-32 -32)">
+    <path fill="#ffffff" fill-rule="evenodd"
+          d="M24 15H46V39H50V50H42V45H22V50H14V39H18Z
+             M31 22H39V39H26Z"/>
+  </g>
+</svg>

@@ -1,10 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="14" fill="#2563eb"/>
-  <!-- Папка досье: обложка со срезанным углом -->
-  <path d="M16 17h13l4 5h15a3 3 0 0 1 3 3v22a3 3 0 0 1-3 3H16a3 3 0 0 1-3-3V20a3 3 0 0 1 3-3z"
-        fill="#ffffff" opacity="0.92"/>
-  <!-- Светофор риска: три точки, красная активна -->
-  <circle cx="24" cy="37" r="3.4" fill="#c02a2a"/>
-  <circle cx="34" cy="37" r="3.4" fill="#2563eb" opacity="0.28"/>
-  <circle cx="44" cy="37" r="3.4" fill="#2563eb" opacity="0.28"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Досье Заказчика">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a7bfa"/>
+      <stop offset="1" stop-color="#1b3ccd"/>
+    </linearGradient>
+  </defs>
+  <!-- Плитка. Фон непрозрачный: прозрачный PNG на iOS даёт чёрный квадрат. -->
+  <rect width="64" height="64" rx="15" fill="url(#tile)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1.5"/>
+  <!-- Монограмма «Д»: геометрическая, две фигуры — читается на 16 px. -->
+  <g transform="translate(32 32) scale(0.9) translate(-32 -32)">
+    <path fill="#ffffff" fill-rule="evenodd"
+          d="M24 15H46V39H50V50H42V45H22V50H14V39H18Z
+             M31 22H39V39H26Z"/>
+  </g>
 </svg>

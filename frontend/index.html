@@ -5,16 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Досье Заказчика</title>
     <meta name="description" content="Портал деловой разведки по стройрынку Казахстана" />
+    <meta name="color-scheme" content="light dark" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png" />
     <link rel="manifest" href="/manifest.json" />
 
+    <!-- Inter с фолбэком на системный стек: без сети интерфейс просто берёт
+         системный гротеск, вёрстка не разъезжается. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+
+    <!-- apple-mobile-web-app-capable устарел, но iOS до 17 читает только его. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- default, а не black-translucent: при translucent часы и статус-бар
+         рисуются белым поверх контента и на светлой теме исчезают. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Досье" />
-    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="theme-color" content="#f4f5f8" />
 
     <script>
       // Тема ставится до первой отрисовки — иначе при загрузке мигает светлым.
@@ -26,7 +43,7 @@
             (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
           document.documentElement.setAttribute('data-theme', theme);
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'dark' ? '#12141a' : '#f7f8fa');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1015' : '#f4f5f8');
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'light');
         }

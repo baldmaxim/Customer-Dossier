@@ -2,7 +2,7 @@
 // Одно место: иначе «general_contractor» превращается в «генподрядчик» на одном
 // экране и в «Генеральный подрядчик» на другом.
 
-import type { Role } from '../api/types';
+import type { Role, Sentiment } from '../api/types';
 
 export const ROLE_LABELS: Record<Role, string> = {
   customer: 'Заказчик',
@@ -11,6 +11,13 @@ export const ROLE_LABELS: Record<Role, string> = {
   designer: 'Проектировщик',
   investor: 'Инвестор',
   operator: 'Эксплуатация',
+};
+
+/** Тональность упоминания. Подпись словом обязательна: одного цвета мало. */
+export const SENTIMENT_LABELS: Record<Sentiment, string> = {
+  positive: 'позитив',
+  neutral: 'нейтрально',
+  negative: 'негатив',
 };
 
 export const STAGE_LABELS: Record<string, string> = {

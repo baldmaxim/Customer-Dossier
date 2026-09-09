@@ -1,40 +1,79 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
+  gap: 7px;
+  padding: 5px 11px 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
   font-weight: 600;
+  letter-spacing: -0.005em;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
+/* Точка насыщенная, текст — контрастный. Цвет никогда не единственный носитель
+   смысла: подпись стоит рядом всегда. */
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--dot);
   flex: 0 0 auto;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot) 22%, transparent);
 }
 
 .grey {
+  --dot: var(--risk-grey-dot);
   color: var(--risk-grey);
   background: var(--risk-grey-bg);
+  border-color: var(--risk-grey-border);
 }
+
 .green {
+  --dot: var(--risk-green-dot);
   color: var(--risk-green);
   background: var(--risk-green-bg);
+  border-color: var(--risk-green-border);
 }
+
 .yellow {
+  --dot: var(--risk-yellow-dot);
   color: var(--risk-yellow);
   background: var(--risk-yellow-bg);
+  border-color: var(--risk-yellow-border);
 }
+
 .red {
+  --dot: var(--risk-red-dot);
   color: var(--risk-red);
   background: var(--risk-red-bg);
+  border-color: var(--risk-red-border);
+}
+
+/* «Мало данных» — не «зелёный лайт»: штриховка отличает состояние «нечем
+   судить» от состояния «проверено, чисто» даже в чёрно-белой печати. */
+.grey .dot {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--risk-grey-dot) 0 2px,
+    transparent 2px 4px
+  );
+  box-shadow: 0 0 0 1px var(--risk-grey-dot) inset;
+}
+
+.score {
+  opacity: 0.75;
+  font-weight: 500;
 }
 
 .large {
-  font-size: 1rem;
-  padding: 7px 14px;
+  font-size: 0.95rem;
+  padding: 8px 15px 8px 12px;
+  gap: 9px;
+}
+
+.large .dot {
+  width: 11px;
+  height: 11px;
 }

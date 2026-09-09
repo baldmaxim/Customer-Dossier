@@ -73,7 +73,7 @@ export const AdminPage: FC = () => {
 
   return (
     <>
-      <h1>Админка</h1>
+      <h1 className={styles.pageTitle}>Админка</h1>
 
       {notice && (
         <div className={styles.notice} role="status">

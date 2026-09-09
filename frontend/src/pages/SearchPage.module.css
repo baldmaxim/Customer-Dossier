@@ -1,45 +1,84 @@
+.hero {
+  max-width: 660px;
+  margin: 8px 0 18px;
+}
+
 .title {
+  letter-spacing: -0.03em;
   margin-bottom: 8px;
 }
 
 .lead {
   color: var(--muted);
   margin: 0 0 18px;
-  max-width: 62ch;
+  max-width: 58ch;
+  font-size: 0.95rem;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fieldIcon {
+  position: absolute;
+  left: 15px;
+  width: 19px;
+  height: 19px;
+  color: var(--faint);
+  pointer-events: none;
 }
 
 .input {
   width: 100%;
-  padding: 13px 15px;
+  /* 52 px — крупная тап-цель и место под иконку слева. */
+  min-height: 52px;
+  padding: 13px 16px 13px 44px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
-  transition: border-color 160ms ease-out;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.input::placeholder {
+  color: var(--faint);
 }
 
 .input:focus {
+  outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Крестик очистки в Safari/Chrome красится в цвет темы. */
+.input::-webkit-search-cancel-button {
+  filter: grayscale(1) opacity(0.55);
 }
 
 .results {
-  margin-top: 14px;
+  max-width: 660px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
+  animation: rise 180ms var(--ease) both;
 }
 
 .resultRow {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  padding: 13px 15px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
-  min-height: 48px;
-  transition: background-color 160ms ease-out;
+  min-height: 56px;
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .resultRow:last-child {
@@ -51,29 +90,61 @@
   text-decoration: none;
 }
 
+.resultText {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .resultName {
   font-weight: 500;
+  color: var(--text);
 }
 
 .resultMeta {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+}
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--faint);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.resultRow:hover .chevron {
+  transform: translateX(2px);
+  color: var(--accent);
 }
 
 .hint {
   color: var(--muted);
-  padding: 14px 15px;
+  padding: 16px 15px;
   margin: 0;
+  font-size: 0.9rem;
+}
+
+.hintPlain {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 14px 0 0;
 }
 
 .warning {
   color: var(--risk-yellow);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   margin: 10px 0 0;
+  max-width: 62ch;
 }
 
+/* ─── Сводка «что в базе» ──────────────────────────────────────────────── */
+
 .summary {
-  margin-top: 34px;
+  margin-top: 32px;
 }
 
 .summaryTitle {
@@ -82,9 +153,9 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .summaryStat {
@@ -92,18 +163,71 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.summaryStat:hover {
+  border-color: var(--border-strong);
 }
 
 .summaryValue {
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   font-weight: 600;
+  letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .summaryLabel {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.riskCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px 16px;
+}
+
+.riskTitle {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.bar {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--surface-2);
+  margin-bottom: 14px;
+}
+
+.barPart {
+  display: block;
+  height: 100%;
+}
+
+.barRed {
+  background: var(--risk-red-dot);
+}
+.barYellow {
+  background: var(--risk-yellow-dot);
+}
+.barGreen {
+  background: var(--risk-green-dot);
+}
+/* Серый в полосе штрихуется: «мало данных» — не ещё один оттенок благополучия. */
+.barGrey {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--risk-grey-dot) 0 3px,
+    var(--surface-3) 3px 6px
+  );
 }
 
 .riskRow {
@@ -116,10 +240,34 @@
 .riskItem {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .riskCount {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .hero {
+    margin: 20px 0 24px;
+  }
+
+  .input {
+    min-height: 56px;
+    /* Только px и только ≥ 16: rem-значение меньше 16 px заставит Safari
+       зумить страницу при фокусе. */
+    font-size: 17px;
+  }
 }

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 198 32" width="198" height="32" role="img" aria-label="Досье Заказчика">
+  <defs>
+    <linearGradient id="tileDark" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b89ff"/>
+      <stop offset="1" stop-color="#2447d8"/>
+    </linearGradient>
+  </defs>
+  <g transform="scale(0.5)">
+    <rect width="64" height="64" rx="15" fill="url(#tileDark)"/>
+    <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.5"/>
+    <g transform="translate(32 32) scale(0.9) translate(-32 -32)">
+      <path fill="#ffffff" fill-rule="evenodd"
+            d="M24 15H46V39H50V50H42V45H22V50H14V39H18Z
+               M31 22H39V39H26Z"/>
+    </g>
+  </g>
+  <!-- Системный стек: SVG внутри <img> не подтягивает Inter с Google Fonts. -->
+  <text x="42" y="21.5"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="16.5" letter-spacing="-0.35">
+    <tspan font-weight="600" fill="#e9ecf2">Досье</tspan><tspan font-weight="400" fill="#9aa3b4" dx="5">Заказчика</tspan>
+  </text>
+</svg>

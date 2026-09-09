@@ -32,7 +32,11 @@ export const RiskBadge: FC<IRiskBadgeProps> = ({ light, score, large = false }) 
     <span className={className} title={score !== undefined ? `Индекс риска: ${score}` : undefined}>
       <span className={styles.dot} aria-hidden="true" />
       {LABELS[light]}
-      {score !== undefined && light !== 'grey' ? ` · ${score}` : null}
+      {/* У серого индекс не показываем: считать нечего, число вводило бы в
+          заблуждение. */}
+      {score !== undefined && light !== 'grey' ? (
+        <span className={styles.score}>· {score}</span>
+      ) : null}
     </span>
   );
 };

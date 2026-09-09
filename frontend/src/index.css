@@ -1,74 +1,124 @@
 /* Дизайн-токены. Хардкод цветов в компонентах запрещён — только эти переменные. */
 
 :root {
-  --bg: #f7f8fa;
+  /* Поверхности. Фон холоднее и темнее белого: карточки должны читаться как
+     отдельный слой, а не сливаться с полотном. */
+  --bg: #f4f5f8;
   --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #dfe3e8;
-  --border-strong: #c4cad2;
+  --surface-2: #eef0f4;
+  --surface-3: #e4e7ee;
+  /* Полупрозрачная поверхность под шапку и нижнюю панель (стекло). */
+  --surface-glass: rgb(255 255 255 / 78%);
+  --border: #e2e5ec;
+  --border-strong: #cbd0da;
 
-  --text: #16181d;
-  --muted: #646c7a;
-  --faint: #8b93a1;
+  --text: #0f1219;
+  --muted: #586071;
+  /* Мелкие подписи: ≥ 4.5:1 к --surface и --bg. */
+  --faint: #646c7c;
 
-  --accent: #2563eb;
+  --accent: #2551e0;
+  --accent-hover: #1b40c2;
   --accent-contrast: #ffffff;
-  --accent-soft: #e8f0fe;
+  --accent-soft: #e9eefe;
+  --accent-border: #bccbfa;
 
   /* Светофор риска. Серый — «мало данных», не «всё хорошо»: это разные вещи,
-     и цвет обязан их различать. */
-  --risk-grey: #8b93a1;
-  --risk-green: #1a8a4a;
-  --risk-yellow: #b7791f;
-  --risk-red: #c02a2a;
+     и дизайн обязан их различать. Текстовый цвет отдельно от цвета точки:
+     точка должна быть насыщенной, текст — контрастным (≥ 4.5:1). */
+  --risk-grey: #5c6675;
+  --risk-green: #0e7a46;
+  --risk-yellow: #8f5e0a;
+  --risk-red: #b3261e;
 
-  --risk-grey-bg: #eef0f3;
-  --risk-green-bg: #e6f4ec;
-  --risk-yellow-bg: #fdf3e2;
-  --risk-red-bg: #fbeaea;
+  --risk-grey-dot: #8b93a1;
+  --risk-green-dot: #17a75c;
+  --risk-yellow-dot: #d99a2b;
+  --risk-red-dot: #dc3a2e;
 
-  --danger: #c02a2a;
-  --positive: #1a8a4a;
+  --risk-grey-bg: #ecedf1;
+  --risk-green-bg: #e3f4ea;
+  --risk-yellow-bg: #fcf1dc;
+  --risk-red-bg: #fbe9e8;
 
-  --radius: 10px;
-  --radius-sm: 6px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
+  --risk-grey-border: #d6dae2;
+  --risk-green-border: #b5e0c5;
+  --risk-yellow-border: #edcf9f;
+  --risk-red-border: #f0bdb8;
 
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --danger: #b3261e;
+  --positive: #0e7a46;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(15 18 25 / 6%);
+  --shadow: 0 1px 2px rgb(15 18 25 / 5%), 0 6px 16px -8px rgb(15 18 25 / 14%);
+  --shadow-lg: 0 2px 4px rgb(15 18 25 / 5%), 0 18px 40px -14px rgb(15 18 25 / 22%);
+
+  --font:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
   --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
-  --header-h: 56px;
+  /* Единая длительность: 150–250 мс, вход ease-out. */
+  --t-fast: 140ms;
+  --t: 180ms;
+  --ease: cubic-bezier(0.22, 0.68, 0.36, 1);
+
+  --header-h: 60px;
+  --tabbar-h: 62px;
+  --page-max: 1180px;
 }
 
 :root[data-theme='dark'] {
-  --bg: #12141a;
-  --surface: #1a1d25;
-  --surface-2: #22262f;
-  --border: #2c313b;
-  --border-strong: #3d434f;
+  --bg: #0e1015;
+  --surface: #161920;
+  --surface-2: #1d212a;
+  --surface-3: #262b36;
+  --surface-glass: rgb(22 25 32 / 78%);
+  --border: #262b35;
+  --border-strong: #3a4150;
 
-  --text: #e8eaee;
-  --muted: #9aa2b1;
-  --faint: #6f7787;
+  --text: #e9ecf2;
+  --muted: #9aa3b4;
+  --faint: #8b94a5;
 
-  --accent: #5b8def;
-  --accent-contrast: #0d1117;
-  --accent-soft: #1c2a45;
+  --accent: #7aa2ff;
+  --accent-hover: #96b6ff;
+  --accent-contrast: #0b1020;
+  --accent-soft: #1a2340;
+  --accent-border: #31437a;
 
-  --risk-grey: #7d8493;
-  --risk-green: #45b877;
-  --risk-yellow: #d9a441;
-  --risk-red: #e2635f;
+  --risk-grey: #9aa3b4;
+  --risk-green: #4cc98a;
+  --risk-yellow: #e0a844;
+  --risk-red: #f0736b;
 
-  --risk-grey-bg: #23272f;
-  --risk-green-bg: #16301f;
-  --risk-yellow-bg: #332918;
-  --risk-red-bg: #35201f;
+  --risk-grey-dot: #7c8698;
+  --risk-green-dot: #35c97e;
+  --risk-yellow-dot: #e6a02f;
+  --risk-red-dot: #ef5f52;
 
-  --danger: #e2635f;
-  --positive: #45b877;
+  --risk-grey-bg: #1d212a;
+  --risk-green-bg: #10251a;
+  --risk-yellow-bg: #2a2010;
+  --risk-red-bg: #2b1614;
 
-  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 1px 3px rgb(0 0 0 / 40%);
+  --risk-grey-border: #333a46;
+  --risk-green-border: #1f4c33;
+  --risk-yellow-border: #57411b;
+  --risk-red-border: #5c2a25;
+
+  --danger: #f0736b;
+  --positive: #4cc98a;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -8px rgb(0 0 0 / 60%);
+  --shadow-lg: 0 2px 4px rgb(0 0 0 / 40%), 0 18px 40px -14px rgb(0 0 0 / 70%);
 }
 
 *,
@@ -83,6 +133,13 @@ body {
   padding: 0;
 }
 
+html {
+  scrollbar-color: var(--border-strong) transparent;
+  /* clip, а не hidden: hidden делает элемент скролл-контейнером и ломает
+     position: sticky у шапки. Горизонтального скролла страницы нет. */
+  overflow-x: clip;
+}
+
 body {
   /* dvh, не vh: адресная строка мобильного Chrome съедает vh и обрезает низ. */
   min-height: 100dvh;
@@ -90,8 +147,10 @@ body {
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   overflow-wrap: break-word;
 }
@@ -100,13 +159,21 @@ body {
   min-height: 100dvh;
 }
 
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color var(--t-fast) var(--ease);
 }
 
 a:hover {
+  color: var(--accent-hover);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 button,
@@ -114,37 +181,59 @@ input,
 select,
 textarea {
   font: inherit;
+  font-family: var(--font);
   color: inherit;
   /* 16px минимум: иначе Safari и Chrome на Android зумят форму при фокусе. */
   font-size: max(16px, 1em);
+  letter-spacing: inherit;
   touch-action: manipulation;
 }
 
 button {
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 h1,
 h2,
 h3 {
   margin: 0;
-  line-height: 1.25;
+  line-height: 1.2;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
 }
 h2 {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
 }
 h3 {
-  font-size: 1rem;
+  font-size: 0.95rem;
+}
+
+@media (min-width: 768px) {
+  h1 {
+    font-size: 1.9rem;
+  }
+  h2 {
+    font-size: 1.2rem;
+  }
+}
+
+/* Цифры сравнивают глазами по колонкам — только табличные. */
+table,
+output,
+time,
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Широкое содержимое (таблицы, длинные названия) скроллится внутри своего
