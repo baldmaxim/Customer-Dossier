@@ -11,7 +11,7 @@ import {
   normalizeName,
   isJunkName,
   isShortAmbiguousName,
-  isValidBin,
+  isValidTaxId,
   type INormalizedName,
 } from './normalize.js';
 
@@ -28,14 +28,14 @@ export interface IResolveInput {
   /** Имя ровно как в тексте. */
   surface: string;
   legalForm?: string | null;
-  bin?: string | null;
+  taxId?: string | null;
   city?: string | null;
   /** Документ-основание: попадёт в merge_queue как образец. */
   documentId?: number | null;
 }
 
 export type ResolveMethod =
-  | 'bin'
+  | 'tax_id'
   | 'alias'
   | 'key'
   | 'auto_merge'
@@ -53,7 +53,7 @@ export interface IResolveResult {
 interface ICandidateRow {
   id: number;
   name: string;
-  bin: string | null;
+  tax_id: string | null;
   city: string | null;
   legal_form: string | null;
   s_latin: number;
@@ -99,10 +99,10 @@ const createCompany = async (
   exec: DbExecutor,
   input: IResolveInput,
   normalized: INormalizedName,
-  acceptedBin: string | null,
+  acceptedTaxId: string | null,
 ): Promise<number> => {
   const res = await exec.query<{ id: number }>(
-    `INSERT INTO companies (name, name_norm, name_latin, legal_form, bin, city)
+    `INSERT INTO companies (name, name_norm, name_latin, legal_form, tax_id, city)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
     [
@@ -110,7 +110,7 @@ const createCompany = async (
       normalized.norm,
       normalized.latin,
       input.legalForm ?? normalized.legalForm,
-      acceptedBin,
+      acceptedTaxId,
       input.city ?? null,
     ],
   );
@@ -143,12 +143,12 @@ const fetchCandidates = async (
        FROM entity_aliases a
        WHERE a.entity_kind = 'company' AND a.alias_latin % $1
      )
-     SELECT c.id, c.name, c.bin, c.city, c.legal_form,
+     SELECT c.id, c.name, c.tax_id, c.city, c.legal_form,
             max(cand.s_latin) AS s_latin,
             max(cand.s_norm)  AS s_norm
      FROM cand
      JOIN companies c ON c.id = cand.id AND c.merged_into_id IS NULL
-     GROUP BY c.id, c.name, c.bin, c.city, c.legal_form
+     GROUP BY c.id, c.name, c.tax_id, c.city, c.legal_form
      ORDER BY max(cand.s_latin) DESC
      LIMIT 25`,
     [normalized.latin, normalized.norm],
@@ -160,27 +160,27 @@ interface IScored {
   candidate: ICandidateRow;
   score: number;
   reasons: Record<string, unknown>;
-  /** Слияние запрещено навсегда: разные БИН. */
+  /** Слияние запрещено навсегда: разные ИНН/ОГРН. */
   forbidden: boolean;
 }
 
 const scoreCandidate = (
   candidate: ICandidateRow,
   input: IResolveInput,
-  acceptedBin: string | null,
+  acceptedTaxId: string | null,
 ): IScored => {
   const reasons: Record<string, unknown> = {
     s_latin: Number(candidate.s_latin.toFixed(3)),
     s_norm: Number(candidate.s_norm.toFixed(3)),
   };
 
-  // Разные БИН — это разные юрлица, какими бы похожими ни были названия.
+  // Разные ИНН/ОГРН — это разные юрлица, какими бы похожими ни были названия.
   // Пишем пару как отклонённую навсегда, чтобы она не всплывала в очереди.
-  if (acceptedBin && candidate.bin && acceptedBin !== candidate.bin) {
-    reasons.bin = 'conflict';
+  if (acceptedTaxId && candidate.tax_id && acceptedTaxId !== candidate.tax_id) {
+    reasons.tax_id = 'conflict';
     return { candidate, score: 0, reasons, forbidden: true };
   }
-  reasons.bin = acceptedBin && candidate.bin ? 'match' : 'none';
+  reasons.tax_id = acceptedTaxId && candidate.tax_id ? 'match' : 'none';
 
   let score = 0.55 * candidate.s_latin + 0.25 * candidate.s_norm;
 
@@ -244,18 +244,18 @@ export const resolveCompany = async (
   const normalized = normalizeName(input.surface, 'company');
   if (isJunkName(normalized)) return null;
 
-  const acceptedBin = input.bin && isValidBin(input.bin) ? input.bin : null;
+  const acceptedTaxId = input.taxId && isValidTaxId(input.taxId) ? input.taxId : null;
 
-  // Ш1. БИН — сильный идентификатор, отменяет всё остальное.
-  if (acceptedBin) {
-    const byBin = await exec.query<{ id: number }>(
-      'SELECT id FROM companies WHERE bin = $1 AND merged_into_id IS NULL',
-      [acceptedBin],
+  // Ш1. ИНН/ОГРН — сильный идентификатор, отменяет всё остальное.
+  if (acceptedTaxId) {
+    const byTaxId = await exec.query<{ id: number }>(
+      'SELECT id FROM companies WHERE tax_id = $1 AND merged_into_id IS NULL',
+      [acceptedTaxId],
     );
-    const id = byBin.rows[0]?.id;
+    const id = byTaxId.rows[0]?.id;
     if (id !== undefined) {
       await addAlias(exec, id, input.surface, normalized);
-      return { companyId: id, method: 'bin', confidence: 1, queued: false };
+      return { companyId: id, method: 'tax_id', confidence: 1, queued: false };
     }
   }
 
@@ -288,7 +288,7 @@ export const resolveCompany = async (
   const candidates = await fetchCandidates(exec, normalized);
   const scored = candidates
     .filter(c => c.s_latin >= MIN_LATIN_SIMILARITY)
-    .map(c => scoreCandidate(c, input, acceptedBin))
+    .map(c => scoreCandidate(c, input, acceptedTaxId))
     .sort((a, b) => b.score - a.score);
 
   const best = scored[0];
@@ -304,9 +304,9 @@ export const resolveCompany = async (
     };
   }
 
-  const newId = await createCompany(exec, input, normalized, acceptedBin);
+  const newId = await createCompany(exec, input, normalized, acceptedTaxId);
 
-  // Запреты фиксируем сразу: пара с конфликтом БИН не должна всплывать в очереди.
+  // Запреты фиксируем сразу: пара с конфликтом ИНН не должна всплывать в очереди.
   for (const forbidden of scored.filter(s => s.forbidden)) {
     await enqueueMerge(exec, newId, forbidden.candidate.id, forbidden, input.documentId ?? null, 'rejected');
   }

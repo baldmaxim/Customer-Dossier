@@ -22,7 +22,7 @@ export interface ICompany {
   id: number;
   name: string;
   legalForm: string | null;
-  bin: string | null;
+  taxId: string | null;
   city: string | null;
   website: string | null;
   isVerified: boolean;
@@ -93,7 +93,7 @@ export interface IEventRow {
   type: string;
   occurredOn: string | null;
   severity: number;
-  amountKzt: number | null;
+  amountRub: number | null;
   quote: string;
   confidence: number;
   status: string;

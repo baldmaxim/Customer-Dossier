@@ -4,7 +4,7 @@ import {
   verifyExtraction,
   isQuoteVerbatim,
   isNameInQuote,
-  isBinPresentInBody,
+  isTaxIdPresentInBody,
   isPlausibleEventDate,
   isAmountInBody,
   isCityMentionedInBody,
@@ -15,8 +15,8 @@ import { emptyExtraction, type IExtraction } from '../llm/schema.js';
 const BODY = [
   'ТОО «BI Group» сорвало срок сдачи ЖК «Астана Тауэр» на восемь месяцев.',
   'Дольщики направили коллективное обращение в акимат Астаны.',
-  'Заказчиком объекта выступает АО «Базис-А», БИН 950140000415.',
-  'Сумма контракта составила 12500000000 тенге.',
+  'Заказчиком объекта выступает АО «Базис-А», ИНН 7707083893.',
+  'Сумма контракта составила 12500000000 рублей.',
 ].join(' ');
 
 const PUBLISHED = new Date('2026-09-01T00:00:00Z');
@@ -24,7 +24,7 @@ const PUBLISHED = new Date('2026-09-01T00:00:00Z');
 const company = (over: Partial<IExtraction['companies'][number]> = {}) => ({
   name: 'BI Group',
   legal_form: 'ТОО',
-  bin: null,
+  tax_id: null,
   role: 'general_contractor' as const,
   sentiment: 'negative' as const,
   quote: 'ТОО «BI Group» сорвало срок сдачи ЖК «Астана Тауэр» на восемь месяцев.',
@@ -71,13 +71,19 @@ describe('isNameInQuote', () => {
   });
 });
 
-describe('isBinPresentInBody', () => {
-  it('принимает БИН, который есть в тексте', () => {
-    expect(isBinPresentInBody('950140000415', BODY)).toBe(true);
+describe('isTaxIdPresentInBody', () => {
+  it('принимает ИНН, который есть в тексте', () => {
+    expect(isTaxIdPresentInBody('7707083893', BODY)).toBe(true);
   });
 
-  it('отклоняет выдуманный БИН', () => {
-    expect(isBinPresentInBody('111140000415', BODY)).toBe(false);
+  it('отклоняет ИНН с верной контрольной суммой, которого нет в тексте', () => {
+    // Модель могла «вспомнить» настоящий ИНН другой компании.
+    expect(isTaxIdPresentInBody('1027700132239', BODY)).toBe(false);
+  });
+
+  it('отклоняет число из текста, не являющееся идентификатором', () => {
+    // 12500000000 в тексте есть, но контрольная сумма не сходится.
+    expect(isTaxIdPresentInBody('12500000000', BODY)).toBe(false);
   });
 });
 
@@ -179,15 +185,15 @@ describe('verifyExtraction', () => {
     expect(result.companies[0]!.confidenceFinal).toBeCloseTo(0.45);
   });
 
-  it('отклоняет выдуманный БИН, но саму компанию оставляет', () => {
+  it('отклоняет ИНН, которого нет в тексте, но саму компанию оставляет', () => {
     const result = verifyExtraction(
-      { ...emptyExtraction(), doc_relevant: true, companies: [company({ bin: '111140000415' })] },
+      { ...emptyExtraction(), doc_relevant: true, companies: [company({ tax_id: '1027700132239' })] },
       BODY,
       PUBLISHED,
     );
     expect(result.companies).toHaveLength(1);
-    expect(result.companies[0]!.binAccepted).toBeNull();
-    expect(result.rejected.some(r => r.kind === 'bin')).toBe(true);
+    expect(result.companies[0]!.taxIdAccepted).toBeNull();
+    expect(result.rejected.some(r => r.kind === 'tax_id')).toBe(true);
   });
 
   it('отбрасывает связь на отброшенную сущность, не роняя документ', () => {
@@ -253,7 +259,7 @@ describe('verifyExtraction', () => {
             counterparty: null,
             project: null,
             occurred_on: null,
-            amount_kzt: null,
+            amount_rub: null,
             quote: 'ТОО «BI Group» сорвало срок сдачи',
             confidence: 0.9,
           },

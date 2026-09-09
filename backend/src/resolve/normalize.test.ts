@@ -4,7 +4,9 @@ import {
   normalizeName,
   isJunkName,
   isShortAmbiguousName,
-  isValidBin,
+  isValidInn,
+  isValidOgrn,
+  isValidTaxId,
 } from './normalize.js';
 
 describe('normalizeName — компании', () => {
@@ -110,14 +112,45 @@ describe('isShortAmbiguousName', () => {
   });
 });
 
-describe('isValidBin', () => {
-  it('принимает корректный БИН юрлица', () => {
-    expect(isValidBin('123456400012')).toBe(true);
+describe('isValidInn', () => {
+  // Числа подобраны так, чтобы контрольная сумма сходилась: проверяем алгоритм,
+  // а не совпадение с чьим-то настоящим ИНН.
+  it('принимает ИНН организации (10 цифр)', () => {
+    expect(isValidInn('7707083893')).toBe(true);
   });
 
-  it('отклоняет ИИН (5-я цифра не 4/5/6) и мусор', () => {
-    expect(isValidBin('123406700012')).toBe(false); // 5-я цифра 0
-    expect(isValidBin('12345')).toBe(false);
-    expect(isValidBin('абвгде123456')).toBe(false);
+  it('принимает ИНН физлица и ИП (12 цифр)', () => {
+    expect(isValidInn('770708389324')).toBe(true);
+  });
+
+  it('отклоняет ИНН с испорченной контрольной цифрой', () => {
+    expect(isValidInn('7707083894')).toBe(false);
+  });
+
+  it('отклоняет неверную длину и мусор', () => {
+    expect(isValidInn('12345')).toBe(false);
+    expect(isValidInn('abcdefghij')).toBe(false);
+  });
+});
+
+describe('isValidOgrn', () => {
+  it('принимает корректный ОГРН', () => {
+    expect(isValidOgrn('1027700132239')).toBe(true);
+  });
+
+  it('отклоняет ОГРН с испорченной контрольной цифрой', () => {
+    expect(isValidOgrn('1027700132230')).toBe(false);
+  });
+});
+
+describe('isValidTaxId', () => {
+  it('принимает и ИНН, и ОГРН', () => {
+    expect(isValidTaxId('7707083893')).toBe(true);
+    expect(isValidTaxId('1027700132239')).toBe(true);
+  });
+
+  it('отклоняет длинное число, которое не является идентификатором', () => {
+    // Кадастровый номер, сумма без пробелов, номер дела — модель их подставляет.
+    expect(isValidTaxId('123456789012')).toBe(false);
   });
 });

@@ -38,7 +38,7 @@ describe('mergeChunkExtractions', () => {
       {
         name,
         legal_form: null,
-        bin: null,
+        tax_id: null,
         role: 'contractor',
         sentiment: 'neutral',
         quote: `цитата про ${name}`,
@@ -84,7 +84,7 @@ describe('mergeChunkExtractions', () => {
           counterparty: null,
           project: 'Астана Тауэр',
           occurred_on: null,
-          amount_kzt: null,
+          amount_rub: null,
           quote: 'задержка',
           confidence: 0.8,
         },

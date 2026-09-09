@@ -67,7 +67,7 @@ export const SearchPage: FC = () => {
       <section className={styles.hero}>
         <h1 className={styles.title}>Как дела у Заказчика?</h1>
         <p className={styles.lead}>
-          Введите название компании — «BI Group», «БИ Групп» или «Базис-А». Написание значения не
+          Введите название компании — «ПИК», «Самолёт» или «Глоракс». Написание значения не
           имеет.
         </p>
 

@@ -135,7 +135,7 @@ export const CompanyPage: FC = () => {
   const events = eventsQuery.data?.items ?? [];
   const similar = similarQuery.data?.items ?? [];
   const mentions = mentionsQuery.data?.pages.flatMap(p => p.items) ?? [];
-  const facts = [company.legalForm, company.city, company.bin ? `БИН ${company.bin}` : null].filter(
+  const facts = [company.legalForm, company.city, company.taxId ? `ИНН ${company.taxId}` : null].filter(
     (value): value is string => Boolean(value),
   );
 
@@ -264,8 +264,8 @@ export const CompanyPage: FC = () => {
                 </div>
                 <div className={styles.eventMeta}>
                   {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
-                  {e.amountKzt !== null && (
-                    <span className={styles.tag}>{formatMoney(e.amountKzt)}</span>
+                  {e.amountRub !== null && (
+                    <span className={styles.tag}>{formatMoney(e.amountRub)}</span>
                   )}
                   {e.url && (
                     <a href={e.url} target="_blank" rel="noreferrer noopener">

@@ -62,7 +62,7 @@ export const applyExtraction = async (
     const resolved = await resolveCompany(client, {
       surface: company.name,
       legalForm: company.legal_form ?? null,
-      bin: company.binAccepted,
+      taxId: company.taxIdAccepted,
       city: null,
       documentId,
     });
@@ -175,7 +175,7 @@ export const applyExtraction = async (
     const res = await client.query(
       `INSERT INTO events
          (type, occurred_on, project_id, company_id, counterparty_id, severity,
-          amount_kzt, document_id, extraction_id, quote, confidence, status)
+          amount_rub, document_id, extraction_id, quote, confidence, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'auto')
        ON CONFLICT (document_id, type, coalesce(project_id, 0), coalesce(company_id, 0))
        DO NOTHING`,
@@ -186,7 +186,7 @@ export const applyExtraction = async (
         companyId,
         counterpartyId,
         severityOf(event.type),
-        event.amountKzt,
+        event.amountRub,
         documentId,
         extractionId,
         event.quote,

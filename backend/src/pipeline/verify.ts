@@ -8,7 +8,7 @@
 // Пороги здесь сознательно консервативные. Ложный факт в карточке Заказчика
 // стоит доверия к порталу целиком; пропущенный факт стоит одного упоминания.
 
-import { normalizeName } from '../resolve/normalize.js';
+import { normalizeName, isValidTaxId } from '../resolve/normalize.js';
 import type {
   ICompanyExtract,
   IEventExtract,
@@ -29,7 +29,7 @@ export const CONFIDENCE_THRESHOLDS = {
   participant: 0.85,
 } as const;
 
-/** Раньше независимости РК события в этой предметной области быть не может. */
+/** Нижняя граница правдоподобия: до распада СССР рынка в нынешнем виде не было. */
 const MIN_EVENT_DATE = new Date('1991-01-01T00:00:00Z');
 
 /** Приведение к форме, в которой сравниваются цитата и текст. */
@@ -93,10 +93,17 @@ export const isNameInQuote = (name: string, quote: string): boolean => {
   return false;
 };
 
-/** БИН принимаем, только если эти 12 цифр физически есть в тексте. */
-export const isBinPresentInBody = (bin: string, body: string): boolean => {
-  if (!/^[0-9]{12}$/.test(bin)) return false;
-  return body.replace(/[\s-]/g, '').includes(bin);
+/**
+ * ИНН/ОГРН принимаем только при двух условиях сразу: контрольная сумма сходится
+ * И эти цифры физически есть в тексте.
+ *
+ * Одной контрольной суммы мало: модель может подставить настоящий ИНН другой
+ * компании, «вспомнив» его. Одного вхождения в текст тоже мало: длинных чисел
+ * в новостях полно — кадастровые номера, суммы, номера лицензий.
+ */
+export const isTaxIdPresentInBody = (taxId: string, body: string): boolean => {
+  if (!isValidTaxId(taxId)) return false;
+  return body.replace(/[\s-]/g, '').includes(taxId);
 };
 
 /**
@@ -122,14 +129,14 @@ export const isPlausibleEventDate = (raw: string, publishedAt: Date | null): Dat
  * Город принимается, только если он упомянут в тексте.
  *
  * Без этой проверки модель дописывает город «по смыслу»: пост про московский
- * ЗИЛ получал город Алматы просто потому, что портал про Казахстан. Цена
+ * ЗИЛ получал город Алматы просто потому, что портал тогда строился под РК. Цена
  * ошибки выше, чем кажется: город — сильный сигнал при сопоставлении объектов
  * (несовпадение запрещает автослияние, совпадение добавляет очки), поэтому
  * выдуманный город тихо разваливает резолвинг.
  *
  * Сравниваем по основе слова: в тексте город стоит в падеже («в Астане»),
  * а модель отдаёт именительный. Отбрасывание двух последних букв покрывает
- * русские склонения и не трогает несклоняемые названия вроде «Алматы».
+ * русские склонения и не трогает несклоняемые названия.
  */
 export const isCityMentionedInBody = (city: string, body: string): boolean => {
   const normalized = normalizeName(city).norm;
@@ -189,7 +196,7 @@ export const isAmountInBody = (amount: number, body: string): boolean => {
 export interface IVerifiedCompany extends ICompanyExtract {
   quoteVerified: boolean;
   confidenceFinal: number;
-  binAccepted: string | null;
+  taxIdAccepted: string | null;
 }
 
 export interface IVerifiedProject extends Omit<IProjectExtract, 'city' | 'address'> {
@@ -200,9 +207,9 @@ export interface IVerifiedProject extends Omit<IProjectExtract, 'city' | 'addres
   confidenceFinal: number;
 }
 
-export interface IVerifiedEvent extends Omit<IEventExtract, 'occurred_on' | 'amount_kzt'> {
+export interface IVerifiedEvent extends Omit<IEventExtract, 'occurred_on' | 'amount_rub'> {
   occurredOn: Date | null;
-  amountKzt: number | null;
+  amountRub: number | null;
   quoteVerified: boolean;
   confidenceFinal: number;
 }
@@ -248,16 +255,16 @@ export const verifyExtraction = (
       continue;
     }
 
-    const binAccepted =
-      company.bin && isBinPresentInBody(company.bin, body) ? company.bin : null;
-    if (company.bin && !binAccepted) {
-      rejected.push({ kind: 'bin', name: company.name, reason: 'БИН отсутствует в тексте' });
+    const taxIdAccepted =
+      company.tax_id && isTaxIdPresentInBody(company.tax_id, body) ? company.tax_id : null;
+    if (company.tax_id && !taxIdAccepted) {
+      rejected.push({ kind: 'tax_id', name: company.name, reason: 'ИНН/ОГРН отсутствует в тексте' });
     }
 
     companies.push({
       ...company,
       quoteVerified,
-      binAccepted,
+      taxIdAccepted,
       confidenceFinal: company.confidence * (quoteVerified ? 1 : UNVERIFIED_QUOTE_FACTOR),
     });
   }
@@ -343,17 +350,17 @@ export const verifyExtraction = (
       rejected.push({ kind: 'event_date', name: event.type, reason: `неправдоподобная дата ${event.occurred_on}` });
     }
 
-    const amountKzt =
-      event.amount_kzt != null && isAmountInBody(event.amount_kzt, body) ? event.amount_kzt : null;
-    if (event.amount_kzt != null && amountKzt === null) {
+    const amountRub =
+      event.amount_rub != null && isAmountInBody(event.amount_rub, body) ? event.amount_rub : null;
+    if (event.amount_rub != null && amountRub === null) {
       rejected.push({ kind: 'event_amount', name: event.type, reason: 'сумма отсутствует в тексте' });
     }
 
-    const { occurred_on: _o, amount_kzt: _a, ...rest } = event;
+    const { occurred_on: _o, amount_rub: _a, ...rest } = event;
     events.push({
       ...rest,
       occurredOn,
-      amountKzt,
+      amountRub,
       quoteVerified,
       confidenceFinal: event.confidence * (quoteVerified ? 1 : UNVERIFIED_QUOTE_FACTOR),
     });

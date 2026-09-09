@@ -114,13 +114,13 @@ companiesRouter.get('/:id', async (req, res) => {
     id: number;
     name: string;
     legalForm: string | null;
-    bin: string | null;
+    taxId: string | null;
     city: string | null;
     website: string | null;
     isVerified: boolean;
     mergedIntoId: number | null;
   }>(
-    `SELECT id, name, legal_form AS "legalForm", bin, city, website,
+    `SELECT id, name, legal_form AS "legalForm", tax_id AS "taxId", city, website,
             is_verified AS "isVerified", merged_into_id AS "mergedIntoId"
      FROM companies WHERE id = $1`,
     [id],
@@ -238,7 +238,7 @@ companiesRouter.get('/:id/events', async (req, res) => {
 
   const rows = await query(
     `SELECT e.id, e.type, e.occurred_on AS "occurredOn", e.severity,
-            e.amount_kzt AS "amountKzt", e.quote, e.confidence, e.status,
+            e.amount_rub AS "amountRub", e.quote, e.confidence, e.status,
             p.id AS "projectId", p.name AS "projectName",
             cp.id AS "counterpartyId", cp.name AS "counterpartyName",
             d.url
@@ -268,7 +268,7 @@ companiesRouter.get('/:id/similar', async (req, res) => {
   }
 
   const rows = await query(
-    `SELECT c2.id, c2.name, c2.city, c2.bin,
+    `SELECT c2.id, c2.name, c2.city, c2.tax_id AS "taxId",
             similarity(c1.name_latin, c2.name_latin) AS score
      FROM companies c1
      JOIN companies c2 ON c2.id <> c1.id AND c2.merged_into_id IS NULL

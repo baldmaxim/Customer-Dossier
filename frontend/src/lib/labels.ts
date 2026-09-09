@@ -79,11 +79,11 @@ export const formatDateTime = (iso: string | null): string => {
   });
 };
 
-/** Суммы в тенге бывают в миллиардах — полное число нечитаемо. */
+/** Суммы в стройке бывают в миллиардах — полное число нечитаемо. */
 export const formatMoney = (amount: number): string => {
-  if (amount >= 1e9) return `${(amount / 1e9).toFixed(1)} млрд ₸`;
-  if (amount >= 1e6) return `${(amount / 1e6).toFixed(1)} млн ₸`;
-  return `${amount.toLocaleString('ru-RU')} ₸`;
+  if (amount >= 1e9) return `${(amount / 1e9).toFixed(1)} млрд ₽`;
+  if (amount >= 1e6) return `${(amount / 1e6).toFixed(1)} млн ₽`;
+  return `${amount.toLocaleString('ru-RU')} ₽`;
 };
 
 export const formatPercent = (share: number | null): string =>
