@@ -13,7 +13,7 @@
 ```
 docs/migrations/   нумерованные SQL, применяются раннером (не psql вручную)
 backend/           Express + TS, pg.Pool без ORM
-frontend/          Vite + React + TS (пока не создан)
+frontend/          Vite + React + TS, четыре экрана MVP
 ```
 
 ## Команды
