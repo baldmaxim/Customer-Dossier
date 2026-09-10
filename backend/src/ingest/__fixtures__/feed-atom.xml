@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Отраслевая лента</title>
+  <link href="https://atom.example.ru/"/>
+  <updated>2026-09-02T08:00:00Z</updated>
+
+  <entry>
+    <title>ГК «Основа» начала строительство склада</title>
+    <link href="https://atom.example.ru/a/100"/>
+    <id>tag:atom.example.ru,2026:100</id>
+    <published>2026-09-01T07:30:00Z</published>
+    <summary>Начало работ на площадке в Новой Москве.</summary>
+  </entry>
+
+  <entry>
+    <title>Суд взыскал с подрядчика неустойку</title>
+    <link href="/a/101"/>
+    <id>tag:atom.example.ru,2026:101</id>
+    <updated>2026-09-02T12:00:00Z</updated>
+    <content type="html">&lt;p&gt;Арбитражный суд удовлетворил иск заказчика.&lt;/p&gt;</content>
+  </entry>
+</feed>

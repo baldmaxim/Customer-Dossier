@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Строительные новости</title>
+    <link>https://example.ru</link>
+    <description>Новости стройки</description>
+
+    <item>
+      <title>ПИК сорвал срок сдачи ЖК «Северный»</title>
+      <link>https://example.ru/news/1</link>
+      <guid isPermaLink="false">news-1</guid>
+      <pubDate>Mon, 01 Sep 2026 10:15:00 +0300</pubDate>
+      <description>&lt;p&gt;Дольщики жалуются на задержку.&lt;/p&gt;</description>
+      <content:encoded><![CDATA[
+        <p>ПАО «ПИК» сорвало срок сдачи ЖК «Северный» на восемь месяцев.</p>
+        <p>Дольщики направили коллективное обращение в мэрию Москвы.</p>
+      ]]></content:encoded>
+    </item>
+
+    <item>
+      <title>Самолёт ввёл в эксплуатацию корпус в Люберцах</title>
+      <link>/news/2</link>
+      <pubDate>Tue, 02 Sep 2026 08:00:00 +0300</pubDate>
+      <description>Короткий анонс без подробностей.</description>
+    </item>
+
+    <!-- Запись без ссылки: разобрать нечего, должна быть пропущена. -->
+    <item>
+      <title>Битая запись</title>
+      <pubDate>Wed, 03 Sep 2026 09:00:00 +0300</pubDate>
+    </item>
+  </channel>
+</rss>

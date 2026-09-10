@@ -50,7 +50,7 @@ export interface IResolveResult {
   queued: boolean;
 }
 
-interface ICandidateRow {
+export interface ICandidateRow {
   id: number;
   name: string;
   tax_id: string | null;
@@ -156,7 +156,7 @@ const fetchCandidates = async (
   return res.rows;
 };
 
-interface IScored {
+export interface IScored {
   candidate: ICandidateRow;
   score: number;
   reasons: Record<string, unknown>;
@@ -164,7 +164,12 @@ interface IScored {
   forbidden: boolean;
 }
 
-const scoreCandidate = (
+/**
+ * Экспортируется ради тестов: это самая опасная логика в проекте — от неё
+ * зависит, склеятся две компании в одну или останутся раздельными, — а
+ * проверить её через БД дорого.
+ */
+export const scoreCandidate = (
   candidate: ICandidateRow,
   input: IResolveInput,
   acceptedTaxId: string | null,

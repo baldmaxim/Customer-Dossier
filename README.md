@@ -151,7 +151,7 @@ npm run pipeline:once -- --reject <id>
 ### Прочее
 
 ```bash
-npm test                            # 107 тестов
+npm test                            # 139 тестов
 npm run migrate                     # миграции
 cd frontend && npm run icons:generate   # иконки PWA из одного SVG
 ```
