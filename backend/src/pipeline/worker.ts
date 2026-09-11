@@ -11,11 +11,17 @@ import { SCHEMA_VERSION, emptyExtraction, type IExtraction } from '../llm/schema
 import { applyExtraction, type IApplyStats } from './apply.js';
 import { verifyExtraction } from './verify.js';
 
-/** Телеграм-пост почти всегда влезает целиком; режем только длинные статьи. */
-const CHUNK_SIZE = 6000;
+/**
+ * Размер чанка — главный рычаг против таймаутов LLM.
+ *
+ * Телеграм-пост почти всегда влезает целиком; режутся только длинные статьи.
+ * Меньший чанк быстрее генерируется и реже упирается в лимит времени, но
+ * факт, разорванный границей, модель может не увидеть — отсюда перекрытие.
+ *
+ * Значения из env: подбирать их надо под конкретную модель и видеокарту,
+ * а не править код.
+ */
 const CHUNK_OVERLAP = 400;
-const MAX_CHUNKS = 4;
-const MAX_BODY = 24_000;
 
 /**
  * Сколько раз пробуем документ, прежде чем признать его провальным.
@@ -60,17 +66,24 @@ export const requeueStale = async (): Promise<number> =>
      WHERE status = 'extracting' AND updated_at < now() - interval '15 minutes'`,
   );
 
-export const splitIntoChunks = (body: string): string[] => {
-  const text = body.length > MAX_BODY ? body.slice(0, MAX_BODY) : body;
-  if (text.length <= CHUNK_SIZE) return [text];
+export const splitIntoChunks = (
+  body: string,
+  chunkSize = env.EXTRACT_CHUNK_SIZE,
+  maxChunks = env.EXTRACT_MAX_CHUNKS,
+): string[] => {
+  // Потолок длины следует из настроек, а не задан отдельно: иначе при росте
+  // числа чанков хвост статьи обрезался бы молча.
+  const maxBody = chunkSize * maxChunks;
+  const text = body.length > maxBody ? body.slice(0, maxBody) : body;
+  if (text.length <= chunkSize) return [text];
 
   const chunks: string[] = [];
   let start = 0;
-  while (start < text.length && chunks.length < MAX_CHUNKS) {
-    const end = Math.min(start + CHUNK_SIZE, text.length);
+  while (start < text.length && chunks.length < maxChunks) {
+    const end = Math.min(start + chunkSize, text.length);
     // Стараемся резать по границе абзаца: разорванное предложение ломает цитаты.
     const boundary = end < text.length ? text.lastIndexOf('\n', end) : end;
-    const cut = boundary > start + CHUNK_SIZE / 2 ? boundary : end;
+    const cut = boundary > start + chunkSize / 2 ? boundary : end;
     chunks.push(text.slice(start, cut));
     if (cut >= text.length) break;
     start = cut - CHUNK_OVERLAP;
@@ -125,7 +138,7 @@ export interface IProcessResult {
   error: string | null;
 }
 
-const recordExtraction = async (
+export const recordExtraction = async (
   documentId: number,
   chunkIndex: number,
   status: string,

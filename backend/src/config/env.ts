@@ -45,6 +45,10 @@ export const env = {
 
   EXTRACT_CONCURRENCY: intOf(optional('EXTRACT_CONCURRENCY', '2'), 'EXTRACT_CONCURRENCY'),
   EXTRACT_BATCH_SIZE: intOf(optional('EXTRACT_BATCH_SIZE', '8'), 'EXTRACT_BATCH_SIZE'),
+  // Значения по умолчанию взяты с живой нагрузки: 6000/4 давали таймауты
+  // на длинных статьях, 3500/6 их убрали.
+  EXTRACT_CHUNK_SIZE: intOf(optional('EXTRACT_CHUNK_SIZE', '3500'), 'EXTRACT_CHUNK_SIZE'),
+  EXTRACT_MAX_CHUNKS: intOf(optional('EXTRACT_MAX_CHUNKS', '6'), 'EXTRACT_MAX_CHUNKS'),
 
   TG_FETCH_DELAY_MS: intOf(optional('TG_FETCH_DELAY_MS', '4000'), 'TG_FETCH_DELAY_MS'),
   INGEST_USER_AGENT: optional(

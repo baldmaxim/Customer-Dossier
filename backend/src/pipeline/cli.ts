@@ -11,6 +11,10 @@
 //   npm run pipeline:once -- --retry-skipped  вернуть нерелевантные в очередь (после правки промпта)
 //   npm run pipeline:once -- --recheck        снять с объектов города и адреса, не подтверждённые текстом
 //   npm run pipeline:once -- --recheck --dry  то же, но только показать
+//   npm run pipeline:once -- --shadow 30      прогнать текущую модель по разобранным, не трогая канон
+//   npm run pipeline:once -- --shadow 30 --source stroygaz.ru
+//   npm run pipeline:once -- --compare        сравнить модели на одних документах
+//   npm run pipeline:once -- --skipped --source stroygaz.ru   нерелевантные одного источника
 //   npm run pipeline:once -- --merges         очередь на ручное слияние
 //   npm run pipeline:once -- --merge <id>     подтвердить слияние
 //   npm run pipeline:once -- --reject <id>    отклонить пару
@@ -21,6 +25,7 @@ import { env } from '../config/env.js';
 import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
 import { MAX_ATTEMPTS, runPipelinePass } from './worker.js';
 import { recheckProjectFields } from './recheck.js';
+import { compareModels, runShadowExtraction, type IDisagreement } from './compare.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -193,7 +198,10 @@ const retryFailed = async (): Promise<void> => {
  * перестраховывается, портал молча теряет данные, и заметить это можно
  * только глазами.
  */
-const showSkipped = async (limit = 10): Promise<void> => {
+const showSkipped = async (limit = 10, sourceKey: string | null = null): Promise<void> => {
+  // Фильтр по источнику нужен не для удобства. Нерелевантное из московского
+  // канала про мусоропроводы — норма; нерелевантное из «Строительной газеты»,
+  // которая целиком про стройку, — почти наверняка ошибка модели.
   const rows = await query<{
     id: number;
     body: string;
@@ -205,10 +213,34 @@ const showSkipped = async (limit = 10): Promise<void> => {
      FROM raw_documents d
      JOIN sources s ON s.id = d.source_id
      WHERE d.status = 'skipped'
+       AND ($2::text IS NULL OR s.key = $2::text)
      ORDER BY d.fetched_at DESC
      LIMIT $1`,
-    [limit],
+    [limit, sourceKey],
   );
+
+  // Доля нерелевантного по источникам — главный сигнал перестраховки модели.
+  const bySource = await query<{ title: string; skipped: number; total: number }>(
+    `SELECT s.title,
+            count(*) FILTER (WHERE d.status = 'skipped')::int                   AS skipped,
+            count(*) FILTER (WHERE d.status IN ('skipped', 'extracted'))::int   AS total
+     FROM raw_documents d
+     JOIN sources s ON s.id = d.source_id
+     GROUP BY s.title
+     HAVING count(*) FILTER (WHERE d.status IN ('skipped', 'extracted')) > 0
+     ORDER BY 2 DESC`,
+  );
+
+  if (bySource.length > 0) {
+    console.log('[skipped] доля нерелевантного по источникам:');
+    for (const s of bySource) {
+      const share = s.total === 0 ? 0 : (s.skipped / s.total) * 100;
+      console.log(`   ${share.toFixed(0).padStart(3)} %  ${s.skipped}/${s.total}  ${s.title}`);
+    }
+    console.log(
+      '   Отраслевое издание с высокой долей — повод подозревать модель, а не источник.\n',
+    );
+  }
 
   if (rows.length === 0) {
     console.log('[skipped] нерелевантных документов нет');
@@ -347,7 +379,71 @@ const main = async (): Promise<void> => {
   if (process.argv.includes('--merges')) return showMerges();
   if (process.argv.includes('--errors')) return showErrors();
   if (process.argv.includes('--retry')) return retryFailed();
-  if (process.argv.includes('--skipped')) return showSkipped();
+  if (process.argv.includes('--skipped')) return showSkipped(10, argValue('--source'));
+
+  const shadowLimit = argValue('--shadow');
+  if (shadowLimit) {
+    console.log(
+      `[shadow] модель ${env.LMSTUDIO_MODEL}, промпт ${env.PROMPT_VERSION}. ` +
+        'Результаты пишутся только для сравнения — карточки не меняются.',
+    );
+    const result = await runShadowExtraction(Number(shadowLimit), argValue('--source'));
+    console.log(`[shadow] прогнано ${result.processed}, с ошибкой ${result.failed}`);
+    console.log('[shadow] дальше: переключите LMSTUDIO_MODEL и повторите, затем --compare');
+    return;
+  }
+
+  if (process.argv.includes('--compare')) {
+    const cmp = await compareModels();
+    if (cmp.models.length === 0) {
+      console.log(`[compare] разборов для промпта ${env.PROMPT_VERSION} нет`);
+      return;
+    }
+
+    console.log(`[compare] промпт ${env.PROMPT_VERSION}\n`);
+    console.log('  модель                          доков  успех  релев.  компаний  ср.время  макс.');
+    for (const m of cmp.models) {
+      console.log(
+        `  ${m.model.padEnd(30)} ${String(m.documents).padStart(6)} ` +
+          `${(m.okRate * 100).toFixed(0).padStart(5)}% ${(m.relevantRate * 100).toFixed(0).padStart(6)}% ` +
+          `${m.avgCompanies.toFixed(1).padStart(9)} ${(m.avgLatencyMs / 1000).toFixed(1).padStart(8)}с ` +
+          `${(m.maxLatencyMs / 1000).toFixed(0).padStart(5)}с`,
+      );
+    }
+
+    const pair = cmp.pair;
+    if (!pair) {
+      console.log('\n[compare] модель одна — сравнивать не с чем.');
+      console.log('[compare] прогоните вторую: смените LMSTUDIO_MODEL и запустите --shadow 30');
+      return;
+    }
+
+    console.log(`\n[compare] ${pair.modelA}  против  ${pair.modelB}`);
+    console.log(`   общих документов: ${pair.overlap}`);
+    if (pair.overlap === 0) {
+      console.log('   пересечения нет — прогоните --shadow по тем же документам');
+      return;
+    }
+    console.log(`   согласие по релевантности: ${(pair.agreement * 100).toFixed(0)} %`);
+
+    const printList = (title: string, list: IDisagreement[]): void => {
+      if (list.length === 0) return;
+      console.log(`\n   ${title}: ${list.length}`);
+      for (const d of list.slice(0, 8)) {
+        console.log(`     док ${d.documentId} · ${d.sourceTitle} · ${d.preview}…`);
+      }
+      if (list.length > 8) console.log(`     … и ещё ${list.length - 8}`);
+    };
+
+    printList(`релевантно только для ${pair.modelA}`, pair.onlyA);
+    printList(`релевантно только для ${pair.modelB}`, pair.onlyB);
+
+    console.log(
+      '\n   Расхождения — это и есть ответ на вопрос «какая модель лучше».\n' +
+        '   Откройте несколько через --doc <id> и решите, кто из моделей прав.',
+    );
+    return;
+  }
   if (process.argv.includes('--retry-skipped')) return retrySkipped();
 
   if (process.argv.includes('--recheck')) {

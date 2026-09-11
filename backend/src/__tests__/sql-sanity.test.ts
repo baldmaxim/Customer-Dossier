@@ -50,6 +50,27 @@ const extractTemplateLiterals = (source: string): string[] => {
   return literals;
 };
 
+/**
+ * Шаблонные константы файла: `const NAME = \`...\``.
+ *
+ * Общий фрагмент запроса (например, CTE) выносят в константу и подставляют
+ * через ${NAME}. Если такую подстановку заменить заглушкой, плейсхолдеры
+ * внутри фрагмента станут невидимы, и сканер объявит их пропущенными — ложная
+ * тревога. Если же проверку для подстановок отключить, сканер ослепнет ровно
+ * там, где ошибиться легче всего: номер плейсхолдера и его значение живут
+ * в разных местах файла. Поэтому известные константы подставляются по-настоящему.
+ */
+const collectTemplateConstants = (source: string): Map<string, string> => {
+  const constants = new Map<string, string>();
+  for (const match of source.matchAll(/const\s+([A-Z][A-Z0-9_]*)\s*=\s*`([^`]*)`/g)) {
+    if (match[1] && match[2] !== undefined) constants.set(match[1], match[2]);
+  }
+  return constants;
+};
+
+const inlineConstants = (literal: string, constants: ReadonlyMap<string, string>): string =>
+  literal.replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (whole, name: string) => constants.get(name) ?? whole);
+
 const SQL_START = /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|SET)\b/i;
 
 const looksLikeSql = (literal: string): boolean => SQL_START.test(literal);
@@ -101,9 +122,10 @@ const collectSqlSites = (): ISqlSite[] => {
   const sites: ISqlSite[] = [];
   for (const file of collectFiles(SRC)) {
     const source = fs.readFileSync(file, 'utf8');
+    const constants = collectTemplateConstants(source);
     for (const literal of extractTemplateLiterals(source)) {
       if (looksLikeSql(literal)) {
-        sites.push({ file: path.relative(SRC, file), sql: literal });
+        sites.push({ file: path.relative(SRC, file), sql: inlineConstants(literal, constants) });
       }
     }
   }
@@ -154,5 +176,20 @@ describe('детекторы сами по себе', () => {
 
   it('ловят пропущенный плейсхолдер', () => {
     expect(placeholderGaps('SELECT * FROM t WHERE a = $1 AND b = $3')).toEqual([2]);
+  });
+
+  it('видят плейсхолдер внутри подставленной константы', () => {
+    // Ровно тот случай, из-за которого появилась подстановка: $1 живёт
+    // в общем CTE, а запрос вокруг него использует $2 и $3.
+    const source = 'const CTE = `x AS (SELECT * FROM e WHERE v = $1)`;';
+    const constants = collectTemplateConstants(source);
+    const query = inlineConstants('WITH ${CTE} SELECT * FROM x WHERE a = $2 AND b = $3', constants);
+    expect(placeholderGaps(query)).toEqual([]);
+  });
+
+  it('незнакомую подстановку оставляют как есть', () => {
+    // Локальная переменная вроде ${orderBy} не шаблонная константа — её
+    // значение статически неизвестно, и выдумывать его нельзя.
+    expect(inlineConstants('ORDER BY ${orderBy}', new Map())).toBe('ORDER BY ${orderBy}');
   });
 });
