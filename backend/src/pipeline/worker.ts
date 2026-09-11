@@ -8,7 +8,7 @@ import { env } from '../config/env.js';
 import { getPool, withTransaction, query, execute } from '../db/pool.js';
 import { extractFromText } from '../llm/client.js';
 import { SCHEMA_VERSION, emptyExtraction, type IExtraction } from '../llm/schema.js';
-import { applyExtraction, type IApplyStats } from './apply.js';
+import { applyExtraction, clearDocumentContribution, type IApplyStats } from './apply.js';
 import { verifyExtraction } from './verify.js';
 
 /**
@@ -213,9 +213,17 @@ export const processDocument = async (doc: IQueuedDocument): Promise<IProcessRes
   const verified = verifyExtraction(merged, doc.body, doc.published_at);
 
   if (!verified.relevant) {
-    await execute(`UPDATE raw_documents SET status = 'skipped', updated_at = now() WHERE id = $1`, [
-      doc.id,
-    ]);
+    // Документ мог быть релевантным в прошлой версии промпта и оставить
+    // упоминания в карточках. Если снять только статус, они повиснут навсегда:
+    // в apply нерелевантный документ больше не заходит. Очистка и смена статуса
+    // — одной транзакцией, чтобы не остаться с полуубранным вкладом.
+    await withTransaction(async client => {
+      await clearDocumentContribution(client, doc.id);
+      await client.query(
+        `UPDATE raw_documents SET status = 'skipped', updated_at = now() WHERE id = $1`,
+        [doc.id],
+      );
+    });
     return { documentId: doc.id, status: 'skipped', stats: null, error: null };
   }
 

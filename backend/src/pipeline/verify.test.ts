@@ -325,6 +325,74 @@ describe('verifyExtraction', () => {
     expect(result.projects[0]!.city).toBe('Астана');
   });
 
+  it('не пишет связь с ролью not_participant', () => {
+    // Аналитик или консультант, упомянутый в тексте, в стройке объекта
+    // не участвует — связь с объектом для него создавать нельзя.
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [company({ role: 'not_participant' })],
+        projects: [project()],
+        links: [
+          { company: 'BI Group', project: 'Астана Тауэр', role: 'not_participant', confidence: 0.95 },
+        ],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.links).toHaveLength(0);
+    // Сама компания остаётся: она упомянута, просто без роли на объекте.
+    expect(result.companies).toHaveLength(1);
+  });
+
+  it('отбрасывает компанию, чьё название совпадает с объектом из того же разбора', () => {
+    // Реальные случаи: район и корпус получали роли генподрядчика и заказчика.
+    // Одно название не может быть и компанией, и объектом — верим объекту.
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [company({ name: 'Астана Тауэр', role: 'general_contractor' })],
+        projects: [project()],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.companies).toHaveLength(0);
+    expect(result.projects).toHaveLength(1);
+    expect(result.rejected.some(r => r.reason.includes('совпадает с объектом'))).toBe(true);
+  });
+
+  it('компания с формой и объект с тем же словом — разные сущности, обе остаются', () => {
+    // «ООО Северный» и «ЖК Северный» законно сосуществуют: девелопера часто
+    // называют по его проекту. Срезать компанию здесь нельзя.
+    const text = 'ООО «Северный» начало строительство ЖК «Северный» в этом году.';
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [
+          company({
+            name: 'ООО Северный',
+            quote: 'ООО «Северный» начало строительство ЖК «Северный» в этом году.',
+          }),
+        ],
+        projects: [
+          project({
+            name: 'Северный',
+            city: null,
+            quote: 'ООО «Северный» начало строительство ЖК «Северный» в этом году.',
+          }),
+        ],
+      },
+      text,
+      PUBLISHED,
+    );
+    expect(result.companies).toHaveLength(1);
+    expect(result.projects).toHaveLength(1);
+  });
+
   it('нерелевантный документ даёт пустой результат', () => {
     const result = verifyExtraction(
       { ...emptyExtraction(), doc_relevant: false, companies: [company()] },

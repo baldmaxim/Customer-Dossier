@@ -12,6 +12,7 @@ import type { PoolClient } from 'pg';
 import { resolveCompany } from '../resolve/company.js';
 import { resolveProject } from '../resolve/project.js';
 import { CONFIDENCE_THRESHOLDS, type IVerificationResult } from './verify.js';
+import { NON_PARTICIPANT_ROLES } from '../llm/schema.js';
 
 export interface IApplyInput {
   documentId: number;
@@ -41,12 +42,54 @@ const emptyStats = (): IApplyStats => ({
   belowThreshold: 0,
 });
 
+/**
+ * Убрать из канона всё, что внёс документ.
+ *
+ * Вклад документа в канон — ровно его последнее применённое извлечение, и
+ * ничего сверх того. Без этой очистки переизвлечение не исправляет ошибок:
+ *
+ *  - упоминание с исправленной ролью, но той же цитатой, упирается в
+ *    уникальный индекс, и ON CONFLICT DO NOTHING оставляет старую роль;
+ *  - роль на объекте с новым значением добавляется РЯДОМ со старой, и обе
+ *    попадают в метрики («СберСити — генподрядчик» живёт вечно);
+ *  - документ, который новая версия промпта верно признала шумом, оставляет
+ *    свои прежние упоминания, потому что в apply он больше не заходит.
+ *
+ * Компании и объекты не удаляются: их могли упоминать и другие документы.
+ * Осиротевшие поля снимет --recheck.
+ *
+ * Роли на объектах удаляются по evidence_document_id — это документ, который
+ * роль СОЗДАЛ. Если ту же роль позже подтвердил другой документ, при частичном
+ * переизвлечении она пропадёт до его собственного переразбора. Поэтому после
+ * смены промпта переразбирать нужно всё, а не выборочно.
+ */
+export const clearDocumentContribution = async (
+  client: PoolClient,
+  documentId: number,
+): Promise<{ mentions: number; events: number; participants: number }> => {
+  const mentions = await client.query('DELETE FROM mentions WHERE document_id = $1', [documentId]);
+  const events = await client.query('DELETE FROM events WHERE document_id = $1', [documentId]);
+  const participants = await client.query(
+    'DELETE FROM project_participants WHERE evidence_document_id = $1',
+    [documentId],
+  );
+  return {
+    mentions: mentions.rowCount ?? 0,
+    events: events.rowCount ?? 0,
+    participants: participants.rowCount ?? 0,
+  };
+};
+
 export const applyExtraction = async (
   client: PoolClient,
   input: IApplyInput,
 ): Promise<IApplyStats> => {
   const stats = emptyStats();
   const { verified, documentId, extractionId, publishedAt } = input;
+
+  // Очистка ДО проверки релевантности и до любой записи: иначе новый разбор
+  // складывается поверх старого, а не заменяет его.
+  await clearDocumentContribution(client, documentId);
 
   if (!verified.relevant) return stats;
 
@@ -78,7 +121,7 @@ export const applyExtraction = async (
       entityKind: 'company',
       entityId: resolved.companyId,
       surfaceForm: company.name,
-      role: company.role === 'unknown' ? null : company.role,
+      role: NON_PARTICIPANT_ROLES.has(company.role) ? null : company.role,
       quote: company.quote,
       quoteVerified: company.quoteVerified,
       sentiment: company.sentiment,

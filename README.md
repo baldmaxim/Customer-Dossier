@@ -143,6 +143,9 @@ npm run pipeline:once -- --skipped    # тексты, признанные не�
 npm run pipeline:once -- --doc <id>   # документ целиком: текст, разбор, канон
 npm run pipeline:once -- --retry      # вернуть провалившиеся и застрявшие
 npm run pipeline:once -- --recheck    # снять неподтверждённые города и адреса
+npm run pipeline:once -- --audit      # дубли, роли, объекты-компании, выборка
+npm run pipeline:once -- --renormalize # пересчитать ключи после правки нормализатора
+npm run pipeline:once -- --reextract  # переразобрать всё после смены промпта
 npm run pipeline:once -- --shadow 30  # прогнать текущую модель, не трогая карточки
 npm run pipeline:once -- --compare    # сравнить модели на одних документах
 npm run pipeline:once -- --merges     # очередь на ручное слияние
@@ -153,7 +156,7 @@ npm run pipeline:once -- --reject <id>
 ### Прочее
 
 ```bash
-npm test                            # 142 теста
+npm test                            # 148 тестов
 npm run migrate                     # миграции
 cd frontend && npm run icons:generate   # иконки PWA из одного SVG
 ```

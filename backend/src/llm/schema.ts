@@ -6,7 +6,7 @@
 
 import { z } from 'zod';
 
-export const SCHEMA_VERSION = 'extract@1';
+export const SCHEMA_VERSION = 'extract@2';
 
 export const ROLES = [
   'customer',
@@ -15,8 +15,16 @@ export const ROLES = [
   'designer',
   'investor',
   'operator',
+  // Упомянута в тексте, но в стройке не участвует: аналитик, консалтинг,
+  // брокер, банк, СМИ, орган власти с комментарием. Без этого варианта модель
+  // обязана выбрать строительную роль и выбирала ближайшую — «проектировщик»:
+  // на живых данных вышло 15 проектировщиков при 1 генподрядчике.
+  'not_participant',
   'unknown',
 ] as const;
+
+/** Роли, которые не описывают участие в стройке и в канон как роль не пишутся. */
+export const NON_PARTICIPANT_ROLES: ReadonlySet<string> = new Set(['not_participant', 'unknown']);
 
 export const PROJECT_KINDS = [
   'residential',

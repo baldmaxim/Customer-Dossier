@@ -9,6 +9,7 @@
 // стоит доверия к порталу целиком; пропущенный факт стоит одного упоминания.
 
 import { normalizeName, isValidTaxId } from '../resolve/normalize.js';
+import { NON_PARTICIPANT_ROLES } from '../llm/schema.js';
 import type {
   ICompanyExtract,
   IEventExtract,
@@ -264,8 +265,26 @@ export const verifyExtraction = (
     return { relevant: false, companies: [], projects: [], links: [], events: [], rejected };
   }
 
+  // Ключи названий объектов этого же ответа. Если модель положила одно и то же
+  // название и в компании, и в объекты, верим объекту: на живых данных
+  // «СберСити» и «STONE Савеловская 2» получали роль генподрядчика и заказчика,
+  // хотя это район и корпус. Обратная ошибка (компания, записанная объектом)
+  // встречается реже и стоит дешевле — объект без роли не попадает в метрики.
+  const projectKeys = new Set(
+    extraction.projects.map(p => normalizeName(p.name, 'project').key).filter(k => k.length > 0),
+  );
+
   const companies: IVerifiedCompany[] = [];
   for (const company of extraction.companies) {
+    if (projectKeys.has(normalizeName(company.name, 'project').key)) {
+      rejected.push({
+        kind: 'company',
+        name: company.name,
+        reason: 'название совпадает с объектом из того же разбора — это объект, не компания',
+      });
+      continue;
+    }
+
     const quoteVerified = isQuoteVerbatim(company.quote, body);
 
     // Имя обязано быть в цитате. Это отсекает выдуманные названия: модель может
@@ -339,7 +358,7 @@ export const verifyExtraction = (
       continue;
     }
     // Роль unknown в participants не пишется — связь без роли бессмысленна.
-    if (link.role === 'unknown') {
+    if (NON_PARTICIPANT_ROLES.has(link.role)) {
       rejected.push({ kind: 'link', name: link.company, reason: 'роль unknown' });
       continue;
     }
