@@ -43,7 +43,10 @@ export const env = {
   PROMPT_VERSION: optional('PROMPT_VERSION', 'p1'),
   SCHEMA_VERSION: optional('SCHEMA_VERSION', 'extract@1'),
 
-  EXTRACT_CONCURRENCY: intOf(optional('EXTRACT_CONCURRENCY', '2'), 'EXTRACT_CONCURRENCY'),
+  // 1, а не 2: каждый параллельный запрос держит свой кэш контекста в VRAM.
+  // На 8 ГБ два запроса к 8B выталкивают модель в оперативную память —
+  // тот же механизм, что давал пятиминутные таймауты при контексте 16K.
+  EXTRACT_CONCURRENCY: intOf(optional('EXTRACT_CONCURRENCY', '1'), 'EXTRACT_CONCURRENCY'),
   EXTRACT_BATCH_SIZE: intOf(optional('EXTRACT_BATCH_SIZE', '8'), 'EXTRACT_BATCH_SIZE'),
   // Значения по умолчанию взяты с живой нагрузки: 6000/4 давали таймауты
   // на длинных статьях, 3500/6 их убрали.

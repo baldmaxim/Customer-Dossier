@@ -328,14 +328,48 @@ const showDocument = async (id: number): Promise<void> => {
 };
 
 /** Вернуть в очередь то, что модель сочла нерелевантным. Для смены промпта. */
-const retrySkipped = async (): Promise<void> => {
-  const affected = await execute(
-    `UPDATE raw_documents
-     SET status = 'queued', attempts = 0, updated_at = now()
-     WHERE status = 'skipped'`,
-  );
+/**
+ * Вернуть нерелевантные документы в очередь.
+ *
+ * По умолчанию — только те, что ТЕКУЩАЯ модель при ТЕКУЩЕМ промпте ещё не
+ * оценивала. Это ровно случай смены модели: документы, которые отбросила
+ * другая модель, заслуживают второго мнения, а те, что текущая модель уже
+ * признала нерелевантными, она признает так же — прогонять их заново значит
+ * жечь GPU впустую (на 8B это десятки секунд на документ).
+ *
+ * --all возвращает все подряд — нужно после правки самого промпта, когда
+ * меняется и PROMPT_VERSION, и прежние оценки теряют силу.
+ */
+const retrySkipped = async (all: boolean): Promise<void> => {
+  const affected = all
+    ? await execute(
+        `UPDATE raw_documents
+         SET status = 'queued', attempts = 0, updated_at = now()
+         WHERE status = 'skipped'`,
+      )
+    : await execute(
+        `UPDATE raw_documents d
+         SET status = 'queued', attempts = 0, updated_at = now()
+         WHERE d.status = 'skipped'
+           AND NOT EXISTS (
+             SELECT 1 FROM extractions e
+             WHERE e.document_id = d.id
+               AND e.model = $1
+               AND e.prompt_version = $2
+               AND e.status = 'ok'
+           )`,
+        [env.LMSTUDIO_MODEL, env.PROMPT_VERSION],
+      );
+
   console.log(`[pipeline] возвращено в очередь: ${affected}`);
-  console.log('[pipeline] помните: без нового PROMPT_VERSION модель ответит то же самое');
+  if (all) {
+    console.log('[pipeline] помните: без нового PROMPT_VERSION модель ответит то же самое');
+  } else {
+    console.log(
+      `[pipeline] только то, что ${env.LMSTUDIO_MODEL} ещё не оценивала. ` +
+        'Вернуть все подряд: --retry-skipped --all',
+    );
+  }
 };
 
 const showMerges = async (): Promise<void> => {
@@ -444,7 +478,7 @@ const main = async (): Promise<void> => {
     );
     return;
   }
-  if (process.argv.includes('--retry-skipped')) return retrySkipped();
+  if (process.argv.includes('--retry-skipped')) return retrySkipped(process.argv.includes('--all'));
 
   if (process.argv.includes('--recheck')) {
     const dry = process.argv.includes('--dry');
