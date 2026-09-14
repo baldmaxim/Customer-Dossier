@@ -393,6 +393,152 @@ describe('verifyExtraction', () => {
     expect(result.projects).toHaveLength(1);
   });
 
+  it('ИНН чужой компании из той же статьи не приписывается (R04)', () => {
+    // ИНН 7707083893 стоит в тексте рядом с «Базис-А», а не с BI Group.
+    const result = verifyExtraction(
+      { ...emptyExtraction(), doc_relevant: true, companies: [company({ tax_id: '7707083893' })] },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.companies[0]!.taxIdAccepted).toBeNull();
+    expect(result.rejected.some(r => r.kind === 'tax_id')).toBe(true);
+  });
+
+  it('ИНН в собственной цитате компании принимается', () => {
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [
+          company({
+            name: 'Базис-А',
+            legal_form: 'АО',
+            tax_id: '7707083893',
+            quote: 'Заказчиком объекта выступает АО «Базис-А», ИНН 7707083893.',
+          }),
+        ],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.companies[0]!.taxIdAccepted).toBe('7707083893');
+  });
+
+  it('ИНН из непроверенной цитаты не принимается, даже если цифры в ней есть', () => {
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [company({ tax_id: '7707083893', quote: 'BI Group, ИНН 7707083893, сорвала сроки' })],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.companies[0]!.quoteVerified).toBe(false);
+    expect(result.companies[0]!.taxIdAccepted).toBeNull();
+  });
+
+  it('сумма из другого предложения не переносится в событие (R04)', () => {
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [company()],
+        events: [
+          {
+            type: 'deadline_missed',
+            company: 'BI Group',
+            counterparty: null,
+            project: null,
+            occurred_on: null,
+            amount_rub: 12_500_000_000,
+            quote: 'ТОО «BI Group» сорвало срок сдачи ЖК «Астана Тауэр» на восемь месяцев.',
+            confidence: 0.9,
+          },
+        ],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]!.amountRub).toBeNull();
+    expect(result.rejected.some(r => r.kind === 'event_amount')).toBe(true);
+  });
+
+  it('сумма внутри подтверждённой цитаты события принимается', () => {
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        projects: [project()],
+        events: [
+          {
+            type: 'tender_award',
+            company: null,
+            counterparty: null,
+            project: 'Астана Тауэр',
+            occurred_on: null,
+            amount_rub: 12_500_000_000,
+            quote: 'Сумма контракта составила 12500000000 рублей.',
+            confidence: 0.9,
+          },
+        ],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.events[0]!.amountRub).toBe(12_500_000_000);
+  });
+
+  it('событие, чья сторона не названа в цитате, отбрасывается (R04)', () => {
+    // В цитате про срыв сроков нет «Базис-А» — нельзя приписать событие ему.
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        companies: [
+          company(),
+          company({
+            name: 'Базис-А',
+            legal_form: 'АО',
+            role: 'customer',
+            quote: 'Заказчиком объекта выступает АО «Базис-А», ИНН 7707083893.',
+          }),
+        ],
+        events: [
+          {
+            type: 'deadline_missed',
+            company: 'Базис-А',
+            counterparty: null,
+            project: null,
+            occurred_on: null,
+            amount_rub: null,
+            quote: 'ТОО «BI Group» сорвало срок сдачи ЖК «Астана Тауэр» на восемь месяцев.',
+            confidence: 0.9,
+          },
+        ],
+      },
+      BODY,
+      PUBLISHED,
+    );
+    expect(result.events).toHaveLength(0);
+    expect(result.rejected.some(r => r.reason.includes('отсутствует в цитате события'))).toBe(true);
+  });
+
+  it('город, названный в другом месте статьи, не приписывается объекту (R04)', () => {
+    const text = 'Рядом строят ЖК «Лесной». Отдельно сообщается о планах в Казани.';
+    const result = verifyExtraction(
+      {
+        ...emptyExtraction(),
+        doc_relevant: true,
+        projects: [project({ name: 'Лесной', city: 'Казань', quote: 'Рядом строят ЖК «Лесной».' })],
+      },
+      text,
+      PUBLISHED,
+    );
+    expect(result.projects[0]!.city).toBeNull();
+  });
+
   it('нерелевантный документ даёт пустой результат', () => {
     const result = verifyExtraction(
       { ...emptyExtraction(), doc_relevant: false, companies: [company()] },

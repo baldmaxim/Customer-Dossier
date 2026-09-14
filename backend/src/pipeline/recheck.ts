@@ -16,6 +16,7 @@
 // хоть один документ, который его подтверждает. Нет — значение снимается.
 
 import { query, execute } from '../db/pool.js';
+import { assertCanonWriteAllowed } from './guard.js';
 import { isCityMentionedInBody, isAddressGroundedInBody } from './verify.js';
 
 export interface IRecheckResult {
@@ -50,6 +51,8 @@ const loadProjects = async (): Promise<IProjectRow[]> =>
   );
 
 export const recheckProjectFields = async (dryRun = false): Promise<IRecheckResult> => {
+  // Предпросмотр разрешён; снятие полей в рабочей базе — массовая правка канона.
+  if (!dryRun) assertCanonWriteAllowed();
   const projects = await loadProjects();
   const result: IRecheckResult = { checked: projects.length, cleared: 0, details: [] };
 

@@ -1,14 +1,29 @@
-// Дефолты окружения для тестов. config/env.ts падает на импорте, если не задан
-// DATABASE_URL — это правильно для рантайма, но тесты чистой логики (парсеры,
-// нормализация) не должны требовать живой БД.
+// Окружение unit-тестов. Присваивание, а не `??=`: уже экспортированный в
+// оболочке DATABASE_URL (рабочая база!) не должен пережить запуск тестов.
 //
-// Строка подключения заведомо нерабочая: если тест случайно полезет в БД,
-// он упадёт с ошибкой соединения, а не молча запишет что-то в реальную базу.
+// Строка подключения заведомо нерабочая: если unit-тест случайно полезет в БД,
+// он упадёт с ошибкой соединения, а не запишет что-то в реальную базу.
+// Интеграционные тесты идут отдельным профилем (vitest.integration.config.ts)
+// со своим guard'ом тестовой цели.
 
-process.env.DATABASE_URL ??= 'postgresql://test:test@127.0.0.1:1/tg_info_test';
-process.env.DATABASE_SSL ??= 'false';
-process.env.LMSTUDIO_BASE_URL ??= 'http://127.0.0.1:1/v1';
-process.env.LMSTUDIO_MODEL ??= 'test-model';
-process.env.PROMPT_VERSION ??= 'test';
-process.env.SCHEMA_VERSION ??= 'extract@1';
-process.env.TZ ??= 'Asia/Almaty';
+export const DEAD_DATABASE_URL = 'postgresql://unit:unit@127.0.0.1:1/unit_tests_no_db';
+
+// dotenv/config читает путь из этой переменной: несуществующий файл = backend/.env
+// не подмешивается в тесты ни целиком, ни отдельными ключами.
+process.env.DOTENV_CONFIG_PATH = 'unit-tests-do-not-load-dotenv.env';
+
+process.env.DATABASE_URL = DEAD_DATABASE_URL;
+process.env.DATABASE_SSL = 'false';
+process.env.LMSTUDIO_BASE_URL = 'http://127.0.0.1:1/v1';
+process.env.LMSTUDIO_MODEL = 'test-model';
+process.env.PROMPT_VERSION = 'test';
+process.env.TG_BOT_TOKEN = '';
+process.env.TG_BOT_ALLOWED_USER_IDS = '';
+process.env.OPERATOR_TOKEN = '';
+process.env.INGEST_ENABLED = 'false';
+process.env.PIPELINE_ENABLED = 'false';
+process.env.METRICS_AUTO_REFRESH = 'false';
+process.env.BOT_ENABLED = 'false';
+process.env.HOST = '127.0.0.1';
+// UTC, а не часовой пояс разработчика: даты не должны зависеть от машины.
+process.env.TZ = 'UTC';

@@ -8,7 +8,9 @@ import { env } from '../config/env.js';
 import { getPool, withTransaction, query, execute } from '../db/pool.js';
 import { extractFromText } from '../llm/client.js';
 import { SCHEMA_VERSION, emptyExtraction, type IExtraction } from '../llm/schema.js';
+import { approvedPolicySql } from '../ingest/policy.js';
 import { applyExtraction, clearDocumentContribution, type IApplyStats } from './apply.js';
+import { assertCanonWriteAllowed } from './guard.js';
 import { verifyExtraction } from './verify.js';
 
 /**
@@ -46,10 +48,13 @@ export const claimBatch = async (limit: number): Promise<IQueuedDocument[]> =>
   query<IQueuedDocument>(
     `UPDATE raw_documents SET status = 'extracting', attempts = attempts + 1, updated_at = now()
      WHERE id IN (
-       SELECT id FROM raw_documents
-       WHERE status IN ('new', 'queued') AND attempts < $2
-       ORDER BY published_at DESC NULLS LAST, id
-       FOR UPDATE SKIP LOCKED
+       SELECT d.id FROM raw_documents d
+       JOIN sources s ON s.id = d.source_id
+       WHERE d.status IN ('new', 'queued') AND d.attempts < $2
+         -- тексты уходят модели только у источников с допуском к ИИ-обработке
+         AND ${approvedPolicySql('s', 'ai_processing')}
+       ORDER BY d.published_at DESC NULLS LAST, d.id
+       FOR UPDATE OF d SKIP LOCKED
        LIMIT $1
      )
      RETURNING id, body, published_at`,
@@ -66,30 +71,53 @@ export const requeueStale = async (): Promise<number> =>
      WHERE status = 'extracting' AND updated_at < now() - interval '15 minutes'`,
   );
 
+export interface IChunkPlan {
+  chunks: string[];
+  /** Весь текст попал хотя бы в один чанк. */
+  complete: boolean;
+  /** До какого символа текст покрыт чанками. */
+  coveredChars: number;
+  totalChars: number;
+}
+
+/**
+ * Нарезка с честным покрытием. Раньше текст сначала обрезался до
+ * chunkSize * maxChunks, а из-за перекрытия чанки не покрывали даже этот
+ * предел — хвост статьи терялся молча, и документ всё равно считался
+ * разобранным. Теперь нарезка не обрезает, а сообщает, покрыт ли текст.
+ */
+export const planChunks = (
+  body: string,
+  chunkSize = env.EXTRACT_CHUNK_SIZE,
+  maxChunks = env.EXTRACT_MAX_CHUNKS,
+): IChunkPlan => {
+  if (body.length <= chunkSize) {
+    return { chunks: [body], complete: true, coveredChars: body.length, totalChars: body.length };
+  }
+
+  const chunks: string[] = [];
+  let start = 0;
+  let coveredChars = 0;
+  while (start < body.length && chunks.length < maxChunks) {
+    const end = Math.min(start + chunkSize, body.length);
+    // Стараемся резать по границе абзаца: разорванное предложение ломает цитаты.
+    const boundary = end < body.length ? body.lastIndexOf('\n', end) : end;
+    const cut = boundary > start + chunkSize / 2 ? boundary : end;
+    chunks.push(body.slice(start, cut));
+    coveredChars = cut;
+    if (cut >= body.length) break;
+    // Перекрытие не должно откатывать начало назад дальше текущего чанка.
+    start = Math.max(cut - CHUNK_OVERLAP, start + 1);
+  }
+  return { chunks, complete: coveredChars >= body.length, coveredChars, totalChars: body.length };
+};
+
+/** Только чанки — для мест, где покрытие проверяется отдельно. */
 export const splitIntoChunks = (
   body: string,
   chunkSize = env.EXTRACT_CHUNK_SIZE,
   maxChunks = env.EXTRACT_MAX_CHUNKS,
-): string[] => {
-  // Потолок длины следует из настроек, а не задан отдельно: иначе при росте
-  // числа чанков хвост статьи обрезался бы молча.
-  const maxBody = chunkSize * maxChunks;
-  const text = body.length > maxBody ? body.slice(0, maxBody) : body;
-  if (text.length <= chunkSize) return [text];
-
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < text.length && chunks.length < maxChunks) {
-    const end = Math.min(start + chunkSize, text.length);
-    // Стараемся резать по границе абзаца: разорванное предложение ломает цитаты.
-    const boundary = end < text.length ? text.lastIndexOf('\n', end) : end;
-    const cut = boundary > start + chunkSize / 2 ? boundary : end;
-    chunks.push(text.slice(start, cut));
-    if (cut >= text.length) break;
-    start = cut - CHUNK_OVERLAP;
-  }
-  return chunks;
-};
+): string[] => planChunks(body, chunkSize, maxChunks).chunks;
 
 /** Слияние результатов чанков: дубли внутри документа схлопываем по имени. */
 export const mergeChunkExtractions = (parts: readonly IExtraction[]): IExtraction => {
@@ -138,6 +166,30 @@ export interface IProcessResult {
   error: string | null;
 }
 
+export class ExtractionPayloadMismatchError extends Error {
+  constructor(
+    readonly documentId: number,
+    readonly chunkIndex: number,
+  ) {
+    super(
+      `док ${documentId}, чанк ${chunkIndex}: сохранённый ответ модели отличается от нового ` +
+        'при тех же промпте и модели — запись остановлена, чтобы канон не ссылался на чужой ответ',
+    );
+    this.name = 'ExtractionPayloadMismatchError';
+  }
+}
+
+/**
+ * Запись ответа модели по ключу (документ, чанк, промпт, модель).
+ *
+ *  - Нет строки — вставляем.
+ *  - Есть строка-ошибка — заменяем: иначе успешный повтор после сбоя LLM
+ *    никогда не записывался, а документ зависал между queued и extracting.
+ *  - Есть успешная строка с тем же ответом — возвращаем её id.
+ *  - Есть успешная строка с другим ответом — останавливаемся: сохранённый
+ *    успешный ответ не перезаписывается, а применять новый, привязывая его
+ *    к старой строке, нельзя — происхождение станет невоспроизводимым.
+ */
 export const recordExtraction = async (
   documentId: number,
   chunkIndex: number,
@@ -146,12 +198,18 @@ export const recordExtraction = async (
   rawResponse: string | null,
   usage: { tokensIn: number | null; tokensOut: number | null; latencyMs: number },
 ): Promise<number | null> => {
+  const payloadJson = payload === null ? null : JSON.stringify(payload);
   const res = await getPool().query<{ id: number }>(
     `INSERT INTO extractions
        (document_id, chunk_index, prompt_version, model, schema_version, status,
         payload, raw_response, tokens_in, tokens_out, latency_ms)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     ON CONFLICT (document_id, chunk_index, prompt_version, model) DO NOTHING
+     ON CONFLICT (document_id, chunk_index, prompt_version, model)
+     DO UPDATE SET schema_version = EXCLUDED.schema_version, status = EXCLUDED.status,
+                   payload = EXCLUDED.payload, raw_response = EXCLUDED.raw_response,
+                   tokens_in = EXCLUDED.tokens_in, tokens_out = EXCLUDED.tokens_out,
+                   latency_ms = EXCLUDED.latency_ms, created_at = now(), applied_at = NULL
+     WHERE extractions.status <> 'ok'
      RETURNING id`,
     [
       documentId,
@@ -160,30 +218,69 @@ export const recordExtraction = async (
       env.LMSTUDIO_MODEL,
       SCHEMA_VERSION,
       status,
-      payload === null ? null : JSON.stringify(payload),
+      payloadJson,
       rawResponse,
       usage.tokensIn,
       usage.tokensOut,
       usage.latencyMs,
     ],
   );
-  return res.rows[0]?.id ?? null;
+  const insertedId = res.rows[0]?.id;
+  if (insertedId !== undefined) return insertedId;
+
+  // Конфликт с успешной строкой.
+  const existing = await getPool().query<{ id: number; same: boolean }>(
+    `SELECT id, (payload IS NOT DISTINCT FROM $5::jsonb) AS same
+     FROM extractions
+     WHERE document_id = $1 AND chunk_index = $2 AND prompt_version = $3 AND model = $4`,
+    [documentId, chunkIndex, env.PROMPT_VERSION, env.LMSTUDIO_MODEL, payloadJson],
+  );
+  const row = existing.rows[0];
+  if (!row) return null;
+  if (status === 'ok' && !row.same) throw new ExtractionPayloadMismatchError(documentId, chunkIndex);
+  return row.id;
+};
+
+const markDocumentFailed = async (documentId: number, reason: string): Promise<void> => {
+  await execute(
+    `UPDATE raw_documents SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1`,
+    [documentId, reason],
+  );
 };
 
 export const processDocument = async (doc: IQueuedDocument): Promise<IProcessResult> => {
-  const chunks = splitIntoChunks(doc.body);
+  const plan = planChunks(doc.body);
+  if (!plan.complete) {
+    // Неполный разбор не подменяет полный: прежний вклад документа остаётся,
+    // а причина видна в --errors.
+    const reason =
+      `incomplete: текст длиннее лимита чанков, покрыто ${plan.coveredChars} из ${plan.totalChars} символов ` +
+      '(EXTRACT_CHUNK_SIZE / EXTRACT_MAX_CHUNKS)';
+    await markDocumentFailed(doc.id, reason);
+    return { documentId: doc.id, status: 'failed', stats: null, error: reason };
+  }
+
+  const chunks = plan.chunks;
   const parts: IExtraction[] = [];
   let firstExtractionId: number | null = null;
   let lastError: string | null = null;
+  let failedChunks = 0;
 
   for (const [index, chunk] of chunks.entries()) {
     const result = await extractFromText({ body: chunk, publishedAt: doc.published_at });
 
-    if (result.ok) {
+    if (result.ok && result.truncatedInput) {
+      // Повтор после невалидного JSON шёл на укороченном тексте: ответ
+      // описывает не весь чанк. Сохраняем как ошибку, в канон не пускаем.
+      failedChunks += 1;
+      lastError = `incomplete: чанк ${index} разобран только частично (повтор на укороченном тексте)`;
+      await recordExtraction(doc.id, index, 'invalid_json', null, lastError, result.usage);
+    } else if (result.ok) {
       const id = await recordExtraction(doc.id, index, 'ok', result.data, null, result.usage);
       firstExtractionId ??= id;
       parts.push(result.data);
     } else {
+      failedChunks += 1;
       lastError = result.message;
       // raw_response пишем только при ошибке: иначе таблица распухнет быстрее,
       // чем сами тексты. При llm_error ответа нет вовсе — тогда кладём сюда
@@ -201,11 +298,16 @@ export const processDocument = async (doc: IQueuedDocument): Promise<IProcessRes
   }
 
   if (parts.length === 0) {
-    await execute(
-      `UPDATE raw_documents SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1`,
-      [doc.id, lastError],
-    );
+    await markDocumentFailed(doc.id, lastError ?? 'ни один чанк не разобран');
     return { documentId: doc.id, status: 'failed', stats: null, error: lastError };
+  }
+
+  if (failedChunks > 0) {
+    // Частично успешный разбор раньше применялся как полный и стирал прежний
+    // вклад документа. Теперь документ остаётся с прежним вкладом.
+    const reason = `incomplete: разобрано ${parts.length} из ${chunks.length} чанков; последняя ошибка: ${lastError ?? '—'}`;
+    await markDocumentFailed(doc.id, reason);
+    return { documentId: doc.id, status: 'failed', stats: null, error: reason };
   }
 
   const merged = mergeChunkExtractions(parts);
@@ -239,6 +341,8 @@ export const processDocument = async (doc: IQueuedDocument): Promise<IProcessRes
     firstExtractionId = existing[0]?.id ?? null;
   }
   if (firstExtractionId === null) {
+    // Раньше статус не обновлялся, и документ навсегда застревал в extracting.
+    await markDocumentFailed(doc.id, 'нет строки extractions');
     return { documentId: doc.id, status: 'failed', stats: null, error: 'нет строки extractions' };
   }
 
@@ -259,6 +363,8 @@ export const processDocument = async (doc: IQueuedDocument): Promise<IProcessRes
 
 /** Один проход по очереди. Возвращает результаты по каждому документу. */
 export const runPipelinePass = async (batchSize = env.EXTRACT_BATCH_SIZE): Promise<IProcessResult[]> => {
+  // До любого запроса к БД: проход меняет статусы и канон.
+  assertCanonWriteAllowed();
   await requeueStale();
   const batch = await claimBatch(batchSize);
   if (batch.length === 0) return [];

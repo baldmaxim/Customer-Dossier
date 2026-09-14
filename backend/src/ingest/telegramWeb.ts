@@ -10,6 +10,14 @@
 import * as cheerio from 'cheerio';
 
 import { env } from '../config/env.js';
+import { DEFAULT_SOURCE_LIMITS, NetworkPolicyError, safeFetch, type ISourceNetworkPolicy } from '../net/safeFetch.js';
+
+/** Веб-версия каналов: только t.me, без поддоменов и чужих редиректов. */
+export const TELEGRAM_WEB_POLICY: ISourceNetworkPolicy = {
+  allowedHosts: ['t.me'],
+  allowSubdomains: false,
+  ...DEFAULT_SOURCE_LIMITS,
+};
 
 /** Селекторы вынесены наружу: при смене вёрстки правится одно место. */
 export const TG_SELECTORS = {
@@ -151,18 +159,17 @@ export const fetchChannelPage = async (
     url.searchParams.set('before', String(options.before));
   }
 
-  let response: Response;
+  let response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, TELEGRAM_WEB_POLICY, {
       headers: {
-        'User-Agent': env.INGEST_USER_AGENT,
-        'Accept-Language': 'ru,en;q=0.8',
+        'user-agent': env.INGEST_USER_AGENT,
+        'accept-language': 'ru,en;q=0.8',
       },
-      signal: options.signal ?? AbortSignal.timeout(30_000),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new TelegramFetchError(`Сеть недоступна: ${message}`, null, 'network');
+    const message = err instanceof NetworkPolicyError ? `${err.kind}: ${err.message}` : 'ошибка запроса';
+    throw new TelegramFetchError(`Сеть недоступна или запрос запрещён (${message})`, null, 'network');
   }
 
   if (response.status === 404) {
@@ -171,11 +178,11 @@ export const fetchChannelPage = async (
   if (response.status === 429) {
     throw new TelegramFetchError('Telegram ограничил частоту запросов', 429, 'rate_limited');
   }
-  if (!response.ok) {
+  if (response.status < 200 || response.status >= 300) {
     throw new TelegramFetchError(`HTTP ${response.status}`, response.status, 'network');
   }
 
-  const html = await response.text();
+  const html = response.text;
 
   // Закрытый канал отдаёт 200 со страницей-заглушкой «Please open in Telegram».
   // Отличать от пустого канала обязательно: иначе источник вечно висит активным

@@ -5,6 +5,7 @@ import { asyncRouter } from '../utils/asyncRouter.js';
 import { z } from 'zod';
 
 import { withTransaction } from '../db/pool.js';
+import { evaluateSourcePolicy } from '../ingest/policy.js';
 import { getSourceByKey } from '../ingest/sources.js';
 import { storeDocument } from '../ingest/store.js';
 
@@ -33,6 +34,13 @@ manualRouter.post('/', async (req, res) => {
   const source = await getSourceByKey('manual', 'form');
   if (!source) {
     res.status(500).json({ error: 'Источник manual:form отсутствует — накатите миграции' });
+    return;
+  }
+
+  // Ручная вставка — такой же вход сбора, как шедулер и бот: тот же допуск.
+  const decision = evaluateSourcePolicy(source, 'collect');
+  if (!decision.allowed) {
+    res.status(403).json({ error: decision.reason, code: 'source_policy' });
     return;
   }
 

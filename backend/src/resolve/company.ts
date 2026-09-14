@@ -8,6 +8,7 @@
 
 import type { DbExecutor } from '../db/pool.js';
 import {
+  compareTaxIds,
   normalizeName,
   isJunkName,
   isShortAmbiguousName,
@@ -179,13 +180,15 @@ export const scoreCandidate = (
     s_norm: Number(candidate.s_norm.toFixed(3)),
   };
 
-  // Разные ИНН/ОГРН — это разные юрлица, какими бы похожими ни были названия.
-  // Пишем пару как отклонённую навсегда, чтобы она не всплывала в очереди.
-  if (acceptedTaxId && candidate.tax_id && acceptedTaxId !== candidate.tax_id) {
+  // Разные ИНН (или разные ОГРН) — это разные юрлица, какими бы похожими ни
+  // были названия. Пишем пару как отклонённую навсегда. ИНН против ОГРН —
+  // разные реквизиты, их несовпадение ничего не доказывает.
+  const taxComparison = compareTaxIds(acceptedTaxId, candidate.tax_id);
+  if (taxComparison === 'conflict') {
     reasons.tax_id = 'conflict';
     return { candidate, score: 0, reasons, forbidden: true };
   }
-  reasons.tax_id = acceptedTaxId && candidate.tax_id ? 'match' : 'none';
+  reasons.tax_id = taxComparison;
 
   let score = 0.55 * candidate.s_latin + 0.25 * candidate.s_norm;
 
@@ -214,6 +217,21 @@ export const scoreCandidate = (
   }
 
   return { candidate, score: Math.max(0, Math.min(1, score)), reasons, forbidden: false };
+};
+
+/**
+ * Годится ли единственный точный кандидат для быстрого пути: реквизиты одного
+ * вида не расходятся и организационная форма не противоречит.
+ */
+export const isExactCandidateCompatible = (
+  candidate: { tax_id: string | null; legal_form: string | null },
+  acceptedTaxId: string | null,
+  legalForm: string | null | undefined,
+): boolean => {
+  if (compareTaxIds(acceptedTaxId, candidate.tax_id) === 'conflict') return false;
+  const inputForm = (legalForm ?? '').trim().toUpperCase();
+  const candidateForm = (candidate.legal_form ?? '').trim().toUpperCase();
+  return !(inputForm && candidateForm && inputForm !== candidateForm);
 };
 
 const enqueueMerge = async (
@@ -265,28 +283,47 @@ export const resolveCompany = async (
   }
 
   // Ш2. Точный алиас — это имя уже встречалось.
-  const byAlias = await exec.query<{ entity_id: number }>(
-    `SELECT entity_id FROM entity_aliases
-     WHERE entity_kind = 'company' AND alias_norm = $1
-     LIMIT 1`,
-    [normalized.norm],
-  );
-  const aliasId = byAlias.rows[0]?.entity_id;
-  if (aliasId !== undefined) {
-    const live = await followTombstone(exec, aliasId);
-    await addAlias(exec, live, input.surface, normalized);
-    return { companyId: live, method: 'alias', confidence: 0.98, queued: false };
-  }
-
   // Ш3. Точный ключ — та же компания, записанная другой графикой.
-  const byKey = await exec.query<{ id: number }>(
-    'SELECT id FROM companies WHERE name_key = $1 AND merged_into_id IS NULL LIMIT 1',
-    [normalized.key],
-  );
-  const keyId = byKey.rows[0]?.id;
-  if (keyId !== undefined) {
-    await addAlias(exec, keyId, input.surface, normalized);
-    return { companyId: keyId, method: 'key', confidence: 0.95, queued: false };
+  //
+  // Быстрый путь принимается, только если кандидат РОВНО один и не конфликтует
+  // по реквизитам и форме. Раньше бралась первая строка (LIMIT 1): одноимённая
+  // компания с другим ИНН получала чужие объекты и претензии.
+  let ambiguousExact = false;
+  for (const step of ['alias', 'key'] as const) {
+    const ids =
+      step === 'alias'
+        ? (
+            await exec.query<{ entity_id: number }>(
+              `SELECT DISTINCT entity_id FROM entity_aliases
+               WHERE entity_kind = 'company' AND alias_norm = $1`,
+              [normalized.norm],
+            )
+          ).rows.map(r => r.entity_id)
+        : (
+            await exec.query<{ id: number }>(
+              'SELECT id FROM companies WHERE name_key = $1 AND merged_into_id IS NULL',
+              [normalized.key],
+            )
+          ).rows.map(r => r.id);
+    if (ids.length === 0) continue;
+
+    const live = [...new Set(await Promise.all(ids.map(id => followTombstone(exec, id))))];
+    const rows = (
+      await exec.query<{ id: number; tax_id: string | null; legal_form: string | null }>(
+        'SELECT id, tax_id, legal_form FROM companies WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL',
+        [live],
+      )
+    ).rows;
+
+    const single = rows.length === 1 ? rows[0] : undefined;
+    if (single && isExactCandidateCompatible(single, acceptedTaxId, input.legalForm ?? normalized.legalForm)) {
+      await addAlias(exec, single.id, input.surface, normalized);
+      return step === 'alias'
+        ? { companyId: single.id, method: 'alias', confidence: 0.98, queued: false }
+        : { companyId: single.id, method: 'key', confidence: 0.95, queued: false };
+    }
+    // Несколько кандидатов или конфликт: решение не за резолвером.
+    ambiguousExact = true;
   }
 
   // Ш4-5. Кандидаты и скоринг.
@@ -298,8 +335,15 @@ export const resolveCompany = async (
 
   const best = scored[0];
 
-  // Ш6. Пороги.
-  if (best && !best.forbidden && best.score >= AUTO_MERGE_SCORE && !isShortAmbiguousName(normalized)) {
+  // Ш6. Пороги. Если точное совпадение было неоднозначным, автослияние
+  // запрещено: лучший по баллу из нескольких одноимённых — тот же произвольный выбор.
+  if (
+    best &&
+    !best.forbidden &&
+    !ambiguousExact &&
+    best.score >= AUTO_MERGE_SCORE &&
+    !isShortAmbiguousName(normalized)
+  ) {
     await addAlias(exec, best.candidate.id, input.surface, normalized);
     return {
       companyId: best.candidate.id,
@@ -320,8 +364,9 @@ export const resolveCompany = async (
     return { companyId: newId, method: 'created', confidence: 1, queued: false };
   }
 
-  // Серая зона либо короткое неоднозначное имя: создали отдельную компанию,
+  // Серая зона, короткое или неоднозначное имя: создали отдельную компанию,
   // решение о слиянии оставили человеку.
-  await enqueueMerge(exec, newId, best.candidate.id, best, input.documentId ?? null, 'pending');
+  const reasons = ambiguousExact ? { ...best.reasons, exact_match: 'ambiguous_or_conflict' } : best.reasons;
+  await enqueueMerge(exec, newId, best.candidate.id, { ...best, reasons }, input.documentId ?? null, 'pending');
   return { companyId: newId, method: 'created_queued', confidence: best.score, queued: true };
 };

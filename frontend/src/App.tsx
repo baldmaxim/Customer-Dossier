@@ -4,9 +4,11 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { Layout } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
+import { useSession } from './hooks/useSession';
 import { AdminPage } from './pages/AdminPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
+import { LoginPage } from './pages/LoginPage';
 import { SearchPage } from './pages/SearchPage';
 
 const queryClient = new QueryClient({
@@ -21,18 +23,32 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Досье и управление доступны только после входа оператора. */
+const AuthGate: FC = () => {
+  const session = useSession();
+
+  if (session.isLoading) return null;
+  if (!session.authenticated) {
+    return <LoginPage onLogin={session.login} error={session.loginError} pending={session.isLoggingIn} />;
+  }
+
+  return (
+    <Layout onLogout={() => void session.logout()}>
+      <Routes>
+        <Route path="/" element={<SearchPage />} />
+        <Route path="/company/:id" element={<CompanyPage />} />
+        <Route path="/contractors" element={<ContractorsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Layout>
+  );
+};
+
 export const App: FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<SearchPage />} />
-          <Route path="/company/:id" element={<CompanyPage />} />
-          <Route path="/contractors" element={<ContractorsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <AuthGate />
       <UpdatePrompt />
     </BrowserRouter>
   </QueryClientProvider>

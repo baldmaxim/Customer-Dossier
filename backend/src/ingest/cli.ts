@@ -1,21 +1,20 @@
 // CLI ингеста.
 //
-//   npm run ingest:once -- --probe kzbuild     проверить вёрстку канала (без БД)
-//   npm run ingest:once -- --add kzbuild       добавить канал в источники
-//   npm run ingest:once -- --source kzbuild    прогнать один канал
-//   npm run ingest:once                        прогнать все просроченные источники
-//   npm run ingest:once -- --add-site <url>    добавить сайт (ищет RSS сам)
-//   npm run ingest:once -- --probe-site <url>  проверить сайт, ничего не сохраняя
-//   npm run ingest:once -- --remove <key>      удалить источник
-//   npm run ingest:once -- --remove <key> --with-documents
+//   npm run ingest:once -- --add kzbuild       добавить канал (на паузе, допуск не подтверждён)
+//   npm run ingest:once -- --add-site <url> [--rss <feed>]  добавить сайт без сетевых запросов
+//   npm run ingest:once -- --probe kzbuild     проверить вёрстку канала (нужен допуск к сбору)
+//   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
+//   npm run ingest:once -- --source kzbuild    прогнать один источник (нужен допуск)
+//   npm run ingest:once                        прогнать все просроченные источники с допуском
+//   npm run ingest:once -- --remove <key>      удалить источник без документов
 //   npm run ingest:once -- --stats             сводка по сырому слою
 //   npm run ingest:once -- --env-check         какие ключи видит программа в .env
-//   npm run ingest:once -- --bot-check         проверить форвард-бота
-//   npm run ingest:once -- --bot-once          разобрать накопленные форварды и выйти
+//   npm run ingest:once -- --bot-check         проверить форвард-бота (без чтения сообщений)
+//   npm run ingest:once -- --bot-once          разобрать накопленные форварды (нужен допуск manual:bot)
 //
-// --probe стоит запускать первым на новой машине: он показывает, сколько узлов
-// нашёл каждый селектор. Если wrap = 0 при большой странице — вёрстка t.me/s/
-// изменилась, и парсер надо чинить ДО включения источников.
+// Любой живой запрос к источнику — в том числе --probe — это сбор. Он
+// выполняется только для зарегистрированного источника с подтверждённым
+// допуском (sources.access_status = approved). Допуск ставит оператор в админке.
 
 import { closeDb } from '../db/pool.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
@@ -29,8 +28,10 @@ import {
 import { getIngestSummary, getDuplicateRate } from './store.js';
 import { checkBot, pollBotUpdates } from './telegramBot.js';
 import { checkEnvFile, printEnvCheck } from '../config/env-check.js';
-import { discoverFeedUrl, fetchSite, parseFeed } from './website.js';
+import { discoverFeedUrl, fetchSite } from './website.js';
 import { ingestWebsiteSource } from './scheduler.js';
+import { evaluateSourcePolicy } from './policy.js';
+import type { ISource } from './sources.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -38,7 +39,33 @@ const argValue = (flag: string): string | null => {
   return process.argv[index + 1] ?? null;
 };
 
+/** Источник по ключу с проверкой допуска к сбору; null — вывод причины и код 1. */
+const loadApprovedSource = async (
+  kind: 'telegram' | 'website' | null,
+  key: string,
+): Promise<ISource | null> => {
+  const source =
+    kind !== null
+      ? await getSourceByKey(kind, key)
+      : ((await getSourceByKey('telegram', key)) ?? (await getSourceByKey('website', key)));
+  if (!source) {
+    console.error(`[ingest] источник «${key}» не зарегистрирован. Добавьте его: --add / --add-site`);
+    process.exitCode = 1;
+    return null;
+  }
+  const decision = evaluateSourcePolicy(source, 'collect');
+  if (!decision.allowed) {
+    console.error(`[ingest] ${decision.reason}`);
+    console.error('[ingest] Допуск к сбору подтверждает оператор в админке (раздел «Источники»).');
+    process.exitCode = 1;
+    return null;
+  }
+  return source;
+};
+
 const probe = async (channel: string): Promise<void> => {
+  const source = await loadApprovedSource('telegram', channel);
+  if (!source) return;
   console.log(`[probe] https://t.me/s/${channel}`);
   const { html, httpStatus } = await fetchChannelPage(channel);
   const parsed = parseChannelPage(html, channel);
@@ -99,36 +126,33 @@ const main = async (): Promise<void> => {
 
   const siteUrl = argValue('--add-site');
   if (siteUrl) {
+    // Регистрация без сетевых запросов: искать ленту — уже сбор, а допуска
+    // у нового источника ещё нет. Лента найдётся при первом разрешённом проходе.
     const url = new URL(siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`);
     const key = url.hostname.replace(/^www\./, '');
-    console.log(`[site] ищу RSS-ленту на ${url.origin}…`);
-    const feed = await discoverFeedUrl(url.origin);
-    if (!feed) {
-      console.error('[site] лента не найдена. Найдите её адрес вручную и добавьте так:');
-      console.error(`  npm run ingest:once -- --add-site ${key} --rss https://.../feed`);
-      process.exitCode = 1;
-      return;
-    }
-    console.log(`[site] лента: ${feed}`);
-    const source = await addWebsiteSource(key, argValue('--title') ?? key, url.origin, {
-      rss: argValue('--rss') ?? feed,
-    });
-    console.log(`[site] добавлен ${source.key} (id ${source.id}), статус ${source.status}`);
+    const rss = argValue('--rss');
+    const source = await addWebsiteSource(key, argValue('--title') ?? key, url.origin, rss ? { rss } : {});
+    console.log(
+      `[site] добавлен ${source.key} (id ${source.id}), статус ${source.status}, ` +
+        `допуск к сбору: ${source.accessStatus}`,
+    );
     return;
   }
 
   const probeSite = argValue('--probe-site');
   if (probeSite) {
-    const url = new URL(probeSite.startsWith('http') ? probeSite : `https://${probeSite}`);
-    const rss = argValue('--rss');
-    const feed = rss ?? (await discoverFeedUrl(url.origin));
+    const source = await loadApprovedSource('website', probeSite.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''));
+    if (!source) return;
+    const origin = source.baseUrl ?? `https://${source.key}`;
+    const rss = argValue('--rss') ?? (typeof source.config.rss === 'string' ? source.config.rss : null);
+    const feed = rss ?? (await discoverFeedUrl(origin));
     if (!feed) {
       console.error('[probe-site] RSS-лента не найдена. Укажите её через --rss.');
       process.exitCode = 1;
       return;
     }
     console.log(`[probe-site] лента: ${feed}`);
-    const result = await fetchSite(url.origin, { rss: feed }, new Set(), 2);
+    const result = await fetchSite(origin, { rss: feed }, new Set(), 2);
     console.log(`[probe-site] записей в ленте: ${result.layoutStats.parsed ?? 0}`);
     console.log(`[probe-site] дозагружено полных текстов: ${result.layoutStats.enriched ?? 0}`);
     const first = result.articles[0];
@@ -168,7 +192,6 @@ const main = async (): Promise<void> => {
       );
     } else {
       console.error(`[ingest] не удалён: ${result.reason}`);
-      console.error(`[ingest] удалить вместе с документами: --remove ${removeKey} --with-documents`);
       process.exitCode = 1;
     }
     return;
@@ -191,7 +214,9 @@ const main = async (): Promise<void> => {
     for (const problem of result.problems) console.error(`[bot] ${problem}`);
     if (result.ok) {
       console.log('\n[bot] всё готово. Перешлите боту любой пост — он ответит «Принято».');
-      console.log('[bot] приём работает, пока запущен npm run dev.');
+      console.log(
+        '[bot] приём работает при BOT_ENABLED=true в npm run dev и подтверждённом допуске источника manual:bot.',
+      );
     } else {
       process.exitCode = 1;
     }
@@ -219,13 +244,8 @@ const main = async (): Promise<void> => {
 
   const sourceKey = argValue('--source');
   if (sourceKey) {
-    const source =
-      (await getSourceByKey('telegram', sourceKey)) ?? (await getSourceByKey('website', sourceKey));
-    if (!source) {
-      console.error(`[ingest] источник «${sourceKey}» не найден. Добавьте: --add ${sourceKey}`);
-      process.exitCode = 1;
-      return;
-    }
+    const source = await loadApprovedSource(null, sourceKey);
+    if (!source) return;
     printReports([
       source.kind === 'website'
         ? await ingestWebsiteSource(source)

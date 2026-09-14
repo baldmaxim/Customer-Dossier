@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 .env.local
+# локальный токен оператора (backend/.local/operator-token)
+.local/
 *.log
 dev-dist/
 *.tsbuildinfo

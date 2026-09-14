@@ -11,7 +11,8 @@
 import { env } from '../config/env.js';
 import { query } from '../db/pool.js';
 import { extractFromText } from '../llm/client.js';
-import { recordExtraction, splitIntoChunks } from './worker.js';
+import { approvedPolicySql } from '../ingest/policy.js';
+import { planChunks, recordExtraction } from './worker.js';
 
 export interface IShadowResult {
   processed: number;
@@ -32,8 +33,11 @@ export const runShadowExtraction = async (
   const docs = await query<{ id: number; body: string; published_at: Date | null }>(
     `SELECT d.id, d.body, d.published_at
      FROM raw_documents d
+     JOIN sources s ON s.id = d.source_id
      WHERE d.status IN ('extracted', 'skipped')
-       AND ($2::text IS NULL OR d.source_id IN (SELECT id FROM sources WHERE key = $2::text))
+       -- теневой прогон тоже отдаёт тексты модели: нужен допуск к ИИ-обработке
+       AND ${approvedPolicySql('s', 'ai_processing')}
+       AND ($2::text IS NULL OR s.key = $2::text)
        AND NOT EXISTS (
          SELECT 1 FROM extractions e
          WHERE e.document_id = d.id AND e.model = $1 AND e.prompt_version = $3
@@ -46,10 +50,19 @@ export const runShadowExtraction = async (
   const result: IShadowResult = { processed: 0, failed: 0 };
 
   for (const doc of docs) {
+    const plan = planChunks(doc.body);
+    if (!plan.complete) {
+      // Сравнивать модели на обрезанном тексте — сравнивать не то, что уйдёт в канон.
+      console.log(`[shadow] док ${doc.id}: пропущен, текст длиннее лимита чанков`);
+      result.failed += 1;
+      continue;
+    }
     let anyOk = false;
-    for (const [index, chunk] of splitIntoChunks(doc.body).entries()) {
+    for (const [index, chunk] of plan.chunks.entries()) {
       const extraction = await extractFromText({ body: chunk, publishedAt: doc.published_at });
-      if (extraction.ok) {
+      if (extraction.ok && extraction.truncatedInput) {
+        await recordExtraction(doc.id, index, 'invalid_json', null, 'incomplete: повтор на укороченном тексте', extraction.usage);
+      } else if (extraction.ok) {
         anyOk = true;
         await recordExtraction(doc.id, index, 'ok', extraction.data, null, extraction.usage);
       } else {

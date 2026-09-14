@@ -9,6 +9,8 @@
 
 import { env } from '../config/env.js';
 import { withTransaction } from '../db/pool.js';
+import { NetworkPolicyError, safeFetch, type ISourceNetworkPolicy } from '../net/safeFetch.js';
+import { SourcePolicyError, assertSourceAllowed } from './policy.js';
 import { getSourceByKey, updateCursor } from './sources.js';
 import { storeDocument, type IIncomingDocument } from './store.js';
 
@@ -56,14 +58,35 @@ interface ITelegramUpdate {
   channel_post?: ITelegramMessage;
 }
 
+/** Bot API — один фиксированный хост; ответ getUpdates укладывается в лимит с запасом. */
+const BOT_API_POLICY: ISourceNetworkPolicy = {
+  allowedHosts: ['api.telegram.org'],
+  allowSubdomains: false,
+  maxBytes: 5 * 1024 * 1024,
+  timeoutMs: 60_000,
+  maxRedirects: 0,
+};
+
 const callApi = async <T>(method: string, payload: Record<string, unknown>): Promise<T> => {
-  const response = await fetch(API(method), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60_000),
-  });
-  const data = (await response.json()) as { ok: boolean; result?: T; description?: string };
+  let text: string;
+  try {
+    const response = await safeFetch(API(method), BOT_API_POLICY, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    text = response.text;
+  } catch (err) {
+    // Текст ошибки не содержит URL: в пути запроса лежит токен бота.
+    const kind = err instanceof NetworkPolicyError ? err.kind : 'network';
+    throw new Error(`Telegram API ${method}: запрос не выполнен (${kind})`);
+  }
+  let data: { ok: boolean; result?: T; description?: string };
+  try {
+    data = JSON.parse(text) as { ok: boolean; result?: T; description?: string };
+  } catch {
+    throw new Error(`Telegram API ${method}: ответ не JSON`);
+  }
   if (!data.ok) {
     // description от Telegram токена не содержит — логировать безопасно.
     throw new Error(`Telegram API ${method}: ${data.description ?? 'неизвестная ошибка'}`);
@@ -202,6 +225,10 @@ export const pollBotUpdates = async (timeoutSec = 30): Promise<IBotPollResult> =
     throw new Error('Источник manual:bot отсутствует. Накатите миграцию 008_seed_sources.sql');
   }
 
+  // Допуск проверяется до обращения к Telegram: без него сообщения не
+  // забираются из очереди Bot API и не сохраняются.
+  assertSourceAllowed(source, 'collect');
+
   const allowed = parseAllowedUserIds();
   if (allowed.size === 0) {
     console.warn(
@@ -298,8 +325,9 @@ export const runBotLoop = async (signal?: AbortSignal): Promise<void> => {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[bot] ошибка опроса: ${message}`);
-      // Пауза, чтобы при устойчивой ошибке (неверный токен) не молотить API.
-      await new Promise(resolve => setTimeout(resolve, 15_000));
+      // Пауза, чтобы при устойчивой ошибке (неверный токен, нет допуска) не
+      // молотить API и не засорять лог.
+      await new Promise(resolve => setTimeout(resolve, err instanceof SourcePolicyError ? 60_000 : 15_000));
     }
   }
 };

@@ -1,0 +1,2 @@
+6b905f71b1e0dd482de367f95d7346766482f9937ceccf717319189f1f237eda *backend/package-lock.json
+5a3359999cd405ff3f6e5541ccf101bee90f727c2886708ad35a4858a4e0253f *frontend/package-lock.json

@@ -67,6 +67,18 @@
   font-weight: 500;
 }
 
+/* Пометка устаревшего индекса: не даёт принять цвет за оценку надёжности. */
+.legacy {
+  font-size: 0.68em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-xs);
+  padding: 0 4px;
+}
+
 .large {
   font-size: 0.95rem;
   padding: 8px 15px 8px 12px;

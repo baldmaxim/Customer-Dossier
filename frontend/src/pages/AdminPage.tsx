@@ -1,9 +1,10 @@
-import { FC, useState } from 'react';
+import { FC, Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IPendingMerge, ISourceRow } from '../api/types';
-import { SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
+import { SourcePolicyEditor } from '../components/SourcePolicyEditor';
+import { PERMISSION_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './AdminPage.module.css';
 
 export const AdminPage: FC = () => {
@@ -12,6 +13,7 @@ export const AdminPage: FC = () => {
   const [site, setSite] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<number | null>(null);
 
   const sourcesQuery = useQuery({
     queryKey: ['sources'],
@@ -39,25 +41,24 @@ export const AdminPage: FC = () => {
     mutationFn: (value: string) => api.post('/api/admin/sources/telegram', { channel: value }),
     onSuccess: () => {
       setChannel('');
-      setNotice('Канал добавлен и включён.');
+      setNotice('Канал добавлен на паузе. Сбор начнётся после решения о допуске и включения.');
       invalidate();
     },
     onError: (err: Error) => setNotice(err.message),
   });
 
   const addSite = useMutation({
-    mutationFn: (url: string) => api.post<{ feedUrl: string }>('/api/admin/sources/website', { url }),
-    onSuccess: result => {
+    mutationFn: (url: string) => api.post<{ feedUrl: string | null }>('/api/admin/sources/website', { url }),
+    onSuccess: () => {
       setSite('');
-      setNotice(`Сайт добавлен. Лента: ${result.feedUrl}`);
+      setNotice('Сайт добавлен на паузе. Лента найдётся при первом разрешённом проходе.');
       invalidate();
     },
     onError: (err: Error) => setNotice(err.message),
   });
 
   const removeSource = useMutation({
-    mutationFn: ({ id, withDocuments }: { id: number; withDocuments: boolean }) =>
-      api.delete(`/api/admin/sources/${id}${withDocuments ? '?withDocuments=true' : ''}`),
+    mutationFn: (id: number) => api.delete(`/api/admin/sources/${id}`),
     onSuccess: () => {
       setNotice('Источник удалён.');
       invalidate();
@@ -66,8 +67,7 @@ export const AdminPage: FC = () => {
   });
 
   const decide = useMutation({
-    mutationFn: ({ id, action }: { id: number; action: 'merge' | 'reject' }) =>
-      api.post(`/api/admin/merges/${id}/${action}`, { decidedBy: 'admin' }),
+    mutationFn: (id: number) => api.post(`/api/admin/merges/${id}/reject`, { decidedBy: 'operator' }),
     onSuccess: invalidate,
     onError: (err: Error) => setNotice(err.message),
   });
@@ -117,7 +117,8 @@ export const AdminPage: FC = () => {
         <h2>Очередь слияний</h2>
         <p className={styles.hint}>
           Резолвер намеренно осторожен: в спорных случаях он создаёт новую компанию, а не сливает.
-          Разлить ошибочно слитые компании почти невозможно, склеить дубли — одна кнопка.
+          Слияние сейчас выключено: в нём нет проверки реквизитов и отката (безопасная версия — этап
+          04). Отклонить неверную пару можно.
         </p>
 
         {merges.length === 0 ? (
@@ -142,16 +143,16 @@ export const AdminPage: FC = () => {
                 <button
                   type="button"
                   className={styles.primary}
-                  disabled={decide.isPending}
-                  onClick={() => decide.mutate({ id: m.id, action: 'merge' })}
+                  disabled
+                  title="Слияние выключено до этапа 04"
                 >
-                  Это одна компания
+                  Слить (выключено)
                 </button>
                 <button
                   type="button"
                   className={styles.secondary}
                   disabled={decide.isPending}
-                  onClick={() => decide.mutate({ id: m.id, action: 'reject' })}
+                  onClick={() => decide.mutate(m.id)}
                 >
                   Разные
                 </button>
@@ -189,9 +190,9 @@ export const AdminPage: FC = () => {
       <section className={styles.section}>
         <h2>Добавить сайт</h2>
         <p className={styles.hint}>
-          Читаем через RSS — он стабильнее вёрстки. Адрес ленты найдётся сам; если нет,
-          портал скажет об этом, и её нужно будет указать вручную (обычно это{' '}
-          <code>/rss</code> или <code>/feed</code>).
+          Читаем через RSS — он стабильнее вёрстки. При добавлении запросов к сайту нет: адрес ленты
+          ищется при первом проходе после решения о допуске (обычно это <code>/rss</code> или{' '}
+          <code>/feed</code>).
         </p>
         <form
           className={styles.inlineForm}
@@ -207,7 +208,7 @@ export const AdminPage: FC = () => {
             onChange={e => setSite(e.target.value)}
           />
           <button type="submit" className={styles.primary} disabled={addSite.isPending}>
-            {addSite.isPending ? 'Ищу ленту…' : 'Добавить'}
+            Добавить
           </button>
         </form>
       </section>
@@ -221,6 +222,7 @@ export const AdminPage: FC = () => {
                 <th>Источник</th>
                 <th>Тип</th>
                 <th>Статус</th>
+                <th>Допуск</th>
                 <th>Последний запуск</th>
                 <th className={styles.num}>Найдено</th>
                 <th>Ошибка</th>
@@ -229,7 +231,8 @@ export const AdminPage: FC = () => {
             </thead>
             <tbody>
               {sources.map(s => (
-                <tr key={s.id}>
+                <Fragment key={s.id}>
+                <tr>
                   <td>
                     <span className={styles.sourceTitle}>{s.title}</span>
                     <span className={styles.sourceKey}>{s.key}</span>
@@ -240,58 +243,78 @@ export const AdminPage: FC = () => {
                       {s.status === 'active' ? 'активен' : s.status === 'paused' ? 'пауза' : 'сломан'}
                     </span>
                   </td>
+                  <td className={styles.policyCell}>
+                    {/* Причина блокировки — словами, как её считает сервер. */}
+                    <span className={s.collectBlockedReason ? styles.policyBlocked : styles.policyOk}>
+                      сбор: {PERMISSION_LABELS[s.accessStatus]}
+                    </span>
+                    <span className={s.aiBlockedReason ? styles.policyBlocked : styles.policyOk}>
+                      ИИ: {PERMISSION_LABELS[s.aiProcessingStatus]}
+                    </span>
+                    {(s.collectBlockedReason ?? s.aiBlockedReason) && (
+                      <span className={styles.policyReason}>{s.collectBlockedReason ?? s.aiBlockedReason}</span>
+                    )}
+                  </td>
                   <td className={styles.dim}>{formatDateTime(s.lastRunAt) || '—'}</td>
                   <td className={styles.num}>
                     {s.lastItemsSeen === null ? '—' : `${s.lastItemsNew ?? 0}/${s.lastItemsSeen}`}
                   </td>
                   <td className={styles.error}>{s.lastError ?? ''}</td>
                   <td>
-                    {s.kind !== 'manual' && (
-                      <div className={styles.rowActions}>
-                        <button
-                          type="button"
-                          className={styles.secondary}
-                          disabled={setStatus.isPending}
-                          onClick={() =>
-                            setStatus.mutate({
-                              id: s.id,
-                              status: s.status === 'active' ? 'paused' : 'active',
-                            })
-                          }
-                        >
-                          {s.status === 'active' ? 'Пауза' : 'Включить'}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.danger}
-                          disabled={removeSource.isPending}
-                          onClick={() => {
-                            // Сначала пробуем без документов: сервер откажет,
-                            // если они есть, и назовёт их число. Только тогда
-                            // спрашиваем про необратимое удаление.
-                            removeSource.mutate(
-                              { id: s.id, withDocuments: false },
-                              {
-                                onError: () => {
-                                  const ok = window.confirm(
-                                    `По источнику «${s.title}» уже собраны документы.\n\n` +
-                                      'Удалить вместе с ними? Извлечённые упоминания и события ' +
-                                      'исчезнут безвозвратно.\n\n' +
-                                      'Если нужно просто остановить сбор — нажмите «Отмена» ' +
-                                      'и поставьте источник на паузу.',
-                                  );
-                                  if (ok) removeSource.mutate({ id: s.id, withDocuments: true });
-                                },
-                              },
-                            );
-                          }}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    )}
+                    <div className={styles.rowActions}>
+                      <button
+                        type="button"
+                        className={styles.secondary}
+                        onClick={() => setEditingPolicy(editingPolicy === s.id ? null : s.id)}
+                      >
+                        Допуск
+                      </button>
+                      {s.kind !== 'manual' && (
+                        <>
+                          <button
+                            type="button"
+                            className={styles.secondary}
+                            disabled={setStatus.isPending}
+                            onClick={() =>
+                              setStatus.mutate({
+                                id: s.id,
+                                status: s.status === 'active' ? 'paused' : 'active',
+                              })
+                            }
+                          >
+                            {s.status === 'active' ? 'Пауза' : 'Включить'}
+                          </button>
+                          {/* Удаляется только источник без документов. С документами —
+                              пауза: удаление унесло бы упоминания и события. */}
+                          <button
+                            type="button"
+                            className={styles.danger}
+                            disabled={removeSource.isPending}
+                            onClick={() => removeSource.mutate(s.id)}
+                          >
+                            Удалить
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
+                {editingPolicy === s.id && (
+                  <tr>
+                    <td colSpan={8}>
+                      <SourcePolicyEditor
+                        source={s}
+                        onCancel={() => setEditingPolicy(null)}
+                        onSaved={() => {
+                          setEditingPolicy(null);
+                          setNotice(`Решение о допуске «${s.title}» сохранено и записано в журнал.`);
+                          invalidate();
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

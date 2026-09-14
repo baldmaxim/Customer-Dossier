@@ -10,11 +10,20 @@ import { query } from '../db/pool.js';
 
 export const contractorsRouter = asyncRouter();
 
-const listSchema = z.object({
+/**
+ * Булев параметр строки запроса. z.coerce.boolean() превращал любую непустую
+ * строку — в том числе "false" — в true, и фильтр серых не работал никогда.
+ */
+export const queryBoolean = z
+  .enum(['true', 'false', '1', '0'])
+  .default('false')
+  .transform(value => value === 'true' || value === '1');
+
+export const listSchema = z.object({
   role: z.enum(['general_contractor', 'contractor', 'customer', 'any']).default('any'),
   city: z.string().max(120).optional(),
   /** Компании без данных по умолчанию скрыты: серый светофор ничего не говорит. */
-  includeGrey: z.coerce.boolean().default(false),
+  includeGrey: queryBoolean,
   sort: z.enum(['risk', 'projects', 'mentions']).default('projects'),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });

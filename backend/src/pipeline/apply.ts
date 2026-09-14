@@ -13,6 +13,7 @@ import { resolveCompany } from '../resolve/company.js';
 import { resolveProject } from '../resolve/project.js';
 import { CONFIDENCE_THRESHOLDS, type IVerificationResult } from './verify.js';
 import { NON_PARTICIPANT_ROLES } from '../llm/schema.js';
+import { assertCanonWriteAllowed } from './guard.js';
 
 export interface IApplyInput {
   documentId: number;
@@ -59,14 +60,16 @@ const emptyStats = (): IApplyStats => ({
  * Осиротевшие поля снимет --recheck.
  *
  * Роли на объектах удаляются по evidence_document_id — это документ, который
- * роль СОЗДАЛ. Если ту же роль позже подтвердил другой документ, при частичном
- * переизвлечении она пропадёт до его собственного переразбора. Поэтому после
- * смены промпта переразбирать нужно всё, а не выборочно.
+ * роль СОЗДАЛ. Если ту же роль позже подтвердил другой документ, она пропадёт
+ * при переразборе ЛЮБОГО объёма — одного документа или всей базы: схема не
+ * хранит множественных доказательств и ручных решений. Поэтому функция
+ * заблокирована (pipeline/guard.ts) до append-only записи этапа 03B.
  */
 export const clearDocumentContribution = async (
   client: PoolClient,
   documentId: number,
 ): Promise<{ mentions: number; events: number; participants: number }> => {
+  assertCanonWriteAllowed();
   const mentions = await client.query('DELETE FROM mentions WHERE document_id = $1', [documentId]);
   const events = await client.query('DELETE FROM events WHERE document_id = $1', [documentId]);
   const participants = await client.query(
@@ -84,6 +87,7 @@ export const applyExtraction = async (
   client: PoolClient,
   input: IApplyInput,
 ): Promise<IApplyStats> => {
+  assertCanonWriteAllowed();
   const stats = emptyStats();
   const { verified, documentId, extractionId, publishedAt } = input;
 

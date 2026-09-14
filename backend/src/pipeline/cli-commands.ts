@@ -7,6 +7,7 @@
 import { execute, query, queryOne } from '../db/pool.js';
 import { env } from '../config/env.js';
 import { listPendingMerges } from '../resolve/merge.js';
+import { assertCanonWriteAllowed } from './guard.js';
 import { MAX_ATTEMPTS, runPipelinePass } from './worker.js';
 
 export const printPass = (results: Awaited<ReturnType<typeof runPipelinePass>>): number => {
@@ -153,6 +154,9 @@ export const showErrors = async (limit = 15): Promise<void> => {
  * проходе.
  */
 export const retryFailed = async (): Promise<void> => {
+  // Возврат в очередь имеет смысл только вместе с проходом конвейера, а он
+  // заблокирован; менять статусы впустую не нужно.
+  assertCanonWriteAllowed();
   const affected = await execute(
     `UPDATE raw_documents
      SET status = 'queued', attempts = 0, last_error = NULL, updated_at = now()
@@ -229,9 +233,9 @@ export const showSkipped = async (limit = 10, sourceKey: string | null = null): 
     console.log(`${r.body.slice(0, 600)}${r.body.length > 600 ? '…' : ''}\n`);
   }
   console.log(
-    'Если тексты по теме — модель перестраховывается. Смягчите правило 9\n' +
-      'в SYSTEM_PROMPT (src/llm/prompt.ts) и поднимите PROMPT_VERSION в .env,\n' +
-      'иначе документы не переизвлекутся. Затем: --retry-skipped и --loop.',
+    'Если тексты по теме — модель перестраховывается. Правку промпта проверяйте\n' +
+      'теневым прогоном (--shadow, --compare). Переразбор с записью в канон\n' +
+      'заблокирован до безопасного пути записи (этап 03B).',
   );
 };
 
@@ -317,6 +321,7 @@ export const showDocument = async (id: number): Promise<void> => {
  * меняется и PROMPT_VERSION, и прежние оценки теряют силу.
  */
 export const retrySkipped = async (all: boolean): Promise<void> => {
+  assertCanonWriteAllowed();
   const affected = all
     ? await execute(
         `UPDATE raw_documents

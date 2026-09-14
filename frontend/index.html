@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Досье Заказчика</title>
-    <meta name="description" content="Портал деловой разведки по стройрынку Казахстана" />
+    <meta name="description" content="Локальный портал досье участников строительного рынка" />
     <meta name="color-scheme" content="light dark" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -15,14 +15,8 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png" />
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Inter с фолбэком на системный стек: без сети интерфейс просто берёт
-         системный гротеск, вёрстка не разъезжается. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-    />
+    <!-- Шрифт — системный стек (см. --font в src/index.css). Внешних запросов
+         за шрифтами нет: портал работает офлайн и не сообщает о себе третьим сайтам. -->
 
     <!-- apple-mobile-web-app-capable устарел, но iOS до 17 читает только его. -->
     <meta name="mobile-web-app-capable" content="yes" />

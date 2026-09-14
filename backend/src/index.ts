@@ -1,10 +1,13 @@
-// Точка входа: HTTP API + фоновый ингест + приём форвардов.
+// Точка входа: HTTP API на loopback. Фоновые задания (сбор, разбор моделью,
+// пересчёт метрик, приём форвардов) запускаются только явными флагами.
 
 import { createApp } from './app.js';
+import { resolveOperatorToken } from './api/operatorToken.js';
 import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
 import { runBotLoop } from './ingest/telegramBot.js';
+import { startBackgroundJobs } from './jobs.js';
 import { startMetricsScheduler } from './metrics/refresh.js';
 import { runPipelinePass } from './pipeline/worker.js';
 
@@ -75,20 +78,26 @@ const main = async (): Promise<void> => {
   }
 
   const controller = new AbortController();
-  const app = createApp();
-  const server = app.listen(env.PORT, () => {
-    console.log(`[api] слушает порт ${env.PORT}`);
+  const operator = resolveOperatorToken(env.OPERATOR_TOKEN);
+  const app = createApp({ operatorToken: operator.token });
+  const server = app.listen(env.PORT, env.HOST, () => {
+    console.log(`[api] слушает http://${env.HOST.includes(':') ? `[${env.HOST}]` : env.HOST}:${env.PORT}`);
+    // Сам токен не печатается никогда — только откуда его взять.
+    console.log(`[auth] токен оператора: ${operator.description}`);
   });
 
-  startIngestScheduler(controller.signal);
-  startPipelineWorker(controller.signal);
-  startMetricsScheduler(controller.signal);
-
-  if (env.TG_BOT_TOKEN !== '') {
-    void runBotLoop(controller.signal);
-  } else {
-    console.log('[bot] TG_BOT_TOKEN не задан — приём форвардов выключен');
-  }
+  const decision = startBackgroundJobs(
+    env,
+    {
+      ingest: startIngestScheduler,
+      pipeline: startPipelineWorker,
+      metrics: startMetricsScheduler,
+      bot: signal => void runBotLoop(signal),
+    },
+    controller.signal,
+  );
+  for (const note of decision.notes) console.log(`[jobs] ${note}`);
+  if (decision.started.length > 0) console.log(`[jobs] запущено: ${decision.started.join(', ')}`);
 
   const shutdown = (sig: string): void => {
     console.log(`[app] ${sig}, останавливаюсь`);

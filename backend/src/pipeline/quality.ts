@@ -15,6 +15,7 @@
 import { env } from '../config/env.js';
 import { getPool, query, withTransaction } from '../db/pool.js';
 import { normalizeName, type EntityKindForNormalize } from '../resolve/normalize.js';
+import { assertCanonWriteAllowed } from './guard.js';
 
 // --- Переразбор ----------------------------------------------------------
 
@@ -29,6 +30,8 @@ import { normalizeName, type EntityKindForNormalize } from '../resolve/normalize
  * до переразбора другого документа, который её подтверждал.
  */
 export const requeueForReextraction = async (sourceKey: string | null): Promise<number> => {
+  // Переразбор проходит через apply, который стирает прежний вклад документа.
+  assertCanonWriteAllowed();
   const res = await getPool().query(
     `UPDATE raw_documents d
      SET status = 'queued', attempts = 0, updated_at = now()
@@ -72,6 +75,9 @@ export interface IRenormalizeResult {
  * асимметрия прежняя — ошибочное слияние не разлить.
  */
 export const renormalizeEntities = async (dryRun: boolean): Promise<IRenormalizeResult> => {
+  // Предпросмотр разрешён: он откатывает транзакцию. Запись ключей рабочей
+  // базы — массовая правка канона, до версионного backfill этапа 04 выключена.
+  if (!dryRun) assertCanonWriteAllowed();
   const result: IRenormalizeResult = {
     companiesChanged: 0,
     projectsChanged: 0,

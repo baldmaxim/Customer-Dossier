@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  isExactCandidateCompatible,
   scoreCandidate,
   AUTO_MERGE_SCORE,
   QUEUE_SCORE,
@@ -55,12 +56,25 @@ describe('scoreCandidate — идентификатор', () => {
   it('разные ИНН запрещают слияние навсегда, как бы ни совпадали названия', () => {
     const result = scoreCandidate(
       candidate({ s_latin: 1, s_norm: 1, tax_id: '7707083893' }),
-      input({ taxId: '1027700132239' }),
-      '1027700132239',
+      input({ taxId: '7736050003' }),
+      '7736050003',
     );
     expect(result.forbidden).toBe(true);
     expect(result.score).toBe(0);
     expect(result.reasons.tax_id).toBe('conflict');
+  });
+
+  it('ИНН и ОГРН — разные реквизиты: их несовпадение не конфликт (R01)', () => {
+    // Раньше ИНН 7707083893 и ОГРН 1027700132239 одной и той же организации
+    // сравнивались как строки и навсегда запрещали слияние. Тест фиксировал
+    // эту ошибку как правило; вид реквизита теперь учитывается.
+    const result = scoreCandidate(
+      candidate({ s_latin: 1, s_norm: 1, tax_id: '7707083893' }),
+      input({ taxId: '1027700132239' }),
+      '1027700132239',
+    );
+    expect(result.forbidden).toBe(false);
+    expect(result.reasons.tax_id).toBe('different_kind');
   });
 
   it('совпадение ИНН отмечается в обосновании', () => {
@@ -171,6 +185,23 @@ describe('scoreCandidate — границы', () => {
     // будут копиться молча.
     expect(QUEUE_SCORE).toBeLessThan(AUTO_MERGE_SCORE);
     expect(AUTO_MERGE_SCORE - QUEUE_SCORE).toBeGreaterThan(0.1);
+  });
+});
+
+describe('isExactCandidateCompatible — быстрый путь точного совпадения (R01)', () => {
+  it('разный ИНН того же вида блокирует быстрый путь', () => {
+    expect(isExactCandidateCompatible({ tax_id: '7707083893', legal_form: null }, '7736050003', null)).toBe(false);
+  });
+
+  it('конфликт организационной формы блокирует быстрый путь', () => {
+    expect(isExactCandidateCompatible({ tax_id: null, legal_form: 'ООО' }, null, 'АО')).toBe(false);
+  });
+
+  it('ИНН против ОГРН и неизвестные реквизиты не блокируют', () => {
+    expect(isExactCandidateCompatible({ tax_id: '7707083893', legal_form: 'ПАО' }, '1027700132239', 'пао')).toBe(
+      true,
+    );
+    expect(isExactCandidateCompatible({ tax_id: null, legal_form: null }, null, null)).toBe(true);
   });
 });
 

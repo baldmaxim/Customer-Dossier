@@ -198,6 +198,14 @@ const scoreCandidate = (
   return { candidate, score: Math.max(0, Math.min(1, score)), reasons, cityConflict };
 };
 
+/** Город известен у обоих и совпадает по ключу нормализации. */
+export const citiesKnownAndEqual = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  if (!a || !b) return false;
+  const keyA = normalizeName(a).key;
+  const keyB = normalizeName(b).key;
+  return keyA.length > 0 && keyA === keyB;
+};
+
 const enqueueMerge = async (
   exec: DbExecutor,
   sourceId: number,
@@ -222,34 +230,47 @@ export const resolveProject = async (
   const normalized = normalizeName(input.surface, 'project');
   if (isJunkName(normalized)) return null;
 
-  const byAlias = await exec.query<{ entity_id: number }>(
-    `SELECT entity_id FROM entity_aliases
-     WHERE entity_kind = 'project' AND alias_norm = $1
-     LIMIT 1`,
-    [normalized.norm],
-  );
-  const aliasId = byAlias.rows[0]?.entity_id;
-  if (aliasId !== undefined) {
-    const live = await followTombstone(exec, aliasId);
-    await addAlias(exec, live, input.surface, normalized);
-    return { projectId: live, method: 'alias', confidence: 0.98, queued: false };
-  }
+  // Точный алиас и точный ключ принимаются, только если кандидат ровно один и
+  // город ИЗВЕСТЕН у обоих и совпадает. Раньше алиас не проверял город вовсе,
+  // а ключ считал неизвестный город согласием — одноимённые ЖК из разных
+  // городов схлопывались молча. Неизвестная география — не совпадение: такой
+  // объект создаётся отдельно и уходит в очередь (дубль дешевле склейки).
+  for (const step of ['alias', 'key'] as const) {
+    const ids =
+      step === 'alias'
+        ? (
+            await exec.query<{ entity_id: number }>(
+              `SELECT DISTINCT entity_id FROM entity_aliases
+               WHERE entity_kind = 'project' AND alias_norm = $1`,
+              [normalized.norm],
+            )
+          ).rows.map(r => r.entity_id)
+        : (
+            await exec.query<{ id: number }>(
+              'SELECT id FROM projects WHERE name_key = $1 AND merged_into_id IS NULL',
+              [normalized.key],
+            )
+          ).rows.map(r => r.id);
+    if (ids.length === 0) continue;
 
-  // Точное совпадение ключа принимаем только при согласии по городу: иначе
-  // одноимённые ЖК из разных городов схлопнутся молча.
-  const byKey = await exec.query<{ id: number; city: string | null }>(
-    'SELECT id, city FROM projects WHERE name_key = $1 AND merged_into_id IS NULL LIMIT 1',
-    [normalized.key],
-  );
-  const keyRow = byKey.rows[0];
-  if (keyRow) {
-    const citiesAgree =
-      !input.city ||
-      !keyRow.city ||
-      normalizeName(input.city).key === normalizeName(keyRow.city).key;
-    if (citiesAgree) {
-      await addAlias(exec, keyRow.id, input.surface, normalized);
-      return { projectId: keyRow.id, method: 'key', confidence: 0.95, queued: false };
+    const live = [...new Set(await Promise.all(ids.map(id => followTombstone(exec, id))))];
+    const rows = (
+      await exec.query<{ id: number; city: string | null }>(
+        'SELECT id, city FROM projects WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL',
+        [live],
+      )
+    ).rows;
+
+    // Одноимённые объекты в других городах не мешают: берём тот единственный,
+    // у кого город известен и совпадает. Два таких в одном городе — уже
+    // неоднозначность, решение за человеком.
+    const matching = rows.filter(r => citiesKnownAndEqual(input.city, r.city));
+    const single = matching.length === 1 ? matching[0] : undefined;
+    if (single) {
+      await addAlias(exec, single.id, input.surface, normalized);
+      return step === 'alias'
+        ? { projectId: single.id, method: 'alias', confidence: 0.98, queued: false }
+        : { projectId: single.id, method: 'key', confidence: 0.95, queued: false };
     }
   }
 

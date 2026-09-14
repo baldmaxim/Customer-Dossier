@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { splitIntoChunks, mergeChunkExtractions } from './worker.js';
+import { planChunks, splitIntoChunks, mergeChunkExtractions } from './worker.js';
 import { emptyExtraction, type IExtraction } from '../llm/schema.js';
 
 describe('splitIntoChunks', () => {
@@ -40,6 +40,44 @@ describe('splitIntoChunks', () => {
     expect(chunks.length).toBeGreaterThan(1);
     const tail = chunks[0]!.slice(-100);
     expect(chunks[1]).toContain(tail.slice(0, 50));
+  });
+});
+
+describe('planChunks — честное покрытие (R05)', () => {
+  const SIZE = 3500;
+  const MAX = 6;
+  const article = (paragraphs: number): string =>
+    Array.from({ length: paragraphs }, (_, i) => `Абзац ${i}. ${'слово '.repeat(60)}`).join('\n\n');
+
+  it('текст в пределах лимита покрыт полностью, последний чанк кончается концом текста', () => {
+    const text = article(40);
+    const plan = planChunks(text, SIZE, MAX);
+    expect(plan.complete).toBe(true);
+    expect(plan.coveredChars).toBe(text.length);
+    expect(text.endsWith(plan.chunks[plan.chunks.length - 1]!)).toBe(true);
+  });
+
+  it('текст длиннее лимита помечается неполным, а не обрезается молча', () => {
+    const huge = article(400);
+    const plan = planChunks(huge, SIZE, MAX);
+    expect(plan.chunks.length).toBeLessThanOrEqual(MAX);
+    expect(plan.complete).toBe(false);
+    expect(plan.coveredChars).toBeLessThan(plan.totalChars);
+  });
+
+  it('текст ровно на границе «chunkSize × maxChunks» из-за перекрытия не считается покрытым', () => {
+    // Старая реализация обрезала до 21000 символов, но 6 перекрывающихся чанков
+    // покрывали меньше — хвост пропадал, а документ считался разобранным.
+    const text = 'а'.repeat(SIZE * MAX);
+    const plan = planChunks(text, SIZE, MAX);
+    expect(plan.complete).toBe(false);
+  });
+
+  it('последний символ длинного текста попадает в чанк, если лимита хватает', () => {
+    const text = `${'б'.repeat(8000)}КОНЕЦ`;
+    const plan = planChunks(text, SIZE, MAX);
+    expect(plan.complete).toBe(true);
+    expect(plan.chunks.join('')).toContain('КОНЕЦ');
   });
 });
 

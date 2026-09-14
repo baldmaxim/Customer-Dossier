@@ -1,0 +1,29 @@
+# Изолированная PostgreSQL только для интеграционных тестов TG_Info.
+# Порт открыт только на 127.0.0.1. Данные не сохраняются между пересозданиями.
+#
+#   docker compose -f backend/test-db/docker-compose.yml up -d
+#   docker compose -f backend/test-db/docker-compose.yml down
+#
+# Учётные данные тестовые и не являются секретом: база ничего, кроме тестов, не хранит.
+
+services:
+  tg-info-test-db:
+    image: postgres:17-alpine
+    container_name: tg-info-test-db
+    environment:
+      POSTGRES_USER: tg_test
+      POSTGRES_PASSWORD: tg_test
+      POSTGRES_DB: tg_info_test
+    ports:
+      - '127.0.0.1:55433:5432'
+    volumes:
+      # Ставит метку tg_info:test-target — без неё guard откажет запускать тесты.
+      - ./init:/docker-entrypoint-initdb.d:ro
+    labels:
+      project: tg-info
+      purpose: test-only
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tg_test -d tg_info_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30

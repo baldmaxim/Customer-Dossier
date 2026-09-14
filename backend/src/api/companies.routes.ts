@@ -76,6 +76,9 @@ companiesRouter.get('/', async (req, res) => {
   }
 
   const normalized = normalizeName(parsed.data.q, 'company');
+  // ИНН/ОГРН ищем точным совпадением: похожесть цифр ничего не значит.
+  const digits = parsed.data.q.replace(/[\s-]/g, '');
+  const taxId = /^[0-9]{10,15}$/.test(digits) ? digits : null;
 
   const rows = await query<{
     id: number;
@@ -85,18 +88,30 @@ companiesRouter.get('/', async (req, res) => {
     score: number;
   }>(
     `SELECT c.id, c.name, c.city, c.legal_form AS "legalForm",
+            CASE WHEN $4::text IS NOT NULL AND c.tax_id = $4::text THEN 1 ELSE
             greatest(
               similarity(c.name_latin, $1),
               coalesce((SELECT max(similarity(a.alias_latin, $1))
                         FROM entity_aliases a
                         WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)
-            ) AS score
+            ) END AS score
      FROM companies c
      WHERE c.merged_into_id IS NULL
-       AND (c.name_latin % $1 OR c.name_key LIKE $2 || '%')
+       AND (
+         c.name_latin % $1
+         OR ($2 <> '' AND c.name_key LIKE $2 || '%')
+         -- Альтернативные написания участвуют не только в оценке, но и в отборе:
+         -- иначе компанию не найти по имени, под которым её знают.
+         OR EXISTS (
+           SELECT 1 FROM entity_aliases a
+           WHERE a.entity_kind = 'company' AND a.entity_id = c.id
+             AND (a.alias_latin % $1 OR ($2 <> '' AND replace(a.alias_latin, ' ', '') LIKE $2 || '%'))
+         )
+         OR ($4::text IS NOT NULL AND c.tax_id = $4::text)
+       )
      ORDER BY score DESC, c.name
      LIMIT $3`,
-    [normalized.latin, normalized.key, parsed.data.limit],
+    [normalized.latin, normalized.key, parsed.data.limit, taxId],
   );
 
   res.json({ items: rows });

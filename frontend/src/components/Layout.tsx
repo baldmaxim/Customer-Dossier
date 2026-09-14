@@ -36,6 +36,7 @@ const NAV: INavItem[] = [
 const SUN =
   'M12 4.5v-2M12 21.5v-2M4.5 12h-2M21.5 12h-2M6.7 6.7 5.3 5.3M18.7 18.7l-1.4-1.4M6.7 17.3l-1.4 1.4M18.7 5.3l-1.4 1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z';
 const MOON = 'M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z';
+const EXIT = 'M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M10 16.5 14.5 12 10 7.5M14.5 12H4';
 
 const Glyph: FC<{ d: string; className?: string }> = ({ d, className }) => (
   <svg
@@ -53,7 +54,12 @@ const Glyph: FC<{ d: string; className?: string }> = ({ d, className }) => (
   </svg>
 );
 
-export const Layout: FC<{ children: ReactNode }> = ({ children }) => {
+interface ILayoutProps {
+  children: ReactNode;
+  onLogout: () => void;
+}
+
+export const Layout: FC<ILayoutProps> = ({ children, onLogout }) => {
   const { theme, toggle } = useTheme();
   const themeLabel = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
 
@@ -91,6 +97,16 @@ export const Layout: FC<{ children: ReactNode }> = ({ children }) => {
             title={themeLabel}
           >
             <Glyph d={theme === 'dark' ? SUN : MOON} className={styles.themeIcon} />
+          </button>
+
+          <button
+            type="button"
+            className={styles.themeButton}
+            onClick={onLogout}
+            aria-label="Выйти"
+            title="Выйти"
+          >
+            <Glyph d={EXIT} className={styles.themeIcon} />
           </button>
         </div>
       </header>

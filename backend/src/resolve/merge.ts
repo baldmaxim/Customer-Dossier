@@ -9,6 +9,7 @@
 
 import { withTransaction } from '../db/pool.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
+import { assertMergeAllowed } from '../pipeline/guard.js';
 
 export interface IMergeRequest {
   queueId: number;
@@ -35,6 +36,10 @@ interface IQueueRow {
  * сущность хуже, чем не слитая вовсе.
  */
 export const applyMerge = async (request: IMergeRequest): Promise<IMergeResult> => {
+  // Нет проверки ИНН/ОГРН источника и цели, блокировки обеих сущностей и
+  // отката: до этапа 04 слияние выключено ещё до обращения к БД.
+  assertMergeAllowed();
+
   const result = await withTransaction(async client => {
     // FOR UPDATE: два модератора не должны обработать одну пару одновременно.
     const queue = await client.query<IQueueRow>(

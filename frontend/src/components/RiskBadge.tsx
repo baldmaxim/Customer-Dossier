@@ -1,6 +1,7 @@
 import { FC } from 'react';
 
 import type { RiskLight } from '../api/types';
+import { RISK_LEGACY_LABELS, RISK_LEGACY_NOTE } from '../lib/labels';
 import styles from './RiskBadge.module.css';
 
 interface IRiskBadgeProps {
@@ -13,30 +14,26 @@ interface IRiskBadgeProps {
  * Подписи намеренно словесные, а не только цветные: цвет один ничего не
  * сообщает при дальтонизме и в чёрно-белой печати.
  *
- * «Мало данных» — не «всё в порядке». Компания с одним негативным постом
- * без истории не должна выглядеть проверенной, но и красной она не является.
+ * Индекс устаревший и некалиброванный: бейдж говорит «сигналов не найдено»,
+ * а не «без замечаний», и помечен как legacy. Замена — этап 07.
  */
-const LABELS: Record<RiskLight, string> = {
-  grey: 'Мало данных',
-  green: 'Без замечаний',
-  yellow: 'Есть вопросы',
-  red: 'Высокий риск',
-};
-
 export const RiskBadge: FC<IRiskBadgeProps> = ({ light, score, large = false }) => {
   const className = [styles.badge, styles[light], large ? styles.large : '']
     .filter(Boolean)
     .join(' ');
 
+  const title = score !== undefined ? `${RISK_LEGACY_NOTE} Индекс: ${score}` : RISK_LEGACY_NOTE;
+
   return (
-    <span className={className} title={score !== undefined ? `Индекс риска: ${score}` : undefined}>
+    <span className={className} title={title}>
       <span className={styles.dot} aria-hidden="true" />
-      {LABELS[light]}
+      {RISK_LEGACY_LABELS[light]}
       {/* У серого индекс не показываем: считать нечего, число вводило бы в
           заблуждение. */}
       {score !== undefined && light !== 'grey' ? (
         <span className={styles.score}>· {score}</span>
       ) : null}
+      <span className={styles.legacy}>legacy</span>
     </span>
   );
 };

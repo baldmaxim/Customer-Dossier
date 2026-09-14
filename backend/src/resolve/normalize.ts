@@ -284,3 +284,26 @@ export const isValidOgrn = (value: string): boolean => {
  */
 export const isValidTaxId = (value: string): boolean =>
   isValidInn(value) || isValidOgrn(value);
+
+export type TaxIdKind = 'inn' | 'ogrn';
+
+/**
+ * Вид идентификатора по длине: ИНН (10/12) и ОГРН/ОГРНИП (13/15) — разные
+ * реквизиты. ИНН одной компании и её ОГРН не совпадают как строки, и сравнивать
+ * их между собой нельзя: это не конфликт, а просто разные поля.
+ */
+export const taxIdKind = (value: string): TaxIdKind | null => {
+  if (/^[0-9]{10}$|^[0-9]{12}$/.test(value)) return 'inn';
+  if (/^[0-9]{13}$|^[0-9]{15}$/.test(value)) return 'ogrn';
+  return null;
+};
+
+export type TaxIdComparison = 'match' | 'conflict' | 'different_kind' | 'none';
+
+export const compareTaxIds = (a: string | null | undefined, b: string | null | undefined): TaxIdComparison => {
+  if (!a || !b) return 'none';
+  const kindA = taxIdKind(a);
+  const kindB = taxIdKind(b);
+  if (kindA === null || kindB === null || kindA !== kindB) return 'different_kind';
+  return a === b ? 'match' : 'conflict';
+};

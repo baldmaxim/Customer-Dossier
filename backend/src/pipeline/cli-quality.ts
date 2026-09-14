@@ -180,13 +180,7 @@ export const runReextractCommand = async (sourceKey: string | null): Promise<voi
     );
     return;
   }
+  // Сюда код не доходит, пока запись канона заблокирована (pipeline/guard.ts):
+  // переразбор любого объема стирает прежний вклад документов.
   console.log('[reextract] прежние упоминания и роли каждого документа будут заменены новыми.');
-  console.log('[reextract] запустите: npm run pipeline:once -- --loop');
-  if (sourceKey) {
-    console.log(
-      '[reextract] Внимание: переразбор одного источника. Роль на объекте, созданная\n' +
-        '[reextract] его документом, пропадёт, даже если её подтверждал другой источник.\n' +
-        '[reextract] После смены промпта надёжнее переразобрать всё, без --source.',
-    );
-  }
 };

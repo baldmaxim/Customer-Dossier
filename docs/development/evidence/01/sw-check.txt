@@ -1,0 +1,5 @@
+api occurrences: 1
+NetworkFirst: 0
+googleapis/gstatic: 0
+denylist present: 1
+external font links in index.html: 0

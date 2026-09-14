@@ -1,6 +1,8 @@
 // Операции над таблицей источников: выбор просроченных, курсор, журнал запусков.
 
-import { query, queryOne, execute } from '../db/pool.js';
+import { query, queryOne, execute, withTransaction } from '../db/pool.js';
+import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
+import type { PermissionStatus } from './policy.js';
 
 export type SourceKind = 'telegram' | 'website' | 'manual';
 export type SourceStatus = 'active' | 'paused' | 'broken';
@@ -16,11 +18,17 @@ export interface ISource {
   status: SourceStatus;
   pollIntervalSec: number;
   failStreak: number;
+  accessStatus: PermissionStatus;
+  aiProcessingStatus: PermissionStatus;
+  policyExpiresAt: Date | null;
+  isSynthetic: boolean;
 }
 
 const SELECT_COLUMNS = `
   id, kind, key, title, base_url AS "baseUrl", cursor, config,
-  status, poll_interval_sec AS "pollIntervalSec", fail_streak AS "failStreak"
+  status, poll_interval_sec AS "pollIntervalSec", fail_streak AS "failStreak",
+  access_status AS "accessStatus", ai_processing_status AS "aiProcessingStatus",
+  policy_expires_at AS "policyExpiresAt", is_synthetic AS "isSynthetic"
 `;
 
 /**
@@ -133,11 +141,15 @@ export const markBroken = async (sourceId: number, reason: string): Promise<void
   console.error(`[ingest] источник ${sourceId} помечен broken: ${reason}`);
 };
 
+/**
+ * Новый источник всегда заводится на паузе и с неподтверждённым допуском:
+ * включать опрос и разрешать сбор — отдельные осознанные действия оператора.
+ */
 export const addTelegramSource = async (channel: string, title?: string): Promise<ISource> => {
   const key = channel.replace(/^@/, '').trim();
   const row = await queryOne<ISource>(
     `INSERT INTO sources (kind, key, title, base_url, status)
-     VALUES ('telegram', $1, $2, $3, 'active')
+     VALUES ('telegram', $1, $2, $3, 'paused')
      ON CONFLICT (kind, key) DO UPDATE SET title = EXCLUDED.title, updated_at = now()
      RETURNING ${SELECT_COLUMNS}`,
     [key, title ?? key, `https://t.me/s/${key}`],
@@ -165,10 +177,9 @@ export interface IDeleteSourceResult {
  * Обычно нужен не delete, а статус paused: источник перестаёт опрашиваться,
  * собранное остаётся.
  *
- * withDocuments — для честных ошибок: добавили не тот канал, он натаскал
- * мусора. Тогда удаляем вместе с документами, а каскад уносит упоминания
- * и события. Компании и объекты остаются: они могли упоминаться и в других
- * источниках, а осиротевшие подчистит --recheck.
+ * withDocuments сейчас заблокирован: каскад уносит упоминания и события, а
+ * роли на объектах остаются без доказательства. Удаление с документами
+ * вернётся вместе с моделью ревизий и доказательств (этапы 02–03A).
  */
 export const deleteSource = async (
   id: number,
@@ -192,8 +203,10 @@ export const deleteSource = async (
   }
 
   if (withDocuments && documentCount > 0) {
-    // Каскад из схемы уносит mentions и events; document_sightings тоже.
-    await execute('DELETE FROM raw_documents WHERE source_id = $1', [id]);
+    // Каскад из схемы унёс бы mentions и events, а роли на объектах остались
+    // бы без доказательства (evidence_document_id = NULL). До модели
+    // доказательств (этапы 02–03A) такое удаление выключено.
+    return { deleted: false, documentCount, reason: DELETE_WITH_DOCUMENTS_BLOCK_REASON };
   }
 
   const affected = await execute('DELETE FROM sources WHERE id = $1', [id]);
@@ -213,13 +226,95 @@ export const addWebsiteSource = async (
 ): Promise<ISource> => {
   const row = await queryOne<ISource>(
     `INSERT INTO sources (kind, key, title, base_url, status, config)
-     VALUES ('website', $1, $2, $3, 'active', $4::jsonb)
+     VALUES ('website', $1, $2, $3, 'paused', $4::jsonb)
      ON CONFLICT (kind, key)
      DO UPDATE SET title = EXCLUDED.title, base_url = EXCLUDED.base_url,
-                   config = EXCLUDED.config, status = 'active', updated_at = now()
+                   config = EXCLUDED.config, updated_at = now()
      RETURNING ${SELECT_COLUMNS}`,
     [key, title, baseUrl, JSON.stringify(config)],
   );
   if (!row) throw new Error(`Не удалось добавить сайт ${key}`);
   return row;
+};
+
+export interface ISourcePolicyInput {
+  accessStatus: PermissionStatus;
+  aiProcessingStatus: PermissionStatus;
+  scope: string | null;
+  basis: string | null;
+  reference: string | null;
+  owner: string | null;
+  expiresAt: Date | null;
+}
+
+export class SourcePolicyValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourcePolicyValidationError';
+  }
+}
+
+/**
+ * Решение о допуске: одной транзакцией меняет поля и пишет журнал.
+ * Разрешение без основания и ответственного не принимается (и в схеме тоже).
+ */
+export const updateSourcePolicy = async (
+  sourceId: number,
+  input: ISourcePolicyInput,
+  changedBy: string,
+): Promise<ISource | null> => {
+  const approving = input.accessStatus === 'approved' || input.aiProcessingStatus === 'approved';
+  if (approving && (!input.basis?.trim() || !input.owner?.trim())) {
+    throw new SourcePolicyValidationError('Для разрешения обязательны основание и ответственный');
+  }
+  if (input.expiresAt !== null && input.expiresAt <= new Date() && approving) {
+    throw new SourcePolicyValidationError('Срок действия разрешения уже истёк');
+  }
+
+  return withTransaction(async client => {
+    const before = await client.query<{
+      kind: SourceKind;
+      key: string;
+      snapshot: Record<string, unknown>;
+    }>(
+      `SELECT kind, key,
+              jsonb_build_object(
+                'accessStatus', access_status, 'aiProcessingStatus', ai_processing_status,
+                'scope', policy_scope, 'basis', policy_basis, 'reference', policy_reference,
+                'owner', policy_owner, 'decidedAt', policy_decided_at, 'expiresAt', policy_expires_at
+              ) AS snapshot
+       FROM sources WHERE id = $1 FOR UPDATE`,
+      [sourceId],
+    );
+    const prev = before.rows[0];
+    if (!prev) return null;
+
+    const updated = await client.query<ISource>(
+      `UPDATE sources
+       SET access_status = $2::source_permission,
+           ai_processing_status = $3::source_permission,
+           policy_scope = $4, policy_basis = $5, policy_reference = $6, policy_owner = $7,
+           policy_expires_at = $8, policy_decided_at = now(), updated_at = now()
+       WHERE id = $1
+       RETURNING ${SELECT_COLUMNS}`,
+      [
+        sourceId,
+        input.accessStatus,
+        input.aiProcessingStatus,
+        input.scope,
+        input.basis,
+        input.reference,
+        input.owner,
+        input.expiresAt,
+      ],
+    );
+
+    await client.query(
+      `INSERT INTO source_policy_log (source_id, source_kind, source_key, changed_by, previous, next)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [sourceId, prev.kind, prev.key, changedBy, JSON.stringify(prev.snapshot), JSON.stringify(input)],
+    );
+
+    return updated.rows[0] ?? null;
+  });
 };

@@ -120,12 +120,26 @@ export interface IPendingMerge {
   sampleDocumentId: number | null;
 }
 
+export type PermissionStatus = 'unknown' | 'approved' | 'blocked' | 'revoked' | 'expired';
+
 export interface ISourceRow {
   id: number;
   kind: 'telegram' | 'website' | 'manual';
   key: string;
   title: string;
   status: 'active' | 'paused' | 'broken';
+  accessStatus: PermissionStatus;
+  aiProcessingStatus: PermissionStatus;
+  policyScope: string | null;
+  policyBasis: string | null;
+  policyReference: string | null;
+  policyOwner: string | null;
+  policyDecidedAt: string | null;
+  policyExpiresAt: string | null;
+  isSynthetic: boolean;
+  /** Почему сбор запрещён; null — разрешён. Считает сервер тем же gate. */
+  collectBlockedReason: string | null;
+  aiBlockedReason: string | null;
   pollIntervalSec: number;
   nextRunAt: string | null;
   lastOkAt: string | null;

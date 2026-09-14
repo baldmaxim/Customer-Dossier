@@ -15,6 +15,7 @@ import {
 import { fetchSite, WebsiteFetchError, type IWebsiteConfig } from './website.js';
 import { storeDocuments, emptyBatchStats, type IIncomingDocument, type IBatchStats } from './store.js';
 import { query } from '../db/pool.js';
+import { evaluateSourcePolicy } from './policy.js';
 import {
   getDueSources,
   startRun,
@@ -34,12 +35,22 @@ export interface IIngestReport {
   error: string | null;
 }
 
+/** Отказ по допуску: без сетевого запроса и без записи запуска. */
+const policyBlocked = (source: ISource): IIngestReport | null => {
+  const decision = evaluateSourcePolicy(source, 'collect');
+  if (decision.allowed) return null;
+  return { sourceKey: source.key, ok: false, stats: emptyBatchStats(), error: decision.reason };
+};
+
 /**
  * Один проход по Telegram-каналу. Читает только первую страницу — это самые
- * свежие посты. Историю вглубь тянет отдельная разовая команда backfill,
- * ежеминутному опросу она не нужна.
+ * свежие посты. Загрузки истории и догоняющего обхода нет: после простоя
+ * посты, ушедшие с первой страницы, пропускаются (этап 05B).
  */
 export const ingestTelegramSource = async (source: ISource): Promise<IIngestReport> => {
+  const blocked = policyBlocked(source);
+  if (blocked) return blocked;
+
   const runId = await startRun(source.id);
   const lastPostId = Number(source.cursor.last_post_id ?? 0);
 
@@ -120,6 +131,9 @@ export const ingestTelegramSource = async (source: ISource): Promise<IIngestRepo
  * Ссылки берём из БД, а не из cursor: так работает и после ручной чистки.
  */
 export const ingestWebsiteSource = async (source: ISource): Promise<IIngestReport> => {
+  const blocked = policyBlocked(source);
+  if (blocked) return blocked;
+
   const runId = await startRun(source.id);
 
   let outcome: IRunOutcome = {
@@ -191,6 +205,12 @@ export const runIngestPass = async (limit = 20): Promise<IIngestReport[]> => {
   const reports: IIngestReport[] = [];
 
   for (const [index, source] of sources.entries()) {
+    const blocked = policyBlocked(source);
+    if (blocked) {
+      // Без паузы: запроса не было, троттлить нечего.
+      reports.push(blocked);
+      continue;
+    }
     if (source.kind === 'telegram') {
       reports.push(await ingestTelegramSource(source));
     } else if (source.kind === 'website') {

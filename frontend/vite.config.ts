@@ -2,6 +2,11 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Портал рассчитан на одного оператора на этой же машине: dev и preview
+// слушают только loopback. Запуск с --host 0.0.0.0 не является штатным.
+const LOOPBACK = '127.0.0.1';
+const API_TARGET = 'http://127.0.0.1:4100';
+
 export default defineConfig({
   plugins: [
     react(),
@@ -21,47 +26,30 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
-        // Данные портала обновляются постоянно — кэш только как страховка при
-        // обрыве связи, не как основной источник.
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-          // Inter с Google Fonts. Без сети интерфейс берёт системный гротеск,
-          // но на объекте связь рвётся часто — шрифт держим в кэше.
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts-css',
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-files',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // /api не отдаётся из офлайн-оболочки и не кэшируется вовсе: досье —
+        // закрытые данные, после выхода оператора они не должны читаться из
+        // кэша. Старые кэши 'api' и шрифтов удаляет приложение (lib/cachePurge).
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [],
       },
       devOptions: { enabled: false },
     }),
   ],
   server: {
+    host: LOOPBACK,
     port: 5173,
+    strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:4100', changeOrigin: true },
+      '/api': { target: API_TARGET, changeOrigin: true },
+    },
+  },
+  preview: {
+    host: LOOPBACK,
+    port: 4173,
+    strictPort: true,
+    proxy: {
+      '/api': { target: API_TARGET, changeOrigin: true },
     },
   },
   build: {

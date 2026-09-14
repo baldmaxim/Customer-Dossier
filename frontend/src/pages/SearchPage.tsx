@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ICompanySearchItem, RiskLight } from '../api/types';
 import { RiskBadge } from '../components/RiskBadge';
+import { RISK_LEGACY_NOTE } from '../lib/labels';
 import styles from './SearchPage.module.css';
 
 interface ISummary {
@@ -142,7 +143,9 @@ export const SearchPage: FC = () => {
 
           {riskTotal > 0 && (
             <div className={styles.riskCard}>
-              <div className={styles.riskTitle}>Компании по светофору риска</div>
+              <div className={styles.riskTitle} title={RISK_LEGACY_NOTE}>
+                Компании по устаревшему индексу сигналов (не оценка надёжности)
+              </div>
               <div
                 className={styles.bar}
                 role="img"

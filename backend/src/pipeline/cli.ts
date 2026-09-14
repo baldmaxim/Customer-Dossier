@@ -1,30 +1,33 @@
 // CLI пайплайна извлечения. Здесь только разбор аргументов — реализация команд
 // в cli-commands.ts (очередь и осмотр) и cli-quality.ts (качество канона).
 //
+// [Б] — заблокировано до безопасного пути записи канона (pipeline/guard.ts,
+// этапы 03B/04). Команда завершится с объяснением, ничего не изменив.
+//
 // Разбор очереди
 //   --check                    LM Studio поднят, модель загружена?
-//   (без флагов)               обработать одну пачку
-//   --loop                     крутить, пока очередь не опустеет
+//   (без флагов)          [Б]  обработать одну пачку
+//   --loop                [Б]  крутить, пока очередь не опустеет
 //   --stats                    состояние очереди и доля ошибок
 //
 // Осмотр и починка
 //   --errors                   последние отказы с текстом ошибки
-//   --retry                    вернуть провалившиеся и застрявшие
+//   --retry               [Б]  вернуть провалившиеся и застрявшие
 //   --skipped [--source <key>] нерелевантные и их доля по источникам
-//   --retry-skipped [--all]    вернуть нерелевантные, не оценённые текущей моделью
+//   --retry-skipped [--all] [Б] вернуть нерелевантные в очередь
 //   --doc <id>                 документ целиком: текст, разбор, что легло в канон
 //
 // Слияния
 //   --merges                   очередь на ручное слияние
-//   --merge <id> / --reject <id>
+//   --merge <id>          [Б]  / --reject <id>
 //
 // Качество канона
 //   --audit [--sample N]       скрытые дубли, распределение ролей, объекты-компании
-//   --renormalize [--dry]      пересчитать ключи поиска, совпавшие пары — в очередь
-//   --reextract [--source key] переразобрать всё, что не разобрано текущим промптом
-//   --recheck [--dry]          снять города и адреса, не подтверждённые текстом
+//   --renormalize --dry        предпросмотр пересчёта ключей (без --dry — [Б])
+//   --reextract           [Б]  переразбор с записью в канон
+//   --recheck --dry            предпросмотр снятия городов и адресов (без --dry — [Б])
 //
-// Выбор модели
+// Выбор модели (пишут только в extractions, нужен допуск источника к ИИ-обработке)
 //   --shadow N [--source key]  прогнать текущую модель, не трогая карточки
 //   --compare                  сравнить модели на одних документах
 
@@ -32,6 +35,7 @@ import { closeDb } from '../db/pool.js';
 import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
 import { applyMerge, rejectMerge } from '../resolve/merge.js';
+import { CanonWriteBlockedError } from './guard.js';
 import { runPipelinePass } from './worker.js';
 import {
   printPass,
@@ -135,7 +139,11 @@ main()
   .then(() => closeDb())
   .then(() => process.exit(process.exitCode ?? 0))
   .catch(async err => {
-    console.error('[pipeline] прервано:', err instanceof Error ? err.message : String(err));
+    if (err instanceof CanonWriteBlockedError) {
+      console.error(`[pipeline] команда заблокирована: ${err.reason}`);
+    } else {
+      console.error('[pipeline] прервано:', err instanceof Error ? err.message : String(err));
+    }
     await closeDb().catch(() => undefined);
     process.exit(1);
   });

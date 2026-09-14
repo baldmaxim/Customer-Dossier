@@ -1,26 +1,47 @@
-// Админка: источники и очередь слияний.
+// Админка: источники, их допуск и очередь слияний.
 //
-// Аутентификации в MVP нет — портал крутится в локальной сети. Перед выносом
-// на VPS сюда обязателен auth-middleware: слияние сущностей необратимо, а
-// правка источников открывает исходящие запросы с сервера.
+// Все маршруты — только для вошедшего оператора (см. app.ts, auth.ts).
+// Изменяющие канон операции (слияние, удаление с документами) заблокированы
+// до безопасного пути записи — см. pipeline/guard.ts.
 
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { z } from 'zod';
 
 import { query, execute } from '../db/pool.js';
-import { applyMerge, rejectMerge, listPendingMerges } from '../resolve/merge.js';
-import { addTelegramSource, addWebsiteSource, deleteSource } from '../ingest/sources.js';
+import { rejectMerge, listPendingMerges } from '../resolve/merge.js';
+import {
+  SourcePolicyValidationError,
+  addTelegramSource,
+  addWebsiteSource,
+  deleteSource,
+  updateSourcePolicy,
+} from '../ingest/sources.js';
+import { PERMISSION_STATUSES, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
-import { discoverFeedUrl } from '../ingest/website.js';
+import { DELETE_WITH_DOCUMENTS_BLOCK_REASON, MERGE_BLOCK_REASON } from '../pipeline/guard.js';
 
 export const adminRouter = asyncRouter();
 
+interface ISourceAdminRow {
+  id: number;
+  key: string;
+  accessStatus: PermissionStatus;
+  aiProcessingStatus: PermissionStatus;
+  policyExpiresAt: string | null;
+  [column: string]: unknown;
+}
+
 adminRouter.get('/sources', async (_req, res) => {
-  const rows = await query(
+  const rows = await query<ISourceAdminRow>(
     `SELECT s.id, s.kind, s.key, s.title, s.status, s.cursor,
             s.poll_interval_sec AS "pollIntervalSec",
             s.next_run_at AS "nextRunAt", s.last_ok_at AS "lastOkAt",
             s.fail_streak AS "failStreak",
+            s.access_status AS "accessStatus", s.ai_processing_status AS "aiProcessingStatus",
+            s.policy_scope AS "policyScope", s.policy_basis AS "policyBasis",
+            s.policy_reference AS "policyReference", s.policy_owner AS "policyOwner",
+            s.policy_decided_at AS "policyDecidedAt", s.policy_expires_at AS "policyExpiresAt",
+            s.is_synthetic AS "isSynthetic",
             r.started_at AS "lastRunAt", r.status AS "lastRunStatus",
             r.items_seen AS "lastItemsSeen", r.items_new AS "lastItemsNew",
             r.error AS "lastError", r.layout_stats AS "layoutStats"
@@ -33,7 +54,14 @@ adminRouter.get('/sources', async (_req, res) => {
        CASE s.status WHEN 'broken' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
        s.kind, s.key`,
   );
-  res.json({ items: rows });
+
+  // Причины блокировки считает тот же код, что и gate на входах.
+  const items = rows.map(row => ({
+    ...row,
+    collectBlockedReason: evaluateSourcePolicy(row, 'collect').reason,
+    aiBlockedReason: evaluateSourcePolicy(row, 'ai_processing').reason,
+  }));
+  res.json({ items });
 });
 
 const statusSchema = z.object({ status: z.enum(['active', 'paused', 'broken']) });
@@ -47,6 +75,7 @@ adminRouter.patch('/sources/:id', async (req, res) => {
   }
   // Возврат в active сбрасывает счётчик неудач и снимает отсрочку: иначе
   // источник, починенный вручную, будет ещё час ждать next_run_at.
+  // Сам по себе active сбор не разрешает — нужен допуск (access_status).
   const updated = await execute(
     `UPDATE sources
      SET status = $2::source_status,
@@ -61,6 +90,50 @@ adminRouter.patch('/sources/:id', async (req, res) => {
     return;
   }
   res.json({ ok: true });
+});
+
+const optionalText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullish()
+    .transform(v => (v === undefined || v === null || v.trim() === '' ? null : v.trim()));
+
+const policySchema = z.object({
+  accessStatus: z.enum(PERMISSION_STATUSES),
+  aiProcessingStatus: z.enum(PERMISSION_STATUSES),
+  scope: optionalText(2000),
+  basis: optionalText(2000),
+  reference: optionalText(1000),
+  owner: optionalText(200),
+  expiresAt: z
+    .string()
+    .datetime({ offset: true })
+    .nullish()
+    .transform(v => (v ? new Date(v) : null)),
+});
+
+adminRouter.patch('/sources/:id/policy', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const parsed = policySchema.safeParse(req.body);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: 'Некорректные параметры допуска' });
+    return;
+  }
+  try {
+    const source = await updateSourcePolicy(id, parsed.data, 'operator');
+    if (!source) {
+      res.status(404).json({ error: 'Источник не найден' });
+      return;
+    }
+    res.json({ source });
+  } catch (err) {
+    if (err instanceof SourcePolicyValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 });
 
 const addSourceSchema = z.object({
@@ -81,7 +154,7 @@ adminRouter.post('/sources/telegram', async (req, res) => {
 const addSiteSchema = z.object({
   url: z.string().min(4).max(300),
   title: z.string().max(200).optional(),
-  /** Прямой адрес ленты. Пусто — ищем сами. */
+  /** Прямой адрес ленты. Пусто — найдётся при первом разрешённом проходе. */
   rss: z.string().url().max(500).optional(),
 });
 
@@ -100,20 +173,21 @@ adminRouter.post('/sources/website', async (req, res) => {
     res.status(400).json({ error: 'Некорректный адрес' });
     return;
   }
-
-  const key = url.hostname.replace(/^www\./, '');
-  const feed = parsed.data.rss ?? (await discoverFeedUrl(url.origin));
-  if (!feed) {
-    res.status(422).json({
-      error:
-        'RSS-лента не найдена. Найдите её адрес на сайте и укажите вручную — ' +
-        'обычно это /rss, /feed или ссылка в подвале.',
-    });
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    res.status(400).json({ error: 'Допустимы только http и https' });
     return;
   }
 
-  const source = await addWebsiteSource(key, parsed.data.title ?? key, url.origin, { rss: feed });
-  res.status(201).json({ source, feedUrl: feed });
+  // Никаких сетевых запросов при добавлении: поиск ленты — уже сбор, а допуска
+  // у нового источника ещё нет.
+  const key = url.hostname.replace(/^www\./, '');
+  const source = await addWebsiteSource(
+    key,
+    parsed.data.title ?? key,
+    url.origin,
+    parsed.data.rss ? { rss: parsed.data.rss } : {},
+  );
+  res.status(201).json({ source, feedUrl: parsed.data.rss ?? null });
 });
 
 adminRouter.delete('/sources/:id', async (req, res) => {
@@ -122,38 +196,29 @@ adminRouter.delete('/sources/:id', async (req, res) => {
     res.status(400).json({ error: 'Некорректный id' });
     return;
   }
-  // Удаление вместе с документами подтверждается явно: оно необратимо и
-  // уносит извлечённые упоминания и события.
-  const withDocuments = req.query.withDocuments === 'true';
-  const result = await deleteSource(id, withDocuments);
+  if (req.query.withDocuments === 'true') {
+    res.status(423).json({ error: DELETE_WITH_DOCUMENTS_BLOCK_REASON, code: 'blocked' });
+    return;
+  }
+  const result = await deleteSource(id, false);
 
   if (!result.deleted) {
     res.status(409).json({ error: result.reason, documentCount: result.documentCount });
     return;
   }
-  res.json({ ok: true, documentCount: withDocuments ? result.documentCount : 0 });
+  res.json({ ok: true, documentCount: 0 });
 });
 
 adminRouter.get('/merges', async (_req, res) => {
   res.json({ items: await listPendingMerges() });
 });
 
-const decisionSchema = z.object({ decidedBy: z.string().min(1).max(100).default('admin') });
-
-adminRouter.post('/merges/:id/merge', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  const parsed = decisionSchema.safeParse(req.body ?? {});
-  if (!Number.isFinite(id) || !parsed.success) {
-    res.status(400).json({ error: 'Некорректные параметры' });
-    return;
-  }
-  try {
-    const result = await applyMerge({ queueId: id, decidedBy: parsed.data.decidedBy });
-    res.json(result);
-  } catch (err) {
-    res.status(409).json({ error: err instanceof Error ? err.message : String(err) });
-  }
+adminRouter.post('/merges/:id/merge', (_req, res) => {
+  // 423 Locked: операция существует, но выключена до безопасной реализации.
+  res.status(423).json({ error: MERGE_BLOCK_REASON, code: 'blocked' });
 });
+
+const decisionSchema = z.object({ decidedBy: z.string().min(1).max(100).default('operator') });
 
 adminRouter.post('/merges/:id/reject', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);

@@ -17,6 +17,7 @@ import {
   STAGE_LABELS,
   EVENT_LABELS,
   SENTIMENT_LABELS,
+  RISK_LEGACY_NOTE,
   formatDate,
   formatMoney,
 } from '../lib/labels';
@@ -48,7 +49,9 @@ const buildVerdict = (risk: IRisk | null): string => {
   }
 
   if (parts.length === 0) {
-    return `Заметных проблем в открытых источниках нет. Активных объектов: ${risk.activeProjects}, упоминаний за 90 дней: ${risk.mentions90d}.`;
+    // Не «проблем нет»: портал видит только собранные публикации, и их
+    // отсутствие ничего не говорит о надёжности компании.
+    return `В собранных публикациях сигналов не найдено — это не оценка надёжности. Активных объектов: ${risk.activeProjects}, упоминаний за 90 дней: ${risk.mentions90d}.`;
   }
 
   const lead =
@@ -164,6 +167,7 @@ export const CompanyPage: FC = () => {
         <p className={styles.verdict} role="status">
           {buildVerdict(risk)}
         </p>
+        <p className={styles.heroFoot}>{RISK_LEGACY_NOTE}</p>
 
         {risk?.lastMentionAt && (
           <p className={styles.heroFoot}>

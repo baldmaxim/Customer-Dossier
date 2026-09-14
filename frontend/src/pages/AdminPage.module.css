@@ -294,6 +294,34 @@
   color: var(--risk-red);
 }
 
+.policyCell {
+  min-width: 180px;
+}
+
+.policyOk,
+.policyBlocked {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.policyOk {
+  color: var(--risk-green);
+}
+
+.policyBlocked {
+  color: var(--risk-grey);
+}
+
+.policyReason {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  max-width: 260px;
+}
+
 .dim {
   color: var(--muted);
   white-space: nowrap;

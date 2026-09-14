@@ -2,7 +2,31 @@
 // Одно место: иначе «general_contractor» превращается в «генподрядчик» на одном
 // экране и в «Генеральный подрядчик» на другом.
 
-import type { Role, Sentiment } from '../api/types';
+import type { PermissionStatus, RiskLight, Role, Sentiment } from '../api/types';
+
+/**
+ * Старый светофор — эвристический индекс по новостям (веса 40/30/30 не
+ * калиброваны). Он не оценивает надёжность контрагента, а отсутствие новостей
+ * не означает отсутствия проблем. Подписи это говорят прямо.
+ */
+export const RISK_LEGACY_LABELS: Record<RiskLight, string> = {
+  grey: 'Мало данных',
+  green: 'Сигналов не найдено',
+  yellow: 'Есть сигналы',
+  red: 'Много сигналов',
+};
+
+export const RISK_LEGACY_NOTE =
+  'Устаревший эвристический индекс по публикациям, не оценка надёжности. ' +
+  'Отсутствие сигналов в выборке не означает отсутствия проблем.';
+
+export const PERMISSION_LABELS: Record<PermissionStatus, string> = {
+  unknown: 'не подтверждён',
+  approved: 'разрешён',
+  blocked: 'запрещён',
+  revoked: 'отозван',
+  expired: 'истёк',
+};
 
 export const ROLE_LABELS: Record<Role, string> = {
   customer: 'Заказчик',

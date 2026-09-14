@@ -294,10 +294,18 @@ export const verifyExtraction = (
       continue;
     }
 
+    // Реквизит принимается только из собственной подтверждённой цитаты компании:
+    // в той же статье может стоять ИНН заказчика рядом с именем подрядчика.
     const taxIdAccepted =
-      company.tax_id && isTaxIdPresentInBody(company.tax_id, body) ? company.tax_id : null;
+      company.tax_id && quoteVerified && isTaxIdPresentInBody(company.tax_id, company.quote)
+        ? company.tax_id
+        : null;
     if (company.tax_id && !taxIdAccepted) {
-      rejected.push({ kind: 'tax_id', name: company.name, reason: 'ИНН/ОГРН отсутствует в тексте' });
+      rejected.push({
+        kind: 'tax_id',
+        name: company.name,
+        reason: 'ИНН/ОГРН отсутствует в подтверждённой цитате компании',
+      });
     }
 
     companies.push({
@@ -315,21 +323,30 @@ export const verifyExtraction = (
       rejected.push({ kind: 'project', name: project.name, reason: 'имя отсутствует в цитате' });
       continue;
     }
+    // Город и адрес — из собственной подтверждённой цитаты объекта. Город,
+    // названный где-то в статье, мог относиться к другому объекту.
     const cityClaim = nullifyPlaceholder(project.city);
-    const cityAccepted = cityClaim && isCityMentionedInBody(cityClaim, body) ? cityClaim : null;
+    const cityAccepted =
+      cityClaim && quoteVerified && isCityMentionedInBody(cityClaim, project.quote) ? cityClaim : null;
     if (cityClaim && cityAccepted === null) {
       rejected.push({
         kind: 'city',
         name: project.name,
-        reason: `город «${cityClaim}» отсутствует в тексте`,
+        reason: `город «${cityClaim}» отсутствует в подтверждённой цитате объекта`,
       });
     }
 
     const addressClaim = nullifyPlaceholder(project.address);
     const addressAccepted =
-      addressClaim && isAddressGroundedInBody(addressClaim, body) ? addressClaim : null;
+      addressClaim && quoteVerified && isAddressGroundedInBody(addressClaim, project.quote)
+        ? addressClaim
+        : null;
     if (addressClaim && addressAccepted === null) {
-      rejected.push({ kind: 'address', name: project.name, reason: 'адрес отсутствует в тексте' });
+      rejected.push({
+        kind: 'address',
+        name: project.name,
+        reason: 'адрес отсутствует в подтверждённой цитате объекта',
+      });
     }
 
     projects.push({
@@ -383,6 +400,22 @@ export const verifyExtraction = (
       continue;
     }
 
+    // Названная сторона события обязана стоять в его цитате: иначе иск к одной
+    // компании приписывается другой, упомянутой в той же статье.
+    if (event.company && !isNameInQuote(event.company, event.quote)) {
+      rejected.push({ kind: 'event', name: event.type, reason: `сторона «${event.company}» отсутствует в цитате события` });
+      continue;
+    }
+    let counterparty = event.counterparty ?? null;
+    if (counterparty && !isNameInQuote(counterparty, event.quote)) {
+      rejected.push({
+        kind: 'event_counterparty',
+        name: event.type,
+        reason: `контрагент «${counterparty}» отсутствует в цитате события`,
+      });
+      counterparty = null;
+    }
+
     const occurredOn = event.occurred_on
       ? isPlausibleEventDate(event.occurred_on, publishedAt)
       : null;
@@ -390,15 +423,23 @@ export const verifyExtraction = (
       rejected.push({ kind: 'event_date', name: event.type, reason: `неправдоподобная дата ${event.occurred_on}` });
     }
 
+    // Сумма — только из подтверждённой цитаты события, не из любого числа статьи.
     const amountRub =
-      event.amount_rub != null && isAmountInBody(event.amount_rub, body) ? event.amount_rub : null;
+      event.amount_rub != null && quoteVerified && isAmountInBody(event.amount_rub, event.quote)
+        ? event.amount_rub
+        : null;
     if (event.amount_rub != null && amountRub === null) {
-      rejected.push({ kind: 'event_amount', name: event.type, reason: 'сумма отсутствует в тексте' });
+      rejected.push({
+        kind: 'event_amount',
+        name: event.type,
+        reason: 'сумма отсутствует в подтверждённой цитате события',
+      });
     }
 
     const { occurred_on: _o, amount_rub: _a, ...rest } = event;
     events.push({
       ...rest,
+      counterparty,
       occurredOn,
       amountRub,
       quoteVerified,

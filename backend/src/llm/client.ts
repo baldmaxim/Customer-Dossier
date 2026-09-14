@@ -17,7 +17,14 @@ export interface ILlmUsage {
 }
 
 export type ILlmResult =
-  | { ok: true; data: IExtraction; usage: ILlmUsage; rawResponse: string }
+  | {
+      ok: true;
+      data: IExtraction;
+      usage: ILlmUsage;
+      rawResponse: string;
+      /** Ответ получен на укороченном тексте: он описывает не весь вход. */
+      truncatedInput?: boolean;
+    }
   | { ok: false; failure: LlmFailure; message: string; usage: ILlmUsage; rawResponse: string | null };
 
 interface IChatCompletionResponse {
@@ -165,7 +172,9 @@ export const extractFromText = async (options: IExtractOptions): Promise<ILlmRes
 
   const shortened = options.body.slice(0, Math.floor(options.body.length * 0.7));
   console.warn('[llm] невалидный JSON, повтор при temperature=0 и укороченном тексте');
-  return callOnce({ ...options, body: shortened, temperature: 0 });
+  const retry = await callOnce({ ...options, body: shortened, temperature: 0 });
+  // Хвост текста модель не видела — вызывающий код обязан это знать.
+  return retry.ok ? { ...retry, truncatedInput: true } : retry;
 };
 
 /** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */

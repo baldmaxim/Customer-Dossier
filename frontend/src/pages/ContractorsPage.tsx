@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { IContractorRow } from '../api/types';
 import { RiskBadge } from '../components/RiskBadge';
-import { formatPercent } from '../lib/labels';
+import { RISK_LEGACY_NOTE, formatPercent } from '../lib/labels';
 import styles from './ContractorsPage.module.css';
 
 type RoleFilter = 'any' | 'general_contractor' | 'contractor' | 'customer';
@@ -20,7 +20,7 @@ const ROLE_TABS: Array<{ value: RoleFilter; label: string }> = [
 
 const SORTS: Array<{ value: SortKey; label: string }> = [
   { value: 'projects', label: 'По объёму' },
-  { value: 'risk', label: 'По риску' },
+  { value: 'risk', label: 'По индексу сигналов (legacy)' },
   { value: 'mentions', label: 'По упоминаниям' },
 ];
 
@@ -54,7 +54,8 @@ export const ContractorsPage: FC = () => {
     <>
       <h1>Статистика подрядчиков</h1>
       <p className={styles.lead}>
-        Собрано из открытых источников. Это не проверка контрагента, а повод задать вопросы.
+        Собрано из открытых источников. Это не проверка контрагента, а повод задать вопросы.{' '}
+        {RISK_LEGACY_NOTE}
       </p>
 
       <div className={styles.controls}>
