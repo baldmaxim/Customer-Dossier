@@ -77,7 +77,7 @@
 | R04 | **present** (адресно) | ИНН/сумма/город/адрес из собственной подтверждённой цитаты; стороны события в цитате | `verify.test.ts` |
 | R05 | **present** (адресно) | `planChunks` с покрытием; неполный разбор не применяется; повтор на укороченном тексте = incomplete | `worker.test.ts` |
 | R06 | **present** (адресно) | конфликт с другим успешным payload — остановка; строка-ошибка заменяется | `api.int.test.ts` |
-| R07 | blocked | `clearDocumentContribution`/apply/переразбор выключены guard'ом; модель — 03A/03B | `guard.test.ts`, `cli-gates.log` |
+| R07 | partial (03A) | модель: множество доказательств на утверждение, append-only решения, пересмотр при изменении доказательств; старый apply по-прежнему заблокирован, новая запись конвейера — 03B | `assertions.test.ts`, `assertions.int.test.ts` |
 | R08, R09 | blocked/marked | UI: legacy-метка и формулировки; SQL не менялся — 06/07 | frontend build |
 | R10 | **present** | loopback-only, авторизация оператора, Host/Origin/CSRF, SSRF-клиент | `auth.test.ts`, `safeFetch.test.ts`, smoke |
 | R11 | **present** | допуск сбора/ИИ, журнал, единый gate | `policy.test.ts`, `policy.int.test.ts`, `cli-gates.log` |

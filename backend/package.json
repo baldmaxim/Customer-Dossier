@@ -16,7 +16,9 @@
     "pipeline:once": "tsx src/pipeline/cli.ts",
     "metrics:refresh": "tsx src/metrics/cli.ts",
     "backfill:revisions": "tsx src/revisions/cli.ts",
-    "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts"
+    "backfill:assertions": "tsx src/assertions/cli.ts",
+    "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts",
+    "seed:test-assertions": "tsx src/__tests__/integration/seedAssertionsDemo.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

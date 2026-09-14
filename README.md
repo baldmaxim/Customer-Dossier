@@ -178,6 +178,7 @@ docker compose -f test-db/docker-compose.yml down
 
 npm run metrics:refresh      # разовый пересчёт агрегатов
 npm run backfill:revisions   # dry-run переноса старых документов в публикации/редакции; запись: -- --apply
+npm run backfill:assertions  # затем: dry-run переноса канона в утверждения и доказательства; запись: -- --apply
 cd ../frontend && npm run build && npm run icons:generate
 ```
 

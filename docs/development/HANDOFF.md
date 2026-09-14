@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этап 02 — код готов, ждёт прогона пользователя (интеграционные тесты, backfill CLI, UI). Ветка `dossier-stages`.
+Этап 03A — код готов, ждёт прогона пользователя (TESTING_LOCAL A5 — 9 файлов / 82 теста, раздел E). Этап 02 — PASS. Ветка `dossier-stages`.
 Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -15,7 +15,9 @@ Docker и проверки с базой агент не запускает: п�
 - 00: baseline (`stages/00_REPORT.md`, `PATCH_COVERAGE.md`, `BACKLOG.md`).
 - 01: безопасный запуск, вход оператора, допуск источников, SSRF-клиент, блокировка канона, изоляция тестов (`stages/01_REPORT.md`, ADR-001).
 - 02: `source_items` / неизменяемые `document_revisions` / `source_observations` (миграция 011), запись в `ingest/store.ts`
-  с мостом к legacy, полнота по адаптерам, backfill `npm run backfill:revisions`, API и UI версий (`stages/02_REPORT.md`, ADR-002).
+  с мостом к legacy, полнота по адаптерам, backfill `npm run backfill:revisions`, API и UI версий (`stages/02_REPORT.md`, ADR-002). PASS.
+- 03A: `assertions` / `evidence` / `review_decisions` (миграция 012), `backend/src/assertions/*`, backfill `npm run backfill:assertions`,
+  API решений с версией и идемпотентностью, панель в админке (`stages/03A_REPORT.md`, ADR-003). Следующая миграция — 013.
 
 ## Принятые решения
 ADR-001, ADR-002. Личность публикации — `(source_id, item_key)`; legacy-документ только для первой редакции; редакции неизменяемы (триггер);
@@ -34,9 +36,9 @@ typecheck backend/frontend, build backend/frontend, unit 20 файлов / 297 �
 Рабочая база не подключалась; 010/011/backfill к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Дождаться отчёта пользователя по TESTING_LOCAL (A–C). Исправить упавшее, обновить 02_REPORT до PASS, commit/push.
-Затем `stages/STAGE_03A_ASSERTIONS_EVIDENCE.md`: читать COMMON_RULES, DATA_CONTRACTS (Assertion/Evidence/ReviewDecision),
-`pipeline/verify.ts`, `pipeline/apply.ts`, миграции 005 и 011.
+Дождаться отчёта пользователя по TESTING_LOCAL (A5, E). Исправить упавшее, обновить 03A_REPORT до PASS, commit/push.
+Затем `stages/STAGE_03B_SAFE_REPROCESSING.md`: читать COMMON_RULES, DATA_CONTRACTS (ExtractionRun/Chunk, promotion),
+`pipeline/worker.ts`, `apply.ts`, `guard.ts`, `assertions/repository.ts`, миграции 004, 011, 012.
 
 ## Запреты
 Не писать в рабочую БД; не снимать блокировки `pipeline/guard.ts` вне 03B/04; не подключать источники/облачную модель;

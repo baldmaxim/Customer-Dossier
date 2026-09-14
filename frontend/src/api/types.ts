@@ -132,6 +132,68 @@ export interface IDiffResponse {
   diff: { ok: true; ops: DiffOp[]; inserted: number; deleted: number } | { ok: false; reason: string };
 }
 
+export type AssertionStatus = 'candidate' | 'text_grounded' | 'reviewed_supported' | 'disputed' | 'rejected';
+
+export interface IAssertion {
+  id: number;
+  predicate: 'participates_in_project' | 'event' | 'company_mentioned' | 'project_mentioned';
+  role: Role | null;
+  eventType: string | null;
+  subjectCompanyId: number | null;
+  subjectCompanyName: string | null;
+  subjectProjectId: number | null;
+  subjectProjectName: string | null;
+  subjectText: string | null;
+  objectCompanyId: number | null;
+  objectCompanyName: string | null;
+  objectProjectId: number | null;
+  objectProjectName: string | null;
+  objectText: string | null;
+  counterpartyCompanyName: string | null;
+  scopeBuilding: string | null;
+  workPackage: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  modality: string;
+  valueNumeric: string | null;
+  valueCurrency: string | null;
+  status: AssertionStatus;
+  needsRevalidation: boolean;
+  version: number;
+  confidenceExtraction: number | null;
+  origin: string;
+  supportsCount: number;
+  contradictsCount: number;
+}
+
+export interface IEvidenceRow {
+  id: number;
+  stance: 'supports' | 'contradicts' | 'mentions';
+  status: 'active' | 'withdrawn' | 'unavailable';
+  statusReason: string | null;
+  quote: string;
+  contextBefore: string;
+  contextAfter: string;
+  revisionId: number;
+  revisionNo: number;
+  completeness: TextCompleteness;
+  legacyDocumentId: number | null;
+  sourceTitle: string;
+  url: string | null;
+  publishedAt: string | null;
+}
+
+export interface IReviewRow {
+  id: number;
+  decision: AssertionStatus;
+  scope: 'reflects_source' | 'fact_confirmed';
+  reviewer: string;
+  reason: string | null;
+  assertionVersion: number;
+  provenanceGap: boolean;
+  decidedAt: string;
+}
+
 export interface IMention {
   id: number;
   documentId: number;

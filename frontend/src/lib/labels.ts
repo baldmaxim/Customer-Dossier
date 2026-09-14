@@ -2,7 +2,14 @@
 // Одно место: иначе «general_contractor» превращается в «генподрядчик» на одном
 // экране и в «Генеральный подрядчик» на другом.
 
-import type { PermissionStatus, RiskLight, Role, Sentiment, TextCompleteness } from '../api/types';
+import type {
+  AssertionStatus,
+  PermissionStatus,
+  RiskLight,
+  Role,
+  Sentiment,
+  TextCompleteness,
+} from '../api/types';
 
 /**
  * Старый светофор — эвристический индекс по новостям (веса 40/30/30 не
@@ -27,6 +34,35 @@ export const COMPLETENESS_LABELS: Record<TextCompleteness, string> = {
   caption_only: 'подпись к вложению',
   failed: 'не получен',
   unknown: 'полнота неизвестна',
+};
+
+/** Статус утверждения: «найдено в тексте» и «подтверждено аналитиком» — разные вещи. */
+export const ASSERTION_STATUS_LABELS: Record<AssertionStatus, string> = {
+  candidate: 'кандидат',
+  text_grounded: 'есть в тексте источника',
+  reviewed_supported: 'подтверждено аналитиком',
+  disputed: 'спорно',
+  rejected: 'отклонено',
+};
+
+export const REVIEW_SCOPE_LABELS: Record<string, string> = {
+  reflects_source: 'источник действительно так пишет',
+  fact_confirmed: 'факт подтверждён независимо',
+};
+
+export const STANCE_LABELS: Record<string, string> = {
+  supports: 'подтверждает',
+  contradicts: 'опровергает',
+  mentions: 'упоминает',
+};
+
+export const MODALITY_LABELS: Record<string, string> = {
+  reported_fact: 'сообщается как факт',
+  claim: 'заявление стороны',
+  planned: 'план',
+  possible: 'возможно',
+  negated: 'отрицание',
+  unknown: 'модальность неизвестна',
 };
 
 export const CHRONOLOGY_LABELS: Record<string, string> = {

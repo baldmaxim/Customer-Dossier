@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IPendingMerge, ISourceRow } from '../api/types';
+import { AssertionReviewPanel } from '../components/AssertionReviewPanel';
 import { SourcePolicyEditor } from '../components/SourcePolicyEditor';
 import { PERMISSION_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './AdminPage.module.css';
@@ -116,6 +117,15 @@ export const AdminPage: FC = () => {
           <code>npm run ingest:once -- --probe {broken[0]?.key}</code>
         </div>
       )}
+
+      <section className={styles.section}>
+        <h2>Проверка утверждений</h2>
+        <p className={styles.hint}>
+          «Есть в тексте» значит только, что источник так пишет. Подтверждение аналитика хранится отдельно и не
+          исчезает при повторном разборе; если доказательства изменились, утверждение попадает в «Нужен пересмотр».
+        </p>
+        <AssertionReviewPanel />
+      </section>
 
       <section className={styles.section}>
         <h2>Очередь слияний</h2>

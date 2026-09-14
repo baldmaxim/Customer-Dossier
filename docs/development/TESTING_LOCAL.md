@@ -3,8 +3,8 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 02** (публикации и версии): шаги A1–A5, затем B, затем C. Раздел D — проверки
-этапа 01, если вы их ещё не прогоняли.
+**Сейчас проверяется этап 03A** (утверждения, доказательства, решения): шаги A1–A5, затем раздел E.
+Разделы B–D — проверки этапов 02 и 01 (пройдены 2026-09-14), повторять не обязательно.
 
 ---
 
@@ -35,7 +35,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **20 файлов / 297 тестов passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **21 файл / 311 тестов passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -70,11 +70,13 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **7 файлов / 61 тест passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **9 файлов / 82 теста passed**:
 
 | Файл | Что проверяет |
 |---|---|
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–011 |
+| `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
+| `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–012 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -197,6 +199,45 @@ curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: evil.example" http://127.0.0.1:
 Экран входа; неверный токен — ошибка; «Админка» → «Источники»: «сбор: …, ИИ: …» и причина; «Допуск»:
 разрешение без основания не сохраняется; «Слить (выключено)»; выход → экран входа; DevTools → Application →
 Cache Storage без `api` и `google-fonts-*`; Network без `fonts.googleapis.com`.
+
+---
+
+## E. Этап 03A — утверждения из командной строки и в админке
+
+### E1. Backfill legacy-канона (переменные `DATABASE_URL`, `DATABASE_SSL`, `DOTENV_CONFIG_PATH` — как в разделе B)
+
+Схема с нуля и минимальные legacy-данные: документ, компания, объект, упоминание с ролью, роль на объекте,
+событие с ручным статусом `confirmed`:
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "INSERT INTO sources (kind,key,title,status) VALUES ('telegram','legacy_canon','legacy','paused'); INSERT INTO raw_documents (source_id, external_id, body, content_hash, lead_hash, body_len, status) SELECT id, 'legacy_canon/1', 'Синтетика: «Демо-Бета» — подрядчик ЖК «Демо-Парк». Срыв срока признан застройщиком.', decode(md5('c1'),'hex'), decode(md5('l1'),'hex'), 80, 'extracted' FROM sources WHERE key='legacy_canon'; INSERT INTO document_sightings (document_id, source_id, external_id) SELECT id, source_id, external_id FROM raw_documents; INSERT INTO companies (name,name_norm,name_latin) VALUES ('Демо-Бета','демо бета','demo beta'); INSERT INTO projects (name,name_norm,name_latin) VALUES ('Демо-Парк','демо парк','demo park'); INSERT INTO mentions (document_id, entity_kind, entity_id, surface_form, role, quote, confidence, published_at) SELECT d.id, 'company', c.id, 'Демо-Бета', 'contractor', '«Демо-Бета» — подрядчик ЖК «Демо-Парк»', 0.9, now() FROM raw_documents d, companies c; INSERT INTO project_participants (project_id, company_id, role, confidence, evidence_document_id) SELECT p.id, c.id, 'contractor', 0.9, d.id FROM projects p, companies c, raw_documents d; INSERT INTO events (type, company_id, project_id, document_id, quote, confidence, status) SELECT 'deadline_missed', c.id, p.id, d.id, 'Срыв срока признан застройщиком', 0.9, 'confirmed' FROM projects p, companies c, raw_documents d;"
+npm run backfill:revisions -- --apply
+```
+
+| Команда | Ожидается |
+|---|---|
+| `npm run backfill:assertions` | `dry-run`; `project_participant.assertionsCreated: 1`, `mention.assertionsCreated: 1`, `event.manualStatusesMigrated: 1` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -t -c "SELECT count(*) FROM assertions"` | `0` |
+| `npm run backfill:assertions -- --apply` | те же числа, `ЗАПИСЬ` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT decision, reviewer, provenance_gap FROM review_decisions"` | одна строка: `reviewed_supported`, `legacy_unknown`, `t` |
+| `npm run backfill:assertions -- --apply --from-start` | `assertionsCreated: 0`, `evidenceCreated: 0`, `event.manualStatusesExisting: 1` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE evidence SET quote='x'"` | ошибка `evidence: содержание доказательства неизменяемо` |
+
+### E2. Панель в админке
+
+1. Данные (как в C1 — без `DATABASE_URL`, с `TEST_DATABASE_URL`): `npm run seed:test-assertions`.
+2. API (`npm run dev` с переменными раздела B) и UI (`frontend: npm run dev`), вход токеном.
+3. «Админка» → «Проверка утверждений» → фильтр «Есть в тексте»: строка «Демо-Гамма — Генподрядчик на объекте
+   Демо-Квартал (корпус 3)», «за 2 · против 1».
+4. Открыть: слева два «подтверждает» с выделенной цитатой и контекстом, справа одно «опровергает»; ссылки «версии».
+5. «Подтвердить» + причина → «Решение записано», история: «подтверждено аналитиком · operator · версия N».
+6. Две вкладки: в обеих открыть утверждение; в первой записать «Спорно», во второй — «Отклонить» →
+   сообщение «Утверждение изменилось в другой вкладке…», данные обновились, решение первой вкладки на месте.
+7. «отозвать» у одного поддерживающего доказательства (причина ≥ 3 символов) → оно тусклое с причиной,
+   утверждение в фильтре «Нужен пересмотр», история решений не пропала.
+8. Ширина 390 px: колонки «подтверждает/опровергает» друг под другом, без горизонтального скролла страницы.
 
 ---
 
