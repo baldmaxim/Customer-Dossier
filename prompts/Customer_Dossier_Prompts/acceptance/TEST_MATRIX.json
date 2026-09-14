@@ -1,0 +1,551 @@
+{
+  "description": "Сценарии для будущей реализации. Это не выполненные тесты.",
+  "cases": [
+    {
+      "id": "TC-001",
+      "stage": "01",
+      "scenario": "Startup API/UI не запускает ingestion, bot, pipeline и metrics",
+      "expected": "Счётчики сетевых вызовов/канона не меняются",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-002",
+      "stage": "01",
+      "scenario": "Unit tests при уже заданном рабочем DATABASE_URL",
+      "expected": "Рабочая цель не используется; тестовый guard срабатывает",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-003",
+      "stage": "01",
+      "scenario": "Migration --dry при отсутствии schema_migrations",
+      "expected": "Нет DDL/DML; показан только план",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-004",
+      "stage": "01",
+      "scenario": "Неавторизованное изменение source/review/merge",
+      "expected": "401/403; состояние БД прежнее",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-005",
+      "stage": "01",
+      "scenario": "Cross-origin/Host/CSRF запрос изменяющей операции",
+      "expected": "Запрос блокирован; CORS не единственная защита",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-006",
+      "stage": "01",
+      "scenario": "SSRF URL, redirect или DNS к локальному/служебному адресу",
+      "expected": "Источник блокирован без запроса во внутреннюю сеть",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-007",
+      "stage": "01",
+      "scenario": "Доверенный LM Studio endpoint на loopback",
+      "expected": "Работает отдельно от запрета loopback для источников",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-008",
+      "stage": "01",
+      "scenario": "Unknown/revoked source через scheduler/CLI/bot/import",
+      "expected": "Одинаковый policy gate на всех входах",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-009",
+      "stage": "01",
+      "scenario": "Старый PWA-cache и авторизованные данные",
+      "expected": "Чувствительный API не кэшируется и не выдаётся после logout",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-010",
+      "stage": "01",
+      "scenario": "False/0/невалидное значение feature flag",
+      "expected": "Строгий разбор; никакого непреднамеренного запуска",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-011",
+      "stage": "02",
+      "scenario": "Изменение текста при прежнем external ID",
+      "expected": "Новая revision; старый текст/ссылка сохранены",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-012",
+      "stage": "02",
+      "scenario": "Повтор той же актуальной revision",
+      "expected": "Observation без лишней версии/события",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-013",
+      "stage": "02",
+      "scenario": "Текст A → B → A",
+      "expected": "Сохранены три наблюдаемые редакции и порядок",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-014",
+      "stage": "02",
+      "scenario": "Два concurrent fetch одного состояния",
+      "expected": "Нет дублирования revision и нарушения FK",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-015",
+      "stage": "02",
+      "scenario": "Одинаковый текст в разных каналах/сайтах",
+      "expected": "Разные SourceItem; общность текста отдельно",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-016",
+      "stage": "02",
+      "scenario": "Excerpt/caption и недоступное вложение",
+      "expected": "Полнота не становится full автоматически",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-017",
+      "stage": "02",
+      "scenario": "Canonical URL с параметром, меняющим статью",
+      "expected": "Разные статьи не склеены",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-018",
+      "stage": "02",
+      "scenario": "Двойной legacy-backfill и неизвестная история",
+      "expected": "Идемпотентность; unknown вместо выдуманных версий",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-019",
+      "stage": "03A",
+      "scenario": "Два документа подтверждают роль, одно evidence отозвано",
+      "expected": "Второе evidence и ручной review сохранены",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-020",
+      "stage": "03A",
+      "scenario": "Новый смысл assertion при старом review",
+      "expected": "Одобрение не перенесено молча; needs_revalidation",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-021",
+      "stage": "03A",
+      "scenario": "Есть поддерживающее и опровергающее evidence",
+      "expected": "Обе стороны видны; не скрытое last-write-wins",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-022",
+      "stage": "03A",
+      "scenario": "Повтор review/idempotency key и две вкладки",
+      "expected": "Один результат повтора; version conflict не затирает решение",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-023",
+      "stage": "03A",
+      "scenario": "Несуществующий subject/object/revision",
+      "expected": "DB constraints не допускают висячих ссылок",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-024",
+      "stage": "03A",
+      "scenario": "Кириллица/emoji/повторяющаяся цитата",
+      "expected": "Точный span в immutable representation",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-025",
+      "stage": "03A",
+      "scenario": "Перенос старого manual status без reviewer",
+      "expected": "Статус сохранён; reviewer=legacy_unknown и provenance gap",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-026",
+      "stage": "03B",
+      "scenario": "Failed последний chunk / непокрытый хвост",
+      "expected": "Старый опубликованный набор не заменён",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-027",
+      "stage": "03B",
+      "scenario": "Повтор run с новым payload",
+      "expected": "Новый run/response; старое содержимое неизменно",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-028",
+      "stage": "03B",
+      "scenario": "Падение до/после commit promotion",
+      "expected": "Атомарно старый или новый набор, без смеси",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-029",
+      "stage": "03B",
+      "scenario": "Два workers и истёкший lease",
+      "expected": "Нет конкурирующего unsafe apply, fencing работает",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-030",
+      "stage": "03B",
+      "scenario": "Поздно завершившийся старый run",
+      "expected": "Не перезаписывает новое опубликованное состояние",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-031",
+      "stage": "03B",
+      "scenario": "Новая irrelevant revision одного источника",
+      "expected": "Нет удаления чужих доказательств/канонических entities",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-032",
+      "stage": "03B",
+      "scenario": "Отзыв AI policy до apply",
+      "expected": "Публикация запрещена; статус/причина видны",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-033",
+      "stage": "03B",
+      "scenario": "Одинаковые названия в разных чанках",
+      "expected": "Ссылки через mention ID; реквизиты/дела не схлопываются",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-034",
+      "stage": "04",
+      "scenario": "Одинаковое имя, разные известные ИНН",
+      "expected": "Разные юрлица даже при exact alias",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-035",
+      "stage": "04",
+      "scenario": "Название бренда и дочернее ООО",
+      "expected": "Отдельные сущности с явным типом связи",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-036",
+      "stage": "04",
+      "scenario": "Несколько candidates с одним alias без реквизитов",
+      "expected": "Нет выбора первой строки; очередь уточнения",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-037",
+      "stage": "04",
+      "scenario": "Одинаковые ЖК в двух городах и неизвестный город",
+      "expected": "Не склеиваются по одному имени",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-038",
+      "stage": "04",
+      "scenario": "Два корпуса одного ЖК",
+      "expected": "Иерархия и раздельный контекст работ",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-039",
+      "stage": "04",
+      "scenario": "Merge с duplicate evidence и конфликтом unique",
+      "expected": "Нет потери оснований; полный rollback при конфликте",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-040",
+      "stage": "04",
+      "scenario": "Concurrent merge и повтор apply",
+      "expected": "Стабильные блокировки и идемпотентность",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-041",
+      "stage": "04",
+      "scenario": "Undo merge после новых зависимостей",
+      "expected": "Нет слепого отката; явный compensating plan",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-042",
+      "stage": "05A",
+      "scenario": "RSS анонс и full article длиннее/с отрицанием",
+      "expected": "Берётся доступный полный текст, полнота корректна",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-043",
+      "stage": "05A",
+      "scenario": "HTML-list без RSS с pagination",
+      "expected": "Адаптер реально обнаруживает и сохраняет items",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-044",
+      "stage": "05A",
+      "scenario": "Сбой на странице 2 и restart",
+      "expected": "Нет продвижения курсора за несохранённый диапазон",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-045",
+      "stage": "05A",
+      "scenario": "304/429/403/oversize response",
+      "expected": "Различимые состояния; нет ложного full/no-news",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-046",
+      "stage": "05A",
+      "scenario": "Смена selector/layout",
+      "expected": "parser_degraded, не уверенное отсутствие новостей",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-047",
+      "stage": "05B",
+      "scenario": "Web-preview первая страница не покрывает backlog",
+      "expected": "Coverage ограничено честно; доступный catch-up безопасен",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-048",
+      "stage": "05B",
+      "scenario": "Bot update replay и crash offset/persist",
+      "expected": "Идемпотентная запись/курсор; нет дублей событий",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-049",
+      "stage": "05B",
+      "scenario": "Edit/короткое опровержение/forward без origin",
+      "expected": "Revision сохранена; автор/источник не выдуманы",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-050",
+      "stage": "05B",
+      "scenario": "Пустой allowed users и revoked policy",
+      "expected": "Никакого приёма/обработки вопреки допуску",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-051",
+      "stage": "05B",
+      "scenario": "Ненаблюдаемое удаление / unavailable history",
+      "expected": "Нет фиктивной гарантии полной истории",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-052",
+      "stage": "06",
+      "scenario": "«Не является», «планирует», «по слухам»",
+      "expected": "Нет положительного confirmed договора/участия",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-053",
+      "stage": "06",
+      "scenario": "Две компании в одной публикации/на одном ЖК",
+      "expected": "Co-mention/participation не contract",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-054",
+      "stage": "06",
+      "scenario": "Договорная цепочка А→Б→В",
+      "expected": "Два evidence-backed ребра, не прямой договор А→В",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-055",
+      "stage": "06",
+      "scenario": "Два суда одной компании в статье",
+      "expected": "Два case/event IDs; не один type-company event",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-056",
+      "stage": "06",
+      "scenario": "Истец/ответчик, иск/решение/обжалование",
+      "expected": "Стадии и роли сохранены без вывода виновности",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-057",
+      "stage": "06",
+      "scenario": "Старая статья, приостановка и возобновление",
+      "expected": "Корректные интервалы; late data не затирают новое",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-058",
+      "stage": "06",
+      "scenario": "Чужой ИНН/сумма в той же статье/цитате",
+      "expected": "Нет переноса поля без семантической привязки",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-059",
+      "stage": "06",
+      "scenario": "Prompt injection и HTML команды внутри статьи",
+      "expected": "Только данные; нет tool call/исполнения HTML",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-060",
+      "stage": "07",
+      "scenario": "Unknown event date и свежая публикация",
+      "expected": "Не становится свежим событием; окна раздельны",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-061",
+      "stage": "07",
+      "scenario": "Новый подрядчик после старой задержки",
+      "expected": "Не наследует ответственность и чужое событие",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-062",
+      "stage": "07",
+      "scenario": "Пять перепечаток одного сообщения",
+      "expected": "Публикации=5; событие/независимость считаются отдельно",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-063",
+      "stage": "07",
+      "scenario": "Ноль наблюдений/нулевой denominator",
+      "expected": "Insufficient_data/null; не зелёный/100%",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-064",
+      "stage": "07",
+      "scenario": "Ошибка refresh и замороженный cutoff",
+      "expected": "Последняя успешная модель и явный stale; детерминизм",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-065",
+      "stage": "08A",
+      "scenario": "Поиск двух одноимённых юрлиц и создание case",
+      "expected": "Осознанный выбор и provenance заявленной роли",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-066",
+      "stage": "08A",
+      "scenario": "Проверка противоречия и повторное открытие",
+      "expected": "Review сохранён и виден с evidence/причиной",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-067",
+      "stage": "08A",
+      "scenario": "Отключены LLM и внешняя сеть",
+      "expected": "Читается сохранённое досье; ясные freshness/empty states",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-068",
+      "stage": "08A",
+      "scenario": "Истёкшая сессия/ошибка API/недостаток данных",
+      "expected": "Не выдаются фиктивные свежие сведения",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-069",
+      "stage": "08B",
+      "scenario": "Click graph edge с периодом/пакетом/корпусом",
+      "expected": "Открывается собственное evidence и тип отношения",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-070",
+      "stage": "08B",
+      "scenario": "Snapshot S1 затем edit/merge/review/rules change",
+      "expected": "S1 immutable; S2 учитывает изменения",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-071",
+      "stage": "08B",
+      "scenario": "Knowledge cutoff против effective date filter",
+      "expected": "Исторический срез не обещан без recorded history",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-072",
+      "stage": "08B",
+      "scenario": "Экспорт MD/JSON/HTML без сети и с опасным source text",
+      "expected": "Согласованное содержимое; нет XSS/секретов/внешних ресурсов",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-073",
+      "stage": "08B",
+      "scenario": "Source display/export revoked после snapshot",
+      "expected": "Снимок не обходит текущие ограничения доступа",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-074",
+      "stage": "09",
+      "scenario": "Fresh install и upgrade репрезентативной legacy-копии",
+      "expected": "Миграции воспроизводимы, не меняют рабочую БД",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-075",
+      "stage": "09",
+      "scenario": "Backup тестовой базы → restore в новую цель",
+      "expected": "Revisions/review/snapshots/контрольные числа совпадают",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-076",
+      "stage": "09",
+      "scenario": "Полный source→dossier→snapshot→restart сценарий",
+      "expected": "Конечный пользовательский результат воспроизводим",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-077",
+      "stage": "09",
+      "scenario": "Disk-full/DB down/model down/network down",
+      "expected": "Нет потери после ложного checkpoint; ошибки видны",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "TC-078",
+      "stage": "09",
+      "scenario": "Performance на описанном объёме и машине",
+      "expected": "Фактические времена, не выдуманный throughput",
+      "status": "NOT_RUN"
+    }
+  ]
+}

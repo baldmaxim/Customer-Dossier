@@ -1,0 +1,124 @@
+{
+  "pack": "Customer Dossier local improvement prompts",
+  "version": "1.0",
+  "date": "2026-09-11",
+  "user_selected_development_mode": "Claude Opus 5 (1M); account access not tested",
+  "macro_stages": 10,
+  "implementation_prompts": 13,
+  "stages": [
+    {
+      "id": "00",
+      "file": "stages/STAGE_00_BASELINE.md",
+      "title": "Инвентаризация и безопасная стартовая точка",
+      "depends_on": []
+    },
+    {
+      "id": "01",
+      "file": "stages/STAGE_01_LOCAL_SAFETY.md",
+      "title": "Безопасный локальный запуск и защита изменений",
+      "depends_on": [
+        "00"
+      ]
+    },
+    {
+      "id": "02",
+      "file": "stages/STAGE_02_DOCUMENT_REVISIONS.md",
+      "title": "Публикации, версии и полнота исходных данных",
+      "depends_on": [
+        "01"
+      ]
+    },
+    {
+      "id": "03A",
+      "file": "stages/STAGE_03A_ASSERTIONS_EVIDENCE.md",
+      "title": "Утверждения, доказательства и решения аналитика",
+      "depends_on": [
+        "02"
+      ]
+    },
+    {
+      "id": "03B",
+      "file": "stages/STAGE_03B_SAFE_REPROCESSING.md",
+      "title": "Новый конвейер и безопасное переизвлечение",
+      "depends_on": [
+        "03A"
+      ]
+    },
+    {
+      "id": "04",
+      "file": "stages/STAGE_04_IDENTITY_MERGE.md",
+      "title": "Юридические лица, объекты и безопасное слияние",
+      "depends_on": [
+        "03B"
+      ]
+    },
+    {
+      "id": "05A",
+      "file": "stages/STAGE_05A_WEBSITES.md",
+      "title": "Парсинг указанных сайтов и контроль качества сбора",
+      "depends_on": [
+        "04"
+      ]
+    },
+    {
+      "id": "05B",
+      "file": "stages/STAGE_05B_TELEGRAM.md",
+      "title": "Разрешённый Telegram-сбор, курсоры и правки",
+      "depends_on": [
+        "05A"
+      ]
+    },
+    {
+      "id": "06",
+      "file": "stages/STAGE_06_RELATIONS_EVENTS.md",
+      "title": "Смысл связей, история ролей и корректные события",
+      "depends_on": [
+        "05B"
+      ]
+    },
+    {
+      "id": "07",
+      "file": "stages/STAGE_07_ANALYTICS.md",
+      "title": "Объяснимая аналитика и общий фон компании",
+      "depends_on": [
+        "06"
+      ]
+    },
+    {
+      "id": "08A",
+      "file": "stages/STAGE_08A_DOSSIER_UI.md",
+      "title": "Рабочее досье компании, объекта и обращения",
+      "depends_on": [
+        "07"
+      ]
+    },
+    {
+      "id": "08B",
+      "file": "stages/STAGE_08B_GRAPH_SNAPSHOTS.md",
+      "title": "Доказательная схема связей, снимки и экспорт",
+      "depends_on": [
+        "08A"
+      ]
+    },
+    {
+      "id": "09",
+      "file": "stages/STAGE_09_LOCAL_RELEASE.md",
+      "title": "Сквозная приёмка и локальная эксплуатация",
+      "depends_on": [
+        "08B"
+      ]
+    }
+  ],
+  "service_prompts": [
+    "service/FIX_REVIEW.md",
+    "service/RESUME_STAGE.md",
+    "service/REVIEW_PLAN.md",
+    "service/REVIEW_STAGE.md",
+    "service/WRITE_HANDOFF.md"
+  ],
+  "acceptance_scenarios": 78,
+  "synthetic_examples": 18,
+  "default_execution": "one stage at a time; stop at boundary",
+  "application_code_included": false,
+  "runtime_tests_executed_by_pack_creation": false
+}

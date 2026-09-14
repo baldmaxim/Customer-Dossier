@@ -1,0 +1,27 @@
+[
+  {
+    "file": "Customer-Dossier-main.zip",
+    "bytes": 378074,
+    "sha256": "34ec26892012469ee4e359e031a6e581934c8c84c3e5967e926e3a3ad4f6971c"
+  },
+  {
+    "file": "Customer-Dossier-reviewed-2026-09-11.zip",
+    "bytes": 413532,
+    "sha256": "575f6fb24bc1b9e4f1ca448aed7c72d929df513d60efa4a7a745cee9b06fe798"
+  },
+  {
+    "file": "Customer-Dossier_Review_2026-09-11.md",
+    "bytes": 30119,
+    "sha256": "972d50117ba00fbf01e2aa7b306c12550b4c3b4d6d4de1698ac6537caef6d0df"
+  },
+  {
+    "file": "Customer-Dossier_Dossier_Spec_2026-09-11.md",
+    "bytes": 33317,
+    "sha256": "f695a76ef7f27c5d4641582308cb4ae977a1cd9c1aabf188e4fe670fbffc6df1"
+  },
+  {
+    "file": "Customer-Dossier_Changes_2026-09-11.patch",
+    "bytes": 178746,
+    "sha256": "f784ec9ba78d2b4ee81776aa3c4893d6c208300acc11cf0151c5c5b70d2f3b7e"
+  }
+]
