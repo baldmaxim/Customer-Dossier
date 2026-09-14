@@ -104,7 +104,9 @@ const printReports = (reports: Awaited<ReturnType<typeof runIngestPass>>): void 
     const s = r.stats;
     const line =
       `новых ${s.inserted}, дублей ${s.duplicate}, ` +
-      `коротких ${s.tooShort}, правок ${s.editedSkipped}`;
+      `коротких ${s.tooShort}, новых редакций ${s.newRevision}, без изменений ${s.unchanged}, ` +
+      `запоздалых ${s.stale}` +
+      (s.editedSkipped > 0 ? `, потерянных правок ${s.editedSkipped} (REVISION_WRITE_ENABLED=false)` : '');
     if (r.ok) console.log(`[ingest] ok   ${r.sourceKey}: ${line}`);
     else console.error(`[ingest] FAIL ${r.sourceKey}: ${r.error}`);
   }

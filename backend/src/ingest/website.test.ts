@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, it, expect } from 'vitest';
 
-import { parseFeed, looksLikeFeed, extractArticleText } from './website.js';
+import { parseFeed, looksLikeFeed, extractArticleText, extractArticleTextWithMethod } from './website.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string =>
@@ -87,6 +87,31 @@ describe('parseFeed — Atom', () => {
   it('различает формат в статистике разбора', () => {
     expect(parsed.layoutStats.atom_entry).toBe(2);
     expect(parsed.layoutStats.rss_item).toBe(0);
+  });
+});
+
+describe('полнота текста ленты и статьи (TC-016)', () => {
+  it('content:encoded — полнота неизвестна, а не full: лента может урезать текст', () => {
+    const parsed = parseFeed(RSS, 'https://example.ru');
+    expect(parsed.items[0]!.completeness).toBe('unknown');
+    expect(parsed.items[0]!.completenessReason).toBe('feed_content_unverified');
+  });
+
+  it('description/summary — анонс, даже если длинный', () => {
+    const feed = `<rss><channel><item><title>T</title><link>https://example.ru/x</link>
+      <description>${'Длинный анонс. '.repeat(100)}</description></item></channel></rss>`;
+    const parsed = parseFeed(feed, 'https://example.ru');
+    expect(parsed.items[0]!.completeness).toBe('excerpt');
+  });
+
+  it('текст статьи из семантического контейнера — full, из эвристики — unknown', () => {
+    expect(extractArticleTextWithMethod(ARTICLE, '.content').method).toBe('selector');
+    const semantic = `<html><body><article>${'<p>Текст статьи. </p>'.repeat(30)}</article></body></html>`;
+    expect(extractArticleTextWithMethod(semantic).method).toBe('semantic');
+    // В фикстуре нет семантического контейнера: без селектора — эвристика.
+    expect(extractArticleTextWithMethod(ARTICLE).method).toBe('heuristic');
+    const heuristicOnly = `<html><body><div><p>${'Абзац текста. '.repeat(20)}</p><p>${'Ещё. '.repeat(40)}</p></div></body></html>`;
+    expect(extractArticleTextWithMethod(heuristicOnly).method).toBe('heuristic');
   });
 });
 

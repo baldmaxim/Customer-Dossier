@@ -8,6 +8,7 @@ import { useSession } from './hooks/useSession';
 import { AdminPage } from './pages/AdminPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
+import { DocumentPage } from './pages/DocumentPage';
 import { LoginPage } from './pages/LoginPage';
 import { SearchPage } from './pages/SearchPage';
 
@@ -38,6 +39,7 @@ const AuthGate: FC = () => {
         <Route path="/" element={<SearchPage />} />
         <Route path="/company/:id" element={<CompanyPage />} />
         <Route path="/contractors" element={<ContractorsPage />} />
+        <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

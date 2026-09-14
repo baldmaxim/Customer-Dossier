@@ -65,6 +65,7 @@ export const ingestTelegramSource = async (source: ISource): Promise<IIngestRepo
 
   try {
     const { html, httpStatus } = await fetchChannelPage(source.key);
+    const fetchedAt = new Date();
     const parsed = parseChannelPage(html, source.key);
 
     outcome = {
@@ -95,6 +96,13 @@ export const ingestTelegramSource = async (source: ISource): Promise<IIngestRepo
       body: post.body,
       publishedAt: post.publishedAt,
       forwardFrom: post.forwardFrom,
+      representation: 'telegram_web_text@1',
+      completeness: post.completeness,
+      completenessReason: post.completenessReason,
+      attachments: post.attachments,
+      // Веб-версия не сообщает надёжной даты правки: порядок — по наблюдению.
+      sourceModifiedAt: null,
+      fetchedAt,
     }));
 
     stats = await withTransaction(client => storeDocuments(docs, client));
@@ -159,6 +167,7 @@ export const ingestWebsiteSource = async (source: ISource): Promise<IIngestRepor
       source.config as IWebsiteConfig,
       knownUrls,
     );
+    const fetchedAt = new Date();
 
     outcome = {
       ...outcome,
@@ -178,6 +187,13 @@ export const ingestWebsiteSource = async (source: ISource): Promise<IIngestRepor
       body: article.title ? `${article.title}\n\n${article.body}` : article.body,
       publishedAt: article.publishedAt,
       forwardFrom: null,
+      // Заголовок + текст: версия представления фиксирует и эту склейку.
+      representation: `${article.representation}+title`,
+      completeness: article.completeness,
+      completenessReason: article.completenessReason,
+      attachments: [],
+      sourceModifiedAt: null,
+      fetchedAt,
     }));
 
     stats = await withTransaction(client => storeDocuments(docs, client));

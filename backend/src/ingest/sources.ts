@@ -185,11 +185,14 @@ export const deleteSource = async (
   id: number,
   withDocuments = false,
 ): Promise<IDeleteSourceResult> => {
+  // Публикации и редакции (этап 02) — тоже собранные документы: их история
+  // не удаляется вместе с источником.
   const row = await queryOne<{ n: number }>(
-    'SELECT count(*)::int AS n FROM raw_documents WHERE source_id = $1',
+    `SELECT (SELECT count(*) FROM raw_documents WHERE source_id = $1)
+          + (SELECT count(*) FROM source_items WHERE source_id = $1) AS n`,
     [id],
   );
-  const documentCount = row?.n ?? 0;
+  const documentCount = Number(row?.n ?? 0);
 
   if (documentCount > 0 && !withDocuments) {
     return {

@@ -11,6 +11,7 @@ import * as cheerio from 'cheerio';
 
 import { env } from '../config/env.js';
 import { DEFAULT_SOURCE_LIMITS, NetworkPolicyError, safeFetch, type ISourceNetworkPolicy } from '../net/safeFetch.js';
+import type { IAttachment, TextCompleteness } from '../revisions/store.js';
 
 /** Веб-версия каналов: только t.me, без поддоменов и чужих редиректов. */
 export const TELEGRAM_WEB_POLICY: ISourceNetworkPolicy = {
@@ -39,7 +40,20 @@ export interface ITelegramPost {
   publishedAt: Date | null;
   /** Канал-первоисточник, если это репост. */
   forwardFrom: string | null;
+  /** Текст сообщения — full; подпись к медиа — caption_only (содержимое медиа не читается). */
+  completeness: TextCompleteness;
+  completenessReason: string;
+  attachments: IAttachment[];
 }
+
+/** Вложения веб-версии: наличие видно, содержимое не читается. */
+const MEDIA_SELECTORS: Record<string, string> = {
+  photo: '.tgme_widget_message_photo_wrap',
+  video: '.tgme_widget_message_video_player, .tgme_widget_message_roundvideo_player',
+  document: '.tgme_widget_message_document',
+  voice: '.tgme_widget_message_voice',
+  poll: '.tgme_widget_message_poll',
+};
 
 export interface IParsedChannelPage {
   posts: ITelegramPost[];
@@ -113,6 +127,10 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       ? (forwardHref.replace(/^https?:\/\/t\.me\//, '').split('/')[0] ?? null)
       : null;
 
+    const attachments: IAttachment[] = Object.entries(MEDIA_SELECTORS)
+      .filter(([, selector]) => wrap.find(selector).length > 0)
+      .map(([kind]) => ({ kind, status: 'unsupported' as const }));
+
     posts.push({
       externalId: dataPost,
       postId: parsePostId(dataPost),
@@ -120,6 +138,9 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       body,
       publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
       forwardFrom,
+      completeness: attachments.length > 0 ? 'caption_only' : 'full',
+      completenessReason: attachments.length > 0 ? 'telegram_web_media_caption' : 'telegram_web_message_text',
+      attachments,
     });
   });
 

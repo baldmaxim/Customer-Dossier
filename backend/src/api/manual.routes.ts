@@ -56,13 +56,27 @@ manualRouter.post('/', async (req, res) => {
         url: input.url ?? null,
         title: input.title ?? null,
         body: input.body,
-        publishedAt: input.publishedAt ? new Date(input.publishedAt) : new Date(),
+        // Дата публикации неизвестна — NULL, а не момент вставки: иначе старый
+        // текст выглядит свежим.
+        publishedAt: input.publishedAt ? new Date(input.publishedAt) : null,
         forwardFrom: input.origin ?? null,
+        representation: 'manual_text@1',
+        // Оператор мог вставить как всю статью, так и её кусок.
+        completeness: 'unknown',
+        completenessReason: 'manual_paste',
+        attachments: [],
+        sourceModifiedAt: null,
+        fetchedAt: new Date(),
       },
       client,
     ),
   );
 
   const status = result.outcome === 'inserted' ? 201 : 200;
-  res.status(status).json({ outcome: result.outcome, documentId: result.documentId });
+  res.status(status).json({
+    outcome: result.outcome,
+    documentId: result.documentId,
+    sourceItemId: result.sourceItemId,
+    revisionId: result.revisionId,
+  });
 });

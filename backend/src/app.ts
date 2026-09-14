@@ -16,6 +16,7 @@ import {
 import { companiesRouter } from './api/companies.routes.js';
 import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
+import { revisionsRouter } from './api/revisions.routes.js';
 
 export interface ICreateAppOptions {
   operatorToken: string;
@@ -87,6 +88,7 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
   app.use('/api/companies', requireOperator, companiesRouter);
   app.use('/api/contractors', requireOperator, contractorsRouter);
   app.use('/api/admin', requireOperator, adminRouter);
+  app.use('/api', requireOperator, revisionsRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });

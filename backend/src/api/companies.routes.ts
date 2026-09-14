@@ -223,7 +223,7 @@ companiesRouter.get('/:id/mentions', async (req, res) => {
   const rows = await query<{ publishedAt: string; id: number }>(
     `SELECT m.id, m.surface_form AS "surfaceForm", m.role, m.quote,
             m.quote_verified AS "quoteVerified", m.sentiment, m.confidence,
-            m.published_at   AS "publishedAt",
+            m.published_at   AS "publishedAt", m.document_id AS "documentId",
             d.url, d.body, s.title AS "sourceTitle", s.kind AS "sourceKind"
      FROM mentions m
      JOIN raw_documents d ON d.id = m.document_id

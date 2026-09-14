@@ -74,8 +74,67 @@ export interface IProjectRow {
   counterparties: Array<{ id: number; name: string; role: Role }> | null;
 }
 
+export type TextCompleteness = 'full' | 'excerpt' | 'caption_only' | 'failed' | 'unknown';
+
+export interface ISourceItem {
+  id: number;
+  sourceId: number;
+  sourceTitle: string;
+  sourceKind: string;
+  itemKey: string;
+  externalId: string | null;
+  canonicalUrl: string | null;
+  originalUrl: string | null;
+  publishedAt: string | null;
+  state: 'present' | 'deleted_observed';
+  deletedObservedAt: string | null;
+  firstObservedAt: string;
+  lastObservedAt: string;
+  latestRevisionId: number | null;
+  historyBeforeImport: 'complete' | 'unknown';
+  origin: 'ingest' | 'legacy_import';
+  revisionCount: number;
+  latestCompleteness: TextCompleteness | null;
+  latestCompletenessReason: string | null;
+}
+
+export interface IRevisionMeta {
+  id: number;
+  revisionNo: number;
+  bodyLength: number;
+  representation: string;
+  completeness: TextCompleteness;
+  completenessReason: string | null;
+  attachments: Array<{ kind: string; status: string }>;
+  publishedAt: string | null;
+  sourceModifiedAt: string | null;
+  firstObservedAt: string;
+  chronology: 'source_modified_at' | 'observed_order' | 'unknown';
+  sameContentAsRevisionId: number | null;
+  legacyDocumentId: number | null;
+  origin: 'ingest' | 'legacy_import';
+  observationCount: number;
+}
+
+export interface IRevision extends Omit<IRevisionMeta, 'bodyLength' | 'observationCount'> {
+  sourceItemId: number;
+  title: string | null;
+  body: string;
+}
+
+export type DiffOp =
+  | { op: 'equal' | 'delete' | 'insert'; lines: string[] }
+  | { op: 'skip'; count: number };
+
+export interface IDiffResponse {
+  from: number;
+  to: number;
+  diff: { ok: true; ops: DiffOp[]; inserted: number; deleted: number } | { ok: false; reason: string };
+}
+
 export interface IMention {
   id: number;
+  documentId: number;
   surfaceForm: string;
   role: Role | null;
   quote: string;

@@ -14,7 +14,9 @@
     "migrate": "tsx src/db/migrate.ts",
     "ingest:once": "tsx src/ingest/cli.ts",
     "pipeline:once": "tsx src/pipeline/cli.ts",
-    "metrics:refresh": "tsx src/metrics/cli.ts"
+    "metrics:refresh": "tsx src/metrics/cli.ts",
+    "backfill:revisions": "tsx src/revisions/cli.ts",
+    "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

@@ -64,6 +64,24 @@ describe('parseChannelPage', () => {
   });
 });
 
+describe('полнота поста (TC-016)', () => {
+  it('текстовый пост — full', () => {
+    const post = parseChannelPage(FIXTURE, 'kzbuild').posts.find(p => p.postId === 1201)!;
+    expect(post.completeness).toBe('full');
+    expect(post.attachments).toEqual([]);
+  });
+
+  it('фото с подписью — caption_only, вложение отмечено неподдержанным', () => {
+    const html = `<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="ch/7">
+      <a class="tgme_widget_message_photo_wrap" href="https://t.me/ch/7"></a>
+      <div class="tgme_widget_message_text">Подпись к фотографии объекта: монтаж каркаса корпуса два.</div>
+      </div></div>`;
+    const post = parseChannelPage(html, 'ch').posts[0]!;
+    expect(post.completeness).toBe('caption_only');
+    expect(post.attachments).toEqual([{ kind: 'photo', status: 'unsupported' }]);
+  });
+});
+
 describe('looksLikeLayoutChange', () => {
   it('молчащий канал (маленькая страница, ноль постов) — не слом вёрстки', () => {
     const parsed = parseChannelPage('<html><body>пусто</body></html>', 'x');

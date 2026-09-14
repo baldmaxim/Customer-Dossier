@@ -82,7 +82,7 @@
 | R10 | **present** | loopback-only, авторизация оператора, Host/Origin/CSRF, SSRF-клиент | `auth.test.ts`, `safeFetch.test.ts`, smoke |
 | R11 | **present** | допуск сбора/ИИ, журнал, единый gate | `policy.test.ts`, `policy.int.test.ts`, `cli-gates.log` |
 | R12 | partial | описание исправлено; догоняющего сбора нет — 05B | — |
-| R13 | missing → 02 | — | — |
+| R13 | **present** (этап 02) | правка поста — новая неизменяемая редакция; legacy-текст не переписывается | `revisions.test.ts`; интеграция `revisions.int.test.ts` — у пользователя |
 | R14 | partial | текст ошибки исправлен; HTML-адаптеры — 05A | — |
 | R15, R16 | missing → 06 / 03B | — | — |
 | R17 | blocked | слияние выключено (API 423, CLI exit 1) — 04 | `guard.test.ts`, `api.int.test.ts` |

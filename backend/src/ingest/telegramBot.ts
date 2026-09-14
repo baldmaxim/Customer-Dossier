@@ -12,6 +12,7 @@ import { withTransaction } from '../db/pool.js';
 import { NetworkPolicyError, safeFetch, type ISourceNetworkPolicy } from '../net/safeFetch.js';
 import { SourcePolicyError, assertSourceAllowed } from './policy.js';
 import { getSourceByKey, updateCursor } from './sources.js';
+import type { IAttachment, TextCompleteness } from '../revisions/store.js';
 import { storeDocument, type IIncomingDocument } from './store.js';
 
 const API = (method: string): string => `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/${method}`;
@@ -46,6 +47,12 @@ interface ITelegramMessage {
   date: number;
   text?: string;
   caption?: string;
+  photo?: unknown[];
+  video?: unknown;
+  document?: unknown;
+  audio?: unknown;
+  voice?: unknown;
+  animation?: unknown;
   forward_origin?: IForwardOrigin;
   /** Устаревшие поля: остаются у старых клиентов. */
   forward_from_chat?: ITelegramChat;
@@ -188,8 +195,34 @@ export const checkBot = async (): Promise<IBotCheck> => {
   };
 };
 
-const extractBody = (message: ITelegramMessage): string =>
-  (message.text ?? message.caption ?? '').trim();
+const MEDIA_KINDS = ['photo', 'video', 'document', 'audio', 'voice', 'animation'] as const;
+
+export interface IBotMessageText {
+  body: string;
+  completeness: TextCompleteness;
+  completenessReason: string;
+  attachments: IAttachment[];
+}
+
+/**
+ * Текст пересланного сообщения и его полнота. Подпись к фото или файлу —
+ * это не текст вложения: содержимое вложения не читается и так и отмечается.
+ */
+export const describeBotMessage = (message: ITelegramMessage): IBotMessageText => {
+  const attachments: IAttachment[] = MEDIA_KINDS.filter(kind => message[kind] !== undefined).map(kind => ({
+    kind,
+    status: 'unsupported',
+  }));
+  if (message.text !== undefined) {
+    return { body: message.text.trim(), completeness: 'full', completenessReason: 'bot_message_text', attachments };
+  }
+  return {
+    body: (message.caption ?? '').trim(),
+    completeness: attachments.length > 0 ? 'caption_only' : 'unknown',
+    completenessReason: attachments.length > 0 ? 'bot_media_caption' : 'bot_no_text',
+    attachments,
+  };
+};
 
 /** Канал-первоисточник форварда: новый формат, затем устаревший. */
 const extractForwardFrom = (message: ITelegramMessage): string | null => {
@@ -263,8 +296,8 @@ export const pollBotUpdates = async (timeoutSec = 30): Promise<IBotPollResult> =
       continue;
     }
 
-    const body = extractBody(message);
-    if (body.length === 0) {
+    const text = describeBotMessage(message);
+    if (text.body.length === 0) {
       await reply(message.chat.id, 'В сообщении нет текста — нечего разбирать.');
       result.rejected += 1;
       continue;
@@ -278,9 +311,14 @@ export const pollBotUpdates = async (timeoutSec = 30): Promise<IBotPollResult> =
       externalId: `${message.chat.id}/${message.message_id}`,
       url: null,
       title: null,
-      body,
+      body: text.body,
       publishedAt: extractPublishedAt(message),
       forwardFrom,
+      representation: 'telegram_bot_text@1',
+      completeness: text.completeness,
+      completenessReason: text.completenessReason,
+      attachments: text.attachments,
+      fetchedAt: new Date(),
     };
 
     const stored = await withTransaction(client => storeDocument(doc, client));
@@ -289,11 +327,17 @@ export const pollBotUpdates = async (timeoutSec = 30): Promise<IBotPollResult> =
       result.accepted += 1;
       await reply(message.chat.id, `Принято (#${stored.documentId}). Источник: ${forwardFrom ?? 'не указан'}.`);
     } else if (stored.outcome === 'duplicate') {
-      await reply(message.chat.id, `Такой текст уже есть (#${stored.documentId}).`);
+      result.accepted += 1;
+      await reply(message.chat.id, `Такой текст уже есть (#${stored.documentId}), пересылка учтена.`);
     } else if (stored.outcome === 'too_short') {
       await reply(message.chat.id, 'Слишком короткий текст — пропущено.');
+    } else if (stored.outcome === 'new_revision') {
+      result.accepted += 1;
+      await reply(message.chat.id, `Сохранена новая редакция сообщения (версия ${stored.revisionNo ?? '?'}).`);
+    } else if (stored.outcome === 'unchanged' || stored.outcome === 'stale') {
+      await reply(message.chat.id, 'Это сообщение уже принято в таком виде.');
     } else {
-      await reply(message.chat.id, 'Это сообщение уже принималось с другим текстом — пропущено.');
+      await reply(message.chat.id, 'Это сообщение уже принималось с другим текстом — правка не сохранена.');
     }
   }
 

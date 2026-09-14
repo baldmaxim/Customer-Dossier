@@ -2,7 +2,7 @@
 // Одно место: иначе «general_contractor» превращается в «генподрядчик» на одном
 // экране и в «Генеральный подрядчик» на другом.
 
-import type { PermissionStatus, RiskLight, Role, Sentiment } from '../api/types';
+import type { PermissionStatus, RiskLight, Role, Sentiment, TextCompleteness } from '../api/types';
 
 /**
  * Старый светофор — эвристический индекс по новостям (веса 40/30/30 не
@@ -19,6 +19,21 @@ export const RISK_LEGACY_LABELS: Record<RiskLight, string> = {
 export const RISK_LEGACY_NOTE =
   'Устаревший эвристический индекс по публикациям, не оценка надёжности. ' +
   'Отсутствие сигналов в выборке не означает отсутствия проблем.';
+
+/** Полнота текста: «полный» — только при положительном признаке, не по длине. */
+export const COMPLETENESS_LABELS: Record<TextCompleteness, string> = {
+  full: 'полный текст',
+  excerpt: 'анонс',
+  caption_only: 'подпись к вложению',
+  failed: 'не получен',
+  unknown: 'полнота неизвестна',
+};
+
+export const CHRONOLOGY_LABELS: Record<string, string> = {
+  source_modified_at: 'по дате изменения от источника',
+  observed_order: 'по порядку наблюдения',
+  unknown: 'порядок неизвестен',
+};
 
 export const PERMISSION_LABELS: Record<PermissionStatus, string> = {
   unknown: 'не подтверждён',

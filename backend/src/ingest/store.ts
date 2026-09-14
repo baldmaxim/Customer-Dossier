@@ -1,10 +1,26 @@
-// Запись сырых документов. Вся дедупликация опирается на уникальные индексы
-// БД, а не на предварительную проверку SELECT'ом: между проверкой и вставкой
-// параллельный воркер успеет вставить ту же строку.
+// Запись документов — единственная точка входа для шедулера, бота и ручной
+// вставки.
+//
+// Два слоя в одной транзакции:
+//  1. публикация/редакция/наблюдение (revisions/store.ts) — личность публикации
+//     и история её текста; правка поста — новая неизменяемая редакция;
+//  2. legacy raw_documents + document_sightings — то, к чему привязаны текущие
+//     цитаты и карточки. Legacy-документ создаётся только для ПЕРВОЙ редакции
+//     новой публикации; текст существующего документа никогда не переписывается.
+//
+// Дедупликация legacy опирается на уникальные индексы БД, а не на SELECT до
+// вставки: между проверкой и вставкой параллельный воркер успеет вставить ту же строку.
 
 import type { PoolClient } from 'pg';
 
-import { getPool, query, queryOne, type DbExecutor } from '../db/pool.js';
+import { env } from '../config/env.js';
+import { query, queryOne, withTransaction } from '../db/pool.js';
+import {
+  recordObservation,
+  type IAttachment,
+  type ILegacyLink,
+  type TextCompleteness,
+} from '../revisions/store.js';
 import { computeHashes, isTooShortToProcess } from './dedup.js';
 
 export interface IIncomingDocument {
@@ -17,21 +33,41 @@ export interface IIncomingDocument {
   publishedAt: Date | null;
   forwardFrom: string | null;
   lang?: string | null;
+  /** Адаптер и версия очистки текста. */
+  representation?: string;
+  /** Полнота текста по данным адаптера. Длина полноту не доказывает. */
+  completeness?: TextCompleteness;
+  completenessReason?: string | null;
+  attachments?: IAttachment[];
+  /** Дата изменения публикации, если источник её надёжно сообщает. */
+  sourceModifiedAt?: Date | null;
+  /** Когда адаптер получил ответ источника. По умолчанию — момент записи. */
+  fetchedAt?: Date;
 }
 
 export type StoreOutcome =
-  /** Новый текст, документ создан и поставлен в очередь на извлечение. */
+  /** Новая публикация, новый legacy-документ поставлен в очередь на извлечение. */
   | 'inserted'
-  /** Такой текст уже есть (репост/перепечатка) — записали ещё одно наблюдение. */
+  /** Новая публикация, но такой текст уже есть в legacy (репост/перепечатка). */
   | 'duplicate'
   /** Пост слишком короткий: реакция, стикер, голая ссылка. */
   | 'too_short'
-  /** Тот же external_id, но текст изменился — пост отредактировали. */
+  /** Текст публикации изменился — сохранена новая редакция; legacy-текст не тронут. */
+  | 'new_revision'
+  /** Повтор текущей редакции — только наблюдение. */
+  | 'unchanged'
+  /** Запоздалое наблюдение старого состояния — сохранено, текущим не стало. */
+  | 'stale'
+  /** Запись версий выключена (REVISION_WRITE_ENABLED=false): правка потеряна, как до этапа 02. */
   | 'edited_skipped';
 
 export interface IStoreResult {
   outcome: StoreOutcome;
+  /** Legacy-документ с цитатами, если есть. */
   documentId: number | null;
+  sourceItemId: number | null;
+  revisionId: number | null;
+  revisionNo: number | null;
 }
 
 const INSERT_SQL = `
@@ -43,23 +79,20 @@ const INSERT_SQL = `
   RETURNING id
 `;
 
-/**
- * ON CONFLICT DO NOTHING без указания цели — намеренно: на таблице два
- * уникальных индекса (content_hash и source_id+external_id), и конфликт может
- * прийти по любому. С указанной целью второй конфликт улетел бы исключением.
- */
-export const storeDocument = async (
-  doc: IIncomingDocument,
-  executor?: DbExecutor,
-): Promise<IStoreResult> => {
-  if (isTooShortToProcess(doc.body)) {
-    return { outcome: 'too_short', documentId: null };
-  }
+type LegacyOutcome = 'inserted' | 'duplicate' | 'edited_skipped';
 
-  const exec = executor ?? getPool();
+/**
+ * Legacy-запись. ON CONFLICT DO NOTHING без цели — намеренно: на таблице два
+ * уникальных индекса (content_hash и source_id+external_id), конфликт возможен
+ * по любому, и исход разбирается явно ниже.
+ */
+const storeLegacy = async (
+  client: PoolClient,
+  doc: IIncomingDocument,
+): Promise<{ outcome: LegacyOutcome; documentId: number | null }> => {
   const { contentHash, leadHash } = computeHashes(doc.body);
 
-  const inserted = await exec.query<{ id: number }>(INSERT_SQL, [
+  const inserted = await client.query<{ id: number }>(INSERT_SQL, [
     doc.sourceId,
     doc.sourceRunId,
     doc.externalId,
@@ -78,35 +111,93 @@ export const storeDocument = async (
   if (newId !== undefined) {
     // Первое наблюдение фиксируем тоже: иначе у документа, увиденного в трёх
     // каналах, в истории будет два источника вместо трёх.
-    await recordSighting(exec, newId, doc);
+    await recordSighting(client, newId, doc);
     return { outcome: 'inserted', documentId: newId };
   }
 
-  // Вставка не прошла. Разбираемся, по какому из двух индексов.
-  const existing = await exec.query<{ id: number }>(
-    'SELECT id FROM raw_documents WHERE content_hash = $1',
-    [contentHash],
-  );
+  const existing = await client.query<{ id: number }>('SELECT id FROM raw_documents WHERE content_hash = $1', [
+    contentHash,
+  ]);
   const existingId = existing.rows[0]?.id;
-
   if (existingId !== undefined) {
-    await recordSighting(exec, existingId, doc);
+    await recordSighting(client, existingId, doc);
     return { outcome: 'duplicate', documentId: existingId };
   }
 
-  // Текста с таким хэшем нет — значит конфликт был по (source_id, external_id):
-  // пост с тем же id, но другим содержимым, то есть отредактированный.
-  // Перечитывание правок за рамками MVP: молча перезаписать body нельзя,
-  // к нему уже могут быть привязаны mentions и events.
+  // Конфликт по (source_id, external_id): legacy знает этот пост с другим текстом.
+  // Переписать body нельзя — к нему привязаны цитаты.
   return { outcome: 'edited_skipped', documentId: null };
 };
 
-const recordSighting = async (
-  exec: DbExecutor,
-  documentId: number,
-  doc: IIncomingDocument,
-): Promise<void> => {
-  await exec.query(
+const storeInTransaction = async (client: PoolClient, doc: IIncomingDocument): Promise<IStoreResult> => {
+  if (!env.REVISION_WRITE_ENABLED) {
+    const legacy = await storeLegacy(client, doc);
+    return { outcome: legacy.outcome, documentId: legacy.documentId, sourceItemId: null, revisionId: null, revisionNo: null };
+  }
+
+  // Объект, а не let: исход legacy узнаётся внутри колбэка.
+  const legacyState: { outcome: LegacyOutcome | null } = { outcome: null };
+
+  const observation = await recordObservation(
+    client,
+    {
+      sourceId: doc.sourceId,
+      sourceRunId: doc.sourceRunId,
+      externalId: doc.externalId,
+      url: doc.url,
+      title: doc.title,
+      body: doc.body,
+      representation: doc.representation ?? 'unspecified@1',
+      completeness: doc.completeness ?? 'unknown',
+      completenessReason: doc.completenessReason ?? null,
+      attachments: doc.attachments ?? [],
+      publishedAt: doc.publishedAt,
+      sourceModifiedAt: doc.sourceModifiedAt ?? null,
+      fetchedAt: doc.fetchedAt ?? new Date(),
+      forwardOrigin: doc.forwardFrom,
+    },
+    async (): Promise<ILegacyLink> => {
+      const legacy = await storeLegacy(client, doc);
+      legacyState.outcome = legacy.outcome;
+      return {
+        legacyDocumentId: legacy.outcome === 'edited_skipped' ? null : legacy.documentId,
+        historyUnknown: legacy.outcome === 'edited_skipped',
+      };
+    },
+  );
+
+  const base = {
+    documentId: observation.legacyDocumentId,
+    sourceItemId: observation.sourceItemId,
+    revisionId: observation.revisionId,
+    revisionNo: observation.revisionNo,
+  };
+
+  if (observation.outcome === 'new_item') {
+    // Публикация новая для модели версий, но legacy уже знал её с другим
+    // текстом (данные до миграции 011): это правка, а не новый документ.
+    const outcome: StoreOutcome =
+      legacyState.outcome === 'inserted'
+        ? 'inserted'
+        : legacyState.outcome === 'duplicate'
+          ? 'duplicate'
+          : 'new_revision';
+    return { outcome, ...base };
+  }
+  return { outcome: observation.outcome, ...base };
+};
+
+export const storeDocument = async (doc: IIncomingDocument, client?: PoolClient): Promise<IStoreResult> => {
+  if (isTooShortToProcess(doc.body)) {
+    return { outcome: 'too_short', documentId: null, sourceItemId: null, revisionId: null, revisionNo: null };
+  }
+  // Публикация и legacy-документ пишутся атомарно: без транзакции блокировка
+  // строки публикации не удержится, и параллельные наблюдения размножат редакции.
+  return client ? storeInTransaction(client, doc) : withTransaction(tx => storeInTransaction(tx, doc));
+};
+
+const recordSighting = async (client: PoolClient, documentId: number, doc: IIncomingDocument): Promise<void> => {
+  await client.query(
     `INSERT INTO document_sightings (document_id, source_id, external_id, url)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (document_id, source_id, external_id) DO NOTHING`,
@@ -118,6 +209,9 @@ export interface IBatchStats {
   inserted: number;
   duplicate: number;
   tooShort: number;
+  newRevision: number;
+  unchanged: number;
+  stale: number;
   editedSkipped: number;
 }
 
@@ -125,21 +219,28 @@ export const emptyBatchStats = (): IBatchStats => ({
   inserted: 0,
   duplicate: 0,
   tooShort: 0,
+  newRevision: 0,
+  unchanged: 0,
+  stale: 0,
   editedSkipped: 0,
 });
 
+const STAT_KEY: Record<StoreOutcome, keyof IBatchStats> = {
+  inserted: 'inserted',
+  duplicate: 'duplicate',
+  too_short: 'tooShort',
+  new_revision: 'newRevision',
+  unchanged: 'unchanged',
+  stale: 'stale',
+  edited_skipped: 'editedSkipped',
+};
+
 /** Пакетная запись в одной транзакции. Возвращает разбивку по исходам. */
-export const storeDocuments = async (
-  docs: readonly IIncomingDocument[],
-  client: PoolClient,
-): Promise<IBatchStats> => {
+export const storeDocuments = async (docs: readonly IIncomingDocument[], client: PoolClient): Promise<IBatchStats> => {
   const stats = emptyBatchStats();
   for (const doc of docs) {
     const { outcome } = await storeDocument(doc, client);
-    if (outcome === 'inserted') stats.inserted += 1;
-    else if (outcome === 'duplicate') stats.duplicate += 1;
-    else if (outcome === 'too_short') stats.tooShort += 1;
-    else stats.editedSkipped += 1;
+    stats[STAT_KEY[outcome]] += 1;
   }
   return stats;
 };

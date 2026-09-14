@@ -74,6 +74,9 @@ export const parseEnv = (source: EnvSource) => {
     PIPELINE_ENABLED: parseStrictBool('PIPELINE_ENABLED', source.PIPELINE_ENABLED, false),
     METRICS_AUTO_REFRESH: parseStrictBool('METRICS_AUTO_REFRESH', source.METRICS_AUTO_REFRESH, false),
     BOT_ENABLED: parseStrictBool('BOT_ENABLED', source.BOT_ENABLED, false),
+    // Запись публикаций и редакций (миграция 011). Выключение — откат к
+    // прежнему поведению: правки постов снова теряются, legacy-чтение не страдает.
+    REVISION_WRITE_ENABLED: parseStrictBool('REVISION_WRITE_ENABLED', source.REVISION_WRITE_ENABLED, true),
 
     HOST: parseListenHost(source.HOST),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),

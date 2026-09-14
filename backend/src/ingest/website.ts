@@ -18,6 +18,7 @@ import {
   type ISafeFetchDeps,
   type ISourceNetworkPolicy,
 } from '../net/safeFetch.js';
+import type { TextCompleteness } from '../revisions/store.js';
 
 /** Автообнаружение: где чаще всего лежит лента, если её адрес не указан. */
 const COMMON_FEED_PATHS = ['/rss', '/rss.xml', '/feed', '/feed/', '/atom.xml', '/index.xml'];
@@ -39,6 +40,14 @@ export interface IWebsiteArticle {
   title: string;
   body: string;
   publishedAt: Date | null;
+  /**
+   * Полнота по происхождению текста, а не по длине: description/summary —
+   * анонс; content:encoded — может быть урезан лентой (unknown); текст со
+   * страницы статьи по явному или семантическому контейнеру — full.
+   */
+  completeness: TextCompleteness;
+  completenessReason: string;
+  representation: string;
 }
 
 export class WebsiteFetchError extends Error {
@@ -176,18 +185,19 @@ export const parseFeed = (
 
     // description/summary — обычно анонс. Полный текст доберём со страницы,
     // но если он есть прямо в ленте (content:encoded), берём его.
-    const contentHtml =
-      node.find('content\\:encoded').first().text() ||
-      node.find('content').first().text() ||
-      node.find('description').first().text() ||
-      node.find('summary').first().text();
+    const fullContent = node.find('content\\:encoded').first().text() || node.find('content').first().text();
+    const summary = node.find('description').first().text() || node.find('summary').first().text();
+    const body = stripHtml(fullContent || summary);
 
     items.push({
       externalId: node.find('guid').first().text().trim() || url,
       url,
       title,
-      body: stripHtml(contentHtml),
+      body,
       publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+      completeness: body === '' ? 'unknown' : fullContent ? 'unknown' : 'excerpt',
+      completenessReason: body === '' ? 'feed_no_text' : fullContent ? 'feed_content_unverified' : 'feed_summary',
+      representation: 'rss_text@1',
     });
   });
 
@@ -217,7 +227,16 @@ const stripHtml = (html: string): string => {
  * на новостных страницах это почти всегда тело статьи, а меню и подвал
  * набирают мало.
  */
-export const extractArticleText = (html: string, selector?: string): string => {
+export type ArticleTextMethod = 'selector' | 'semantic' | 'heuristic' | 'none';
+
+export const extractArticleText = (html: string, selector?: string): string =>
+  extractArticleTextWithMethod(html, selector).text;
+
+/** Текст статьи и способ, которым он найден: от способа зависит, считать ли его полным. */
+export const extractArticleTextWithMethod = (
+  html: string,
+  selector?: string,
+): { text: string; method: ArticleTextMethod } => {
   const $ = cheerio.load(html);
 
   // Шум, который иначе попадёт в текст и испортит цитаты.
@@ -225,12 +244,12 @@ export const extractArticleText = (html: string, selector?: string): string => {
 
   if (selector) {
     const explicit = stripHtml($(selector).first().html() ?? '');
-    if (explicit.length > 200) return explicit;
+    if (explicit.length > 200) return { text: explicit, method: 'selector' };
   }
 
   for (const candidate of ['article', '[itemprop="articleBody"]', '.article__text', '.entry-content']) {
     const text = stripHtml($(candidate).first().html() ?? '');
-    if (text.length > 200) return text;
+    if (text.length > 200) return { text, method: 'semantic' };
   }
 
   let best = '';
@@ -246,7 +265,7 @@ export const extractArticleText = (html: string, selector?: string): string => {
     if (text.length > best.length) best = text;
   });
 
-  return best;
+  return { text: best, method: best === '' ? 'none' : 'heuristic' };
 };
 
 export interface IFetchSiteResult {
@@ -303,17 +322,24 @@ export const fetchSite = async (
     }
     if (!hostMatchesPolicy(linkHost, policy)) {
       blockedLinks += 1;
+      item.completenessReason = `${item.completenessReason}; article_link_outside_source`;
       continue;
     }
     try {
       const page = await fetchText(item.url, policy);
-      const full = extractArticleText(page.text, config.articleSelector);
-      if (full.length > item.body.length) {
-        item.body = full;
+      const article = extractArticleTextWithMethod(page.text, config.articleSelector);
+      if (article.text.length > item.body.length) {
+        item.body = article.text;
+        item.representation = 'article_text@1';
+        // Явный или семантический контейнер статьи — full; эвристика «самый
+        // длинный блок абзацев» полноты не доказывает.
+        item.completeness = article.method === 'selector' || article.method === 'semantic' ? 'full' : 'unknown';
+        item.completenessReason = `article_page_${article.method}`;
         enriched += 1;
       }
     } catch {
-      // Статья недоступна — оставляем анонс из ленты, он тоже пригоден.
+      // Статья недоступна — оставляем анонс из ленты; полнота остаётся прежней.
+      item.completenessReason = `${item.completenessReason}; article_fetch_failed`;
     }
     await new Promise(resolve => setTimeout(resolve, env.TG_FETCH_DELAY_MS));
   }

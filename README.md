@@ -177,6 +177,7 @@ TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test npm 
 docker compose -f test-db/docker-compose.yml down
 
 npm run metrics:refresh      # разовый пересчёт агрегатов
+npm run backfill:revisions   # dry-run переноса старых документов в публикации/редакции; запись: -- --apply
 cd ../frontend && npm run build && npm run icons:generate
 ```
 

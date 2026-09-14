@@ -78,10 +78,14 @@ export const AdminPage: FC = () => {
       setPasteText('');
       setNotice(
         result.outcome === 'inserted'
-          ? 'Текст принят, встанет в очередь на разбор.'
+          ? 'Текст принят и сохранён как новая публикация.'
           : result.outcome === 'duplicate'
-            ? 'Такой текст уже есть в базе.'
-            : 'Текст слишком короткий — пропущен.',
+            ? 'Такой текст уже есть в базе — вставка учтена как ещё одно появление.'
+            : result.outcome === 'unchanged' || result.outcome === 'stale'
+              ? 'Этот текст уже вставлялся.'
+              : result.outcome === 'too_short'
+                ? 'Текст слишком короткий — пропущен.'
+                : 'Текст сохранён.',
       );
       invalidate();
     },

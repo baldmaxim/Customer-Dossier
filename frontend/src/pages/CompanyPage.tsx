@@ -345,6 +345,7 @@ export const CompanyPage: FC = () => {
                       оригинал
                     </a>
                   )}
+                  <Link to={`/documents/${m.documentId}`}>версии</Link>
                 </div>
               </article>
             ))}
