@@ -1,8 +1,12 @@
 # Изолированная PostgreSQL только для интеграционных тестов TG_Info.
 # Порт открыт только на 127.0.0.1. Данные не сохраняются между пересозданиями.
 #
-#   docker compose -f backend/test-db/docker-compose.yml up -d
+#   docker compose -f backend/test-db/docker-compose.yml up -d --wait
 #   docker compose -f backend/test-db/docker-compose.yml down
+#
+# Без монтирования каталогов: bind-mount требует File Sharing в Docker Desktop
+# и на части машин падает. Метку тестовой цели ставит healthcheck — контейнер
+# становится healthy только после того, как метка на месте.
 #
 # Учётные данные тестовые и не являются секретом: база ничего, кроме тестов, не хранит.
 
@@ -16,14 +20,18 @@ services:
       POSTGRES_DB: tg_info_test
     ports:
       - '127.0.0.1:55433:5432'
-    volumes:
-      # Ставит метку tg_info:test-target — без неё guard откажет запускать тесты.
-      - ./init:/docker-entrypoint-initdb.d:ro
     labels:
       project: tg-info
       purpose: test-only
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U tg_test -d tg_info_test']
-      interval: 2s
-      timeout: 3s
+      # Метка tg_info:test-target: без неё guard интеграционных тестов откажет.
+      # Ставится один раз; дальше проверка только читает.
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U tg_test -d tg_info_test &&
+          (psql -U tg_test -d tg_info_test -tAc "SELECT shobj_description(oid,'pg_database') FROM pg_database WHERE datname='tg_info_test'" | grep -qx 'tg_info:test-target' ||
+           psql -U tg_test -d tg_info_test -qc "COMMENT ON DATABASE tg_info_test IS 'tg_info:test-target'")
+      interval: 3s
+      timeout: 5s
       retries: 30

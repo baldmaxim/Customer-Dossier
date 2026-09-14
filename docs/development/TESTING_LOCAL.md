@@ -44,7 +44,16 @@ docker compose -f backend/test-db/docker-compose.yml up -d --wait
 docker exec tg-info-test-db psql -U tg_test -d tg_info_test -t -c "SELECT shobj_description(oid,'pg_database') FROM pg_database WHERE datname='tg_info_test'"
 ```
 
-Ожидается: контейнер `healthy`, запрос возвращает `tg_info:test-target`.
+Ожидается: контейнер `healthy`, запрос возвращает `tg_info:test-target`. Compose не монтирует каталоги
+(метку ставит healthcheck), поэтому настройка File Sharing в Docker Desktop не нужна.
+
+Запасной путь без compose:
+
+```bash
+docker run -d --name tg-info-test-db -e POSTGRES_USER=tg_test -e POSTGRES_PASSWORD=tg_test -e POSTGRES_DB=tg_info_test -p 127.0.0.1:55433:5432 postgres:17-alpine
+# подождать 3–5 секунд, затем:
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "COMMENT ON DATABASE tg_info_test IS 'tg_info:test-target'"
+```
 
 ### A5. Интеграционные тесты
 
@@ -195,7 +204,7 @@ Cache Storage без `api` и `google-fonts-*`; Network без `fonts.googleapis
 
 ```bash
 # Ctrl+C в окнах npm run dev
-docker compose -f backend/test-db/docker-compose.yml down
+docker compose -f backend/test-db/docker-compose.yml down   # или: docker rm -f tg-info-test-db
 ```
 
 ## Что прислать

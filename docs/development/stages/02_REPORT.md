@@ -1,10 +1,10 @@
 # Отчёт этапа 02 — Публикации, версии и полнота исходных данных
 
 Дата/время: 2026-09-14 (+02:00). Исполнитель: Claude Code (Opus 5), единственный writer.
-Статус: **IN_PROGRESS — ждёт прогона пользователя.** Код, unit-тесты, typecheck и сборки — PASS в среде
-агента. Приёмка этапа требует реальной PostgreSQL: интеграционные тесты написаны, но по договорённости
-запускаются у пользователя ([TESTING_LOCAL.md](../TESTING_LOCAL.md), разделы A–C). До их результата
-core-gates этапа не объявляются пройденными.
+Статус: **PASS** (2026-09-14, по прогону пользователя — [evidence/02/USER_RUN.md](../evidence/02/USER_RUN.md)).
+Интеграционные тесты на PostgreSQL 7 файлов / 61 тест, backfill CLI, API и данные панели версий — ок.
+Визуальная проверка UI (390 px, метки, ссылка «версии») — NOT_RUN. Замечание прогона (compose и File Sharing)
+исправлено: compose без bind-mount, в инструкции добавлен запасной `docker run`.
 
 ## Исходная база
 
@@ -47,19 +47,21 @@ core-gates этапа не объявляются пройденными.
 | Сборка backend/frontend | `npm run build` | — | 0/0 | PASS | среда агента |
 | Unit | `npm test` | мёртвый URL | 0 | PASS: 20 файлов / 297 тестов (было 267) | среда агента |
 | canonical URL, ключ публикации, хэш редакции, решение о версии, diff, полнота адаптеров | `revisions.test.ts`, `telegramWeb.test.ts`, `website.test.ts`, `telegramBot.test.ts` | unit | 0 | PASS | — |
-| TC-011 новый текст при прежнем external_id | `revisions.int.test.ts` | tg_info_test | — | **ждёт прогона** | TESTING_LOCAL A5 |
-| TC-012 повтор текущей редакции | то же | tg_info_test | — | ждёт прогона | |
-| TC-013 A → B → A | то же | tg_info_test | — | ждёт прогона | |
-| TC-014 гонка двух одинаковых записей | то же | tg_info_test | — | ждёт прогона | |
-| TC-015 одинаковый текст в двух источниках | то же | tg_info_test | — | ждёт прогона | |
-| TC-016 caption/excerpt/вложение | unit + то же | unit / tg_info_test | 0 / — | unit PASS; интеграция ждёт | |
-| TC-017 содержательный query-параметр | unit + то же | unit / tg_info_test | 0 / — | unit PASS; интеграция ждёт | |
-| Исправление без даты, запоздалое наблюдение, «пропал со страницы» без delete, tombstone | то же | tg_info_test | — | ждёт прогона | |
-| FK, неизменяемость, CHECK наблюдения | то же | tg_info_test | — | ждёт прогона | |
-| TC-018 backfill дважды, с начала, неоднозначность | `backfill.int.test.ts` + CLI (TESTING_LOCAL B) | tg_info_test | — | ждёт прогона | |
-| API версий и здоровья источника | `revisions.api.int.test.ts` | tg_info_test | — | ждёт прогона | |
-| UI панели версий | seed + браузер (TESTING_LOCAL C) | tg_info_test | — | ждёт прогона | |
-| Регрессия этапа 01 (4 файла, 34 теста) | `npm run test:integration` | tg_info_test | — | ждёт прогона | |
+| TC-011 новый текст при прежнем external_id | `revisions.int.test.ts` | tg_info_test | — | PASS | evidence/02/USER_RUN.md (A5: 7 файлов / 61) |
+| TC-012 повтор текущей редакции | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| TC-013 A → B → A | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| TC-014 гонка двух одинаковых записей | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| TC-015 одинаковый текст в двух источниках | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| TC-016 caption/excerpt/вложение | unit + то же | unit / tg_info_test | 0 / 0 | PASS | evidence/02/USER_RUN.md |
+| TC-017 содержательный query-параметр | unit + то же | unit / tg_info_test | 0 / 0 | PASS | evidence/02/USER_RUN.md |
+| Исправление без даты, запоздалое наблюдение, «пропал со страницы» без delete, tombstone | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| FK, неизменяемость, CHECK наблюдения | то же | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| TC-018 backfill дважды, с начала, неоднозначность | `backfill.int.test.ts` + CLI (TESTING_LOCAL B) | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| API версий и здоровья источника | `revisions.api.int.test.ts` | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| UI панели версий: данные через API | seed + HTTP (TESTING_LOCAL C) | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
+| UI визуально: 390 px, метка «текущая», ссылка «версии» | браузер | — | — | NOT_RUN | глазами не проверено |
+| Compose тестовой базы | `docker compose … up -d --wait` | — | 1 | FAIL → исправлено | File Sharing для bind-mount; compose переписан без монтирования, повторно не прогонялся |
+| Регрессия этапа 01 (4 файла, 34 теста) | `npm run test:integration` | tg_info_test | 0 | PASS | evidence/02/USER_RUN.md |
 
 Live-source: NOT_RUN (не требуется). Реальная модель: NOT_APPLICABLE.
 
@@ -73,7 +75,8 @@ Live-source: NOT_RUN (не требуется). Реальная модель: N
 
 ## Непроверенное, дефекты, решения
 
-- **Все сценарии с базой не выполнены** — ждут прогона пользователя. Возможны исправления по его отчёту.
+- Визуальная проверка UI не выполнена ни у агента, ни у пользователя; новый compose без bind-mount
+  повторно не прогонялся (запасной `docker run` описан в TESTING_LOCAL A4).
 - Извлечение по-прежнему идёт по legacy-документу (первой редакции); разбор последующих редакций — этап 03B.
 - Telegram web не даёт надёжной даты правки — хронология редакций постов `observed_order`.
 - Наблюдённое удаление реализовано функцией (`recordDeletionObserved`), адаптеры его пока не сообщают — этап 05B.
