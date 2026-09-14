@@ -17,6 +17,8 @@
 
 ### A2. Код и зависимости
 
+Перед `npm ci` остановите прежние `npm run dev` (иначе `EPERM` на `esbuild.exe`).
+
 ```bash
 git fetch origin && git switch dossier-stages && git pull
 cd backend && npm ci && cd ..
@@ -56,6 +58,9 @@ docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "COMMENT ON DATAB
 ```
 
 ### A5. Интеграционные тесты
+
+`DATABASE_URL` в этой сессии должен быть не задан (или указывать не на тестовую базу) — иначе guard откажет
+«совпадает с DATABASE_URL». PowerShell: `Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue`.
 
 ```powershell
 # PowerShell
