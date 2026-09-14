@@ -45,13 +45,13 @@ typecheck/build backend и frontend, unit 23 файла / 340 тестов — P
 
 ## Следующий шаг
 Дождаться отчёта пользователя по TESTING_LOCAL (A5, G). Исправить упавшее, обновить 04_REPORT до PASS, commit/push.
-Затем : читать COMMON_RULES, DATA_CONTRACTS, , ,
-, , , миграции 010, 011.
+Затем `stages/STAGE_05A_WEBSITES.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/website.ts`, `net/safeFetch.ts`,
+`ingest/scheduler.ts`, `ingest/store.ts`, `revisions/*`, миграции 010, 011.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
-не редактировать ; не запускать Docker в среде агента.
+не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-, , этот HANDOFF, , ADR-005,
-; ключевые файлы: , .
+`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/04_REPORT.md`, ADR-005,
+`TESTING_LOCAL.md`; ключевые файлы: `backend/src/resolve/*.ts`, `docs/migrations/014_identity_merge.sql`.
