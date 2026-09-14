@@ -163,3 +163,49 @@ export const formatMoney = (amount: number): string => {
 
 export const formatPercent = (share: number | null): string =>
   share === null ? '—' : `${Math.round(share * 100)} %`;
+
+/** Вид сущности компании (этап 04). */
+export const ENTITY_TYPE_LABELS: Record<string, string> = {
+  legal_entity: 'юрлицо',
+  brand: 'бренд',
+  group: 'группа компаний',
+  unknown: 'вид не установлен',
+};
+
+export const IDENTIFIER_TYPE_LABELS: Record<string, string> = {
+  inn: 'ИНН',
+  ogrn: 'ОГРН',
+  ogrnip: 'ОГРНИП',
+  kpp: 'КПП',
+  bin: 'БИН',
+  other: 'реквизит',
+};
+
+export const RELATION_LABELS: Record<string, { outgoing: string; incoming: string }> = {
+  brand_of: { outgoing: 'бренд компании', incoming: 'владеет брендом' },
+  member_of_group: { outgoing: 'входит в группу', incoming: 'группа включает' },
+  successor_of: { outgoing: 'правопреемник', incoming: 'предшественник компании' },
+};
+
+export const PROJECT_LEVEL_LABELS: Record<string, string> = {
+  complex: 'комплекс',
+  phase: 'очередь',
+  building: 'корпус',
+};
+
+/** Что переносит слияние — подписи счётчиков предпросмотра. */
+export const MERGE_COUNT_LABELS: Record<string, string> = {
+  aliases: 'написаний',
+  aliasDuplicates: 'совпавших написаний',
+  mentions: 'упоминаний',
+  events: 'событий (legacy)',
+  participants: 'ролей на объектах (legacy)',
+  participantDuplicates: 'совпавших ролей',
+  identifiers: 'реквизитов',
+  relations: 'связей',
+  children: 'очередей и корпусов',
+  assertions: 'утверждений',
+  activeEvidence: 'активных оснований',
+  pendingQueuePairs: 'других пар в очереди',
+  priorMerges: 'прежних слияний сторон',
+};

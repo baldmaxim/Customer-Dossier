@@ -27,6 +27,27 @@ export interface ICompany {
   website: string | null;
   isVerified: boolean;
   mergedIntoId: number | null;
+  entityType?: EntityType;
+  version?: number;
+}
+
+export type EntityType = 'legal_entity' | 'brand' | 'group' | 'unknown';
+
+export interface ICompanyIdentifier {
+  jurisdiction: string;
+  type: string;
+  value: string;
+  validationStatus: string;
+  origin: string;
+}
+
+export interface ICompanyRelation {
+  id: number;
+  relationType: 'brand_of' | 'member_of_group' | 'successor_of';
+  status: string;
+  direction: 'outgoing' | 'incoming';
+  otherCompanyId: number;
+  otherCompanyName: string;
 }
 
 export interface IRisk {
@@ -56,6 +77,8 @@ export interface ICompanyResponse {
   company: ICompany;
   risk: IRisk | null;
   aliases: Array<{ alias: string; hits: number }>;
+  identifiers?: ICompanyIdentifier[];
+  relations?: ICompanyRelation[];
   /** Приходит вместо остального, если компания слита в другую. */
   mergedInto?: number;
 }
@@ -271,4 +294,54 @@ export interface ISourceRow {
   lastItemsNew: number | null;
   lastError: string | null;
   layoutStats: Record<string, number> | null;
+}
+
+export interface IMergeEntitySummary {
+  id: number;
+  name: string;
+  version: number;
+  mergedIntoId: number | null;
+  city: string | null;
+  legalForm: string | null;
+  entityType: EntityType | null;
+  projectLevel: string | null;
+  parentProjectId: number | null;
+  identifiers: Array<{ type: string; value: string }>;
+  aliases: string[];
+}
+
+export interface IMergeConflict {
+  code: string;
+  message: string;
+}
+
+export interface IMergePreview {
+  kind: 'company' | 'project';
+  source: IMergeEntitySummary;
+  target: IMergeEntitySummary;
+  conflicts: IMergeConflict[];
+  warnings: string[];
+  counts: Record<string, number>;
+  reviewedAssertions: Array<{ assertionId: number; status: string; decisions: number }>;
+  canApply: boolean;
+  queueStatus?: string;
+}
+
+export interface IMergeHistoryItem {
+  id: number;
+  entityKind: 'company' | 'project';
+  sourceId: number;
+  targetId: number;
+  sourceName: string | null;
+  targetName: string | null;
+  status: 'applied' | 'undone';
+  actor: string;
+  createdAt: string;
+  undoneAt: string | null;
+}
+
+export interface ICompensatingPlan {
+  reason: string;
+  changes: Array<{ dependency: string; added: string[]; removed: string[] }>;
+  steps: string[];
 }

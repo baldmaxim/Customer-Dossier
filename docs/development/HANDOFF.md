@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02, 03A, 03B — PASS (03B: интеграция 10 файлов / 103, раздел F, evidence/03B/USER_RUN.md). Следующий — 04.
+Этап 04 — код готов, ждёт прогона пользователя (TESTING_LOCAL A5 — 11 файлов / 123 теста, раздел G). Этапы 02, 03A, 03B — PASS.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -19,34 +19,39 @@ Docker и проверки с базой агент не запускает: п�
 - 03B: миграция 013 — запуски с отпечатком, lease/fencing, чанки с диапазонами, append-only ответы, наборы кандидатов,
   публикация одной транзакцией (`item_publications`, версия, stale, политика, superseded), проекции карточек;
   `backend/src/reprocess/*`, CLI `--reextract --limit/--runs/--preview/--publish/--retry`, API `/api/reprocess/*`,
-  worker по `PIPELINE_ENABLED`, флаг `REPROCESS_AUTO_PUBLISH` (ADR-004). Следующая миграция — 014.
+  worker по `PIPELINE_ENABLED`, флаг `REPROCESS_AUTO_PUBLISH` (ADR-004). PASS.
+- 04: миграция 014 — `companies.entity_type`, реестр `entity_identifiers`, `company_relations`, иерархия объектов,
+  `resolution_ambiguities`, журнал `entity_merges`/`entity_merge_moves`; резолверы `decideExact`/`decideProjectExact`,
+  `resolve/entityMerge.ts` (предпросмотр/применение/отмена), `backfill:identity`, API `/api/entities/*`, панель очереди
+  слияний, флаг `MERGE_APPLY_ENABLED` (ADR-005). Следующая миграция — 015.
 
 ## Принятые решения
-ADR-001…ADR-004. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
+ADR-001…ADR-005. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
 Публикация снимает только вклад своей публикации (evidence → superseded). Completed — только при полном покрытии.
-Legacy apply, `clearDocumentContribution` и слияние не возвращать (слияние — этап 04).
+Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck backend/frontend, build backend, unit 22 файла / 325 тестов — PASS.
+typecheck/build backend и frontend, unit 23 файла / 340 тестов — PASS.
 
 ## Что НЕ проверено
-Реальный LLM-smoke; визуальные проверки 390 px (02, 03A).
+Интеграция 04 (11 файлов / 123), раздел G (CLI и админка); реальный LLM-smoke; визуальные проверки 390 px.
 
 ## Остаточные риски
-Метрики светофора по legacy-таблицам не видят замещения (этап 07); отзыв права ИИ не снимает опубликованное;
-UI для запусков/предпросмотра нет.
+Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
+очереди неоднозначностей нет; решения аналитика при слиянии не переносятся (нужен пересмотр).
 
 ## Безопасность
-Рабочая база не подключалась; 010–013/backfill/переразбор к ней не применялись; `.env` не трогался; источники не включались.
+Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Этап `stages/STAGE_04_IDENTITY_MERGE.md`: читать COMMON_RULES, DATA_CONTRACTS, `resolve/merge.ts`, `company.ts`, `project.ts`,
-`pipeline/guard.ts`, `reprocess/publish.ts` (findPriorEntity), миграции 006, 012, 013.
+Дождаться отчёта пользователя по TESTING_LOCAL (A5, G). Исправить упавшее, обновить 04_REPORT до PASS, commit/push.
+Затем : читать COMMON_RULES, DATA_CONTRACTS, , ,
+, , , миграции 010, 011.
 
 ## Запреты
-Не писать в рабочую БД; не снимать блокировку слияния вне 04; не подключать источники/облачную модель;
-не редактировать `.env`; не запускать Docker в среде агента.
+Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
+не редактировать ; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/03B_REPORT.md`, ADR-004,
-`TESTING_LOCAL.md`; ключевые файлы: `backend/src/reprocess/*.ts`, `docs/migrations/013_extraction_runs_publications.sql`.
+, , этот HANDOFF, , ADR-005,
+; ключевые файлы: , .

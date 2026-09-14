@@ -1,24 +1,24 @@
 // Резолвинг объектов (ЖК, БЦ, микрорайоны).
 //
-// Отличия от компаний, и все три существенные:
+// Отличия от компаний:
 //  1. Имена объектов гораздо более омонимичны: «ЖК Астана» есть в трёх городах.
 //     Поэтому порог автослияния выше — 0.94.
 //  2. Город работает не как бонус, а как запрет: если города известны и разные,
-//     автослияние запрещено, максимум очередь.
-//  3. Общий заказчик — сильный дополнительный сигнал: два «Самала» с одним и
-//     тем же заказчиком почти наверняка один объект.
+//     автослияние запрещено, максимум очередь. Неизвестный город не равен совпавшему.
+//  3. Общий участник — только пояснение для оператора, а не довод идентичности (этап 04).
+//  4. Иерархия (этап 04): комплекс → очередь → корпус. Корпуса одного ЖК — разные записи
+//     со ссылкой на родителя, одноимённые очереди разных ЖК не склеиваются.
 
 import type { DbExecutor } from '../db/pool.js';
-import { normalizeName, isJunkName, type INormalizedName } from './normalize.js';
+import { recordAmbiguity } from './company.js';
+import { parseProjectPath, type ProjectLevel } from './hierarchy.js';
+import { NORMALIZER_VERSION, normalizeName, isJunkName, type INormalizedName } from './normalize.js';
 
 const TRGM_THRESHOLD = 0.35;
 const MIN_LATIN_SIMILARITY = 0.45;
 
 export const PROJECT_AUTO_MERGE_SCORE = 0.94;
 export const PROJECT_QUEUE_SCORE = 0.78;
-
-/** Бонус за общего участника: два объекта с тем же заказчиком — скорее один. */
-const SHARED_PARTICIPANT_BONUS = 0.1;
 
 export type ProjectKind =
   | 'residential'
@@ -46,6 +46,8 @@ export interface IResolveProjectInput {
   /** Компании, уже привязанные к этому объекту в текущем документе. */
   relatedCompanyIds?: readonly number[];
   documentId?: number | null;
+  /** Редакция-основание: источник географии и якорь неоднозначности. */
+  revisionId?: number | null;
 }
 
 export interface IResolveProjectResult {
@@ -93,14 +95,19 @@ const followTombstone = async (exec: DbExecutor, id: number): Promise<number> =>
   return current;
 };
 
+/** География ставится только из текста публикации — не из профиля канала или прописки компании. */
+const geoSource = (input: IResolveProjectInput): { source: 'text' | null; revisionId: number | null } =>
+  input.city || input.address ? { source: 'text', revisionId: input.revisionId ?? null } : { source: null, revisionId: null };
+
 const createProject = async (
   exec: DbExecutor,
   input: IResolveProjectInput,
   normalized: INormalizedName,
 ): Promise<number> => {
+  const geo = geoSource(input);
   const res = await exec.query<{ id: number }>(
-    `INSERT INTO projects (name, name_norm, name_latin, kind, stage, city, address)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO projects (name, name_norm, name_latin, kind, stage, city, address, geo_source, geo_revision_id, normalizer_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
     [
       normalized.display,
@@ -110,6 +117,9 @@ const createProject = async (
       input.stage ?? 'unknown',
       input.city ?? null,
       input.address ?? null,
+      geo.source,
+      geo.revisionId,
+      NORMALIZER_VERSION,
     ],
   );
   const id = res.rows[0]?.id;
@@ -131,7 +141,7 @@ const fetchCandidates = async (
               similarity(p.name_latin, $1) AS s_latin,
               similarity(p.name_norm,  $2) AS s_norm
        FROM projects p
-       WHERE p.merged_into_id IS NULL AND p.name_latin % $1
+       WHERE p.merged_into_id IS NULL AND p.project_level = 'complex' AND p.name_latin % $1
        UNION ALL
        SELECT a.entity_id,
               similarity(a.alias_latin, $1),
@@ -145,7 +155,7 @@ const fetchCandidates = async (
             (SELECT count(*)::int FROM project_participants pp
              WHERE pp.project_id = p.id AND pp.company_id = ANY($3::bigint[])) AS shared_participants
      FROM cand
-     JOIN projects p ON p.id = cand.id AND p.merged_into_id IS NULL
+     JOIN projects p ON p.id = cand.id AND p.merged_into_id IS NULL AND p.project_level = 'complex'
      GROUP BY p.id, p.name, p.city
      ORDER BY max(cand.s_latin) DESC
      LIMIT 25`,
@@ -155,16 +165,16 @@ const fetchCandidates = async (
 };
 
 interface IScoredProject {
-  candidate: IProjectCandidate;
   score: number;
   reasons: Record<string, unknown>;
-  /** Города известны и разные: автослияние запрещено. */
+  /** Города известны и разные или неизвестны: автослияние запрещено. */
   cityConflict: boolean;
+  candidate: IProjectCandidate;
 }
 
-const scoreCandidate = (
+export const scoreProjectCandidate = (
   candidate: IProjectCandidate,
-  input: IResolveProjectInput,
+  input: Pick<IResolveProjectInput, 'city'>,
 ): IScoredProject => {
   const reasons: Record<string, unknown> = {
     s_latin: Number(candidate.s_latin.toFixed(3)),
@@ -190,10 +200,8 @@ const scoreCandidate = (
     cityConflict = true;
   }
 
-  if (candidate.shared_participants > 0) {
-    reasons.shared_participants = candidate.shared_participants;
-    score += SHARED_PARTICIPANT_BONUS;
-  }
+  // Общий участник — пояснение для оператора, а не доказательство идентичности: в балл не входит.
+  if (candidate.shared_participants > 0) reasons.shared_participants = candidate.shared_participants;
 
   return { candidate, score: Math.max(0, Math.min(1, score)), reasons, cityConflict };
 };
@@ -210,7 +218,7 @@ const enqueueMerge = async (
   exec: DbExecutor,
   sourceId: number,
   targetId: number,
-  scored: IScoredProject,
+  scored: Pick<IScoredProject, 'score' | 'reasons'>,
   documentId: number | null,
 ): Promise<void> => {
   await exec.query(
@@ -223,18 +231,40 @@ const enqueueMerge = async (
   );
 };
 
-export const resolveProject = async (
+export type ProjectExactDecision =
+  | { kind: 'reuse'; id: number }
+  | { kind: 'create'; queueWith: number[] }
+  | { kind: 'ambiguous'; candidateIds: number[] };
+
+/**
+ * Решение по точным совпадениям имени комплекса. Чистая функция — ради тестов.
+ *  - город известен: ровно один кандидат с тем же известным городом — он; несколько — неоднозначность;
+ *    нет — новый объект и пары с кандидатами без города (город в чужой объект не подставляется);
+ *  - город неизвестен: ровно один кандидат тоже без города — он (стабильная provisional-запись,
+ *    а не новый дубль на каждый повтор); несколько — неоднозначность; только с известным городом —
+ *    новый объект и пары: неизвестный город не равен совпавшему.
+ */
+export const decideProjectExact = (
+  candidates: ReadonlyArray<{ id: number; city: string | null }>,
+  city: string | null | undefined,
+): ProjectExactDecision => {
+  if (city) {
+    const equal = candidates.filter(c => citiesKnownAndEqual(city, c.city));
+    if (equal.length === 1) return { kind: 'reuse', id: equal[0]!.id };
+    if (equal.length > 1) return { kind: 'ambiguous', candidateIds: equal.map(c => c.id) };
+    return { kind: 'create', queueWith: candidates.filter(c => !c.city).map(c => c.id) };
+  }
+  const unknown = candidates.filter(c => !c.city);
+  if (unknown.length === 1) return { kind: 'reuse', id: unknown[0]!.id };
+  if (unknown.length > 1) return { kind: 'ambiguous', candidateIds: unknown.map(c => c.id) };
+  return { kind: 'create', queueWith: candidates.map(c => c.id) };
+};
+
+const resolveComplex = async (
   exec: DbExecutor,
   input: IResolveProjectInput,
+  normalized: INormalizedName,
 ): Promise<IResolveProjectResult | null> => {
-  const normalized = normalizeName(input.surface, 'project');
-  if (isJunkName(normalized)) return null;
-
-  // Точный алиас и точный ключ принимаются, только если кандидат ровно один и
-  // город ИЗВЕСТЕН у обоих и совпадает. Раньше алиас не проверял город вовсе,
-  // а ключ считал неизвестный город согласием — одноимённые ЖК из разных
-  // городов схлопывались молча. Неизвестная география — не совпадение: такой
-  // объект создаётся отдельно и уходит в очередь (дубль дешевле склейки).
   for (const step of ['alias', 'key'] as const) {
     const ids =
       step === 'alias'
@@ -247,7 +277,7 @@ export const resolveProject = async (
           ).rows.map(r => r.entity_id)
         : (
             await exec.query<{ id: number }>(
-              'SELECT id FROM projects WHERE name_key = $1 AND merged_into_id IS NULL',
+              `SELECT id FROM projects WHERE name_key = $1 AND merged_into_id IS NULL AND project_level = 'complex'`,
               [normalized.key],
             )
           ).rows.map(r => r.id);
@@ -256,40 +286,49 @@ export const resolveProject = async (
     const live = [...new Set(await Promise.all(ids.map(id => followTombstone(exec, id))))];
     const rows = (
       await exec.query<{ id: number; city: string | null }>(
-        'SELECT id, city FROM projects WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL',
+        `SELECT id, city FROM projects
+         WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL AND project_level = 'complex' ORDER BY id`,
         [live],
       )
     ).rows;
+    if (rows.length === 0) continue;
 
-    // Одноимённые объекты в других городах не мешают: берём тот единственный,
-    // у кого город известен и совпадает. Два таких в одном городе — уже
-    // неоднозначность, решение за человеком.
-    const matching = rows.filter(r => citiesKnownAndEqual(input.city, r.city));
-    const single = matching.length === 1 ? matching[0] : undefined;
-    if (single) {
-      await addAlias(exec, single.id, input.surface, normalized);
+    const decision = decideProjectExact(rows, input.city);
+    if (decision.kind === 'reuse') {
+      await addAlias(exec, decision.id, input.surface, normalized);
       return step === 'alias'
-        ? { projectId: single.id, method: 'alias', confidence: 0.98, queued: false }
-        : { projectId: single.id, method: 'key', confidence: 0.95, queued: false };
+        ? { projectId: decision.id, method: 'alias', confidence: 0.98, queued: false }
+        : { projectId: decision.id, method: 'key', confidence: 0.95, queued: false };
     }
+    if (decision.kind === 'ambiguous') {
+      await recordAmbiguity(exec, {
+        kind: 'project',
+        surface: input.surface,
+        nameKey: normalized.key,
+        candidateIds: decision.candidateIds,
+        revisionId: input.revisionId ?? null,
+      });
+      return null;
+    }
+    const newId = await createProject(exec, input, normalized);
+    for (const id of decision.queueWith) {
+      await enqueueMerge(exec, newId, id, { score: 0.9, reasons: { exact_name: step, city: 'unknown' } }, input.documentId ?? null);
+    }
+    const queued = decision.queueWith.length > 0;
+    return { projectId: newId, method: queued ? 'created_queued' : 'created', confidence: 1, queued };
   }
 
   const candidates = await fetchCandidates(exec, normalized, input.relatedCompanyIds ?? []);
   const scored = candidates
     .filter(c => c.s_latin >= MIN_LATIN_SIMILARITY)
-    .map(c => scoreCandidate(c, input))
+    .map(c => scoreProjectCandidate(c, input))
     .sort((a, b) => b.score - a.score);
 
   const best = scored[0];
 
   if (best && !best.cityConflict && best.score >= PROJECT_AUTO_MERGE_SCORE) {
     await addAlias(exec, best.candidate.id, input.surface, normalized);
-    return {
-      projectId: best.candidate.id,
-      method: 'auto_merge',
-      confidence: best.score,
-      queued: false,
-    };
+    return { projectId: best.candidate.id, method: 'auto_merge', confidence: best.score, queued: false };
   }
 
   const newId = await createProject(exec, input, normalized);
@@ -300,4 +339,88 @@ export const resolveProject = async (
 
   await enqueueMerge(exec, newId, best.candidate.id, best, input.documentId ?? null);
   return { projectId: newId, method: 'created_queued', confidence: best.score, queued: true };
+};
+
+const LEVEL_TITLES: Record<Exclude<ProjectLevel, 'complex'>, string> = { phase: 'очередь', building: 'корпус' };
+
+const findChild = async (
+  exec: DbExecutor,
+  parentId: number,
+  level: Exclude<ProjectLevel, 'complex'>,
+  label: string,
+): Promise<number | null> =>
+  (
+    await exec.query<{ id: number }>(
+      `SELECT id FROM projects
+       WHERE parent_project_id = $1 AND project_level = $2 AND level_label = $3 AND merged_into_id IS NULL`,
+      [parentId, level, label],
+    )
+  ).rows[0]?.id ?? null;
+
+/** Очередь или корпус внутри родителя: идентичность — (родитель, уровень, обозначение). */
+const resolveChild = async (
+  exec: DbExecutor,
+  parentId: number,
+  level: Exclude<ProjectLevel, 'complex'>,
+  label: string,
+  input: IResolveProjectInput,
+): Promise<number> => {
+  const existing = await findChild(exec, parentId, level, label);
+  if (existing !== null) return existing;
+
+  const parent = (await exec.query<{ name: string }>('SELECT name FROM projects WHERE id = $1', [parentId])).rows[0];
+  const name = `${parent?.name ?? ''}, ${LEVEL_TITLES[level]} ${label}`;
+  const normalized = normalizeName(name, 'project');
+  const geo = geoSource(input);
+  const inserted = (
+    await exec.query<{ id: number }>(
+      `INSERT INTO projects (name, name_norm, name_latin, kind, stage, city, address, project_level, parent_project_id,
+                             level_label, geo_source, geo_revision_id, normalizer_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (parent_project_id, project_level, level_label) WHERE parent_project_id IS NOT NULL AND merged_into_id IS NULL
+       DO NOTHING
+       RETURNING id`,
+      [
+        name,
+        normalized.norm,
+        normalized.latin,
+        input.kind ?? 'other',
+        input.stage ?? 'unknown',
+        input.city ?? null,
+        input.address ?? null,
+        level,
+        parentId,
+        label,
+        geo.source,
+        geo.revisionId,
+        NORMALIZER_VERSION,
+      ],
+    )
+  ).rows[0];
+  if (inserted) return inserted.id;
+  // Параллельная вставка того же корпуса: берём её.
+  const raced = await findChild(exec, parentId, level, label);
+  if (raced === null) throw new Error(`Не удалось создать ${LEVEL_TITLES[level]} ${label}`);
+  return raced;
+};
+
+/**
+ * Резолвинг объекта с иерархией: «ЖК Берег, корпус 3» → комплекс «ЖК Берег» → корпус «3».
+ * Возвращается самый глубокий уровень. null — мусорное имя или неоднозначность комплекса.
+ */
+export const resolveProject = async (
+  exec: DbExecutor,
+  input: IResolveProjectInput,
+): Promise<IResolveProjectResult | null> => {
+  const path = parseProjectPath(input.surface);
+  const normalized = normalizeName(path.complex, 'project');
+  if (isJunkName(normalized)) return null;
+
+  const complex = await resolveComplex(exec, { ...input, surface: path.complex }, normalized);
+  if (!complex) return null;
+
+  let projectId = complex.projectId;
+  if (path.phase) projectId = await resolveChild(exec, projectId, 'phase', path.phase, input);
+  if (path.building) projectId = await resolveChild(exec, projectId, 'building', path.building, input);
+  return { ...complex, projectId };
 };

@@ -406,6 +406,7 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
             taxId: party.taxId,
             city: null,
             documentId: revision.legacy_document_id,
+            revisionId: set.revision_id,
           });
           companyIds.set(ref, resolved?.companyId ?? null);
         }
@@ -424,6 +425,7 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
           city: party.city,
           address: party.address,
           documentId: revision.legacy_document_id,
+          revisionId: set.revision_id,
         });
         projectIds.set(ref, resolved?.projectId ?? null);
       }

@@ -11,6 +11,8 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly code: string | null = null,
+    /** Тело ответа об ошибке: конфликты слияния, план компенсации. */
+    readonly body: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -48,7 +50,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
       setCsrfToken(null);
       window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
     }
-    throw new ApiError(body?.error ?? `Ошибка ${response.status}`, response.status, body?.code ?? null);
+    throw new ApiError(body?.error ?? `Ошибка ${response.status}`, response.status, body?.code ?? null, body);
   }
 
   return (await response.json()) as T;

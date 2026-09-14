@@ -18,7 +18,7 @@ import {
 } from '../ingest/sources.js';
 import { PERMISSION_STATUSES, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
-import { DELETE_WITH_DOCUMENTS_BLOCK_REASON, MERGE_BLOCK_REASON } from '../pipeline/guard.js';
+import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 
 export const adminRouter = asyncRouter();
 
@@ -265,11 +265,6 @@ adminRouter.delete('/sources/:id', async (req, res) => {
 
 adminRouter.get('/merges', async (_req, res) => {
   res.json({ items: await listPendingMerges() });
-});
-
-adminRouter.post('/merges/:id/merge', (_req, res) => {
-  // 423 Locked: операция существует, но выключена до безопасной реализации.
-  res.status(423).json({ error: MERGE_BLOCK_REASON, code: 'blocked' });
 });
 
 const decisionSchema = z.object({ decidedBy: z.string().min(1).max(100).default('operator') });

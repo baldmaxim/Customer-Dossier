@@ -71,8 +71,8 @@
 
 | ID | Статус | Что сделано | Тесты |
 |---|---|---|---|
-| R01 | **present** (адресно) | быстрые пути alias/key: только один совместимый кандидат; ИНН≠ОГРН не конфликт; неоднозначность запрещает автослияние | `company.test.ts`, `identity.test.ts`, `resolve.int.test.ts` |
-| R02 | **present** (адресно) | alias/key: единственный кандидат с известным и равным городом | `identity.test.ts`, `resolve.int.test.ts` |
+| R01 | **present** (01 адресно, 04 полностью) | реестр реквизитов по типу; точное имя не обходит реквизиты; бренд без реквизитов не прикрепляется к юрлицу; неоднозначность — очередь уточнения без выбора первой строки | `company.test.ts`, `identity04.test.ts`, `resolve.int.test.ts`, `identity.int.test.ts` |
+| R02 | **present** (01 адресно, 04 полностью) | известный и равный город; стабильная запись без города; иерархия комплекс → очередь → корпус; общий участник не в балле | `identity04.test.ts`, `resolve.int.test.ts`, `identity.int.test.ts` |
 | R03 | missing → 06 | не менялось (нужна смена схемы и переразбор) | — |
 | R04 | **present** (адресно) | ИНН/сумма/город/адрес из собственной подтверждённой цитаты; стороны события в цитате | `verify.test.ts` |
 | R05 | **present** (01 адресно, 03B полностью) | диапазоны чанков в code points, покрытие по объединению диапазонов; `completed` только при всех ok и полном покрытии; хвост сверх лимита — `failed`; `truncated_input` не ok | `reprocess.test.ts`, `reprocess.int.test.ts` |
@@ -86,7 +86,7 @@
 | R14 | partial | текст ошибки исправлен; HTML-адаптеры — 05A | — |
 | R15 | missing → 06 | — | — |
 | R16 | **present** (03B) | сущности чанков объединяются по ключу имени и ИНН/городу; события — только при той же позиции цитаты; mention-id в пространстве чанка | `reprocess.test.ts`, `reprocess.int.test.ts` |
-| R17 | blocked | слияние выключено (API 423, CLI exit 1) — 04 | `guard.test.ts`, `api.int.test.ts` |
+| R17 | **present** (04) | предпросмотр, версии, идемпотентность, стабильные блокировки, коллизии до записи, журнал ходов, tombstone, отмена при неизменных зависимостях; применение за флагом MERGE_APPLY_ENABLED | `identity.int.test.ts`, `guard.test.ts`, `api.int.test.ts` |
 | R18 | **present** | алиасы и ИНН в отборе поиска | `api.int.test.ts` |
 | R19 | **present** | строгий разбор `includeGrey` | `contractors.test.ts` |
 | R20 | **present** | `src/metrics/cli.ts` | backend build |

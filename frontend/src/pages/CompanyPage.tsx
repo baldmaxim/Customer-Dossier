@@ -21,6 +21,7 @@ import {
   formatDate,
   formatMoney,
 } from '../lib/labels';
+import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
 import styles from './CompanyPage.module.css';
 
 /**
@@ -132,15 +133,28 @@ export const CompanyPage: FC = () => {
   if (data?.mergedInto) return <Navigate to={`/company/${data.mergedInto}`} replace />;
   if (!data?.company) return <p className={styles.empty}>Компания не найдена.</p>;
 
-  const { company, risk, aliases } = data;
+  const { company, risk, aliases, identifiers = [], relations = [] } = data;
   const light = risk?.riskLight ?? 'grey';
   const projects = projectsQuery.data?.items ?? [];
   const events = eventsQuery.data?.items ?? [];
   const similar = similarQuery.data?.items ?? [];
   const mentions = mentionsQuery.data?.pages.flatMap(p => p.items) ?? [];
-  const facts = [company.legalForm, company.city, company.taxId ? `ИНН ${company.taxId}` : null].filter(
-    (value): value is string => Boolean(value),
-  );
+  // Реквизиты по типу из реестра (этап 04); старая проекция tax_id — только если реестр пуст.
+  const identifierFacts =
+    identifiers.length > 0
+      ? identifiers.map(i => `${IDENTIFIER_TYPE_LABELS[i.type] ?? i.type} ${i.value}`)
+      : company.taxId
+        ? [`ИНН/ОГРН ${company.taxId}`]
+        : [];
+  const facts = [
+    company.entityType && company.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[company.entityType] : null,
+    company.legalForm,
+    company.city,
+    ...identifierFacts,
+    ...relations.map(
+      r => `${RELATION_LABELS[r.relationType]?.[r.direction] ?? r.relationType} «${r.otherCompanyName}»${r.status === 'candidate' ? ' (не подтверждено)' : ''}`,
+    ),
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <>

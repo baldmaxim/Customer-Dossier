@@ -5,9 +5,21 @@
 // уже перемешаны, и восстановить, что чьё, неоткуда). Поэтому в серой зоне
 // уверенности мы СОЗДАЁМ НОВУЮ компанию и кладём пару в merge_queue, а не
 // сливаем. Дубль стоит одной кнопки в админке; ошибочное слияние стоит данных.
+//
+// Этап 04:
+//  - реквизит ищется в реестре entity_identifiers по типу (ИНН ≠ ОГРН), затем в legacy tax_id;
+//  - точное имя никогда не обходит реквизиты: упоминание с ИНН не прикрепляется к
+//    одноимённой компании без этого ИНН, а упоминание без реквизитов и формы — к
+//    юрлицу с реквизитами (бренд не получает ИНН дочернего ООО);
+//  - для упоминаний без реквизитов есть одна стабильная provisional-сущность на имя:
+//    повтор не плодит «пустых дублей»;
+//  - несколько равноправных кандидатов — не выбор первого и не новая сущность, а запись
+//    в resolution_ambiguities с якорем-редакцией.
 
 import type { DbExecutor } from '../db/pool.js';
+import { addIdentifier, classifyTaxId, findCompanyByIdentifier } from './identifiers.js';
 import {
+  NORMALIZER_VERSION,
   compareTaxIds,
   normalizeName,
   isJunkName,
@@ -33,12 +45,15 @@ export interface IResolveInput {
   city?: string | null;
   /** Документ-основание: попадёт в merge_queue как образец. */
   documentId?: number | null;
+  /** Редакция-основание: якорь реквизита и неоднозначного совпадения. */
+  revisionId?: number | null;
 }
 
 export type ResolveMethod =
   | 'tax_id'
   | 'alias'
   | 'key'
+  | 'provisional'
   | 'auto_merge'
   | 'created'
   | 'created_queued';
@@ -60,6 +75,19 @@ export interface ICandidateRow {
   s_latin: number;
   s_norm: number;
 }
+
+/** Организационные формы, означающие группу, а не юрлицо. */
+const GROUP_FORMS = new Set(['ГК', 'ГРУППА КОМПАНИЙ', 'ХОЛДИНГ']);
+
+export type CompanyEntityType = 'legal_entity' | 'brand' | 'group' | 'unknown';
+
+/** Тип новой сущности из того, что реально есть в тексте. Бренд ставит только оператор. */
+export const inferEntityType = (legalForm: string | null | undefined, hasIdentifier: boolean): CompanyEntityType => {
+  const form = (legalForm ?? '').trim().toUpperCase();
+  if (form && GROUP_FORMS.has(form)) return 'group';
+  if (hasIdentifier || form) return 'legal_entity';
+  return 'unknown';
+};
 
 /**
  * Слияние оставляет tombstone (merged_into_id). Любая найденная ссылка должна
@@ -102,22 +130,29 @@ const createCompany = async (
   normalized: INormalizedName,
   acceptedTaxId: string | null,
 ): Promise<number> => {
+  const legalForm = input.legalForm ?? normalized.legalForm;
   const res = await exec.query<{ id: number }>(
-    `INSERT INTO companies (name, name_norm, name_latin, legal_form, tax_id, city)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO companies (name, name_norm, name_latin, legal_form, tax_id, city, entity_type, normalizer_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       normalized.display,
       normalized.norm,
       normalized.latin,
-      input.legalForm ?? normalized.legalForm,
+      legalForm,
       acceptedTaxId,
       input.city ?? null,
+      inferEntityType(legalForm, acceptedTaxId !== null),
+      NORMALIZER_VERSION,
     ],
   );
   const id = res.rows[0]?.id;
   if (id === undefined) throw new Error(`Не удалось создать компанию «${normalized.display}»`);
   await addAlias(exec, id, input.surface, normalized);
+  const typed = acceptedTaxId ? classifyTaxId(acceptedTaxId) : null;
+  if (typed) {
+    await addIdentifier(exec, { ...typed, companyId: id, origin: 'extraction', sourceRevisionId: input.revisionId ?? null });
+  }
   return id;
 };
 
@@ -207,7 +242,7 @@ export const scoreCandidate = (
       reasons.legal_form = 'match';
       score += 0.1;
     } else {
-      // ТОО против АО — сигнал против слияния, но не запрет: форма в тексте
+      // ООО против АО — сигнал против слияния, но не запрет: форма в тексте
       // указывается небрежно.
       reasons.legal_form = 'conflict';
       score -= 0.1;
@@ -234,11 +269,61 @@ export const isExactCandidateCompatible = (
   return !(inputForm && candidateForm && inputForm !== candidateForm);
 };
 
+export interface IExactCandidate {
+  id: number;
+  tax_id: string | null;
+  legal_form: string | null;
+  entity_type: CompanyEntityType;
+  identifiers: number;
+}
+
+export type ExactDecision =
+  | { kind: 'reuse'; id: number; provisional: boolean }
+  | { kind: 'create'; queueWith: number[]; forbidWith: number[]; provisional: boolean }
+  | { kind: 'ambiguous'; candidateIds: number[] };
+
+const hasIdentifier = (c: IExactCandidate): boolean => c.identifiers > 0 || c.tax_id !== null;
+
+/**
+ * Решение по точным совпадениям имени (алиас или ключ). Чистая функция — ради тестов.
+ *
+ *  - упоминание с реквизитом сюда попадает, только если реквизит не найден: одноимённые
+ *    кандидаты без него — пара в очередь, с другим реквизитом того же вида — запрет;
+ *  - упоминание с формой без реквизита: ровно один совместимый по форме кандидат — он;
+ *    несколько — неоднозначность;
+ *  - упоминание без формы и реквизита: ровно одна provisional-сущность (без реквизитов,
+ *    тип unknown/brand) — она; нет — создаём одну provisional и ставим пары; несколько — неоднозначность.
+ */
+export const decideExact = (
+  candidates: readonly IExactCandidate[],
+  acceptedTaxId: string | null,
+  legalForm: string | null,
+): ExactDecision => {
+  if (acceptedTaxId) {
+    const forbidWith = candidates.filter(c => compareTaxIds(acceptedTaxId, c.tax_id) === 'conflict').map(c => c.id);
+    const queueWith = candidates.filter(c => !forbidWith.includes(c.id)).map(c => c.id);
+    return { kind: 'create', queueWith, forbidWith, provisional: false };
+  }
+
+  const form = (legalForm ?? '').trim().toUpperCase();
+  if (form) {
+    const compatible = candidates.filter(c => isExactCandidateCompatible(c, null, form));
+    if (compatible.length === 1) return { kind: 'reuse', id: compatible[0]!.id, provisional: false };
+    if (compatible.length > 1) return { kind: 'ambiguous', candidateIds: compatible.map(c => c.id) };
+    return { kind: 'create', queueWith: candidates.map(c => c.id), forbidWith: [], provisional: false };
+  }
+
+  const provisional = candidates.filter(c => !hasIdentifier(c) && (c.entity_type === 'unknown' || c.entity_type === 'brand'));
+  if (provisional.length === 1) return { kind: 'reuse', id: provisional[0]!.id, provisional: true };
+  if (provisional.length > 1) return { kind: 'ambiguous', candidateIds: provisional.map(c => c.id) };
+  return { kind: 'create', queueWith: candidates.map(c => c.id), forbidWith: [], provisional: true };
+};
+
 const enqueueMerge = async (
   exec: DbExecutor,
   sourceId: number,
   targetId: number,
-  scored: IScored,
+  scored: Pick<IScored, 'score' | 'reasons'>,
   documentId: number | null,
   status: 'pending' | 'rejected',
 ): Promise<void> => {
@@ -252,10 +337,37 @@ const enqueueMerge = async (
   );
 };
 
+/** Неоднозначность с якорем-редакцией: повтор той же публикации только увеличивает счётчик. */
+export const recordAmbiguity = async (
+  exec: DbExecutor,
+  input: { kind: 'company' | 'project'; surface: string; nameKey: string; candidateIds: number[]; revisionId: number | null },
+): Promise<void> => {
+  await exec.query(
+    `INSERT INTO resolution_ambiguities (entity_kind, surface, name_key, candidate_ids, revision_id)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (entity_kind, name_key, coalesce(revision_id, 0))
+     DO UPDATE SET occurrences = resolution_ambiguities.occurrences + 1, candidate_ids = EXCLUDED.candidate_ids,
+                   updated_at = now()`,
+    [input.kind, input.surface, input.nameKey, input.candidateIds, input.revisionId],
+  );
+};
+
+const loadExactCandidates = async (exec: DbExecutor, ids: readonly number[]): Promise<IExactCandidate[]> => {
+  const live = [...new Set(await Promise.all(ids.map(id => followTombstone(exec, id))))];
+  return (
+    await exec.query<IExactCandidate>(
+      `SELECT c.id, c.tax_id, c.legal_form, c.entity_type,
+              (SELECT count(*)::int FROM entity_identifiers i WHERE i.company_id = c.id AND i.status = 'active') AS identifiers
+       FROM companies c WHERE c.id = ANY($1::bigint[]) AND c.merged_into_id IS NULL ORDER BY c.id`,
+      [live],
+    )
+  ).rows;
+};
+
 /**
  * Полный резолвинг. Возвращает null, если имя признано мусором (роль вместо
- * названия, слишком короткое) — такую сущность создавать нельзя, она склеит
- * десятки разных компаний.
+ * названия, слишком короткое) или совпадение неоднозначно (записано в
+ * resolution_ambiguities) — такую сущность создавать или выбирать нельзя.
  *
  * Обязательно вызывать внутри транзакции: между поиском кандидатов и вставкой
  * параллельный воркер может создать ту же компанию.
@@ -268,27 +380,19 @@ export const resolveCompany = async (
   if (isJunkName(normalized)) return null;
 
   const acceptedTaxId = input.taxId && isValidTaxId(input.taxId) ? input.taxId : null;
+  const legalForm = input.legalForm ?? normalized.legalForm;
 
-  // Ш1. ИНН/ОГРН — сильный идентификатор, отменяет всё остальное.
-  if (acceptedTaxId) {
-    const byTaxId = await exec.query<{ id: number }>(
-      'SELECT id FROM companies WHERE tax_id = $1 AND merged_into_id IS NULL',
-      [acceptedTaxId],
-    );
-    const id = byTaxId.rows[0]?.id;
-    if (id !== undefined) {
+  // Ш1. Реквизит по типу — сильный идентификатор, отменяет всё остальное.
+  const typed = acceptedTaxId ? classifyTaxId(acceptedTaxId) : null;
+  if (typed) {
+    const id = await findCompanyByIdentifier(exec, typed);
+    if (id !== null) {
       await addAlias(exec, id, input.surface, normalized);
       return { companyId: id, method: 'tax_id', confidence: 1, queued: false };
     }
   }
 
-  // Ш2. Точный алиас — это имя уже встречалось.
-  // Ш3. Точный ключ — та же компания, записанная другой графикой.
-  //
-  // Быстрый путь принимается, только если кандидат РОВНО один и не конфликтует
-  // по реквизитам и форме. Раньше бралась первая строка (LIMIT 1): одноимённая
-  // компания с другим ИНН получала чужие объекты и претензии.
-  let ambiguousExact = false;
+  // Ш2. Точный алиас — это имя уже встречалось. Ш3. Точный ключ — та же графика.
   for (const step of ['alias', 'key'] as const) {
     const ids =
       step === 'alias'
@@ -307,23 +411,50 @@ export const resolveCompany = async (
           ).rows.map(r => r.id);
     if (ids.length === 0) continue;
 
-    const live = [...new Set(await Promise.all(ids.map(id => followTombstone(exec, id))))];
-    const rows = (
-      await exec.query<{ id: number; tax_id: string | null; legal_form: string | null }>(
-        'SELECT id, tax_id, legal_form FROM companies WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL',
-        [live],
-      )
-    ).rows;
+    const candidates = await loadExactCandidates(exec, ids);
+    if (candidates.length === 0) continue;
+    const decision = decideExact(candidates, acceptedTaxId, legalForm);
 
-    const single = rows.length === 1 ? rows[0] : undefined;
-    if (single && isExactCandidateCompatible(single, acceptedTaxId, input.legalForm ?? normalized.legalForm)) {
-      await addAlias(exec, single.id, input.surface, normalized);
-      return step === 'alias'
-        ? { companyId: single.id, method: 'alias', confidence: 0.98, queued: false }
-        : { companyId: single.id, method: 'key', confidence: 0.95, queued: false };
+    if (decision.kind === 'reuse') {
+      await addAlias(exec, decision.id, input.surface, normalized);
+      return {
+        companyId: decision.id,
+        method: decision.provisional ? 'provisional' : step,
+        confidence: step === 'alias' ? 0.98 : 0.95,
+        queued: false,
+      };
     }
-    // Несколько кандидатов или конфликт: решение не за резолвером.
-    ambiguousExact = true;
+    if (decision.kind === 'ambiguous') {
+      await recordAmbiguity(exec, {
+        kind: 'company',
+        surface: input.surface,
+        nameKey: normalized.key,
+        candidateIds: decision.candidateIds,
+        revisionId: input.revisionId ?? null,
+      });
+      return null;
+    }
+
+    const newId = await createCompany(exec, input, normalized, acceptedTaxId);
+    for (const id of decision.forbidWith) {
+      await enqueueMerge(exec, newId, id, { score: 0, reasons: { tax_id: 'conflict', exact_name: true } }, input.documentId ?? null, 'rejected');
+    }
+    for (const id of decision.queueWith) {
+      await enqueueMerge(
+        exec,
+        newId,
+        id,
+        { score: 0.9, reasons: { exact_name: step, tax_id: acceptedTaxId ? 'only_one_side' : 'none', note: 'бренд, юрлицо или одна компания — решает оператор' } },
+        input.documentId ?? null,
+        'pending',
+      );
+    }
+    return {
+      companyId: newId,
+      method: decision.queueWith.length > 0 ? 'created_queued' : 'created',
+      confidence: 1,
+      queued: decision.queueWith.length > 0,
+    };
   }
 
   // Ш4-5. Кандидаты и скоринг.
@@ -335,14 +466,15 @@ export const resolveCompany = async (
 
   const best = scored[0];
 
-  // Ш6. Пороги. Если точное совпадение было неоднозначным, автослияние
-  // запрещено: лучший по баллу из нескольких одноимённых — тот же произвольный выбор.
+  // Ш6. Пороги. Автослияние по похожести — только когда реквизиты не противоречат
+  // и имя не короткое; упоминание без реквизитов не прикрепляется к юрлицу с реквизитами.
   if (
     best &&
     !best.forbidden &&
-    !ambiguousExact &&
     best.score >= AUTO_MERGE_SCORE &&
-    !isShortAmbiguousName(normalized)
+    !isShortAmbiguousName(normalized) &&
+    !(acceptedTaxId === null && best.candidate.tax_id !== null) &&
+    !(acceptedTaxId !== null && best.candidate.tax_id === null)
   ) {
     await addAlias(exec, best.candidate.id, input.surface, normalized);
     return {
@@ -364,9 +496,8 @@ export const resolveCompany = async (
     return { companyId: newId, method: 'created', confidence: 1, queued: false };
   }
 
-  // Серая зона, короткое или неоднозначное имя: создали отдельную компанию,
-  // решение о слиянии оставили человеку.
-  const reasons = ambiguousExact ? { ...best.reasons, exact_match: 'ambiguous_or_conflict' } : best.reasons;
-  await enqueueMerge(exec, newId, best.candidate.id, { ...best, reasons }, input.documentId ?? null, 'pending');
+  // Серая зона, короткое имя или разная полнота реквизитов: создали отдельную
+  // компанию, решение о слиянии оставили человеку.
+  await enqueueMerge(exec, newId, best.candidate.id, best, input.documentId ?? null, 'pending');
   return { companyId: newId, method: 'created_queued', confidence: best.score, queued: true };
 };

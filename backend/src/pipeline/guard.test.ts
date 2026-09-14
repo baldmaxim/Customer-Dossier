@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { applyMerge } from '../resolve/merge.js';
+import { applyQueuedMerge, undoMerge } from '../resolve/merge.js';
 import { CanonWriteBlockedError } from './guard.js';
 import { requeueForReextraction, renormalizeEntities } from './quality.js';
 import { recheckProjectFields } from './recheck.js';
@@ -31,7 +31,10 @@ describe('изменяющие канон пути заблокированы', 
     await expect(recheckProjectFields(false)).rejects.toBeInstanceOf(CanonWriteBlockedError);
   });
 
-  it('слияние', async () => {
-    await expect(applyMerge({ queueId: 1, decidedBy: 'test' })).rejects.toThrow(/этапа 04/);
+  it('применение и отмена слияния при MERGE_APPLY_ENABLED=false (по умолчанию)', async () => {
+    await expect(
+      applyQueuedMerge({ queueId: 1, actor: 'test', expectedSourceVersion: 1, expectedTargetVersion: 1, idempotencyKey: 'guard-test-key' }),
+    ).rejects.toThrow(/MERGE_APPLY_ENABLED/);
+    await expect(undoMerge(1, 'test', 'guard-test-undo')).rejects.toThrow(/MERGE_APPLY_ENABLED/);
   });
 });

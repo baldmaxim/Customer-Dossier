@@ -3,10 +3,8 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 03B** (запуски, чанки, наборы кандидатов, публикация): шаги A1–A5, затем раздел F.
-Повторный прогон после исправлений: A2 (`git pull`), A3 и A5; раздел F прошёл, повторять не обязательно
-(если повторяете — схема с нуля, миграция 013 изменилась).
-Разделы B–E — проверки этапов 02, 01 и 03A (пройдены 2026-09-14), повторять не обязательно.
+**Сейчас проверяется этап 04** (реквизиты, бренд/юрлицо, корпуса, слияние с отменой): шаги A1–A5, затем раздел G.
+Разделы B–F — проверки этапов 02, 01, 03A и 03B (пройдены 2026-09-14), повторять не обязательно.
 LM Studio не нужен: модель в тестах и seed подменена детерминированными ответами.
 
 ---
@@ -40,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **22 файла / 325 тестов passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **23 файла / 340 тестов passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -78,14 +76,15 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **10 файлов / 103 теста passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **11 файлов / 123 теста passed**:
 
 | Файл | Что проверяет |
 |---|---|
+| `resolve/identity.int.test.ts` | **этап 04**: TC-034…TC-041 — разные ИНН при одном имени, бренд и юрлицо, неоднозначность без выбора первой строки, ЖК в двух городах и неизвестный город, корпуса, поиск по реквизиту и алиасу, слияние с дубликатами, сбой в середине, коллизия уникальности, конкуренция и встречные операции, повтор, отмена и отказ небезопасной отмены, backfill идентичности |
 | `reprocess/reprocess.int.test.ts` | **этап 03B**: полный путь и цепочка evidence → chunk → run → revision, падение последнего чанка, непокрытый хвост, timeout, crash до/после commit, два worker'а и fencing, поздний старый разбор, нерелевантная новая версия при двух источниках и ручном решении, отзыв права ИИ, одинаковые имена с разными ИНН, идемпотентная публикация, 409, проекции карточки, без дублей при переразборе |
 | `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
 | `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–013 |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–014 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -292,6 +291,80 @@ $env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
 | `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE extraction_chunk_responses SET error='x'"` | ошибка append-only |
 
 `pipeline:once` без флагов здесь **не запускать**: он обращается к LM Studio.
+
+## G. Этап 04 — идентичность и слияние
+
+### G1. Данные
+
+Схема с нуля (переменные `DATABASE_URL`, `DATABASE_SSL`, `DOTENV_CONFIG_PATH` — как в разделе B), затем seed без `DATABASE_URL`:
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+Remove-Item Env:DATABASE_URL
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run seed:test-identity
+$env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+```
+
+Ожидается три строки: `пара-дубль #N1`, `пара с разными ИНН #N2`, `ЖК в двух городах #N3` — дальше подставлять свои номера.
+
+### G2. Команды (флаг `MERGE_APPLY_ENABLED` пока не задан)
+
+| Команда | Ожидается |
+|---|---|
+| `npm run pipeline:once -- --merges` | три пары |
+| `npm run pipeline:once -- --merge N1` | предпросмотр: «Гранит-Демо» → «Демо-Гранит», `mentions 1`, `participants 1`, блоков нет, подсказка `--yes` |
+| `npm run pipeline:once -- --merge N1 --yes` | предпросмотр, затем `команда заблокирована: применение слияния выключено (MERGE_APPLY_ENABLED=false)`, код 1 |
+| `npm run pipeline:once -- --merge N2` | `БЛОК [identifier_conflict]`, код 1 |
+| `npm run pipeline:once -- --merge N3` | `БЛОК [city_conflict]`, код 1 |
+
+### G3. Применение, повтор и отмена
+
+```powershell
+$env:MERGE_APPLY_ENABLED = 'true'
+```
+
+| Команда | Ожидается |
+|---|---|
+| `npm run pipeline:once -- --merge N1 --yes` | `применено: слияние #M` |
+| `npm run pipeline:once -- --merge N1 --yes` | предпросмотр с `уже слита` и код 1 (пара уже применена; второго слияния нет) |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT id, merged_into_id, version FROM companies ORDER BY id"` | у «Гранит-Демо» `merged_into_id` = id «Демо-Гранит», строка не удалена |
+| `npm run pipeline:once -- --merge-history` | `#M company «Гранит-Демо» → «Демо-Гранит» applied (cli)` |
+| `npm run pipeline:once -- --merge-undo M` | `слияние #M отменено, восстановлено изменений: K` |
+| `npm run pipeline:once -- --merge-undo M` | `слияние #M уже отменено этой командой` |
+| тот же `SELECT` | `merged_into_id` снова пусто |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE entity_merge_moves SET old_value = NULL"` | ошибка append-only |
+
+Небезопасная отмена:
+
+| Команда | Ожидается |
+|---|---|
+| `npm run pipeline:once -- --merge N1 --yes` | `применено: слияние #M2` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "INSERT INTO mentions (document_id, entity_kind, entity_id, surface_form, quote, confidence, published_at) SELECT document_id, 'company', (SELECT merged_into_id FROM companies WHERE name = 'Гранит-Демо'), 'x', 'новое после слияния', 0.9, now() FROM mentions LIMIT 1"` | `INSERT 0 1` |
+| `npm run pipeline:once -- --merge-undo M2` | `Простая отмена небезопасна…`, строка `mentions: добавлено 1…`, шаги плана, код 1; `merged_into_id` не изменился |
+
+### G4. Backfill идентичности
+
+| Команда | Ожидается |
+|---|---|
+| `npm run backfill:identity -- --identifiers` | `dry-run`, `identifiersExisting` ≥ 2 (реквизиты seed уже в реестре) |
+| `npm run backfill:identity -- --renormalize --apply` | `запись требует --confirm-copy`, код 1 |
+| `npm run backfill:identity -- --renormalize --apply --confirm-copy` | `ЗАПИСЬ`, `companiesScanned`/`projectsScanned` ≥ 0 |
+| та же команда | `companiesScanned: 0`, `projectsScanned: 0` |
+
+### G5. Админка (API с `MERGE_APPLY_ENABLED=true`)
+
+Повторить G1 (схема с нуля и seed). Окно API — с переменными раздела B и `$env:MERGE_APPLY_ENABLED = 'true'`, затем
+`npm run dev`; UI — `frontend: npm run dev`, вход токеном.
+
+1. «Админка» → «Очередь слияний»: три пары. «Предпросмотр» у пары-дубля: две карточки сторон (вид, форма, город,
+   реквизиты), «1 упоминаний», «1 ролей на объектах (legacy)», кнопка «Слить» активна.
+2. У пары с разными ИНН и у ЖК в двух городах — красные строки «Нельзя: …», «Слить» неактивна.
+3. «Слить» у пары-дубля → уведомление «Слияние #… применено», пара ушла из очереди, в «Журнале слияний» строка.
+4. «Отменить» в журнале → «Слияние отменено…», пара вернулась в очередь.
+5. Карточка «Демо-Гранит» (поиск по `7707083893`): в шапке «юрлицо · ООО · ИНН 7707083893».
+6. Ширина 390 px: карточки сторон друг под другом, без горизонтального скролла.
 
 ---
 

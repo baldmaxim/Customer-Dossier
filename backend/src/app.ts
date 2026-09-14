@@ -15,6 +15,7 @@ import {
   requireLoopbackHost,
 } from './api/auth.js';
 import { companiesRouter } from './api/companies.routes.js';
+import { entitiesRouter } from './api/entities.routes.js';
 import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
 import { reprocessRouter } from './api/reprocess.routes.js';
@@ -89,6 +90,7 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
   app.use('/api/manual', requireOperator, manualRouter);
   app.use('/api/companies', requireOperator, companiesRouter);
   app.use('/api/contractors', requireOperator, contractorsRouter);
+  app.use('/api', requireOperator, entitiesRouter);
   app.use('/api/admin', requireOperator, adminRouter);
   app.use('/api', requireOperator, revisionsRouter);
   app.use('/api', requireOperator, assertionsRouter);

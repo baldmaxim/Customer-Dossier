@@ -2,8 +2,9 @@ import { FC, Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
-import type { IPendingMerge, ISourceRow } from '../api/types';
+import type { ISourceRow } from '../api/types';
 import { AssertionReviewPanel } from '../components/AssertionReviewPanel';
+import { MergeQueuePanel } from '../components/MergeQueuePanel';
 import { SourcePolicyEditor } from '../components/SourcePolicyEditor';
 import { PERMISSION_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './AdminPage.module.css';
@@ -21,14 +22,8 @@ export const AdminPage: FC = () => {
     queryFn: () => api.get<{ items: ISourceRow[] }>('/api/admin/sources'),
   });
 
-  const mergesQuery = useQuery({
-    queryKey: ['merges'],
-    queryFn: () => api.get<{ items: IPendingMerge[] }>('/api/admin/merges'),
-  });
-
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['sources'] });
-    void queryClient.invalidateQueries({ queryKey: ['merges'] });
     void queryClient.invalidateQueries({ queryKey: ['summary'] });
   };
 
@@ -67,12 +62,6 @@ export const AdminPage: FC = () => {
     onError: (err: Error) => setNotice(err.message),
   });
 
-  const decide = useMutation({
-    mutationFn: (id: number) => api.post(`/api/admin/merges/${id}/reject`, { decidedBy: 'operator' }),
-    onSuccess: invalidate,
-    onError: (err: Error) => setNotice(err.message),
-  });
-
   const paste = useMutation({
     mutationFn: (body: string) => api.post<{ outcome: string }>('/api/manual', { body }),
     onSuccess: result => {
@@ -94,7 +83,6 @@ export const AdminPage: FC = () => {
   });
 
   const sources = sourcesQuery.data?.items ?? [];
-  const merges = mergesQuery.data?.items ?? [];
   const broken = sources.filter(s => s.status === 'broken');
 
   return (
@@ -129,51 +117,7 @@ export const AdminPage: FC = () => {
 
       <section className={styles.section}>
         <h2>Очередь слияний</h2>
-        <p className={styles.hint}>
-          Резолвер намеренно осторожен: в спорных случаях он создаёт новую компанию, а не сливает.
-          Слияние сейчас выключено: в нём нет проверки реквизитов и отката (безопасная версия — этап
-          04). Отклонить неверную пару можно.
-        </p>
-
-        {merges.length === 0 ? (
-          <p className={styles.empty}>Пар на подтверждение нет.</p>
-        ) : (
-          merges.map(m => (
-            <div key={m.id} className={styles.mergeCard}>
-              <div className={styles.mergePair}>
-                <span className={styles.mergeName}>{m.sourceName}</span>
-                <span className={styles.arrow}>→</span>
-                <span className={styles.mergeName}>{m.targetName}</span>
-                <span className={styles.score}>{Number(m.score).toFixed(2)}</span>
-              </div>
-              <div className={styles.reasons}>
-                {Object.entries(m.reasons).map(([key, value]) => (
-                  <span key={key} className={styles.reason}>
-                    {key}: {String(value)}
-                  </span>
-                ))}
-              </div>
-              <div className={styles.mergeActions}>
-                <button
-                  type="button"
-                  className={styles.primary}
-                  disabled
-                  title="Слияние выключено до этапа 04"
-                >
-                  Слить (выключено)
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  disabled={decide.isPending}
-                  onClick={() => decide.mutate(m.id)}
-                >
-                  Разные
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+        <MergeQueuePanel onNotice={setNotice} />
       </section>
 
       <section className={styles.section}>

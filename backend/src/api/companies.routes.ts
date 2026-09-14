@@ -88,7 +88,9 @@ companiesRouter.get('/', async (req, res) => {
     score: number;
   }>(
     `SELECT c.id, c.name, c.city, c.legal_form AS "legalForm",
-            CASE WHEN $4::text IS NOT NULL AND c.tax_id = $4::text THEN 1 ELSE
+            CASE WHEN $4::text IS NOT NULL AND (c.tax_id = $4::text OR EXISTS (
+                   SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
+                 THEN 1 ELSE
             greatest(
               similarity(c.name_latin, $1),
               coalesce((SELECT max(similarity(a.alias_latin, $1))
@@ -108,6 +110,9 @@ companiesRouter.get('/', async (req, res) => {
              AND (a.alias_latin % $1 OR ($2 <> '' AND replace(a.alias_latin, ' ', '') LIKE $2 || '%'))
          )
          OR ($4::text IS NOT NULL AND c.tax_id = $4::text)
+         -- Типизированный реестр реквизитов (этап 04): ИНН, ОГРН, ОГРНИП.
+         OR ($4::text IS NOT NULL AND EXISTS (
+           SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
        )
      ORDER BY score DESC, c.name
      LIMIT $3`,
@@ -136,7 +141,8 @@ companiesRouter.get('/:id', async (req, res) => {
     mergedIntoId: number | null;
   }>(
     `SELECT id, name, legal_form AS "legalForm", tax_id AS "taxId", city, website,
-            is_verified AS "isVerified", merged_into_id AS "mergedIntoId"
+            is_verified AS "isVerified", merged_into_id AS "mergedIntoId",
+            entity_type AS "entityType", version
      FROM companies WHERE id = $1`,
     [id],
   );
@@ -165,7 +171,25 @@ companiesRouter.get('/:id', async (req, res) => {
     [id],
   );
 
-  res.json({ company, risk, aliases });
+  // Реквизиты по типу с происхождением; явные связи (бренд, группа, правопреемник).
+  const identifiers = await query(
+    `SELECT jurisdiction, identifier_type AS "type", value, validation_status AS "validationStatus", origin,
+            source_revision_id AS "sourceRevisionId", valid_from AS "validFrom", valid_to AS "validTo"
+     FROM entity_identifiers WHERE company_id = $1 AND status = 'active' ORDER BY identifier_type, id`,
+    [id],
+  );
+  const relations = await query(
+    `SELECT r.id, r.relation_type AS "relationType", r.status,
+            CASE WHEN r.from_company_id = $1 THEN 'outgoing' ELSE 'incoming' END AS direction,
+            c.id AS "otherCompanyId", c.name AS "otherCompanyName"
+     FROM company_relations r
+     JOIN companies c ON c.id = CASE WHEN r.from_company_id = $1 THEN r.to_company_id ELSE r.from_company_id END
+     WHERE (r.from_company_id = $1 OR r.to_company_id = $1) AND r.status <> 'rejected'
+     ORDER BY r.id`,
+    [id],
+  );
+
+  res.json({ company, risk, aliases, identifiers, relations });
 });
 
 /**
@@ -182,6 +206,7 @@ companiesRouter.get('/:id/projects', async (req, res) => {
 
   const rows = await query(
     `SELECT p.id, p.name, p.kind, p.stage, p.city,
+            p.project_level AS "projectLevel", p.parent_project_id AS "parentProjectId",
             p.planned_completion AS "plannedCompletion",
             p.actual_completion  AS "actualCompletion",
             pp.role, pp.confidence, pp.is_current AS "isCurrent",

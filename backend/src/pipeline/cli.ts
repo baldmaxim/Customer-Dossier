@@ -24,7 +24,11 @@
 //
 // Слияния
 //   --merges                   очередь на ручное слияние
-//   --merge <id>          [Б]  / --reject <id>
+//   --merge <id>               предпросмотр пары: реквизиты, конфликты, переносимые зависимости
+//   --merge <id> --yes         применить (MERGE_APPLY_ENABLED=true; версии — из предпросмотра)
+//   --merge-history            журнал слияний
+//   --merge-undo <слияние>     отменить, если после слияния ничего не изменилось; иначе — план
+//   --reject <id>              отклонить пару
 //
 // Качество канона
 //   --audit [--sample N]       скрытые дубли, распределение ролей, объекты-компании
@@ -38,7 +42,8 @@
 import { closeDb } from '../db/pool.js';
 import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
-import { applyMerge, rejectMerge } from '../resolve/merge.js';
+import { rejectMerge } from '../resolve/merge.js';
+import { mergeCommand, sendMergeCliError, showMergeHistory, undoMergeCommand } from './cli-merge.js';
 import { CanonWriteBlockedError } from './guard.js';
 import {
   retrySkipped,
@@ -127,15 +132,11 @@ const main = async (): Promise<void> => {
   const docId = argValue('--doc');
   if (docId) return showDocument(Number(docId));
 
+  if (has('--merge-history')) return showMergeHistory();
+  const undoId = argValue('--merge-undo');
+  if (undoId) return undoMergeCommand(Number(undoId));
   const mergeId = argValue('--merge');
-  if (mergeId) {
-    const result = await applyMerge({ queueId: Number(mergeId), decidedBy: 'cli' });
-    console.log(
-      `[merge] ${result.entityKind} ${result.sourceId} -> ${result.targetId}: ` +
-        `перенесено упоминаний ${result.movedMentions}, ролей ${result.movedParticipants}`,
-    );
-    return;
-  }
+  if (mergeId) return mergeCommand(Number(mergeId), has('--yes'));
 
   const rejectId = argValue('--reject');
   if (rejectId) {
@@ -151,7 +152,9 @@ main()
   .then(() => closeDb())
   .then(() => process.exit(process.exitCode ?? 0))
   .catch(async err => {
-    if (err instanceof PublicationConflictError || err instanceof NotPublishableError) {
+    if (sendMergeCliError(err)) {
+      // сообщение уже напечатано
+    } else if (err instanceof PublicationConflictError || err instanceof NotPublishableError) {
       console.error(`[publish] ${err.message}`);
     } else if (err instanceof CanonWriteBlockedError) {
       console.error(`[pipeline] команда заблокирована: ${err.reason}`);

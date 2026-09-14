@@ -80,6 +80,9 @@ export const parseEnv = (source: EnvSource) => {
     // Автопубликация наборов кандидатов нового конвейера (этап 03B). По умолчанию
     // выключена: набор ждёт предпросмотра и решения оператора (--publish).
     REPROCESS_AUTO_PUBLISH: parseStrictBool('REPROCESS_AUTO_PUBLISH', source.REPROCESS_AUTO_PUBLISH, false),
+    // Применение и отмена слияния сущностей (этап 04). По умолчанию выключено: предпросмотр,
+    // журнал и чтение слитых сущностей работают, запись — только после явного включения.
+    MERGE_APPLY_ENABLED: parseStrictBool('MERGE_APPLY_ENABLED', source.MERGE_APPLY_ENABLED, false),
 
     HOST: parseListenHost(source.HOST),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),
