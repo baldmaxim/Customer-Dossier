@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этап 03B — прогон 1: раздел F ок, интеграция 101 / 103; оба падения исправлены (evidence/03B/USER_RUN.md), ждёт повторного A5. Этапы 02 и 03A — PASS.
+Этапы 02, 03A, 03B — PASS (03B: интеграция 10 файлов / 103, раздел F, evidence/03B/USER_RUN.md). Следующий — 04.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -30,7 +30,7 @@ Legacy apply, `clearDocumentContribution` и слияние не возвращ�
 typecheck backend/frontend, build backend, unit 22 файла / 325 тестов — PASS.
 
 ## Что НЕ проверено
-Интеграционные тесты (10 файлов / 103 ожидается), CLI раздела F, реальный LLM-smoke.
+Реальный LLM-smoke; визуальные проверки 390 px (02, 03A).
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам не видят замещения (этап 07); отзыв права ИИ не снимает опубликованное;
@@ -40,8 +40,7 @@ UI для запусков/предпросмотра нет.
 Рабочая база не подключалась; 010–013/backfill/переразбор к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Дождаться отчёта пользователя по TESTING_LOCAL (A5, F). Исправить упавшее, обновить 03B_REPORT до PASS, commit/push.
-Затем `stages/STAGE_04_IDENTITY_MERGE.md`: читать COMMON_RULES, DATA_CONTRACTS, `resolve/merge.ts`, `company.ts`, `project.ts`,
+Этап `stages/STAGE_04_IDENTITY_MERGE.md`: читать COMMON_RULES, DATA_CONTRACTS, `resolve/merge.ts`, `company.ts`, `project.ts`,
 `pipeline/guard.ts`, `reprocess/publish.ts` (findPriorEntity), миграции 006, 012, 013.
 
 ## Запреты
