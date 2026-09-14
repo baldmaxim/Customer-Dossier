@@ -17,6 +17,7 @@ import {
 import { companiesRouter } from './api/companies.routes.js';
 import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
+import { reprocessRouter } from './api/reprocess.routes.js';
 import { revisionsRouter } from './api/revisions.routes.js';
 
 export interface ICreateAppOptions {
@@ -91,6 +92,7 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
   app.use('/api/admin', requireOperator, adminRouter);
   app.use('/api', requireOperator, revisionsRouter);
   app.use('/api', requireOperator, assertionsRouter);
+  app.use('/api', requireOperator, reprocessRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });

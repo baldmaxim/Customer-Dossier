@@ -18,7 +18,8 @@
     "backfill:revisions": "tsx src/revisions/cli.ts",
     "backfill:assertions": "tsx src/assertions/cli.ts",
     "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts",
-    "seed:test-assertions": "tsx src/__tests__/integration/seedAssertionsDemo.ts"
+    "seed:test-assertions": "tsx src/__tests__/integration/seedAssertionsDemo.ts",
+    "seed:test-reprocess": "tsx src/__tests__/integration/seedReprocessDemo.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

@@ -1,18 +1,23 @@
 // CLI пайплайна извлечения. Здесь только разбор аргументов — реализация команд
 // в cli-commands.ts (очередь и осмотр) и cli-quality.ts (качество канона).
 //
-// [Б] — заблокировано до безопасного пути записи канона (pipeline/guard.ts,
-// этапы 03B/04). Команда завершится с объяснением, ничего не изменив.
+// [Б] — заблокировано (pipeline/guard.ts): legacy-запись канона с удалением
+// вклада документа и слияние (этап 04). Команда завершится с объяснением.
 //
-// Разбор очереди
+// Новый конвейер (этап 03B): запуск → чанки → набор кандидатов → публикация
 //   --check                    LM Studio поднят, модель загружена?
-//   (без флагов)          [Б]  обработать одну пачку
-//   --loop                [Б]  крутить, пока очередь не опустеет
-//   --stats                    состояние очереди и доля ошибок
+//   (без флагов)               выполнить поставленные запуски (одна пачка)
+//   --loop                     выполнять, пока очередь запусков не опустеет
+//   --runs [--limit N]         последние запуски, покрытие, наборы
+//   --reextract --limit N [--source key] [--doc id]
+//                              поставить запуски по последним редакциям (карточки не меняются)
+//   --retry [--limit N]        новые запуски вместо failed/partial (прежние не меняются)
+//   --preview <набор>          что изменит публикация набора
+//   --publish <набор> [--allow-stale]  опубликовать набор (одна транзакция)
+//   --stats                    состояние legacy-очереди и доля ошибок
 //
 // Осмотр и починка
 //   --errors                   последние отказы с текстом ошибки
-//   --retry               [Б]  вернуть провалившиеся и застрявшие
 //   --skipped [--source <key>] нерелевантные и их доля по источникам
 //   --retry-skipped [--all] [Б] вернуть нерелевантные в очередь
 //   --doc <id>                 документ целиком: текст, разбор, что легло в канон
@@ -24,7 +29,6 @@
 // Качество канона
 //   --audit [--sample N]       скрытые дубли, распределение ролей, объекты-компании
 //   --renormalize --dry        предпросмотр пересчёта ключей (без --dry — [Б])
-//   --reextract           [Б]  переразбор с записью в канон
 //   --recheck --dry            предпросмотр снятия городов и адресов (без --dry — [Б])
 //
 // Выбор модели (пишут только в extractions, нужен допуск источника к ИИ-обработке)
@@ -36,10 +40,7 @@ import { checkLlmConnection } from '../llm/client.js';
 import { env } from '../config/env.js';
 import { applyMerge, rejectMerge } from '../resolve/merge.js';
 import { CanonWriteBlockedError } from './guard.js';
-import { runPipelinePass } from './worker.js';
 import {
-  printPass,
-  retryFailed,
   retrySkipped,
   showDocument,
   showErrors,
@@ -51,10 +52,18 @@ import {
   runAuditCommand,
   runCompareCommand,
   runRecheckCommand,
-  runReextractCommand,
   runRenormalizeCommand,
   runShadowCommand,
 } from './cli-quality.js';
+import {
+  previewCommand,
+  processRunsCommand,
+  publishCommand,
+  reextractCommand,
+  retryRunsCommand,
+  showRuns,
+} from '../reprocess/cli-commands.js';
+import { NotPublishableError, PublicationConflictError } from '../reprocess/publish.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -90,12 +99,25 @@ const main = async (): Promise<void> => {
   if (has('--errors')) return showErrors();
   if (has('--merges')) return showMerges();
   if (has('--retry-skipped')) return retrySkipped(has('--all'));
-  if (has('--retry')) return retryFailed();
+  if (has('--retry')) return retryRunsCommand(Number(argValue('--limit') ?? 20));
+  if (has('--runs')) return showRuns(Number(argValue('--limit') ?? 20));
+  const previewId = argValue('--preview');
+  if (previewId) return previewCommand(Number(previewId));
+  const publishId = argValue('--publish');
+  if (publishId) return publishCommand(Number(publishId), has('--allow-stale'));
   if (has('--skipped')) return showSkipped(10, argValue('--source'));
 
   if (has('--audit')) return runAuditCommand(Number(argValue('--sample') ?? 20));
   if (has('--renormalize')) return runRenormalizeCommand(has('--dry'));
-  if (has('--reextract')) return runReextractCommand(argValue('--source'));
+  if (has('--reextract')) {
+    const limit = argValue('--limit');
+    const doc = argValue('--doc');
+    return reextractCommand({
+      limit: limit === null ? null : Number(limit),
+      sourceKey: argValue('--source'),
+      documentId: doc === null ? null : Number(doc),
+    });
+  }
   if (has('--recheck')) return runRecheckCommand(has('--dry'));
   if (has('--compare')) return runCompareCommand();
 
@@ -122,24 +144,16 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  if (has('--loop')) {
-    for (;;) {
-      const results = await runPipelinePass();
-      if (results.length === 0) break;
-      printPass(results);
-    }
-    console.log('[pipeline] очередь разобрана');
-    return;
-  }
-
-  printPass(await runPipelinePass());
+  return processRunsCommand(has('--loop'));
 };
 
 main()
   .then(() => closeDb())
   .then(() => process.exit(process.exitCode ?? 0))
   .catch(async err => {
-    if (err instanceof CanonWriteBlockedError) {
+    if (err instanceof PublicationConflictError || err instanceof NotPublishableError) {
+      console.error(`[publish] ${err.message}`);
+    } else if (err instanceof CanonWriteBlockedError) {
       console.error(`[pipeline] команда заблокирована: ${err.reason}`);
     } else {
       console.error('[pipeline] прервано:', err instanceof Error ? err.message : String(err));

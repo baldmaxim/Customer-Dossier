@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-14 (+02:00). Текущий этап: **03A**. Статус: **PASS** (прогон пользователя, evidence/03A/USER_RUN.md); следующий — 03B.
+Обновлено: 2026-09-14 (+02:00). Текущий этап: **03B**. Статус: **код готов, ждёт прогона пользователя** (TESTING_LOCAL A5, F).
 Последний этап с пройденными core-gates: 03A (прогоны пользователя: `evidence/02/USER_RUN.md`, `evidence/03A/USER_RUN.md`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -13,14 +13,16 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/03A_REPORT.md` (00–02 — там же). Handoff: `docs/development/HANDOFF.md`.
-ADR: `ADR-001-local-operator-and-source-policy.md`, `ADR-002-source-items-and-revisions.md`, `ADR-003-assertions-evidence-reviews.md`.
-Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/02/USER_RUN.md`.
+Report: `docs/development/stages/03B_REPORT.md` (00–03A — там же). Handoff: `docs/development/HANDOFF.md`.
+ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
+ADR-004 (запуски извлечения и публикация наборов).
+Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
 
 ## Активные флаги (по умолчанию)
 
-`INGEST_ENABLED=false`, `PIPELINE_ENABLED=false` (+ блокировка `pipeline/guard.ts`), `METRICS_AUTO_REFRESH=false`, `BOT_ENABLED=false`,
-`HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`.
+`INGEST_ENABLED=false`, `PIPELINE_ENABLED=false` (новый конвейер 03B), `REPROCESS_AUTO_PUBLISH=false`,
+`METRICS_AUTO_REFRESH=false`, `BOT_ENABLED=false`, `HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`.
+Legacy apply и слияние заблокированы в `pipeline/guard.ts`.
 
 ## Уровни готовности
 
@@ -28,10 +30,11 @@ LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIV
 
 ## Неразрешённые действия
 
-Запись в рабочую БД (миграции 010–012, backfill); массовый reextract/renormalize/merge; включение источников;
-изменение `.env`; облачное размещение — без отдельного согласования. Commit/push в `dossier-stages` — разрешены пользователем.
+Запись в рабочую БД (миграции 010–013, backfill, переразбор, публикация); массовый reextract/renormalize/merge;
+включение источников; изменение `.env`; облачное размещение — без отдельного согласования.
+Commit/push в `dossier-stages` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-Получить результат прогона TESTING_LOCAL (A5, E); исправить найденное; закрыть 03A (PASS), commit/push;
-затем `stages/STAGE_03B_SAFE_REPROCESSING.md`.
+Получить результат прогона TESTING_LOCAL (A5 — 10 файлов / 103 теста, F); исправить найденное; закрыть 03B (PASS),
+commit/push; затем `stages/STAGE_04_IDENTITY_MERGE.md`.

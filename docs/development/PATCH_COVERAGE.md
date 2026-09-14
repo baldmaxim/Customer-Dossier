@@ -75,16 +75,17 @@
 | R02 | **present** (адресно) | alias/key: единственный кандидат с известным и равным городом | `identity.test.ts`, `resolve.int.test.ts` |
 | R03 | missing → 06 | не менялось (нужна смена схемы и переразбор) | — |
 | R04 | **present** (адресно) | ИНН/сумма/город/адрес из собственной подтверждённой цитаты; стороны события в цитате | `verify.test.ts` |
-| R05 | **present** (адресно) | `planChunks` с покрытием; неполный разбор не применяется; повтор на укороченном тексте = incomplete | `worker.test.ts` |
-| R06 | **present** (адресно) | конфликт с другим успешным payload — остановка; строка-ошибка заменяется | `api.int.test.ts` |
-| R07 | partial (03A) | модель: множество доказательств на утверждение, append-only решения, пересмотр при изменении доказательств; старый apply по-прежнему заблокирован, новая запись конвейера — 03B | `assertions.test.ts`, `assertions.int.test.ts` |
+| R05 | **present** (01 адресно, 03B полностью) | диапазоны чанков в code points, покрытие по объединению диапазонов; `completed` только при всех ok и полном покрытии; хвост сверх лимита — `failed`; `truncated_input` не ok | `reprocess.test.ts`, `reprocess.int.test.ts` |
+| R06 | **present** (01 адресно, 03B полностью) | ответы чанков append-only с попыткой, fencing-токеном и хэшем; повтор — новый запуск; evidence ссылается на свой чанк | `reprocess.int.test.ts`, `api.int.test.ts` |
+| R07 | **present** (03A + 03B) | публикация набора одной транзакцией снимает только вклад своей публикации (`superseded`), решения и чужие доказательства остаются; старый apply заблокирован; проекции карточек | `assertions.int.test.ts`, `reprocess.int.test.ts` |
 | R08, R09 | blocked/marked | UI: legacy-метка и формулировки; SQL не менялся — 06/07 | frontend build |
 | R10 | **present** | loopback-only, авторизация оператора, Host/Origin/CSRF, SSRF-клиент | `auth.test.ts`, `safeFetch.test.ts`, smoke |
 | R11 | **present** | допуск сбора/ИИ, журнал, единый gate | `policy.test.ts`, `policy.int.test.ts`, `cli-gates.log` |
 | R12 | partial | описание исправлено; догоняющего сбора нет — 05B | — |
 | R13 | **present** (этап 02) | правка поста — новая неизменяемая редакция; legacy-текст не переписывается | `revisions.test.ts`; интеграция `revisions.int.test.ts` — у пользователя |
 | R14 | partial | текст ошибки исправлен; HTML-адаптеры — 05A | — |
-| R15, R16 | missing → 06 / 03B | — | — |
+| R15 | missing → 06 | — | — |
+| R16 | **present** (03B) | сущности чанков объединяются по ключу имени и ИНН/городу; события — только при той же позиции цитаты; mention-id в пространстве чанка | `reprocess.test.ts`, `reprocess.int.test.ts` |
 | R17 | blocked | слияние выключено (API 423, CLI exit 1) — 04 | `guard.test.ts`, `api.int.test.ts` |
 | R18 | **present** | алиасы и ИНН в отборе поиска | `api.int.test.ts` |
 | R19 | **present** | строгий разбор `includeGrey` | `contractors.test.ts` |

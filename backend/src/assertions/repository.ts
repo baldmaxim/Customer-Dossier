@@ -150,25 +150,40 @@ export interface IEvidenceInput {
   extractionId: number | null;
   legacyKind: 'mention' | 'event' | 'project_participant' | null;
   legacyId: number | null;
+  /** Чанк запуска извлечения (этап 03B): evidence → chunk → run → revision. */
+  extractionChunkId?: number | null;
 }
 
-/** Новое основание добавляется к утверждению; существующие не заменяются. */
+/**
+ * Новое основание добавляется к утверждению; существующие не заменяются.
+ * Та же позиция, замещённая прежним разбором (superseded), снова становится
+ * активной; отозванная аналитиком (withdrawn) — нет.
+ */
 export const addEvidence = async (client: PoolClient, input: IEvidenceInput): Promise<{ id: number; created: boolean }> => {
   await lockAssertion(client, input.assertionId);
   const existing = (
-    await client.query<{ id: number }>(
-      `SELECT id FROM evidence
+    await client.query<{ id: number; status: string }>(
+      `SELECT id, status FROM evidence
        WHERE assertion_id = $1 AND revision_id = $2 AND span_start = $3 AND span_end = $4 AND stance = $5::evidence_stance`,
       [input.assertionId, input.revisionId, input.span.start, input.span.end, input.stance],
     )
   ).rows[0];
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    if (existing.status === 'superseded') {
+      await client.query(
+        `UPDATE evidence SET status = 'active', status_reason = NULL, status_changed_at = now() WHERE id = $1`,
+        [existing.id],
+      );
+      await refreshAssertionState(client, input.assertionId);
+    }
+    return { id: existing.id, created: false };
+  }
 
   const res = await client.query<{ id: number }>(
     `INSERT INTO evidence
        (assertion_id, revision_id, stance, span_start, span_end, quote, context_before, context_after,
-        origin, extraction_id, legacy_kind, legacy_id)
-     VALUES ($1, $2, $3::evidence_stance, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        origin, extraction_id, legacy_kind, legacy_id, extraction_chunk_id)
+     VALUES ($1, $2, $3::evidence_stance, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
       input.assertionId,
@@ -183,6 +198,7 @@ export const addEvidence = async (client: PoolClient, input: IEvidenceInput): Pr
       input.extractionId,
       input.legacyKind,
       input.legacyId,
+      input.extractionChunkId ?? null,
     ],
   );
   await refreshAssertionState(client, input.assertionId);

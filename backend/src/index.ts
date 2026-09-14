@@ -9,7 +9,8 @@ import { runIngestPass } from './ingest/scheduler.js';
 import { runBotLoop } from './ingest/telegramBot.js';
 import { startBackgroundJobs } from './jobs.js';
 import { startMetricsScheduler } from './metrics/refresh.js';
-import { runPipelinePass } from './pipeline/worker.js';
+import { lmStudioProvider } from './reprocess/provider.js';
+import { runReprocessPass } from './reprocess/worker.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -46,19 +47,21 @@ const startIngestScheduler = (signal: AbortSignal): void => {
 
 const startPipelineWorker = (signal: AbortSignal): void => {
   let running = false;
+  const provider = lmStudioProvider();
 
   const tick = async (): Promise<void> => {
-    // Пачка обрабатывается дольше тика: LM Studio на 8 ГБ отдаёт документ за
-    // единицы секунд, и пачка из восьми легко перекрывает 30 с. Наложение
-    // проходов дало бы двойную нагрузку на GPU.
+    // Запуск обрабатывается дольше тика: наложение проходов дало бы двойную нагрузку на GPU.
     if (running || signal.aborted) return;
     running = true;
     try {
-      const results = await runPipelinePass();
+      const results = await runReprocessPass(provider, {
+        autoPublish: env.REPROCESS_AUTO_PUBLISH,
+        enqueueLimit: env.EXTRACT_BATCH_SIZE,
+      });
       if (results.length > 0) {
-        const extracted = results.filter(r => r.status === 'extracted').length;
-        const failed = results.filter(r => r.status === 'failed').length;
-        console.log(`[pipeline] обработано ${results.length}: успешно ${extracted}, ошибок ${failed}`);
+        const completed = results.filter(r => r.run?.status === 'completed').length;
+        const published = results.filter(r => r.publish?.outcome === 'published').length;
+        console.log(`[pipeline] запусков ${results.length}: завершено ${completed}, опубликовано ${published}`);
       }
     } catch (err) {
       console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);

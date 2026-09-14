@@ -18,6 +18,7 @@ const starters = (): IJobStarters & { calls: string[] } => {
 const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   INGEST_ENABLED: false,
   PIPELINE_ENABLED: false,
+  REPROCESS_AUTO_PUBLISH: false,
   METRICS_AUTO_REFRESH: false,
   BOT_ENABLED: false,
   TG_BOT_TOKEN: '',
@@ -45,11 +46,11 @@ describe('startBackgroundJobs', () => {
     expect(decision.notes.join(' ')).toContain('TG_BOT_TOKEN пуст');
   });
 
-  it('PIPELINE_ENABLED не запускает изменяющий канон воркер, пока нет безопасного пути', () => {
+  it('PIPELINE_ENABLED запускает новый конвейер; автопубликация по умолчанию выключена', () => {
     const s = starters();
     const decision = startBackgroundJobs(flags({ PIPELINE_ENABLED: true }), s, new AbortController().signal);
-    expect(s.calls).toEqual([]);
-    expect(decision.notes.join(' ')).toContain('03B');
+    expect(s.calls).toEqual(['pipeline']);
+    expect(decision.notes.join(' ')).toContain('REPROCESS_AUTO_PUBLISH=false');
   });
 
   it('явные флаги включают ровно свои задания', () => {

@@ -77,6 +77,9 @@ export const parseEnv = (source: EnvSource) => {
     // Запись публикаций и редакций (миграция 011). Выключение — откат к
     // прежнему поведению: правки постов снова теряются, legacy-чтение не страдает.
     REVISION_WRITE_ENABLED: parseStrictBool('REVISION_WRITE_ENABLED', source.REVISION_WRITE_ENABLED, true),
+    // Автопубликация наборов кандидатов нового конвейера (этап 03B). По умолчанию
+    // выключена: набор ждёт предпросмотра и решения оператора (--publish).
+    REPROCESS_AUTO_PUBLISH: parseStrictBool('REPROCESS_AUTO_PUBLISH', source.REPROCESS_AUTO_PUBLISH, false),
 
     HOST: parseListenHost(source.HOST),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),

@@ -53,7 +53,8 @@ Legacy mentions/events/project_participants, карточки и API чтени�
 | TC-024 цитата не совпала — отказ базы; эмодзи — offsets JS приняты базой | то же | tg_info_test | 0 | PASS | evidence/03A/USER_RUN.md |
 | История неизменяема (UPDATE решения, DELETE/UPDATE доказательства) | то же | tg_info_test | 0 | PASS | evidence/03A/USER_RUN.md |
 | TC-025 legacy: только найденные цитаты, ручные статусы = контрольная выборка, автостатус не подтверждение, повтор | `backfill.int.test.ts` + TESTING_LOCAL E1 | tg_info_test | 0 | PASS | evidence/03A/USER_RUN.md |
-| Панель в админке, две вкладки, отзыв, 390 px | TESTING_LOCAL E2 | tg_info_test | 0 | PASS | evidence/03A/USER_RUN.md |
+| Панель в админке: решение, две вкладки, отзыв | TESTING_LOCAL E2 | tg_info_test | 0 | PASS | evidence/03A/USER_RUN.md |
+| Панель на 390 px глазами | браузер | — | — | NOT_RUN | проверен только CSS |
 | Регрессия этапов 01–02 (7 файлов / 61) | `npm run test:integration` | tg_info_test | 0 | PASS | 9 файлов / 82 |
 
 ## Данные, безопасность и откат

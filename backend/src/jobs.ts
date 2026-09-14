@@ -3,11 +3,10 @@
 // Вынесено из index.ts, чтобы проверять без сети и БД: запуск портала не
 // должен сам по себе начинать сбор, разбор моделью или пересчёт метрик.
 
-import { CANON_WRITE_BLOCK_REASON } from './pipeline/guard.js';
-
 export interface IJobFlags {
   INGEST_ENABLED: boolean;
   PIPELINE_ENABLED: boolean;
+  REPROCESS_AUTO_PUBLISH: boolean;
   METRICS_AUTO_REFRESH: boolean;
   BOT_ENABLED: boolean;
   TG_BOT_TOKEN: string;
@@ -40,9 +39,14 @@ export const startBackgroundJobs = (
   }
 
   if (flags.PIPELINE_ENABLED) {
-    // Флаг разобран, но воркер не стартует: изменяющий канон конвейер
-    // заблокирован до безопасного пути записи (этап 03B).
-    decision.notes.push(`разбор моделью не запущен: ${CANON_WRITE_BLOCK_REASON}`);
+    // Новый конвейер (этап 03B): запуски и наборы кандидатов; legacy apply не вызывается.
+    starters.pipeline(signal);
+    decision.started.push('pipeline');
+    decision.notes.push(
+      flags.REPROCESS_AUTO_PUBLISH
+        ? 'наборы кандидатов публикуются автоматически (REPROCESS_AUTO_PUBLISH=true, без проверки человеком)'
+        : 'наборы кандидатов ждут публикации оператором (REPROCESS_AUTO_PUBLISH=false)',
+    );
   } else {
     decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false)');
   }

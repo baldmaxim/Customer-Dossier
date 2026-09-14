@@ -3,8 +3,9 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 03A** (утверждения, доказательства, решения): шаги A1–A5, затем раздел E.
-Разделы B–D — проверки этапов 02 и 01 (пройдены 2026-09-14), повторять не обязательно.
+**Сейчас проверяется этап 03B** (запуски, чанки, наборы кандидатов, публикация): шаги A1–A5, затем раздел F.
+Разделы B–E — проверки этапов 02, 01 и 03A (пройдены 2026-09-14), повторять не обязательно.
+LM Studio не нужен: модель в тестах и seed подменена детерминированными ответами.
 
 ---
 
@@ -37,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **21 файл / 311 тестов passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **22 файла / 325 тестов passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -75,13 +76,14 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **9 файлов / 82 теста passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **10 файлов / 103 теста passed**:
 
 | Файл | Что проверяет |
 |---|---|
+| `reprocess/reprocess.int.test.ts` | **этап 03B**: полный путь и цепочка evidence → chunk → run → revision, падение последнего чанка, непокрытый хвост, timeout, crash до/после commit, два worker'а и fencing, поздний старый разбор, нерелевантная новая версия при двух источниках и ручном решении, отзыв права ИИ, одинаковые имена с разными ИНН, идемпотентная публикация, 409, проекции карточки, без дублей при переразборе |
 | `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
 | `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–012 |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–013 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -243,6 +245,51 @@ npm run backfill:revisions -- --apply
 7. «отозвать» у одного поддерживающего доказательства (причина ≥ 3 символов) → оно тусклое с причиной,
    утверждение в фильтре «Нужен пересмотр», история решений не пропала.
 8. Ширина 390 px: колонки «подтверждает/опровергает» друг под другом, без горизонтального скролла страницы.
+
+---
+
+## F. Этап 03B — конвейер из командной строки
+
+### F1. Данные
+
+Схема с нуля (переменные `DATABASE_URL`, `DATABASE_SSL`, `DOTENV_CONFIG_PATH` — как в разделе B):
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+```
+
+Seed запускается без `DATABASE_URL` (иначе guard откажет), затем переменные раздела B возвращаются:
+
+```powershell
+Remove-Item Env:DATABASE_URL
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run seed:test-reprocess
+$env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+```
+
+Ожидается три строки: `опубликован набор #1`, `ждёт публикации набор #2`, `устаревший набор #3`
+(номера могут отличаться — дальше подставлять свои).
+
+### F2. Команды
+
+| Команда | Ожидается |
+|---|---|
+| `npm run pipeline:once -- --runs` | три запуска `completed`, у каждого покрытие `N/N`; наборы `published`, `built`, `built` |
+| `npm run pipeline:once -- --preview 2` | `+ добавится (1)`: `event||court_case…`; `- снимется основание (1)`: `event||delay…`; `= без изменений (3)` |
+| `npm run pipeline:once -- --preview 3` | строка `УСТАРЕЛ: у публикации есть более новая редакция…` |
+| `npm run pipeline:once -- --publish 3` | `rejected_stale`, код выхода 1 (так и должно быть) |
+| `npm run pipeline:once -- --publish 2` | `published, версия 2`, `снято` ≥ 1 |
+| `npm run pipeline:once -- --publish 2` | `already_published, версия 2` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT status, count(*) FROM evidence GROUP BY status ORDER BY status"` | `active` и `superseded`, строк не меньше, чем до публикации |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT type, origin FROM card_events_v"` | одна строка: `court_case`, `published` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -t -c "SELECT count(*) FROM projects WHERE name = 'Демо-Роща'"` | `1` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT action, actor FROM publication_history ORDER BY id"` | `publish seed`, `rejected_stale cli`, `publish cli` |
+| `npm run pipeline:once -- --reextract` | `нужен явный --limit N`, код выхода 1 |
+| `npm run pipeline:once -- --merge 1` | `команда заблокирована: слияние заблокировано до этапа 04…` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE extraction_chunk_responses SET error='x'"` | ошибка append-only |
+
+`pipeline:once` без флагов здесь **не запускать**: он обращается к LM Studio.
 
 ---
 
