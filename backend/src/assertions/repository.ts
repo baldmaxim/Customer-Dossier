@@ -62,9 +62,9 @@ export const upsertAssertion = async (
         object_company_id, object_project_id, object_text, scope_building, work_package,
         valid_from, valid_to, period_precision, modality, value_type, value_numeric, value_currency,
         content_key, supersedes_assertion_id, origin, confidence_extraction, confidence_identity,
-        counterparty_company_id)
+        counterparty_company_id, event_discriminator)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::assertion_modality, $16, $17, $18,
-             $19, $20, $21, $22, $23, $24)
+             $19, $20, $21, $22, $23, $24, $25)
      ON CONFLICT (content_key) DO UPDATE SET updated_at = assertions.updated_at
      RETURNING id, (xmax = 0) AS created`,
     [
@@ -92,6 +92,7 @@ export const upsertAssertion = async (
       meta.confidenceExtraction,
       meta.confidenceIdentity,
       content.counterpartyCompanyId,
+      content.eventDiscriminator ?? null,
     ],
   );
   const row = res.rows[0];

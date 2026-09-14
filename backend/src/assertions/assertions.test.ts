@@ -88,6 +88,9 @@ describe('assertionContentKey', () => {
     expect(assertionContentKey(content({ modality: 'negated' }))).not.toBe(base);
     expect(assertionContentKey(content({ validFrom: '2026-06-01' }))).not.toBe(base);
     expect(assertionContentKey(content({ role: 'general_contractor' }))).not.toBe(base);
+    // различитель события меняет ключ, а его отсутствие ключ прежних строк не трогает
+    expect(assertionContentKey(content({ eventDiscriminator: null }))).toBe(base);
+    expect(assertionContentKey(content({ eventDiscriminator: 'a' }))).not.toBe(assertionContentKey(content({ eventDiscriminator: 'b' })));
   });
 });
 

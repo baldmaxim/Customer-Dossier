@@ -12,7 +12,7 @@
 import type { PoolClient } from 'pg';
 
 import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
-import type { IAssertionContent } from '../assertions/model.js';
+import { eventQuoteDiscriminator, type IAssertionContent } from '../assertions/model.js';
 import { addEvidence, refreshAssertionState, upsertAssertion } from '../assertions/repository.js';
 import { sliceByCodePoints } from '../assertions/span.js';
 import { resolveCompany } from '../resolve/company.js';
@@ -81,7 +81,7 @@ const partyLabel = (content: StoredContent, ref: string | null): string => {
 };
 
 /** Смысловая подпись кандидата для сравнения наборов (без внутренних ref запуска). */
-export const candidateSignature = (content: StoredContent): string =>
+export const candidateSignature = ({ content, evidence }: Pick<ICandidateRow, 'content' | 'evidence'>): string =>
   [
     content.predicate,
     content.role ?? '',
@@ -92,6 +92,10 @@ export const candidateSignature = (content: StoredContent): string =>
     content.validFrom ?? '',
     content.validTo ?? '',
     content.valueNumeric ?? '',
+    // тот же различитель, что у утверждения: недоопределённые события сравниваются по цитате
+    content.predicate === 'event' && !content.validFrom && !content.valueNumeric && !content.counterpartyRef && evidence[0]
+      ? `#${eventQuoteDiscriminator(evidence[0].quote).slice(0, 8)}`
+      : '',
   ].join('|');
 
 /** Подпись без периода, значения и второй стороны: одна «линия» факта, у которой поменялись детали. */
@@ -168,7 +172,7 @@ export interface IPreview {
 }
 
 const toItem = (row: ICandidateRow): IPreviewItem => ({
-  signature: candidateSignature(row.content),
+  signature: candidateSignature(row),
   predicate: row.content.predicate,
   grounded: row.grounded,
   quotes: row.evidence.map(e => e.quote),
@@ -188,17 +192,17 @@ export const previewCandidateSet = async (setId: number, exec: DbExecutor = getP
       ? (await loadCandidates(exec, publication.active_set_id)).filter(c => c.grounded)
       : [];
 
-  const prevBySig = new Map(prev.map(c => [candidateSignature(c.content), c]));
-  const nextBySig = new Map(nextGrounded.map(c => [candidateSignature(c.content), c]));
-  const added = nextGrounded.filter(c => !prevBySig.has(candidateSignature(c.content)));
-  const removed = prev.filter(c => !nextBySig.has(candidateSignature(c.content)));
-  const kept = nextGrounded.filter(c => prevBySig.has(candidateSignature(c.content)));
+  const prevBySig = new Map(prev.map(c => [candidateSignature(c), c]));
+  const nextBySig = new Map(nextGrounded.map(c => [candidateSignature(c), c]));
+  const added = nextGrounded.filter(c => !prevBySig.has(candidateSignature(c)));
+  const removed = prev.filter(c => !nextBySig.has(candidateSignature(c)));
+  const kept = nextGrounded.filter(c => prevBySig.has(candidateSignature(c)));
 
   const changed: IPreview['changed'] = [];
   for (const r of removed) {
     const line = lineSignature(r.content);
     const a = added.find(x => lineSignature(x.content) === line);
-    if (a) changed.push({ before: candidateSignature(r.content), after: candidateSignature(a.content) });
+    if (a) changed.push({ before: candidateSignature(r), after: candidateSignature(a) });
   }
 
   const reviewImpact =
@@ -460,6 +464,11 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
         valueType: c.valueType,
         valueNumeric: c.valueNumeric,
         valueCurrency: c.valueCurrency,
+        // Событие без даты, суммы и контрагента различается своей цитатой: два суда — два утверждения.
+        eventDiscriminator:
+          c.predicate === 'event' && !c.validFrom && !c.valueNumeric && !c.counterpartyRef && candidate.evidence[0]
+            ? eventQuoteDiscriminator(candidate.evidence[0].quote)
+            : null,
       };
       const assertion = await upsertAssertion(client, content, {
         origin: 'extraction',

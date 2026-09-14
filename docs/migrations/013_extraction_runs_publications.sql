@@ -137,6 +137,35 @@ CREATE TABLE candidate_set_evidence (
 
 CREATE INDEX candidate_set_evidence_evidence_idx ON candidate_set_evidence (evidence_id);
 
+-- Различитель недоопределённого события: без даты, суммы и контрагента два суда одной
+-- компании иначе имели бы одно содержание. Входит в content_key и неизменяем.
+ALTER TABLE assertions ADD COLUMN event_discriminator TEXT;
+
+CREATE OR REPLACE FUNCTION assertions_content_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'assertions: удаление запрещено' USING ERRCODE = 'restrict_violation';
+  END IF;
+  IF (NEW.predicate, NEW.role, NEW.event_type, NEW.subject_company_id, NEW.subject_project_id, NEW.subject_text,
+      NEW.object_company_id, NEW.object_project_id, NEW.object_text, NEW.counterparty_company_id,
+      NEW.scope_building, NEW.work_package,
+      NEW.valid_from, NEW.valid_to, NEW.period_precision, NEW.modality, NEW.value_type, NEW.value_numeric,
+      NEW.value_currency, NEW.content_key, NEW.supersedes_assertion_id, NEW.origin, NEW.created_at,
+      NEW.event_discriminator)
+     IS DISTINCT FROM
+     (OLD.predicate, OLD.role, OLD.event_type, OLD.subject_company_id, OLD.subject_project_id, OLD.subject_text,
+      OLD.object_company_id, OLD.object_project_id, OLD.object_text, OLD.counterparty_company_id,
+      OLD.scope_building, OLD.work_package,
+      OLD.valid_from, OLD.valid_to, OLD.period_precision, OLD.modality, OLD.value_type, OLD.value_numeric,
+      OLD.value_currency, OLD.content_key, OLD.supersedes_assertion_id, OLD.origin, OLD.created_at,
+      OLD.event_discriminator) THEN
+    RAISE EXCEPTION 'assertions: содержание утверждения неизменяемо — новый смысл оформляется новым утверждением'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 -- Доказательство знает, из какого чанка оно получено: evidence → chunk → run → revision.
 ALTER TABLE evidence ADD COLUMN extraction_chunk_id BIGINT REFERENCES extraction_chunks(id);
 

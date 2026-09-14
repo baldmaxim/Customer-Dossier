@@ -35,13 +35,27 @@ export interface IAssertionContent {
   valueType: string | null;
   valueNumeric: string | null;
   valueCurrency: string | null;
+  /**
+   * Различитель недоопределённого события (этап 03B): без даты, суммы и
+   * контрагента два суда одной компании иначе дали бы один ключ. Хэш
+   * нормализованной цитаты события; null — ключ как до 03B.
+   */
+  eventDiscriminator?: string | null;
 }
+
+/** Различитель события по цитате: регистр и пробелы не различают, перепечатка того же текста совпадает. */
+export const eventQuoteDiscriminator = (quote: string): string =>
+  createHash('sha256')
+    .update(quote.normalize('NFC').toLowerCase().replace(/\s+/gu, ' ').trim(), 'utf8')
+    .digest('hex')
+    .slice(0, 32);
 
 /**
  * Ключ содержательной идентичности. В него входит всё, что меняет смысл:
  * предикат, роль/тип события, обе стороны, корпус, пакет работ, период,
  * модальность и значение. Одна компания в двух корпусах — два утверждения;
  * «планирует» и «является» — два утверждения. Порядок полей фиксирован.
+ * Различитель события добавляется только если задан: ключи прежних строк не меняются.
  */
 export const assertionContentKey = (content: IAssertionContent): string => {
   const canonical = [
@@ -65,6 +79,7 @@ export const assertionContentKey = (content: IAssertionContent): string => {
     content.valueNumeric,
     content.valueCurrency,
   ];
+  if (content.eventDiscriminator) canonical.push(`event:${content.eventDiscriminator}`);
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex');
 };
 

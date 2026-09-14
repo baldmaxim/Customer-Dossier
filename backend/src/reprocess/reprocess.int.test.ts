@@ -177,6 +177,11 @@ describe('полный путь: запуск → чанк → набор → п
       `SELECT 1 FROM card_events_v v JOIN companies c ON c.id = v.company_id WHERE c.name = 'Демо-Альфа' AND v.origin = 'published'`,
     );
     expect(events.rowCount).toBe(2);
+    const courts = await pool().query(
+      `SELECT DISTINCT a.id FROM assertions a JOIN companies c ON c.id = a.subject_company_id
+       WHERE c.name = 'Демо-Альфа' AND a.event_type = 'court_case' AND a.event_discriminator IS NOT NULL`,
+    );
+    expect(courts.rowCount).toBe(2);
   });
 
   it('повтор той же публикации идемпотентен', async () => {
@@ -195,8 +200,12 @@ describe('полный путь: запуск → чанк → набор → п
     expect(preview.body.expectedVersion).toBe(1);
     const stale = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0 }, api.auth);
     expect(stale.status).toBe(409);
-    const noCsrf = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 1 });
-    expect([401, 403]).toContain(noCsrf.status);
+    // Тестовый клиент подставляет вход сам: отсутствие cookie и CSRF задаём явно.
+    const anonymous = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 1 }, { cookie: '' });
+    const noCsrf = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 1 }, { 'x-csrf-token': '' });
+    expect(anonymous.status).toBe(401);
+    expect(noCsrf.status).toBe(403);
+    expect((await publicationOf(item.sourceItemId)).version).toBe(1);
   });
 });
 
