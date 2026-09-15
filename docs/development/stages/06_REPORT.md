@@ -1,9 +1,8 @@
 # Отчёт этапа 06 — Смысл связей, история ролей и корректные события
 
 Дата/время: 2026-09-15 (+02:00). Исполнитель: Claude Code (Opus 5), единственный writer.
-Статус: **IN_PROGRESS** — прогон пользователя @ `8aeaa4b` ([evidence/06/USER_RUN.md](../evidence/06/USER_RUN.md)): unit, J1–J3 ок; A5 — 1 из 155 упал
-(дефект «ё» в проверке имени, исправлен, нужен повторный прогон A5). Пользователь разрешил переход к 07.
-`LOCAL_MODEL` на синтетике: qwen3-8b safety 21/21, recall 3/7, 3 llm_error при занятой VRAM — массовый переразбор на extract@3 не начинать.
+Статус: **PASS (core-gates)** — прогон 2 пользователя @ `b0e0fb3` ([evidence/06/USER_RUN.md](../evidence/06/USER_RUN.md)): unit 26 / 386, интеграция 14 / 155, J1–J3 ок.
+`LOCAL_MODEL` на синтетике (qwen3-8b, свободная GPU): safety 24/25, recall 3/9, медиана 13 с — **не пригоден для переразбора рабочей базы**; одно нарушение safety не разобрано.
 
 ## Исходная база
 
@@ -71,9 +70,9 @@
 | TC-057 состояние объекта: поздняя статья не меняет текущее; дата неизвестна — не состояние | то же | tg_info_test | — | AWAITING_USER_RUN | — |
 | TC-058 сумма у стороны рядом с числом | то же | tg_info_test | — | AWAITING_USER_RUN | — |
 | Слияние переносит объект договора | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Регрессия 01–05B + 06 | `npm run test:integration` | tg_info_test | 1 | FAIL → исправлено | 154 / 155; падал перенос объекта договора из-за «ё»; повтор — RERUN_PENDING |
+| Регрессия 01–05B + 06 | `npm run test:integration` | tg_info_test | 0 | PASS | прогон 1: 154 / 155 (дефект «ё»); прогон 2 @ b0e0fb3: 14 / 155 |
 | Seed, CLI, API, 390 px | TESTING_LOCAL J1–J3 | tg_info_test | 0 | PASS | evidence/06/USER_RUN.md |
-| Замер локальной модели на синтетическом корпусе | `npm run benchmark:model` | LM Studio у пользователя | 0 | safety PASS, recall 3/7 | 21/21 safety; промахи SYN-01, 02, 08, 12; llm_error SYN-06, 09, 11 при занятой VRAM; медиана 63 с |
+| Замер локальной модели на синтетическом корпусе | `npm run benchmark:model` | LM Studio у пользователя | 0 | FAIL (модель) | прогон 1 (занятая VRAM): safety 21/21, recall 3/7, 3 llm_error; прогон 2 (свободная GPU): safety 24/25, recall 3/9, 0 ошибок, медиана 13 с |
 | Дефект «ё» в проверке имени; объект в object; «присуждено» без решения — требование без блокировки | `verify.test.ts`, `semantic.test.ts` | unit | 0 | PASS | 26 / 386 после поправок |
 
 ## Данные, безопасность и откат
