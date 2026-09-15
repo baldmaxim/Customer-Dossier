@@ -1,7 +1,7 @@
 # Отчёт этапа 05B — Разрешённый Telegram-сбор, курсоры и правки
 
 Дата/время: 2026-09-15 (+02:00). Исполнитель: Claude Code (Opus 5), единственный writer.
-Статус: **AWAITING_USER_RUN** — код, unit и сборки PASS в среде агента; интеграция и раздел I TESTING_LOCAL — у пользователя.
+Статус: **PASS** (2026-09-15, прогон пользователя @ `5a62b94` — [evidence/05B/USER_RUN.md](../evidence/05B/USER_RUN.md)): unit 25 / 356, интеграция 13 файлов / 148, раздел I ок. Экран 390 px — NOT_RUN.
 `LIVE_SOURCE=NOT_RUN`: согласованных каналов нет, токен бота не запрашивался.
 
 ## Исходная база
@@ -67,17 +67,17 @@
 | Typecheck/build backend и frontend | `tsc --noEmit`, `npm run build` | — | 0/0 | PASS | среда агента |
 | Unit | `npm test` | мёртвый URL | 0 | PASS: 25 / 356 (было 24 / 352) | среда агента |
 | Разбор: правка, скрытая пересылка, альбом, пересылка со ссылкой; подпись без вложения — не full; возможности | `telegram.test.ts` | unit | 0 | PASS | — |
-| TC-047 первая страница не покрывает backlog: граница истории, разрыв и ограниченная догрузка без дублей | `telegram.int.test.ts` | tg_info_test | — | AWAITING_USER_RUN | — |
-| Сбой страницы разрыва после сохранения первой | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Отзыв допуска во время прохода (web и бот) | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Чужой канал в `data-post` — identity_changed | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-049 правка существующего поста и короткое опровержение | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Одинаковый текст в двух каналах — две публикации | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Пересылка без происхождения (web и бот `hidden_user`); подпись без вложения | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-048 повтор обновления и перезапуск long polling; сбой посреди пачки | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-050 правка сообщения ботом; пустой allowlist; пропуск update_id | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Регрессия 01–05A (12 файлов / 135) | `npm run test:integration` | tg_info_test | — | AWAITING_USER_RUN | ожидается 13 файлов / 148 |
-| Seed, база, админка | TESTING_LOCAL I | tg_info_test | — | AWAITING_USER_RUN | — |
+| TC-047 первая страница не покрывает backlog: граница истории, разрыв и ограниченная догрузка без дублей | `telegram.int.test.ts` | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Сбой страницы разрыва после сохранения первой | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Отзыв допуска во время прохода (web и бот) | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Чужой канал в `data-post` — identity_changed | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| TC-049 правка существующего поста и короткое опровержение | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Одинаковый текст в двух каналах — две публикации | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Пересылка без происхождения (web и бот `hidden_user`); подпись без вложения | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| TC-048 повтор обновления и перезапуск long polling; сбой посреди пачки | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| TC-050 правка сообщения ботом; пустой allowlist; пропуск update_id | то же | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
+| Регрессия 01–05A (12 файлов / 135) | `npm run test:integration` | tg_info_test | 0 | PASS | 13 файлов / 148 |
+| Seed, база, админка | TESTING_LOCAL I | tg_info_test | 0 | PASS | evidence/05B/USER_RUN.md |
 | Живой канал / живой бот | — | — | — | NOT_RUN | допуска и токена нет |
 | Экран 390 px | браузер | — | — | NOT_RUN | — |
 
