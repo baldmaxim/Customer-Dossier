@@ -74,7 +74,7 @@
 | Регрессия 01–05B + 06 | `npm run test:integration` | tg_info_test | 1 | FAIL → исправлено | 154 / 155; падал перенос объекта договора из-за «ё»; повтор — RERUN_PENDING |
 | Seed, CLI, API, 390 px | TESTING_LOCAL J1–J3 | tg_info_test | 0 | PASS | evidence/06/USER_RUN.md |
 | Замер локальной модели на синтетическом корпусе | `npm run benchmark:model` | LM Studio у пользователя | 0 | safety PASS, recall 3/7 | 21/21 safety; промахи SYN-01, 02, 08, 12; llm_error SYN-06, 09, 11 при занятой VRAM; медиана 63 с |
-| Дефект «ё» в проверке имени | `verify.test.ts` | unit | 0 | PASS | 26 / 385 после исправления |
+| Дефект «ё» в проверке имени; объект в object; «присуждено» без решения — требование без блокировки | `verify.test.ts`, `semantic.test.ts` | unit | 0 | PASS | 26 / 386 после поправок |
 
 ## Данные, безопасность и откат
 

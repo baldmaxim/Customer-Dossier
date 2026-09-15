@@ -130,9 +130,11 @@ const verifyRelation = (
   let object: string | null = null;
   let project: string | null = null;
   if (relation.type === 'participation') {
-    if (!relation.project || !projectNames.has(relation.project)) return reject('ссылка на отброшенный или неуказанный объект');
-    if (!isNameInQuote(relation.project, relation.quote)) return reject(`объект «${relation.project}» отсутствует в цитате связи`);
-    project = relation.project;
+    // Модель часто кладёт объект в object: это название объекта из того же ответа — не домысел.
+    const named = relation.project ?? (relation.object && projectNames.has(relation.object) ? relation.object : null);
+    if (!named || !projectNames.has(named)) return reject('ссылка на отброшенный или неуказанный объект');
+    if (!isNameInQuote(named, relation.quote)) return reject(`объект «${named}» отсутствует в цитате связи`);
+    project = named;
   } else {
     if (!relation.object || !companyNames.has(relation.object)) return reject('вторая сторона не подтверждена');
     if (sameName(relation.subject, relation.object)) return reject('связь компании с самой собой');
@@ -226,8 +228,9 @@ const verifyEvent = (
     rejected.push({ kind: 'event_amount', name: event.type, reason: 'сумма не привязана к сторонам события в его цитате' });
   }
   let amountPurpose = amount ? event.amount_purpose : null;
+  // «Присуждено» без решения в цитате — понижается до требования: более слабое утверждение, факт иска не теряется.
   if (amountPurpose === 'award' && !hasAwardCue(event.quote)) {
-    reviews.push('сумма названа присуждённой, а в цитате нет решения о взыскании');
+    rejected.push({ kind: 'event_amount_purpose', name: event.type, reason: 'сумма названа присуждённой, а в цитате нет решения — сохранена как требование' });
     amountPurpose = 'claim';
   }
 

@@ -35,6 +35,19 @@ const reviewReasons = (b: ICandidateBuild): string[] =>
 // ---------------------------------------------------------------------------
 
 describe('TC-052: отрицание, план, слух', () => {
+  it('объект участия в поле object вместо project принимается, если это объект того же ответа', () => {
+    const q = 'Компания «Демо-Альфа» не является генподрядчиком ЖК «Берег-Демо».';
+    const b = build(
+      q,
+      answer({
+        companies: [company('Демо-Альфа', q)],
+        projects: [project('Берег-Демо', q)],
+        relations: [relation({ type: 'participation', kind: 'general_contractor', subject: 'Демо-Альфа', object: 'Берег-Демо', quote: q, polarity: 'negative' })],
+      }),
+    );
+    expect(checksOf('SYN-02', b).every(c => c.pass)).toBe(true);
+  });
+
   it('SYN-02: «не является генподрядчиком» с положительным ответом модели — на проверку, роль не публикуется', () => {
     const t = text('SYN-02');
     const q = 'Компания «Демо-Альфа» не является генподрядчиком ЖК «Берег-Демо».';
@@ -213,8 +226,9 @@ describe('TC-055 / TC-056: суды, стороны и суммы требова
       });
 
     const wrong = build(t, answer({ companies, events: [court({ amount_purpose: 'award', outcome: 'satisfied' })] }));
-    expect(reviewReasons(wrong)).toEqual([expect.stringContaining('присуждённой')]);
-    allSafetyPass('SYN-08', wrong);
+    expect(reviewReasons(wrong)).toEqual([]);
+    expect(wrong.rejected.map(r => r.kind)).toEqual(expect.arrayContaining(['event_amount_purpose', 'event_outcome']));
+    expect(checksOf('SYN-08', wrong).every(c => c.pass)).toBe(true);
 
     const right = build(t, answer({ companies, events: [court({ amount_purpose: 'claim' })] }));
     expect(checksOf('SYN-08', right).every(c => c.pass)).toBe(true);
