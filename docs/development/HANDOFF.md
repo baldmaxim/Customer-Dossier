@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–05B — PASS (05B: интеграция 13 файлов / 148, раздел I, evidence/05B/USER_RUN.md). Следующий — 06.
+Этапы 02–05B — PASS. 06 — код готов, ждёт прогона пользователя (ожидается интеграция 14 файлов / 155, раздел J). Затем — 07.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -30,18 +30,23 @@ Docker и проверки с базой агент не запускает: п�
 - 05B: миграция 016 — `bot_processed_updates` (append-only), `source_observations.transport_meta`, исходы
   `policy_blocked/identity_changed/not_found/private`; `ingest/telegram/webCrawler.ts` (курсор `cursor.tg`, разрыв,
   граница истории, перепроверка правок, идентичность канала), `capabilities.ts`, журнал и `edited_message` в
-  `telegramBot.ts`, `seed:test-telegram` (ADR-007). Следующая миграция — 017.
+  `telegramBot.ts`, `seed:test-telegram` (ADR-007).
+- 06: миграция 017 — смысловые столбцы `assertions` (полярность, объект договора, дело, стадия, роли сторон, НДС),
+  предикаты `contract`/`corporate_relation`, проекции карточек без плана/слуха/отрицания, `review_queue_v`,
+  `project_state_history_v`/`project_current_state_v`, `legal_case_events_v`; схема extract@3 (`llm/semantic/*`),
+  проверка смысла `reprocess/semantic/*`, API очереди/истории объекта/дел, `--queue`, `benchmark:model`,
+  `seed:test-semantic` (ADR-008). Следующая миграция — 018.
 
 ## Принятые решения
-ADR-001…ADR-007. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
+ADR-001…ADR-008. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
 Публикация снимает только вклад своей публикации (evidence → superseded). Completed — только при полном покрытии.
 Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck/build backend и frontend, unit 25 файлов / 356 тестов — PASS.
+typecheck/build backend и frontend, unit 26 файлов / 384 теста — PASS.
 
 ## Что НЕ проверено
-Живые сайты и каналы, живой бот (допуска и токена нет);  реальный LLM-smoke; визуальные проверки 390 px.
+Живые сайты и каналы, живой бот (допуска и токена нет); интеграция 06; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -51,13 +56,13 @@ typecheck/build backend и frontend, unit 25 файлов / 356 тестов —
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Этап `stages/STAGE_06_RELATIONS_EVENTS.md`: читать COMMON_RULES, DATA_CONTRACTS, отчёты 03B и 04,
-`reprocess/*`, `pipeline/verify.ts`, `llm/schema.ts`, миграции 012–014.
+После PASS 06 — этап `stages/STAGE_07_ANALYTICS.md`: читать COMMON_RULES, DATA_CONTRACTS, ADR-008,
+`docs/migrations/007_metrics.sql`, `metrics/*`, проекции 017, `api/companies.routes.ts`, `api/contractors.routes.ts`.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/05B_REPORT.md`, ADR-007,
-`TESTING_LOCAL.md`; ключевые файлы: `backend/src/ingest/telegram/*.ts`, `telegramBot.ts`, `docs/migrations/016_telegram_cursors.sql`.
+`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/06_REPORT.md`, ADR-008,
+`TESTING_LOCAL.md`; ключевые файлы: `backend/src/reprocess/semantic/*.ts`, `llm/semantic/*.ts`, `docs/migrations/017_semantic_relations.sql`.

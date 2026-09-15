@@ -12,13 +12,14 @@
 import type { PoolClient } from 'pg';
 
 import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
-import { eventQuoteDiscriminator, type IAssertionContent } from '../assertions/model.js';
+import { eventQuoteDiscriminator } from '../assertions/model.js';
 import { addEvidence, refreshAssertionState, upsertAssertion } from '../assertions/repository.js';
 import { sliceByCodePoints } from '../assertions/span.js';
 import { resolveCompany } from '../resolve/company.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { resolveProject, type ProjectKind, type ProjectStage } from '../resolve/project.js';
 import type { ICandidateContent, IEvidenceCandidate } from './candidates.js';
+import { linkContradiction, needsQuoteDiscriminator, semanticSignature, toAssertionContent } from './publishContent.js';
 import { loadRevisionPolicy } from './runs.js';
 import type { PartyDescriptor } from './runs.js';
 
@@ -44,6 +45,7 @@ interface ICandidateRow {
   evidence: IEvidenceCandidate[];
   grounded: boolean;
   confidence: number | null;
+  rejected_reason: string | null;
 }
 
 interface ISetRow {
@@ -69,10 +71,13 @@ const loadSet = async (exec: DbExecutor, setId: number, lock: boolean): Promise<
 const loadCandidates = async (exec: DbExecutor, setId: number): Promise<ICandidateRow[]> =>
   (
     await exec.query<ICandidateRow>(
-      'SELECT id, content, evidence, grounded, confidence FROM candidate_assertions WHERE set_id = $1 ORDER BY id',
+      'SELECT id, content, evidence, grounded, confidence, rejected_reason FROM candidate_assertions WHERE set_id = $1 ORDER BY id',
       [setId],
     )
   ).rows;
+
+/** Публикуется только найденное в тексте и не отправленное на проверку (этап 06). */
+const publishable = (c: ICandidateRow): boolean => c.grounded && c.rejected_reason === null;
 
 const partyLabel = (content: StoredContent, ref: string | null): string => {
   if (!ref) return '';
@@ -93,9 +98,9 @@ export const candidateSignature = ({ content, evidence }: Pick<ICandidateRow, 'c
     content.validTo ?? '',
     content.valueNumeric ?? '',
     // тот же различитель, что у утверждения: недоопределённые события сравниваются по цитате
-    content.predicate === 'event' && !content.validFrom && !content.valueNumeric && !content.counterpartyRef && evidence[0]
-      ? `#${eventQuoteDiscriminator(evidence[0].quote).slice(0, 8)}`
-      : '',
+    needsQuoteDiscriminator(content) && evidence[0] ? `#${eventQuoteDiscriminator(evidence[0].quote).slice(0, 8)}` : '',
+    ...(content.contextRef ? [`ctx:${partyLabel(content, content.contextRef)}`] : []),
+    ...(semanticSignature(content) ? [semanticSignature(content)] : []),
   ].join('|');
 
 /** Подпись без периода, значения и второй стороны: одна «линия» факта, у которой поменялись детали. */
@@ -186,10 +191,10 @@ export const previewCandidateSet = async (setId: number, exec: DbExecutor = getP
   const stale = await checkStale(exec, set, publication.active_set_id);
 
   const next = await loadCandidates(exec, setId);
-  const nextGrounded = next.filter(c => c.grounded);
+  const nextGrounded = next.filter(publishable);
   const prev =
     publication.active_set_id !== null && publication.active_set_id !== setId
-      ? (await loadCandidates(exec, publication.active_set_id)).filter(c => c.grounded)
+      ? (await loadCandidates(exec, publication.active_set_id)).filter(publishable)
       : [];
 
   const prevBySig = new Map(prev.map(c => [candidateSignature(c), c]));
@@ -245,7 +250,7 @@ export const previewCandidateSet = async (setId: number, exec: DbExecutor = getP
     removed: removed.map(toItem),
     kept: kept.map(toItem),
     changed,
-    ungrounded: next.filter(c => !c.grounded).map(toItem),
+    ungrounded: next.filter(c => !publishable(c)).map(toItem),
     reviewImpact,
     contradictions,
   };
@@ -386,7 +391,7 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
       )
     ).rows[0]!;
 
-    const candidates = (await loadCandidates(client, set.id)).filter(c => c.grounded);
+    const candidates = (await loadCandidates(client, set.id)).filter(publishable);
     const companyIds = new Map<string, number | null>();
     const projectIds = new Map<string, number | null>();
 
@@ -445,33 +450,9 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
       const object = await resolveParty(c, c.objectRef);
       if (c.objectRef && !object) continue;
       const counterparty = await resolveParty(c, c.counterpartyRef);
+      const context = await resolveParty(c, c.contextRef ?? null);
 
-      const content: IAssertionContent = {
-        predicate: c.predicate,
-        role: c.role,
-        eventType: c.eventType,
-        subjectCompanyId: subject.kind === 'company' ? subject.id : null,
-        subjectProjectId: subject.kind === 'project' ? subject.id : null,
-        subjectText: null,
-        objectCompanyId: object?.kind === 'company' ? object.id : null,
-        objectProjectId: object?.kind === 'project' ? object.id : null,
-        objectText: null,
-        counterpartyCompanyId: counterparty?.kind === 'company' ? counterparty.id : null,
-        scopeBuilding: null,
-        workPackage: null,
-        validFrom: c.validFrom,
-        validTo: c.validTo,
-        periodPrecision: c.periodPrecision,
-        modality: c.modality,
-        valueType: c.valueType,
-        valueNumeric: c.valueNumeric,
-        valueCurrency: c.valueCurrency,
-        // Событие без даты, суммы и контрагента различается своей цитатой: два суда — два утверждения.
-        eventDiscriminator:
-          c.predicate === 'event' && !c.validFrom && !c.valueNumeric && !c.counterpartyRef && candidate.evidence[0]
-            ? eventQuoteDiscriminator(candidate.evidence[0].quote)
-            : null,
-      };
+      const content = toAssertionContent(c, { subject, object, counterparty, context }, candidate.evidence);
       const assertion = await upsertAssertion(client, content, {
         origin: 'extraction',
         confidenceExtraction: candidate.confidence,
@@ -496,10 +477,14 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
         });
         if (added.created) evidenceAdded += 1;
         newEvidenceIds.add(added.id);
-        await client.query('INSERT INTO candidate_set_evidence (set_id, evidence_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
-          set.id,
-          added.id,
-        ]);
+        const contradicting = await linkContradiction(client, content, set.revision_id, span, ev.chunkId);
+        for (const id of [added.id, ...contradicting]) {
+          newEvidenceIds.add(id);
+          await client.query('INSERT INTO candidate_set_evidence (set_id, evidence_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
+            set.id,
+            id,
+          ]);
+        }
       }
     }
 

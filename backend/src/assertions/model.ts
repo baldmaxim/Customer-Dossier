@@ -12,7 +12,18 @@ export type ReviewDecisionValue = (typeof REVIEW_DECISIONS)[number];
 export const MODALITIES = ['reported_fact', 'claim', 'planned', 'possible', 'negated', 'unknown'] as const;
 export type Modality = (typeof MODALITIES)[number];
 
-export type Predicate = 'participates_in_project' | 'event' | 'company_mentioned' | 'project_mentioned';
+export const PREDICATES = [
+  'participates_in_project',
+  'contract',
+  'corporate_relation',
+  'event',
+  'company_mentioned',
+  'project_mentioned',
+] as const;
+export type Predicate = (typeof PREDICATES)[number];
+
+export const POLARITY_VALUES = ['positive', 'negative'] as const;
+export type Polarity = (typeof POLARITY_VALUES)[number];
 export type EvidenceStance = 'supports' | 'contradicts' | 'mentions';
 
 export interface IAssertionContent {
@@ -41,7 +52,37 @@ export interface IAssertionContent {
    * нормализованной цитаты события; null — ключ как до 03B.
    */
   eventDiscriminator?: string | null;
+  // Этап 06: смысл связи и события. Не заданы — значения по умолчанию (positive, null).
+  polarity?: Polarity;
+  /** Объект договора: контекст, а не сторона (predicate contract). */
+  contextProjectId?: number | null;
+  workPackageLabel?: string | null;
+  attributedTo?: string | null;
+  caseNumber?: string | null;
+  proceduralRole?: string | null;
+  counterpartyRole?: string | null;
+  eventStage?: string | null;
+  eventOutcome?: string | null;
+  taxBasis?: string | null;
 }
+
+/** Смысловые поля этапа 06 в порядке, фиксированном для ключа. */
+const semanticKeyPart = (c: IAssertionContent): unknown[] | null => {
+  const part = [
+    c.polarity ?? 'positive',
+    c.contextProjectId ?? null,
+    c.workPackageLabel?.trim().toLowerCase() ?? null,
+    c.attributedTo?.trim().toLowerCase() ?? null,
+    c.caseNumber?.replace(/\s+/g, '').toUpperCase() ?? null,
+    c.proceduralRole ?? null,
+    c.counterpartyRole ?? null,
+    c.eventStage ?? null,
+    c.eventOutcome ?? null,
+    c.taxBasis ?? null,
+  ];
+  const isDefault = part[0] === 'positive' && part.slice(1).every(v => v === null);
+  return isDefault ? null : part;
+};
 
 /** Различитель события по цитате: регистр и пробелы не различают, перепечатка того же текста совпадает. */
 export const eventQuoteDiscriminator = (quote: string): string =>
@@ -80,6 +121,9 @@ export const assertionContentKey = (content: IAssertionContent): string => {
     content.valueCurrency,
   ];
   if (content.eventDiscriminator) canonical.push(`event:${content.eventDiscriminator}`);
+  // Смысл этапа 06 добавляется только если отличается от умолчания: ключи прежних строк не меняются.
+  const semantic = semanticKeyPart(content);
+  if (semantic) canonical.push(`semantic:${JSON.stringify(semantic)}`);
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex');
 };
 

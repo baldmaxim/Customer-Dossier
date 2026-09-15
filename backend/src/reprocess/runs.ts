@@ -15,6 +15,7 @@ import type { PoolClient } from 'pg';
 import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
 import { approvedPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import type { IExtraction } from '../llm/schema.js';
+import type { ISemanticExtraction } from '../llm/semantic/schema.js';
 import { buildCandidates, type IAssertionCandidate, type IEntityCandidate } from './candidates.js';
 import { computeCoverage, planCodePointChunks } from './chunking.js';
 import { buildFingerprint, defaultChunkerParams, type IChunkerParams, type IModelProvider } from './provider.js';
@@ -267,7 +268,7 @@ export const processRun = async (
     if (chunk.status === 'ok') continue; // повторный захват не спрашивает модель заново о готовом
     const text = plan[chunk.chunk_index]?.text ?? '';
     let outcome: ChunkOutcome;
-    let payload: IExtraction | null = null;
+    let payload: IExtraction | ISemanticExtraction | null = null;
     let raw: string | null = null;
     let error: string | null = null;
     let usage: { tokensIn: number | null; tokensOut: number | null; latencyMs: number | null } = {
@@ -345,7 +346,8 @@ export const serializeCandidate = (
   entities: ReadonlyMap<string, IEntityCandidate>,
 ): Record<string, unknown> => {
   const parties: Record<string, PartyDescriptor> = {};
-  for (const ref of [candidate.content.subjectRef, candidate.content.objectRef, candidate.content.counterpartyRef]) {
+  const c = candidate.content;
+  for (const ref of [c.subjectRef, c.objectRef, c.counterpartyRef, c.contextRef ?? null]) {
     const entity = ref ? entities.get(ref) : undefined;
     if (ref && entity) {
       parties[ref] = {
@@ -380,7 +382,7 @@ const finalizeRun = async (
     await lockOwnedRun(client, claim, leaseMs);
 
     const chunks = (
-      await client.query<IChunkRow & { text_payload: IExtraction | null }>(
+      await client.query<IChunkRow & { text_payload: IExtraction | ISemanticExtraction | null }>(
         `SELECT c.id, c.chunk_index, c.range_start, c.range_end, c.status, c.attempts,
                 (SELECT resp.payload FROM extraction_chunk_responses resp
                  WHERE resp.chunk_id = c.id AND resp.outcome = 'ok'

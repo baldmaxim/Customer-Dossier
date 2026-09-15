@@ -13,6 +13,14 @@ import {
 
 type EnvSource = Readonly<Record<string, string | undefined>>;
 
+const parseSchemaVersion = (raw: string | undefined): 'extract@2' | 'extract@3' => {
+  const value = raw === undefined || raw.trim() === '' ? 'extract@3' : raw.trim();
+  if (value !== 'extract@2' && value !== 'extract@3') {
+    throw new EnvValueError('EXTRACT_SCHEMA_VERSION: допустимо extract@3 (по умолчанию) или extract@2');
+  }
+  return value;
+};
+
 const optional = (source: EnvSource, name: string, fallback: string): string => {
   const value = source[name];
   return value === undefined || value.trim() === '' ? fallback : value;
@@ -47,6 +55,9 @@ export const parseEnv = (source: EnvSource) => {
     LMSTUDIO_TIMEOUT_MS: parsePositiveInt('LMSTUDIO_TIMEOUT_MS', source.LMSTUDIO_TIMEOUT_MS, 120_000),
 
     PROMPT_VERSION: optional(source, 'PROMPT_VERSION', 'p1'),
+    // Схема ответа модели для новых запусков конвейера (этап 06). extract@2 — откат к прежней
+    // схеме: запуски и наборы, уже сделанные по extract@3, остаются как были.
+    EXTRACT_SCHEMA_VERSION: parseSchemaVersion(source.EXTRACT_SCHEMA_VERSION),
 
     // 1, а не 2: каждый параллельный запрос держит свой кэш контекста в VRAM.
     // На 8 ГБ два запроса к 8B выталкивают модель в оперативную память —

@@ -62,9 +62,11 @@ export const upsertAssertion = async (
         object_company_id, object_project_id, object_text, scope_building, work_package,
         valid_from, valid_to, period_precision, modality, value_type, value_numeric, value_currency,
         content_key, supersedes_assertion_id, origin, confidence_extraction, confidence_identity,
-        counterparty_company_id, event_discriminator)
+        counterparty_company_id, event_discriminator,
+        polarity, context_project_id, work_package_label, attributed_to, case_number, procedural_role, counterparty_role,
+        event_stage, event_outcome, tax_basis)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::assertion_modality, $16, $17, $18,
-             $19, $20, $21, $22, $23, $24, $25)
+             $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
      ON CONFLICT (content_key) DO UPDATE SET updated_at = assertions.updated_at
      RETURNING id, (xmax = 0) AS created`,
     [
@@ -93,6 +95,16 @@ export const upsertAssertion = async (
       meta.confidenceIdentity,
       content.counterpartyCompanyId,
       content.eventDiscriminator ?? null,
+      content.polarity ?? 'positive',
+      content.contextProjectId ?? null,
+      content.workPackageLabel ?? null,
+      content.attributedTo ?? null,
+      content.caseNumber ?? null,
+      content.proceduralRole ?? null,
+      content.counterpartyRole ?? null,
+      content.eventStage ?? null,
+      content.eventOutcome ?? null,
+      content.taxBasis ?? null,
     ],
   );
   const row = res.rows[0];

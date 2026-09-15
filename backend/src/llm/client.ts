@@ -5,8 +5,12 @@
 // без правок в пайплайне.
 
 import { env } from '../config/env.js';
+import type { ZodType, ZodTypeDef } from 'zod';
+
 import { EXTRACT_JSON_SCHEMA, extractionSchema, type IExtraction } from './schema.js';
 import { buildSystemMessage, buildUserMessage } from './prompt.js';
+import { SEMANTIC_JSON_SCHEMA, semanticExtractionSchema, type ISemanticExtraction } from './semantic/schema.js';
+import { buildSemanticSystemMessage, buildSemanticUserMessage } from './semantic/prompt.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
 
@@ -16,10 +20,10 @@ export interface ILlmUsage {
   latencyMs: number;
 }
 
-export type ILlmResult =
+export type ILlmResult<T = IExtraction> =
   | {
       ok: true;
-      data: IExtraction;
+      data: T;
       usage: ILlmUsage;
       rawResponse: string;
       /** Ответ получен на укороченном тексте: он описывает не весь вход. */
@@ -42,6 +46,31 @@ const stripCodeFence = (raw: string): string => {
   return fence?.[1]?.trim() ?? trimmed;
 };
 
+/** Что просить у модели и чем проверять ответ: extract@2 или extract@3. */
+export interface IExtractSpec<T> {
+  schemaName: string;
+  jsonSchema: unknown;
+  validator: ZodType<T, ZodTypeDef, unknown>;
+  system: () => string;
+  user: (body: string, publishedAt: Date | null) => string;
+}
+
+export const LEGACY_SPEC: IExtractSpec<IExtraction> = {
+  schemaName: 'tg_info_extract',
+  jsonSchema: EXTRACT_JSON_SCHEMA,
+  validator: extractionSchema,
+  system: buildSystemMessage,
+  user: buildUserMessage,
+};
+
+export const SEMANTIC_SPEC: IExtractSpec<ISemanticExtraction> = {
+  schemaName: 'tg_info_extract_v3',
+  jsonSchema: SEMANTIC_JSON_SCHEMA,
+  validator: semanticExtractionSchema,
+  system: buildSemanticSystemMessage,
+  user: buildSemanticUserMessage,
+};
+
 export interface IExtractOptions {
   body: string;
   publishedAt: Date | null;
@@ -51,7 +80,7 @@ export interface IExtractOptions {
   signal?: AbortSignal;
 }
 
-const callOnce = async (options: IExtractOptions): Promise<ILlmResult> => {
+const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
   const startedAt = Date.now();
   const emptyUsage = (): ILlmUsage => ({
     tokensIn: null,
@@ -69,12 +98,13 @@ const callOnce = async (options: IExtractOptions): Promise<ILlmResult> => {
         temperature: options.temperature ?? 0.1,
         max_tokens: options.maxTokens ?? 2048,
         messages: [
-          { role: 'system', content: buildSystemMessage() },
-          { role: 'user', content: buildUserMessage(options.body, options.publishedAt) },
+          { role: 'system', content: spec.system() },
+          { role: 'user', content: spec.user(options.body, options.publishedAt) },
         ],
+        // Инструменты модели не передаются: ответ — только JSON по схеме, текст публикации ничего не вызывает.
         response_format: {
           type: 'json_schema',
-          json_schema: { name: 'tg_info_extract', strict: true, schema: EXTRACT_JSON_SCHEMA },
+          json_schema: { name: spec.schemaName, strict: true, schema: spec.jsonSchema },
         },
       }),
       signal: options.signal ?? AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS),
@@ -127,7 +157,7 @@ const callOnce = async (options: IExtractOptions): Promise<ILlmResult> => {
     };
   }
 
-  const validated = extractionSchema.safeParse(parsed);
+  const validated = spec.validator.safeParse(parsed);
   if (!validated.success) {
     const details = validated.error.issues
       .slice(0, 5)
@@ -152,11 +182,11 @@ const BACKOFF_MS = [2000, 8000, 30_000];
  * тексте: обычная причина — обрыв генерации на лимите токенов, и повтор с той
  * же длиной даст тот же обрыв.
  */
-export const extractFromText = async (options: IExtractOptions): Promise<ILlmResult> => {
-  let last: ILlmResult | null = null;
+export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
+  let last: ILlmResult<T> | null = null;
 
   for (let attempt = 0; attempt < BACKOFF_MS.length; attempt += 1) {
-    const result = await callOnce(options);
+    const result = await callOnce(options, spec);
     if (result.ok || result.failure !== 'llm_error') {
       last = result;
       break;
@@ -167,15 +197,22 @@ export const extractFromText = async (options: IExtractOptions): Promise<ILlmRes
     }
   }
 
-  if (!last) throw new Error('extractFromText: недостижимое состояние');
+  if (!last) throw new Error('extractWith: недостижимое состояние');
   if (last.ok || last.failure !== 'invalid_json') return last;
 
   const shortened = options.body.slice(0, Math.floor(options.body.length * 0.7));
   console.warn('[llm] невалидный JSON, повтор при temperature=0 и укороченном тексте');
-  const retry = await callOnce({ ...options, body: shortened, temperature: 0 });
+  const retry = await callOnce({ ...options, body: shortened, temperature: 0 }, spec);
   // Хвост текста модель не видела — вызывающий код обязан это знать.
   return retry.ok ? { ...retry, truncatedInput: true } : retry;
 };
+
+/** extract@2 — прежний путь (теневой прогон, сравнение моделей). */
+export const extractFromText = (options: IExtractOptions): Promise<ILlmResult> => extractWith(options, LEGACY_SPEC);
+
+/** extract@3 — типизированные связи и события (этап 06). */
+export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<ISemanticExtraction>> =>
+  extractWith(options, SEMANTIC_SPEC);
 
 /** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */
 export const checkLlmConnection = async (): Promise<{ ok: boolean; models: string[]; error?: string }> => {

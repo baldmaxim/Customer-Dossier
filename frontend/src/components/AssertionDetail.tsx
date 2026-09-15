@@ -6,9 +6,14 @@ import { ApiError, api } from '../api/client';
 import type { AssertionStatus, IAssertion, IEvidenceRow, IReviewRow } from '../api/types';
 import { describeAssertion } from '../lib/describeAssertion';
 import {
+  AMOUNT_PURPOSE_LABELS,
   ASSERTION_STATUS_LABELS,
   COMPLETENESS_LABELS,
+  EVENT_OUTCOME_LABELS,
+  EVENT_STAGE_LABELS,
   MODALITY_LABELS,
+  POLARITY_LABELS,
+  PRECISION_LABELS,
   REVIEW_SCOPE_LABELS,
   STANCE_LABELS,
   formatDate,
@@ -162,10 +167,22 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
       <h3 className={styles.detailTitle}>{describeAssertion(a)}</h3>
       <p className={styles.muted}>
         {ASSERTION_STATUS_LABELS[a.status]} · {MODALITY_LABELS[a.modality] ?? a.modality}
+        {a.polarity === 'negative' && ` · ${POLARITY_LABELS.negative}`}
+        {a.attributedTo && ` · со слов: ${a.attributedTo}`}
         {a.validFrom && ` · с ${formatDate(a.validFrom)}`}
-        {a.validTo && ` по ${formatDate(a.validTo)}`} · версия {a.version}
+        {a.validTo && ` по ${formatDate(a.validTo)}`}
+        {a.periodPrecision && a.periodPrecision !== 'day' && ` · ${PRECISION_LABELS[a.periodPrecision] ?? a.periodPrecision}`} · версия {a.version}
         {a.confidenceExtraction !== null && ` · уверенность модели ${Number(a.confidenceExtraction).toFixed(2)} (не вероятность истины)`}
       </p>
+      {(a.eventStage || a.eventOutcome || a.valueNumeric) && (
+        <p className={styles.muted}>
+          {a.eventStage && `стадия: ${EVENT_STAGE_LABELS[a.eventStage] ?? a.eventStage}`}
+          {a.eventOutcome && ` · результат по источнику: ${EVENT_OUTCOME_LABELS[a.eventOutcome] ?? a.eventOutcome}`}
+          {a.valueNumeric &&
+            ` · ${AMOUNT_PURPOSE_LABELS[a.valueType ?? 'amount'] ?? 'сумма'}: ${a.valueNumeric} ${a.valueCurrency ?? '(валюта не указана)'}`}
+          {a.taxBasis && ` · ${a.taxBasis === 'with_vat' ? 'с НДС' : 'без НДС'}`}
+        </p>
+      )}
       {a.needsRevalidation && (
         <p className={styles.warn}>Набор доказательств изменился после последнего решения — нужен пересмотр.</p>
       )}

@@ -3,8 +3,8 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 05B** (Telegram: курсоры и разрыв web-preview, журнал бота, правки): шаги A1–A5, затем раздел I.
-Разделы B–H — проверки этапов 01–05A (пройдены), повторять не обязательно.
+**Сейчас проверяется этап 06** (смысл связей, дела, состояние объекта, очередь проверки): шаги A1–A5, затем раздел J.
+Разделы B–I — проверки этапов 01–05B (пройдены), повторять не обязательно.
 LM Studio не нужен: модель в тестах и seed подменена детерминированными ответами.
 
 ---
@@ -38,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **25 файлов / 356 тестов passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **26 файлов / 384 теста passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -76,17 +76,18 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **13 файлов / 148 тестов passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **14 файлов / 155 тестов passed**:
 
 | Файл | Что проверяет |
 |---|---|
+| `reprocess/semantic/semantic.int.test.ts` | **этап 06**: TC-052…TC-058 — отрицание из другой публикации опровергает роль (решение сохранено, нужен пересмотр, очередь), план и слух не в карточке, «факт» с признаком плана — на проверку, цепочка договоров без транзитивного, два дела и стадии дела с номером через API, состояние объекта при поздней статье, чужая сумма, перенос объекта договора при слиянии |
 | `ingest/telegram/telegram.int.test.ts` | **этап 05B**: TC-047…TC-051 — первый запуск без истории, разрыв и ограниченная догрузка без дублей, сбой страницы разрыва, отзыв допуска во время прохода, чужой канал в data-post, правка и короткое опровержение, одинаковый текст в двух каналах, пересылка без источника; бот — повтор обновления и перезапуск, сбой посреди пачки, правка сообщения, скрытый автор и подпись без вложения, пустой allowlist, пропуск update_id и отзыв допуска |
 | `ingest/sites/sites.int.test.ts` | **этап 05A**: TC-042…TC-046 — RSS-анонс → полная статья, честный анонс при недоступной статье, 304 по ETag, повтор без дублей, правка статьи, редирект вне allowlist, HTML-список с пагинацией и датами зоны профиля, значимый query-параметр, сбой второй страницы и продолжение, лимит страниц и хвост, parser_degraded, 429/403/oversize, неверный профиль, карточка объекта без ложных «новостей», проба без записи |
 | `resolve/identity.int.test.ts` | **этап 04**: TC-034…TC-041 — разные ИНН при одном имени, бренд и юрлицо, неоднозначность без выбора первой строки, ЖК в двух городах и неизвестный город, корпуса, поиск по реквизиту и алиасу, слияние с дубликатами, сбой в середине, коллизия уникальности, конкуренция и встречные операции, повтор, отмена и отказ небезопасной отмены, backfill идентичности |
 | `reprocess/reprocess.int.test.ts` | **этап 03B**: полный путь и цепочка evidence → chunk → run → revision, падение последнего чанка, непокрытый хвост, timeout, crash до/после commit, два worker'а и fencing, поздний старый разбор, нерелевантная новая версия при двух источниках и ручном решении, отзыв права ИИ, одинаковые имена с разными ИНН, идемпотентная публикация, 409, проекции карточки, без дублей при переразборе |
 | `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
 | `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–016 |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–017 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -462,6 +463,72 @@ API и UI как в H4. «Админка» → «Источники»:
    «покрытие: разрыв постов ещё не догружен», `tg_web@2`.
 2. `demo_tg_renamed`: «канал не совпадает с источником», итог «другой канал на странице».
 3. Ширина 390 px: таблица скроллится внутри, страница без горизонтального скролла.
+
+---
+
+## J. Этап 06 — смысл связей, дела, состояние объекта, очередь проверки
+
+LM Studio для J1–J3 не нужен: seed подменяет модель шаблонными ответами.
+
+### J1. Данные
+
+Схема с нуля и seed — как в H1, последней командой `npm run seed:test-semantic`:
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+Remove-Item Env:DATABASE_URL
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run seed:test-semantic
+$env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+```
+
+Ожидается:
+- «договоры»: две строки — `Демо-Порт → Демо-Зенит`, `general_contract`, `reported_fact`, корпус `корпус 2`;
+  `Демо-Зенит → Демо-Вектор`, `subcontract`, пакет `ВК`. Договора `Демо-Зенит → Демо-Кварц` нет.
+- «на проверку»: одна строка «на проверку: в цитате план или намерение, а утверждение — состоявшийся факт».
+- «очередь»: `P2 polarity_conflict` и `P3 correction` с одним и тем же `ref_id`.
+- «дело»: три строки `case:А40-555/2026` — `claim_filed` / `claim` / `12000000.00`; `decision` / `satisfied` / `award` /
+  `9000000.00`; `appeal_filed` без суммы.
+- «состояние объекта»: `construction`, `2026-07-01`, `month` (поздняя мартовская статья его не изменила).
+
+### J2. База и CLI
+
+| Команда | Ожидается |
+|---|---|
+| `npm run pipeline:once -- --queue` | `P2 polarity_conflict #…` и `P3 correction #…` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT a.polarity, a.status, a.needs_revalidation, (SELECT count(*) FROM evidence e WHERE e.assertion_id = a.id AND e.stance = 'contradicts') AS contradicts FROM assertions a WHERE a.predicate = 'participates_in_project' ORDER BY a.id"` | `positive`, `reviewed_supported`, `t`, 1; `negative`, `text_grounded`, `f`, 0 |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT count(*) FROM card_participations_v WHERE origin = 'published'"` | 1 (отрицание ролью не стало) |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT state, valid_from, period_precision FROM project_state_history_v ORDER BY valid_from"` | `suspended 2026-03-01 month`, `construction 2026-07-01 month` — ровно две строки |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE assertions SET polarity = 'negative' WHERE id = (SELECT min(id) FROM assertions)"` | ошибка «содержание утверждения неизменяемо» |
+
+### J3. API и админка
+
+API и UI как в H4, вход токеном. В той же вкладке браузера (cookie сессии) откройте:
+
+1. `http://127.0.0.1:5173/api/review-queue` — JSON `items` с `polarity_conflict` (priority 2) и `correction` (priority 3).
+2. `http://127.0.0.1:5173/api/projects/<id>/state-history` — id объекта «Демо-Причал»
+   (`SELECT id FROM projects WHERE name = 'Демо-Причал'`): `history` из двух состояний, `current` — `construction`.
+3. `http://127.0.0.1:5173/api/companies/<id>/legal-cases` — id «Демо-Вектор»: одно дело `case:А40-555/2026` с тремя стадиями,
+   суммы строками (`"12000000.00"`).
+4. «Админка» → «Утверждения» → «Все»: строки «Демо-Порт → Демо-Зенит: договор генподряда по объекту Демо-Причал (корпус 2)»,
+   «Демо-Зенит — не генподрядчик на объекте Демо-Причал», «Судебное дело: Демо-Вектор (истец) · контрагент Демо-Зенит · дело
+   А40-555/2026». В карточке утверждения суда — «стадия: …», «требование: 12000000.00 RUB» или «присуждено: 9000000.00 RUB».
+5. Фильтр «Нужен пересмотр»: положительная роль Демо-Зенит, в карточке «опровергает (1)».
+6. Ширина 390 px: список и карточка утверждения без горизонтального скролла.
+
+### J4. Необязательно: замер локальной модели
+
+Только если LM Studio поднят с моделью из `LMSTUDIO_MODEL`. Отправляются только вымышленные тексты корпуса, база не нужна
+(команда читает ваш `.env` ради адреса модели — значения не присылайте):
+
+```bash
+cd backend
+npm run benchmark:model -- --out benchmark-06.json
+```
+
+Пришлите последнюю строку `[benchmark] …: safety X/Y, recall X/Y, ошибок модели N, медиана … мс` и строки «не выполнено».
+Это не precision/recall на реальных данных; результат попадёт в отчёт как LOCAL_MODEL на синтетике.
 
 ---
 

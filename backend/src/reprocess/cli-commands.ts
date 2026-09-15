@@ -7,6 +7,25 @@ import { lmStudioProvider } from './provider.js';
 import { enqueueRun, retryRun } from './runs.js';
 import { runReprocessPass, type IPassResult } from './worker.js';
 
+/** Очередь проверки по приоритету (этап 06): идентичность → конфликт ролей → исправление → оспаривание. */
+export const showReviewQueue = async (kind: string | null, limit = 30): Promise<void> => {
+  const rows = (
+    await getPool().query<{ priority: number; kind: string; ref_id: number; detail: Record<string, unknown>; since: Date }>(
+      `SELECT priority, kind, ref_id, detail, since FROM review_queue_v
+       WHERE ($1::text IS NULL OR kind = $1::text)
+       ORDER BY priority, since DESC, ref_id DESC LIMIT $2`,
+      [kind, limit],
+    )
+  ).rows;
+  if (rows.length === 0) {
+    console.log('[queue] очередь проверки пуста');
+    return;
+  }
+  for (const r of rows) {
+    console.log(`P${r.priority} ${r.kind} #${r.ref_id} ${JSON.stringify(r.detail)}`);
+  }
+};
+
 /** Потолок одной команды переразбора: массовый переразбор рабочей базы — не одной командой. */
 export const REEXTRACT_MAX_LIMIT = 200;
 

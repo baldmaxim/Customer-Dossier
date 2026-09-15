@@ -15,6 +15,7 @@
 //   --preview <набор>          что изменит публикация набора
 //   --publish <набор> [--allow-stale]  опубликовать набор (одна транзакция)
 //   --stats                    состояние legacy-очереди и доля ошибок
+//   --queue [--kind k] [--limit N]  очередь проверки: идентичность, конфликт ролей, исправление, спор (этап 06)
 //
 // Осмотр и починка
 //   --errors                   последние отказы с текстом ошибки
@@ -66,6 +67,7 @@ import {
   publishCommand,
   reextractCommand,
   retryRunsCommand,
+  showReviewQueue,
   showRuns,
 } from '../reprocess/cli-commands.js';
 import { NotPublishableError, PublicationConflictError } from '../reprocess/publish.js';
@@ -106,6 +108,7 @@ const main = async (): Promise<void> => {
   if (has('--retry-skipped')) return retrySkipped(has('--all'));
   if (has('--retry')) return retryRunsCommand(Number(argValue('--limit') ?? 20));
   if (has('--runs')) return showRuns(Number(argValue('--limit') ?? 20));
+  if (has('--queue')) return showReviewQueue(argValue('--kind'), Number(argValue('--limit') ?? 30));
   const previewId = argValue('--preview');
   if (previewId) return previewCommand(Number(previewId));
   const publishId = argValue('--publish');

@@ -65,6 +65,90 @@ export const MODALITY_LABELS: Record<string, string> = {
   unknown: 'модальность неизвестна',
 };
 
+/** Роль на объекте, вид договора и корпоративной связи в утверждениях (этап 06). */
+export const ASSERTION_ROLE_LABELS: Record<string, string> = {
+  customer: 'заказчик',
+  general_contractor: 'генподрядчик',
+  contractor: 'подрядчик',
+  subcontractor: 'субподрядчик',
+  supplier: 'поставщик',
+  designer: 'проектировщик',
+  investor: 'инвестор',
+  operator: 'эксплуатация',
+  general_contract: 'договор генподряда',
+  subcontract: 'договор субподряда',
+  supply: 'договор поставки',
+  design_contract: 'договор на проектирование',
+  contract: 'договор',
+  owns_share: 'владеет долей',
+  controls: 'контролирует',
+  member_of_group: 'входит в группу',
+  brand_of: 'бренд компании',
+};
+
+export const POLARITY_LABELS: Record<string, string> = {
+  positive: 'утверждается',
+  negative: 'отрицается',
+};
+
+export const PRECISION_LABELS: Record<string, string> = {
+  day: 'точная дата',
+  month: 'с точностью до месяца',
+  quarter: 'с точностью до квартала',
+  year: 'с точностью до года',
+  unknown: 'дата неизвестна',
+};
+
+export const PROCEDURAL_ROLE_LABELS: Record<string, string> = {
+  plaintiff: 'истец',
+  defendant: 'ответчик',
+  applicant: 'заявитель',
+  creditor: 'кредитор',
+  debtor: 'должник',
+  third_party: 'третье лицо',
+};
+
+export const EVENT_STAGE_LABELS: Record<string, string> = {
+  claim_filed: 'иск подан',
+  accepted: 'принят к производству',
+  hearing: 'рассмотрение',
+  decision: 'решение',
+  appeal_filed: 'обжалование',
+  appeal_decision: 'решение апелляции',
+  cassation: 'кассация',
+  enforcement: 'исполнение',
+  settled: 'мировое соглашение',
+  withdrawn: 'отозван',
+  procedure_introduced: 'процедура введена',
+  procedure_completed: 'процедура завершена',
+};
+
+export const EVENT_OUTCOME_LABELS: Record<string, string> = {
+  satisfied: 'удовлетворено',
+  partially_satisfied: 'удовлетворено частично',
+  dismissed: 'отказано',
+  overturned: 'отменено',
+  settled: 'урегулировано',
+};
+
+export const AMOUNT_PURPOSE_LABELS: Record<string, string> = {
+  claim: 'требование',
+  award: 'присуждено',
+  contract: 'цена договора',
+  debt: 'долг по сообщению',
+  penalty: 'неустойка',
+  other: 'сумма',
+  amount: 'сумма',
+};
+
+export const REVIEW_QUEUE_LABELS: Record<string, string> = {
+  identity: 'неоднозначная идентичность',
+  polarity_conflict: 'утверждение и отрицание',
+  role_period_conflict: 'конфликт ролей в одном периоде',
+  correction: 'основание изменилось',
+  dispute: 'оспаривается',
+};
+
 export const CHRONOLOGY_LABELS: Record<string, string> = {
   source_modified_at: 'по дате изменения от источника',
   observed_order: 'по порядку наблюдения',
@@ -123,6 +207,13 @@ export const EVENT_LABELS: Record<string, string> = {
   contractor_change: 'Смена подрядчика',
   commissioning: 'Ввод в эксплуатацию',
   bankruptcy: 'Банкротство',
+  bankruptcy_intent: 'Намерение о банкротстве',
+  bankruptcy_filing: 'Заявление о банкротстве',
+  bankruptcy_procedure: 'Процедура банкротства',
+  payment_claim: 'Претензия об оплате',
+  suspension: 'Приостановка работ',
+  resumption: 'Возобновление работ',
+  cancellation: 'Отмена проекта',
   license_revoked: 'Отзыв лицензии',
   tender_award: 'Победа в тендере',
   other: 'Прочее',

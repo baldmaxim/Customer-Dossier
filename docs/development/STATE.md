@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-15 (+02:00). Текущий этап: **05B**. Статус: **PASS** (прогон пользователя, evidence/05B/USER_RUN.md); следующий — 06. LIVE_SOURCE=NOT_RUN.
+Обновлено: 2026-09-15 (+02:00). Текущий этап: **06**. Статус: **AWAITING_USER_RUN** (unit/build PASS в среде агента; интеграция и раздел J — у пользователя). LIVE_SOURCE=NOT_RUN, LOCAL_MODEL=NOT_RUN.
 Последний этап с пройденными core-gates: 05B (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -13,15 +13,15 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/05B_REPORT.md` (00–05A — там же). Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/06_REPORT.md` (00–05B — там же). Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
-ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота).
+ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота), ADR-008 (смысл связей, время, события).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
 
 ## Активные флаги (по умолчанию)
 
 `INGEST_ENABLED=false`, `PIPELINE_ENABLED=false` (новый конвейер 03B), `REPROCESS_AUTO_PUBLISH=false`,
-`MERGE_APPLY_ENABLED=false`, `METRICS_AUTO_REFRESH=false`, `BOT_ENABLED=false`, `HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`.
+`MERGE_APPLY_ENABLED=false`, `EXTRACT_SCHEMA_VERSION=extract@3` (новые запуски), `METRICS_AUTO_REFRESH=false`, `BOT_ENABLED=false`, `HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`.
 Legacy apply заблокирован в `pipeline/guard.ts`; слияние — безопасный путь за флагом.
 
 ## Уровни готовности
@@ -30,10 +30,10 @@ LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIV
 
 ## Неразрешённые действия
 
-Запись в рабочую БД (миграции 010–016, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
+Запись в рабочую БД (миграции 010–017, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
 включение источников; изменение `.env`; облачное размещение — без отдельного согласования.
 Commit/push в `dossier-stages` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-`stages/STAGE_06_RELATIONS_EVENTS.md`.
+Прогон пользователя по `TESTING_LOCAL.md` (A1–A5, J; J4 — замер модели по желанию); после PASS — `stages/STAGE_07_ANALYTICS.md`.

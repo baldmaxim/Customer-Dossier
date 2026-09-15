@@ -133,7 +133,8 @@ const loadEntity = async (client: PoolClient, kind: MergeEntityKind, id: number)
 
 const ASSERTION_REF_COLUMNS: Record<MergeEntityKind, string[]> = {
   company: ['subject_company_id', 'object_company_id', 'counterparty_company_id'],
-  project: ['subject_project_id', 'object_project_id'],
+  // context_project_id — объект договора (этап 06): ссылка на объект, переносится вместе с остальными.
+  project: ['subject_project_id', 'object_project_id', 'context_project_id'],
 };
 
 const idsOf = async (client: PoolClient, sql: string, params: unknown[]): Promise<number[]> =>
@@ -629,6 +630,16 @@ interface IAssertionFullRow {
   value_numeric: string | null;
   value_currency: string | null;
   event_discriminator: string | null;
+  polarity: 'positive' | 'negative';
+  context_project_id: number | null;
+  work_package_label: string | null;
+  attributed_to: string | null;
+  case_number: string | null;
+  procedural_role: string | null;
+  counterparty_role: string | null;
+  event_stage: string | null;
+  event_outcome: string | null;
+  tax_basis: string | null;
   origin: 'extraction' | 'legacy_import' | 'manual';
   confidence_extraction: number | null;
   confidence_identity: number | null;
@@ -653,6 +664,8 @@ const moveAssertions = async (
                 object_project_id, object_text, counterparty_company_id, scope_building, work_package,
                 valid_from::text AS valid_from, valid_to::text AS valid_to, period_precision, modality::text AS modality,
                 value_type, value_numeric::text AS value_numeric, value_currency, event_discriminator, origin,
+                polarity, context_project_id, work_package_label, attributed_to, case_number, procedural_role,
+                counterparty_role, event_stage, event_outcome, tax_basis,
                 confidence_extraction, confidence_identity
          FROM assertions WHERE id = $1 FOR UPDATE`,
         [oldId],
@@ -704,6 +717,16 @@ const moveAssertions = async (
       valueNumeric: a.value_numeric,
       valueCurrency: a.value_currency,
       eventDiscriminator: a.event_discriminator,
+      polarity: a.polarity,
+      contextProjectId: kind === 'project' ? replaceId(a.context_project_id, s, t) : a.context_project_id,
+      workPackageLabel: a.work_package_label,
+      attributedTo: a.attributed_to,
+      caseNumber: a.case_number,
+      proceduralRole: a.procedural_role,
+      counterpartyRole: a.counterparty_role,
+      eventStage: a.event_stage,
+      eventOutcome: a.event_outcome,
+      taxBasis: a.tax_basis,
     };
     const next = await upsertAssertion(client, content, {
       origin: a.origin,

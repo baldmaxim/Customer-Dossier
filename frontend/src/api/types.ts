@@ -159,8 +159,9 @@ export type AssertionStatus = 'candidate' | 'text_grounded' | 'reviewed_supporte
 
 export interface IAssertion {
   id: number;
-  predicate: 'participates_in_project' | 'event' | 'company_mentioned' | 'project_mentioned';
-  role: Role | null;
+  predicate: 'participates_in_project' | 'contract' | 'corporate_relation' | 'event' | 'company_mentioned' | 'project_mentioned';
+  /** Роль на объекте, вид договора или корпоративной связи (этап 06). */
+  role: string | null;
   eventType: string | null;
   subjectCompanyId: number | null;
   subjectCompanyName: string | null;
@@ -173,11 +174,23 @@ export interface IAssertion {
   objectProjectName: string | null;
   objectText: string | null;
   counterpartyCompanyName: string | null;
+  contextProjectName?: string | null;
+  polarity?: 'positive' | 'negative';
+  workPackageLabel?: string | null;
+  attributedTo?: string | null;
+  caseNumber?: string | null;
+  proceduralRole?: string | null;
+  counterpartyRole?: string | null;
+  eventStage?: string | null;
+  eventOutcome?: string | null;
+  taxBasis?: string | null;
+  periodPrecision?: string;
   scopeBuilding: string | null;
   workPackage: string | null;
   validFrom: string | null;
   validTo: string | null;
   modality: string;
+  valueType?: string | null;
   valueNumeric: string | null;
   valueCurrency: string | null;
   status: AssertionStatus;

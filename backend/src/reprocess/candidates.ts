@@ -7,20 +7,24 @@
 //  - одинаковые названия с разными или неизвестными реквизитами не схлопываются;
 //  - события не объединяются по type/company/project: два суда — два события;
 //    одно событие из перекрывающихся чанков с той же позицией цитаты — одно;
-//  - доказательство — абсолютная позиция в тексте редакции (code points) + чанк.
+//  - доказательство — абсолютная позиция в тексте редакции (code points) + чанк;
+//  - ответ extract@3 (этап 06) даёт типизированные связи и события — semantic/assemble.ts.
 
 import type { IExtraction } from '../llm/schema.js';
+import { isSemanticExtraction, type ISemanticExtraction } from '../llm/semantic/schema.js';
 import { verifyExtraction } from '../pipeline/verify.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { locateQuote } from '../assertions/span.js';
-import type { Predicate } from '../assertions/model.js';
+import type { Modality, Polarity, Predicate } from '../assertions/model.js';
+import { assembleSemantic } from './semantic/assemble.js';
+import { verifySemanticExtraction } from './semantic/verify.js';
 
 export interface IChunkInput {
   chunkId: number;
   index: number;
   start: number;
   text: string;
-  extraction: IExtraction;
+  extraction: IExtraction | ISemanticExtraction;
 }
 
 export interface IEvidenceCandidate {
@@ -55,11 +59,25 @@ export interface ICandidateContent {
   counterpartyRef: string | null;
   validFrom: string | null;
   validTo: string | null;
-  periodPrecision: 'day' | 'unknown';
-  modality: 'unknown';
+  periodPrecision: 'day' | 'month' | 'quarter' | 'year' | 'unknown';
+  modality: Modality;
   valueType: string | null;
   valueNumeric: string | null;
   valueCurrency: string | null;
+  // Этап 06 (extract@3). Отсутствие поля — прежнее значение по умолчанию.
+  polarity?: Polarity;
+  /** Объект, к которому относится договор (контекст, не сторона). */
+  contextRef?: string | null;
+  scopeBuilding?: string | null;
+  workPackage?: string | null;
+  workPackageLabel?: string | null;
+  attributedTo?: string | null;
+  caseNumber?: string | null;
+  proceduralRole?: string | null;
+  counterpartyRole?: string | null;
+  eventStage?: string | null;
+  eventOutcome?: string | null;
+  taxBasis?: string | null;
 }
 
 export interface IAssertionCandidate {
@@ -68,6 +86,8 @@ export interface IAssertionCandidate {
   grounded: boolean;
   confidence: number;
   rejectedReason: string | null;
+  /** Смысл противоречит цитате: кандидат сохраняется, но не публикуется. */
+  review?: string | null;
 }
 
 export interface ICandidateBuild {
@@ -125,7 +145,11 @@ export const buildCandidates = (chunks: readonly IChunkInput[], publishedAt: Dat
   const links = new Map<string, IAssertionCandidate>();
 
   for (const chunk of chunks) {
-    const verified = verifyExtraction(chunk.extraction, chunk.text, publishedAt);
+    const semantic = isSemanticExtraction(chunk.extraction)
+      ? verifySemanticExtraction(chunk.extraction, chunk.text, publishedAt)
+      : null;
+    const legacy = semantic ? null : verifyExtraction(chunk.extraction as IExtraction, chunk.text, publishedAt);
+    const verified = semantic ?? legacy!;
     for (const r of verified.rejected) rejected.push({ chunkIndex: chunk.index, ...r });
     if (!verified.relevant) continue;
     relevant = true;
@@ -176,7 +200,21 @@ export const buildCandidates = (chunks: readonly IChunkInput[], publishedAt: Dat
       localProject.set(project.name, mentionId);
     });
 
-    for (const link of verified.links) {
+    if (semantic) {
+      assembleSemantic(semantic, {
+        localCompany,
+        localProject,
+        mentionToEntity,
+        locate: quote => locateInChunk(chunk, quote),
+        relations: links,
+        events,
+        chunkIndex: chunk.index,
+      });
+      continue;
+    }
+    if (!legacy) continue;
+
+    for (const link of legacy.links) {
       const companyMention = localCompany.get(link.company);
       const projectMention = localProject.get(link.project);
       if (!companyMention || !projectMention) continue;
@@ -207,13 +245,13 @@ export const buildCandidates = (chunks: readonly IChunkInput[], publishedAt: Dat
           rejectedReason: null,
         } satisfies IAssertionCandidate);
       // У связи нет собственной цитаты (R03, этап 06): основание — подтверждённая цитата компании в том же чанке.
-      const company = verified.companies.find(c => c.name === link.company);
+      const company = legacy.companies.find(c => c.name === link.company);
       if (company?.quoteVerified) pushEvidence(candidate.evidence, locateInChunk(chunk, company.quote));
       candidate.confidence = Math.max(candidate.confidence, link.confidenceFinal);
       links.set(key, candidate);
     }
 
-    for (const event of verified.events) {
+    for (const event of legacy.events) {
       const location = event.quoteVerified ? locateInChunk(chunk, event.quote) : null;
       const subjectMention = event.company ? localCompany.get(event.company) : undefined;
       const projectMention = event.project ? localProject.get(event.project) : undefined;
@@ -284,6 +322,7 @@ export const buildCandidates = (chunks: readonly IChunkInput[], publishedAt: Dat
   for (const a of assertions) {
     a.grounded = a.evidence.length > 0;
     if (!a.grounded) a.rejectedReason = 'нет однозначно найденной цитаты в тексте чанка';
+    else if (a.review) a.rejectedReason = `на проверку: ${a.review}`;
   }
 
   return { relevant, entities, assertions, rejected };

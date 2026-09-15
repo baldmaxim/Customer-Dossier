@@ -23,7 +23,9 @@
     "seed:test-identity": "tsx src/__tests__/integration/seedIdentityDemo.ts",
     "seed:test-telegram": "tsx src/__tests__/integration/seedTelegramDemo.ts",
     "seed:test-sites": "tsx src/__tests__/integration/seedSitesDemo.ts",
-    "seed:test-reprocess": "tsx src/__tests__/integration/seedReprocessDemo.ts"
+    "seed:test-reprocess": "tsx src/__tests__/integration/seedReprocessDemo.ts",
+    "seed:test-semantic": "tsx src/__tests__/integration/seedSemanticDemo.ts",
+    "benchmark:model": "tsx src/reprocess/semantic/benchmark.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
