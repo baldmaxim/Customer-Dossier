@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — код готов, ждёт прогона пользователя (ожидается интеграция 15 файлов / 163, раздел K). Затем — 08A.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS (интеграция 15 файлов / 163, раздел K, evidence/07/USER_RUN.md). Следующий — 08A.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -59,7 +59,7 @@ typecheck/build backend и frontend, unit 27 файлов / 398 тестов —
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-После PASS 07 — этап `stages/STAGE_08A_DOSSIER_UI.md`: читать COMMON_RULES, DATA_CONTRACTS, ADR-008, ADR-009,
+Этап `stages/STAGE_08A_DOSSIER_UI.md`: читать COMMON_RULES, DATA_CONTRACTS, ADR-008, ADR-009,
 `frontend/src/pages/CompanyPage.tsx`, `components/CompanySignals.tsx`, `AssertionDetail.tsx`, `api/assertions.routes.ts`, `api/companies.routes.ts`.
 
 ## Запреты

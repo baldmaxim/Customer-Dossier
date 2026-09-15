@@ -1,7 +1,7 @@
 # Отчёт этапа 07 — Объяснимая аналитика и общий фон компании
 
 Дата/время: 2026-09-15 (+02:00). Исполнитель: Claude Code (Opus 5), единственный writer.
-Статус: **AWAITING_USER_RUN** — код, unit и сборки PASS в среде агента; интеграция и раздел K TESTING_LOCAL — у пользователя.
+Статус: **PASS** (2026-09-15, прогон пользователя @ `2f67e51` — [evidence/07/USER_RUN.md](../evidence/07/USER_RUN.md)): unit 27 / 398, интеграция 15 файлов / 163, раздел K ок. Просмотр 390 px в DevTools — NOT_RUN.
 
 ## Исходная база
 
@@ -52,15 +52,15 @@
 | Суды по роли и стадии; отклонённое и спорное видны и не reviewed; план/отрицание — не учтено | то же | unit | 0 | PASS | — |
 | Опыт без сумм; статус идентификации | то же | unit | 0 | PASS | — |
 | TC-064 детерминизм на срезе и независимость от порядка входа | то же | unit | 0 | PASS | — |
-| Снимок на срез через API; карточка без `risk`; deprecated legacy-эндпоинт | `signals.int.test.ts` | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-060/062 на PostgreSQL: пять перепечаток, событие без даты, задержка объекта не у компании | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Drilldown id публикаций и объектов совпадают с SQL | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-063 компания без публикаций | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-061 контекст объекта через API: no_overlap, другой корпус | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Список подрядчиков из снимка, `sort=risk` — 400 | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| TC-064 сбой пересчёта сохраняет снимок и помечает stale; повтор на срез — тот же payload | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Регрессия 01–06 (14 файлов / 155) | `npm run test:integration` | tg_info_test | — | AWAITING_USER_RUN | ожидается 15 файлов / 163 |
-| Upgrade схемы и представлений на тестовой копии, CLI, UI 390 px | TESTING_LOCAL K | tg_info_test | — | AWAITING_USER_RUN | — |
+| Снимок на срез через API; карточка без `risk`; deprecated legacy-эндпоинт | `signals.int.test.ts` | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| TC-060/062 на PostgreSQL: пять перепечаток, событие без даты, задержка объекта не у компании | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| Drilldown id публикаций и объектов совпадают с SQL | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| TC-063 компания без публикаций | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| TC-061 контекст объекта через API: no_overlap, другой корпус | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| Список подрядчиков из снимка, `sort=risk` — 400 | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| TC-064 сбой пересчёта сохраняет снимок и помечает stale; повтор на срез — тот же payload | то же | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
+| Регрессия 01–06 (14 файлов / 155) | `npm run test:integration` | tg_info_test | 0 | PASS | 15 файлов / 163 |
+| Upgrade схемы и представлений на тестовой копии, CLI, UI 390 px | TESTING_LOCAL K | tg_info_test | 0 | PASS | evidence/07/USER_RUN.md |
 
 ## Данные, безопасность и откат
 
