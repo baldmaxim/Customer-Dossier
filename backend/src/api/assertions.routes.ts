@@ -202,13 +202,21 @@ assertionsRouter.get('/assertions/:id', async (req, res) => {
   res.json({ assertion, evidence, reviews });
 });
 
-const reviewSchema = z.object({
-  decision: z.enum(REVIEW_DECISIONS),
-  scope: z.enum(['reflects_source', 'fact_confirmed']).default('reflects_source'),
-  reason: z.string().trim().max(2000).nullish().transform(v => (v ? v : null)),
-  expectedVersion: z.number().int().positive(),
-  idempotencyKey: z.string().min(8).max(200),
-});
+/** Решения, для воспроизводимости которых нужна причина (этап 08A): отклонение, спор и возврат на проверку. */
+export const DECISIONS_REQUIRING_REASON: ReadonlySet<string> = new Set(['rejected', 'disputed', 'candidate']);
+
+export const reviewSchema = z
+  .object({
+    decision: z.enum(REVIEW_DECISIONS),
+    scope: z.enum(['reflects_source', 'fact_confirmed']).default('reflects_source'),
+    reason: z.string().trim().max(2000).nullish().transform(v => (v ? v : null)),
+    expectedVersion: z.number().int().positive(),
+    idempotencyKey: z.string().min(8).max(200),
+  })
+  .refine(v => !DECISIONS_REQUIRING_REASON.has(v.decision) || (v.reason !== null && v.reason.length >= 3), {
+    message: 'Для отклонения, спора и возврата на проверку укажите причину',
+    path: ['reason'],
+  });
 
 const sendDomainError = (res: import('express').Response, err: unknown): boolean => {
   if (err instanceof VersionConflictError) {
@@ -230,7 +238,8 @@ assertionsRouter.post('/assertions/:id/reviews', async (req, res) => {
   const id = idOf(req.params.id);
   const parsed = reviewSchema.safeParse(req.body);
   if (id === null || !parsed.success) {
-    res.status(400).json({ error: 'Некорректное решение' });
+    const reasonIssue = parsed.success ? null : parsed.error.issues.find(i => i.path[0] === 'reason');
+    res.status(400).json({ error: reasonIssue?.message ?? 'Некорректное решение', code: reasonIssue ? 'reason_required' : 'invalid' });
     return;
   }
   try {

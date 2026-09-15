@@ -5,11 +5,16 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useSession } from './hooks/useSession';
+import { DOSSIER_UI_ENABLED } from './lib/features';
 import { AdminPage } from './pages/AdminPage';
+import { CasePage } from './pages/CasePage';
+import { CasesPage } from './pages/CasesPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LoginPage } from './pages/LoginPage';
+import { ProjectPage } from './pages/ProjectPage';
+import { ReviewQueuePage } from './pages/ReviewQueuePage';
 import { SearchPage } from './pages/SearchPage';
 
 const queryClient = new QueryClient({
@@ -41,6 +46,11 @@ const AuthGate: FC = () => {
         <Route path="/contractors" element={<ContractorsPage />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        {/* Рабочее досье (этап 08A). Откат — VITE_DOSSIER_UI=false: маршруты скрыты, обращения в базе сохраняются. */}
+        {DOSSIER_UI_ENABLED && <Route path="/cases" element={<CasesPage />} />}
+        {DOSSIER_UI_ENABLED && <Route path="/cases/:id" element={<CasePage />} />}
+        {DOSSIER_UI_ENABLED && <Route path="/projects/:id" element={<ProjectPage />} />}
+        {DOSSIER_UI_ENABLED && <Route path="/review" element={<ReviewQueuePage />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

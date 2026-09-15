@@ -89,7 +89,16 @@ companiesRouter.get('/', async (req, res) => {
     legalForm: string | null;
     score: number;
   }>(
-    `SELECT c.id, c.name, c.city, c.legal_form AS "legalForm",
+    // Кандидаты с контекстом для осознанного выбора (этап 08A): вид сущности, реквизиты, совпавший алиас,
+    // объекты из последнего снимка сигналов. Одноимённые юрлица различаются реквизитами, а не порядком строк.
+    `SELECT c.id, c.name, c.city, c.legal_form AS "legalForm", c.entity_type AS "entityType",
+            coalesce((SELECT array_agg(i.identifier_type || ' ' || i.value ORDER BY i.id) FROM entity_identifiers i
+                      WHERE i.company_id = c.id AND i.status = 'active'), '{}') AS identifiers,
+            (SELECT s.projects FROM company_signal_snapshots s WHERE s.company_id = c.id
+               AND s.refresh_id = (SELECT id FROM signal_active_refresh_v)) AS projects,
+            (SELECT a.alias FROM entity_aliases a WHERE a.entity_kind = 'company' AND a.entity_id = c.id
+               AND a.alias_latin % $1 ORDER BY similarity(a.alias_latin, $1) DESC LIMIT 1) AS "matchedAlias",
+            (SELECT count(*)::int FROM companies h WHERE h.merged_into_id IS NULL AND h.name_key = c.name_key AND h.id <> c.id) AS homonyms,
             CASE WHEN $4::text IS NOT NULL AND (c.tax_id = $4::text OR EXISTS (
                    SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
                  THEN 1 ELSE

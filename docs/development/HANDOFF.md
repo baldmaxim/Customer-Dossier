@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS (интеграция 15 файлов / 163, раздел K, evidence/07/USER_RUN.md). Следующий — 08A.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — код готов, ждёт прогона пользователя (ожидается интеграция 16 файлов / 173, раздел L). Затем — 08B.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -38,15 +38,19 @@ Docker и проверки с базой агент не запускает: п�
   `seed:test-semantic` (ADR-008).
 - 07: миграция 018 — `signal_refreshes`, `company_signal_snapshots`; `backend/src/signals/*` (правила `signals@1` на срез,
   загрузка, пересчёт с журналом и stale, контекст объекта); API `/companies/:id/signals|context|legacy-risk`, список и сводка
-  подрядчиков из снимка; карточка без вердикта и RiskBadge (ADR-009). Следующая миграция — 019.
+  подрядчиков из снимка; карточка без вердикта и RiskBadge (ADR-009).
+- 08A: миграция 019 — `dossier_cases`, `dossier_case_versions`, `review_queue_v` (отрицание без корпуса); `backend/src/dossier/*`
+  (обращения с версией, факты с доказательствами, шаблоны фраз, досье обращения, объекта, резюме компании); API
+  `/cases`, `/cases/:id/dossier`, `/projects/search`, `/projects/:id/dossier`, `/companies/:id/dossier-summary`; причина решения
+  обязательна; экраны «Обращения», обращение, объект, «Проверка» за `VITE_DOSSIER_UI` (ADR-010). Следующая миграция — 020.
 
 ## Принятые решения
-ADR-001…ADR-009. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
+ADR-001…ADR-010. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
 Публикация снимает только вклад своей публикации (evidence → superseded). Completed — только при полном покрытии.
 Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck/build backend и frontend, unit 27 файлов / 398 тестов — PASS.
+typecheck/build backend и frontend, unit 28 файлов / 410 тестов — PASS.
 
 ## Что НЕ проверено
 Живые сайты и каналы, живой бот (допуска и токена нет); интеграция 06; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
@@ -59,13 +63,13 @@ typecheck/build backend и frontend, unit 27 файлов / 398 тестов —
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Этап `stages/STAGE_08A_DOSSIER_UI.md`: читать COMMON_RULES, DATA_CONTRACTS, ADR-008, ADR-009,
-`frontend/src/pages/CompanyPage.tsx`, `components/CompanySignals.tsx`, `AssertionDetail.tsx`, `api/assertions.routes.ts`, `api/companies.routes.ts`.
+После PASS 08A — этап `stages/STAGE_08B_GRAPH_SNAPSHOTS.md`: читать COMMON_RULES, DATA_CONTRACTS, ADR-009, ADR-010,
+`backend/src/dossier/*`, `signals/*`, `frontend/src/pages/CasePage.tsx`, `ProjectPage.tsx`, миграции 017–019.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/07_REPORT.md`, ADR-009,
-`TESTING_LOCAL.md`; ключевые файлы: `backend/src/signals/*.ts`, `docs/migrations/018_signals_read_model.sql`, `frontend/src/components/CompanySignals.tsx`.
+`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/08A_REPORT.md`, ADR-010,
+`TESTING_LOCAL.md`; ключевые файлы: `backend/src/dossier/*.ts`, `docs/migrations/019_dossier_cases.sql`, `frontend/src/pages/CasePage.tsx`.

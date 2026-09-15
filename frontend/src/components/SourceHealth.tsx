@@ -43,6 +43,12 @@ export const SourceHealthCell: FC<{ source: ISourceRow }> = ({ source }) => {
         {source.lastDurationMs ? ` · ${Math.round(source.lastDurationMs / 100) / 10} с` : ''}
       </span>
       {source.retryAfterAt && <span className={styles.meta}>повтор не раньше {formatDateTime(source.retryAfterAt)}</span>}
+      {source.lagSeconds !== undefined && (
+        <span className={styles.meta}>
+          {source.lagSeconds === null ? 'успешных запусков не было' : `с последнего успеха: ${Math.round(source.lagSeconds / 3600)} ч`}
+          {source.items !== undefined && ` · публикаций ${source.items}, с неполным текстом ${source.incompleteItems ?? 0}`}
+        </span>
+      )}
     </div>
   );
 };

@@ -53,7 +53,12 @@ adminRouter.get('/sources', async (_req, res) => {
             r.outcome AS "lastOutcome", r.items_found AS "lastFound", r.items_saved AS "lastSaved",
             r.items_changed AS "lastChanged", r.items_skipped AS "lastSkipped", r.items_failed AS "lastFailed",
             r.pages_fetched AS "lastPages", r.coverage AS "lastCoverage", r.duration_ms AS "lastDurationMs",
-            r.retry_after_at AS "retryAfterAt"
+            r.retry_after_at AS "retryAfterAt",
+            -- Этап 08A: отставание с последнего успеха и публикации, чья текущая редакция не полная.
+            CASE WHEN s.last_ok_at IS NULL THEN NULL ELSE extract(epoch FROM now() - s.last_ok_at)::int END AS "lagSeconds",
+            (SELECT count(*)::int FROM source_items si WHERE si.source_id = s.id) AS "items",
+            (SELECT count(*)::int FROM source_items si JOIN document_revisions dr ON dr.id = si.latest_revision_id
+              WHERE si.source_id = s.id AND dr.completeness <> 'full') AS "incompleteItems"
      FROM sources s
      LEFT JOIN LATERAL (
        SELECT * FROM source_runs WHERE source_id = s.id ORDER BY started_at DESC LIMIT 1

@@ -370,3 +370,58 @@ export const CONTEXT_STATE_LABELS: Record<string, string> = {
   cancelled: 'отменён',
   commissioned: 'введён',
 };
+
+// ─── Рабочее досье (этап 08A) ────────────────────────────────────────────
+
+export const ATTRIBUTION_LABELS: Record<string, string> = {
+  source_reported: 'в публикации сообщается',
+  analyst_reviewed: 'проверено аналитиком',
+  analyst_disputed: 'спорно по решению аналитика',
+  analyst_rejected: 'отклонено аналитиком',
+  operator_claim: 'со слов обратившегося',
+  not_established: 'не установлено в выборке',
+  system_context: 'контекст',
+};
+
+export const CASE_ROLE_STATUS_LABELS: Record<string, string> = {
+  reviewed: 'подтверждена аналитиком в пределах основания',
+  reported: 'сообщается в публикациях, не проверена',
+  contradicted: 'источники противоречат',
+  not_established: 'по источникам не установлена',
+  no_project: 'объект не выбран',
+  no_company: 'юрлицо не установлено',
+};
+
+export const CASE_CHAIN_STATUS_LABELS: Record<string, string> = {
+  documented: 'договор с заказчиком документирован',
+  differs_from_claim: 'в источниках другой заказчик, чем заявлено',
+  not_documented: 'договорная цепочка не установлена',
+  no_project: 'объект не выбран',
+  no_company: 'юрлицо не установлено',
+};
+
+export const REVIEW_QUEUE_KIND_LABELS: Record<string, string> = {
+  identity: 'нерешённая идентификация',
+  polarity_conflict: 'противоречие источников',
+  role_period_conflict: 'конфликт ролей в одном периоде',
+  correction: 'изменилась доказательная база',
+  dispute: 'оспаривается',
+};
+
+export const IN_PERIOD_LABELS: Record<string, string> = {
+  overlaps: 'в выбранном периоде',
+  no_overlap: 'вне выбранного периода',
+  unknown: 'период участия не указан',
+  no_period_selected: '',
+};
+
+export const CLAIMED_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'customer', label: 'заказчик' },
+  { value: 'general_contractor', label: 'генподрядчик' },
+  { value: 'contractor', label: 'подрядчик' },
+  { value: 'subcontractor', label: 'субподрядчик' },
+  { value: 'supplier', label: 'поставщик' },
+  { value: 'designer', label: 'проектировщик' },
+  { value: 'investor', label: 'инвестор' },
+  { value: 'operator', label: 'эксплуатация' },
+];

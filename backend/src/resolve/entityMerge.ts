@@ -170,10 +170,12 @@ export const dependencyState = async (
     put('events', await rows(`SELECT id || ':' || coalesce(company_id::text, '') || ':' || coalesce(counterparty_id::text, '') AS k FROM events WHERE company_id = ANY($1::bigint[]) OR counterparty_id = ANY($1::bigint[])`));
     put('participants', await rows(`SELECT id || ':' || company_id AS k FROM project_participants WHERE company_id = ANY($1::bigint[])`));
     put('relations', await rows(`SELECT id || ':' || status AS k FROM company_relations WHERE from_company_id = ANY($1::bigint[]) OR to_company_id = ANY($1::bigint[])`));
+    put('cases', await rows(`SELECT id || ':' || coalesce(company_id::text, '') || ':' || coalesce(claimed_client_company_id::text, '') AS k FROM dossier_cases WHERE company_id = ANY($1::bigint[]) OR claimed_client_company_id = ANY($1::bigint[])`));
   } else {
     put('events', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM events WHERE project_id = ANY($1::bigint[])`));
     put('participants', await rows(`SELECT id || ':' || project_id AS k FROM project_participants WHERE project_id = ANY($1::bigint[])`));
     put('children', await rows(`SELECT id || ':' || parent_project_id AS k FROM projects WHERE parent_project_id = ANY($1::bigint[])`));
+    put('cases', await rows(`SELECT id || ':' || project_id AS k FROM dossier_cases WHERE project_id = ANY($1::bigint[])`));
   }
   const refs = ASSERTION_REF_COLUMNS[kind].map(c => `a.${c} = ANY($1::bigint[])`).join(' OR ');
   put('assertions', await rows(`SELECT a.id || ':' || a.version AS k FROM assertions a WHERE ${refs}`));
@@ -509,6 +511,8 @@ const MOVABLE: Record<string, Record<string, string>> = {
   company_relations: { from_company_id: 'bigint', to_company_id: 'bigint' },
   merge_queue: { status: 'merge_status' },
   evidence: { status: 'text' },
+  // Обращения (этап 08A): ссылки на выбранное юрлицо, заявленного заказчика и объект переносятся.
+  dossier_cases: { company_id: 'bigint', claimed_client_company_id: 'bigint', project_id: 'bigint' },
 };
 
 const DELETABLE = new Set(['entity_aliases', 'mentions', 'project_participants']);
@@ -601,9 +605,17 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
         await updateColumn(client, moves, 'company_relations', id, col, s, t);
       }
     }
+    for (const col of ['company_id', 'claimed_client_company_id']) {
+      for (const id of await idsOf(client, `SELECT id FROM dossier_cases WHERE ${col} = $1 ORDER BY id`, [s])) {
+        await updateColumn(client, moves, 'dossier_cases', id, col, s, t);
+      }
+    }
   } else {
     for (const id of await idsOf(client, `SELECT id FROM projects WHERE parent_project_id = $1 AND merged_into_id IS NULL ORDER BY id`, [s])) {
       await updateColumn(client, moves, 'projects', id, 'parent_project_id', s, t);
+    }
+    for (const id of await idsOf(client, `SELECT id FROM dossier_cases WHERE project_id = $1 ORDER BY id`, [s])) {
+      await updateColumn(client, moves, 'dossier_cases', id, 'project_id', s, t);
     }
   }
 };

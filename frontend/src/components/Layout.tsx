@@ -2,6 +2,7 @@ import { FC, ReactNode } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 
 import { useTheme } from '../hooks/useTheme';
+import { DOSSIER_UI_ENABLED } from '../lib/features';
 import styles from './Layout.module.css';
 
 interface INavItem {
@@ -12,12 +13,26 @@ interface INavItem {
   icon: string;
 }
 
-const NAV: INavItem[] = [
+const ALL_NAV: Array<INavItem & { dossier?: boolean }> = [
   {
     to: '/',
     label: 'Поиск',
     end: true,
     icon: 'M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5',
+  },
+  {
+    to: '/cases',
+    label: 'Обращения',
+    end: false,
+    dossier: true,
+    icon: 'M6.5 3.5h8l4 4v13h-12v-17ZM14.5 3.5v4h4M9 12.5h6M9 16h6',
+  },
+  {
+    to: '/review',
+    label: 'Проверка',
+    end: false,
+    dossier: true,
+    icon: 'M4.5 12.5l4.5 4.5 10.5-10.5',
   },
   {
     to: '/contractors',
@@ -32,6 +47,8 @@ const NAV: INavItem[] = [
     icon: 'M3.5 7.5h9M16.5 7.5h4M3.5 16.5h4M11.5 16.5h9M14.5 5v5M9.5 14v5',
   },
 ];
+
+const NAV: INavItem[] = ALL_NAV.filter(item => !item.dossier || DOSSIER_UI_ENABLED);
 
 const SUN =
   'M12 4.5v-2M12 21.5v-2M4.5 12h-2M21.5 12h-2M6.7 6.7 5.3 5.3M18.7 18.7l-1.4-1.4M6.7 17.3l-1.4 1.4M18.7 5.3l-1.4 1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z';

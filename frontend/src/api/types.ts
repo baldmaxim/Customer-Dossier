@@ -14,6 +14,12 @@ export interface ICompanySearchItem {
   city: string | null;
   legalForm: string | null;
   score: number;
+  // Этап 08A: контекст для осознанного выбора среди одноимённых.
+  entityType?: string;
+  identifiers?: string[];
+  projects?: number | null;
+  matchedAlias?: string | null;
+  homonyms?: number;
 }
 
 export interface ICompany {
@@ -307,6 +313,10 @@ export interface ISourceRow {
   lastCoverage?: Record<string, unknown> | null;
   lastDurationMs?: number | null;
   retryAfterAt?: string | null;
+  /** Этап 08A: секунд с последнего успеха, публикаций и публикаций с неполной текущей редакцией. */
+  lagSeconds?: number | null;
+  items?: number;
+  incompleteItems?: number;
 }
 
 export type SourceHealth = 'unknown' | 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid' | 'identity_uncertain';
@@ -532,4 +542,172 @@ export interface IProjectContext {
   }>;
   currentState: Array<{ building: string | null; state: string; validFrom: string; periodPrecision: string }>;
   note: string;
+}
+
+// ─── Рабочее досье (этап 08A) ─────────────────────────────────────────────
+
+export type Attribution =
+  | 'source_reported'
+  | 'analyst_reviewed'
+  | 'analyst_disputed'
+  | 'analyst_rejected'
+  | 'operator_claim'
+  | 'not_established'
+  | 'system_context';
+
+export interface IStatement {
+  code: string;
+  text: string;
+  attribution: Attribution;
+  assertionIds: number[];
+  evidenceIds: number[];
+  quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string }>;
+}
+
+export interface ICaseRow {
+  id: number;
+  title: string;
+  companyStatus: 'identified' | 'unidentified';
+  companyId: number | null;
+  companyName: string | null;
+  companyNameClaimed: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  projectNameClaimed: string | null;
+  scopeBuilding: string | null;
+  workPackage: string | null;
+  workPackageLabel: string | null;
+  claimedRole: string | null;
+  claimedClientCompanyId: number | null;
+  claimedClientCompanyName: string | null;
+  claimedClientName: string | null;
+  claimedTerms: string | null;
+  requestDate: string;
+  operatorNote: string | null;
+  status: 'open' | 'closed';
+  provenance: 'operator_recorded_claim';
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ICaseInput {
+  title: string;
+  companyId: number | null;
+  companyNameClaimed: string | null;
+  projectId: number | null;
+  projectNameClaimed: string | null;
+  scopeBuilding: string | null;
+  workPackageLabel: string | null;
+  claimedRole: string | null;
+  claimedClientCompanyId: number | null;
+  claimedClientName: string | null;
+  claimedTerms: string | null;
+  requestDate: string;
+  operatorNote: string | null;
+  status: 'open' | 'closed';
+}
+
+export interface ICaseDossier {
+  templateVersion: string;
+  caseId: number;
+  caseVersion: number;
+  generatedAt: string;
+  freshness: { signalsCutoff: string | null; stale: boolean; staleReasons: string[]; latestEvidenceAt: string | null };
+  subject: IStatement[];
+  observations: IStatement[];
+  role: {
+    claimed: IStatement | null;
+    status: 'reviewed' | 'reported' | 'contradicted' | 'not_established' | 'no_project' | 'no_company';
+    established: IStatement[];
+    otherBuildings: IStatement[];
+    contradictions: IStatement[];
+  };
+  chain: {
+    claimed: IStatement | null;
+    status: 'documented' | 'differs_from_claim' | 'not_documented' | 'no_project' | 'no_company';
+    documented: IStatement[];
+    subcontracts: IStatement[];
+    coParticipants: IStatement[];
+  };
+  terms: { claimed: IStatement | null; fromSources: IStatement[] };
+  projectContext: { state: IStatement[]; events: IStatement[] };
+  companyEvents: IStatement[];
+  uncertainties: IStatement[];
+  questions: Array<{ code: string; text: string; basedOn: string }>;
+  disclaimer: string;
+}
+
+export interface IProjectSearchItem {
+  id: number;
+  name: string;
+  city: string | null;
+  kind: string;
+  level: string;
+  levelLabel: string | null;
+  parentId: number | null;
+  parentName: string | null;
+  children: number;
+}
+
+export interface IProjectDossier {
+  project: {
+    id: number;
+    name: string;
+    kind: string;
+    city: string | null;
+    level: string;
+    levelLabel: string | null;
+    parent: { id: number; name: string } | null;
+    children: Array<{ id: number; name: string; level: string; levelLabel: string | null }>;
+    mergedIntoId: number | null;
+  };
+  period: { from: string | null; to: string | null };
+  state: {
+    current: Array<{ building: string | null; state: string; validFrom: string; periodPrecision: string }>;
+    history: Array<{ building: string | null; state: string; validFrom: string; periodPrecision: string; assertionId: number }>;
+  };
+  participants: Array<{
+    companyId: number;
+    companyName: string;
+    role: string | null;
+    building: string | null;
+    workPackage: string | null;
+    validFrom: string | null;
+    validTo: string | null;
+    periodPrecision: string;
+    inPeriod: 'overlaps' | 'no_overlap' | 'unknown' | 'no_period_selected';
+    statement: IStatement;
+  }>;
+  notCounted: IStatement[];
+  contracts: IStatement[];
+  coParticipationNote: string;
+  events: IStatement[];
+  cases: Array<{ id: number; title: string; status: string }>;
+}
+
+export interface ICompanySummary {
+  generatedAt: string;
+  signalsCutoff: string | null;
+  stale: boolean;
+  staleReasons: string[];
+  summary: IStatement[];
+  counterparties: {
+    contracts: IStatement[];
+    corporate: IStatement[];
+    coParticipants: Array<{ companyId: number; companyName: string; projectId: number; projectName: string; roleOther: string | null; roleThis: string | null }>;
+  };
+  contradictions: Array<{ kind: string; assertionId: number; priority: number }>;
+  limits: IStatement[];
+  cases: Array<{ id: number; title: string; status: string }>;
+}
+
+export interface IReviewQueueItem {
+  priority: number;
+  kind: 'identity' | 'polarity_conflict' | 'role_period_conflict' | 'correction' | 'dispute';
+  refId: number;
+  assertionId: number | null;
+  detail: Record<string, unknown>;
+  since: string;
 }

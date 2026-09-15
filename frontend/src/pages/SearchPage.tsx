@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { ICompanySearchItem } from '../api/types';
-import { IDENTITY_STATUS_LABELS } from '../lib/labels';
+import { ENTITY_TYPE_LABELS, IDENTITY_STATUS_LABELS } from '../lib/labels';
+import { identifierText } from '../components/EntityPickers';
 import styles from './SearchPage.module.css';
 
 interface ISummary {
@@ -99,7 +100,17 @@ export const SearchPage: FC = () => {
               <span className={styles.resultText}>
                 <span className={styles.resultName}>{item.name}</span>
                 <span className={styles.resultMeta}>
-                  {[item.legalForm, item.city].filter(Boolean).join(' · ')}
+                  {[
+                    item.legalForm,
+                    item.entityType && item.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[item.entityType] : null,
+                    item.city,
+                    item.identifiers && item.identifiers.length > 0 ? item.identifiers.map(identifierText).join(', ') : 'реквизитов нет',
+                    item.projects !== null && item.projects !== undefined ? `объектов: ${item.projects}` : null,
+                    item.matchedAlias ? `написание «${item.matchedAlias}»` : null,
+                    item.homonyms ? `одноимённых: ${item.homonyms} — сверьте реквизиты` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               </span>
               <svg

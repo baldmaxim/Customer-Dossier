@@ -226,6 +226,7 @@ describe('конкурентные решения (TC-022)', () => {
     });
     const tabB = await api.call('POST', `/api/assertions/${assertionId}/reviews`, {
       decision: 'rejected',
+      reason: 'вторая вкладка',
       expectedVersion: version,
       idempotencyKey: 'tc022-tab-b-0001',
     });

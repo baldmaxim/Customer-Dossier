@@ -7,6 +7,7 @@ import { env } from './config/env.js';
 import { checkDbConnection } from './db/pool.js';
 import { adminRouter } from './api/admin.routes.js';
 import { assertionsRouter } from './api/assertions.routes.js';
+import { dossierRouter } from './api/dossier.routes.js';
 import {
   SessionStore,
   createAuthRouter,
@@ -95,6 +96,7 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
   app.use('/api', requireOperator, revisionsRouter);
   app.use('/api', requireOperator, assertionsRouter);
   app.use('/api', requireOperator, reprocessRouter);
+  app.use('/api', requireOperator, dossierRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });

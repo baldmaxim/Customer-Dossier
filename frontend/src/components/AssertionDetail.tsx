@@ -50,6 +50,8 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
   // Ключ идемпотентности живёт, пока форма не отправлена успешно: повтор
   // того же нажатия (двойной клик, повтор после сетевой ошибки) не создаёт дубль.
   const [idempotencyKey, setIdempotencyKey] = useState(newKey);
+  // Отклонение, спор и возврат на проверку без причины сервер не примет (воспроизводимость решения).
+  const reasonRequired = decision === 'rejected' || decision === 'disputed' || decision === 'candidate';
 
   const detailQuery = useQuery({
     queryKey: ['assertion', assertionId],
@@ -234,10 +236,10 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
           </label>
         </div>
         <label className={styles.field}>
-          <span>Причина</span>
-          <textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} />
+          <span>{reasonRequired ? 'Причина (обязательна для этого решения)' : 'Причина'}</span>
+          <textarea rows={2} value={reason} required={reasonRequired} minLength={reasonRequired ? 3 : undefined} onChange={e => setReason(e.target.value)} />
         </label>
-        <button type="submit" className={styles.primary} disabled={review.isPending}>
+        <button type="submit" className={styles.primary} disabled={review.isPending || (reasonRequired && reason.trim().length < 3)}>
           {review.isPending ? 'Записываю…' : 'Записать решение'}
         </button>
       </form>
