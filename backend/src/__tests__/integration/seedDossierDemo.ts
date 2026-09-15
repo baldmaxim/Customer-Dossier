@@ -49,7 +49,8 @@ const OTHER = `АО «Альфа-Демо» (ИНН ${INN_B}) строит ск�
 await ingest(OTHER, fx.answer({ companies: [fx.company('Альфа-Демо', OTHER, { legal_form: 'АО', tax_id: INN_B })] }));
 
 const GC = 'Генподрядчик ЖК «Берег-Демо» — «Бета-Демо».';
-await ingest(GC, fx.answer({
+// Префикс: короткий текст без него отсекается фильтром too_short (меньше 40 символов после нормализации).
+await ingest(`Новости стройки. ${GC}`, fx.answer({
   companies: [fx.company('Бета-Демо', GC)],
   projects: [fx.project('Берег-Демо', GC)],
   relations: [fx.relation({ type: 'participation', kind: 'general_contractor', subject: 'Бета-Демо', project: 'Берег-Демо', quote: GC })],
