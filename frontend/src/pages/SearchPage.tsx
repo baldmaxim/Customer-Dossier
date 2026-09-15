@@ -3,13 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { ICompanySearchItem, RiskLight } from '../api/types';
-import { RiskBadge } from '../components/RiskBadge';
-import { RISK_LEGACY_NOTE } from '../lib/labels';
+import type { ICompanySearchItem } from '../api/types';
+import { IDENTITY_STATUS_LABELS } from '../lib/labels';
 import styles from './SearchPage.module.css';
 
 interface ISummary {
-  byRisk: Array<{ riskLight: RiskLight; n: number }>;
+  byIdentity: Array<{ identityStatus: string; n: number }>;
   totals: {
     companies: number;
     projects: number;
@@ -27,15 +26,6 @@ const useDebounced = (value: string, delay = 300): string => {
     return () => clearTimeout(timer);
   }, [value, delay]);
   return debounced;
-};
-
-const ORDER: RiskLight[] = ['red', 'yellow', 'green', 'grey'];
-
-const BAR_CLASS: Record<RiskLight, string> = {
-  red: styles.barRed ?? '',
-  yellow: styles.barYellow ?? '',
-  green: styles.barGreen ?? '',
-  grey: styles.barGrey ?? '',
 };
 
 export const SearchPage: FC = () => {
@@ -58,10 +48,7 @@ export const SearchPage: FC = () => {
 
   const items = searchQuery.data?.items ?? [];
   const totals = summaryQuery.data?.totals;
-  const byRisk = (summaryQuery.data?.byRisk ?? [])
-    .slice()
-    .sort((a, b) => ORDER.indexOf(a.riskLight) - ORDER.indexOf(b.riskLight));
-  const riskTotal = byRisk.reduce((sum, r) => sum + r.n, 0);
+  const byIdentity = summaryQuery.data?.byIdentity ?? [];
 
   return (
     <>
@@ -141,35 +128,11 @@ export const SearchPage: FC = () => {
             <SummaryStat value={totals.documents} label="разобрано сообщений" />
           </div>
 
-          {riskTotal > 0 && (
-            <div className={styles.riskCard}>
-              <div className={styles.riskTitle} title={RISK_LEGACY_NOTE}>
-                Компании по устаревшему индексу сигналов (не оценка надёжности)
-              </div>
-              <div
-                className={styles.bar}
-                role="img"
-                aria-label={byRisk.map(r => `${r.riskLight}: ${r.n}`).join(', ')}
-              >
-                {byRisk
-                  .filter(r => r.n > 0)
-                  .map(r => (
-                    <span
-                      key={r.riskLight}
-                      className={`${styles.barPart} ${BAR_CLASS[r.riskLight]}`}
-                      style={{ width: `${(r.n / riskTotal) * 100}%` }}
-                    />
-                  ))}
-              </div>
-              <div className={styles.riskRow}>
-                {byRisk.map(r => (
-                  <span key={r.riskLight} className={styles.riskItem}>
-                    <RiskBadge light={r.riskLight} />
-                    <span className={styles.riskCount}>{r.n}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
+          {byIdentity.length > 0 && (
+            <p className={styles.hintPlain}>
+              Идентификация компаний:{' '}
+              {byIdentity.map(r => `${IDENTITY_STATUS_LABELS[r.identityStatus] ?? r.identityStatus} — ${r.n}`).join('; ')}.
+            </p>
           )}
 
           {totals.pendingMerges > 0 && (

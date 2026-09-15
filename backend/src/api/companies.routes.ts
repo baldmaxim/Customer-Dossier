@@ -7,8 +7,10 @@
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { z } from 'zod';
 
-import { query, queryOne } from '../db/pool.js';
+import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
+import { loadProjectContext } from '../signals/context.js';
+import { refreshState } from '../signals/refresh.js';
 
 export const companiesRouter = asyncRouter();
 
@@ -122,7 +124,7 @@ companiesRouter.get('/', async (req, res) => {
   res.json({ items: rows });
 });
 
-/** Профиль + метрики риска. */
+/** Профиль компании. Сигналы — отдельно (/:id/signals); старый индекс риска в карточку не входит. */
 companiesRouter.get('/:id', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);
   if (!Number.isFinite(id)) {
@@ -159,11 +161,6 @@ companiesRouter.get('/:id', async (req, res) => {
     return;
   }
 
-  const risk = await queryOne<ICompanyRisk>(
-    `SELECT ${RISK_COLUMNS} FROM company_risk WHERE company_id = $1`,
-    [id],
-  );
-
   const aliases = await query<{ alias: string; hits: number }>(
     `SELECT alias, hits FROM entity_aliases
      WHERE entity_kind = 'company' AND entity_id = $1
@@ -189,7 +186,65 @@ companiesRouter.get('/:id', async (req, res) => {
     [id],
   );
 
-  res.json({ company, risk, aliases, identifiers, relations });
+  res.json({ company, aliases, identifiers, relations });
+});
+
+/**
+ * Объяснимые сигналы (этап 07): последний успешный снимок, срез, версия правил и признак устаревания.
+ * Нет снимка — status not_computed, а не пустые «хорошие» значения.
+ */
+companiesRouter.get('/:id/signals', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  const state = await refreshState();
+  const row = state.active
+    ? await queryOne<{ payload: unknown }>(
+        'SELECT payload FROM company_signal_snapshots WHERE refresh_id = $1 AND company_id = $2',
+        [state.active.id, id],
+      )
+    : null;
+  res.json({
+    status: !state.active ? 'not_computed' : row ? 'ok' : 'not_in_snapshot',
+    refresh: state,
+    signals: row?.payload ?? null,
+  });
+});
+
+const contextSchema = z.object({
+  projectId: z.coerce.number().int().positive(),
+  /** Явный срез (для воспроизводимости); по умолчанию — срез активного снимка или текущий момент. */
+  cutoff: z.string().datetime({ offset: true }).optional(),
+});
+
+/** Контекст выбранного объекта: участие компании и события объекта с пересечением периодов. */
+companiesRouter.get('/:id/context', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const parsed = contextSchema.safeParse(req.query);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: 'Укажите projectId' });
+    return;
+  }
+  const state = await refreshState();
+  const cutoff = parsed.data.cutoff ? new Date(parsed.data.cutoff) : state.active ? new Date(state.active.cutoffAt) : new Date();
+  res.json(await loadProjectContext(getPool(), id, parsed.data.projectId, cutoff));
+});
+
+/**
+ * Устаревший индекс риска (миграция 007). Некалиброван, смешивает тональность, задержки объектов и суды;
+ * новой карточкой и сортировкой не используется. Оставлен только для сравнения при откате.
+ */
+companiesRouter.get('/:id/legacy-risk', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  const risk = await queryOne<ICompanyRisk>(`SELECT ${RISK_COLUMNS} FROM company_risk WHERE company_id = $1`, [id]);
+  res.setHeader('Deprecation', 'true');
+  res.json({ deprecated: true, note: 'legacy-индекс этапа 007, не оценка надёжности; не смешивать с сигналами signals@1', risk });
 });
 
 /**

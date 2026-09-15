@@ -3,60 +3,71 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { IContractorRow } from '../api/types';
-import { RiskBadge } from '../components/RiskBadge';
-import { RISK_LEGACY_NOTE, formatPercent } from '../lib/labels';
+import type { IContractorRow, ISignalRefreshState } from '../api/types';
+import { ASSERTION_ROLE_LABELS, IDENTITY_STATUS_LABELS, formatDateTime } from '../lib/labels';
 import styles from './ContractorsPage.module.css';
 
-type RoleFilter = 'any' | 'general_contractor' | 'contractor' | 'customer';
-type SortKey = 'projects' | 'risk' | 'mentions';
+type RoleFilter = 'any' | 'general_contractor' | 'contractor' | 'subcontractor' | 'customer';
+type SortKey = 'projects' | 'name';
 
 const ROLE_TABS: Array<{ value: RoleFilter; label: string }> = [
   { value: 'any', label: 'Все' },
   { value: 'general_contractor', label: 'Генподрядчики' },
   { value: 'contractor', label: 'Подрядчики' },
+  { value: 'subcontractor', label: 'Субподрядчики' },
   { value: 'customer', label: 'Заказчики' },
 ];
 
+// Сортировки по «риску» и по числу публикаций нет: активность в новостях — не размер и не надёжность.
 const SORTS: Array<{ value: SortKey; label: string }> = [
-  { value: 'projects', label: 'По объёму' },
-  { value: 'risk', label: 'По индексу сигналов (legacy)' },
-  { value: 'mentions', label: 'По упоминаниям' },
+  { value: 'projects', label: 'По числу объектов' },
+  { value: 'name', label: 'По названию' },
 ];
 
-const delayedText = (row: IContractorRow): string =>
-  row.delayedProjects > 0
-    ? `${row.delayedProjects} (${formatPercent(row.delayShare)})`
-    : '—';
+interface IListResponse {
+  status: 'ok' | 'not_computed';
+  refresh: ISignalRefreshState;
+  items: IContractorRow[];
+}
 
-const avgDelayText = (row: IContractorRow): string =>
-  row.avgDelayDays === null ? '—' : `${Math.round(row.avgDelayDays)} дн`;
+const countText = (value: number | null): string => (value === null ? 'нет данных' : String(value));
 
-const negativeText = (row: IContractorRow): string =>
-  row.mentions90d === 0 ? '—' : `${row.negative90d}/${row.mentions90d}`;
+const rolesText = (row: IContractorRow): string =>
+  row.roles.length === 0 ? '—' : row.roles.map(r => ASSERTION_ROLE_LABELS[r] ?? r).join(', ');
+
+const courtText = (row: IContractorRow): string => {
+  const c = row.courtRoles;
+  if (!c || c.plaintiff + c.defendant + c.other + c.unknown === 0) return '—';
+  return `истец ${c.plaintiff} · ответчик ${c.defendant}${c.unknown ? ` · роль не указана ${c.unknown}` : ''}`;
+};
 
 export const ContractorsPage: FC = () => {
   const [role, setRole] = useState<RoleFilter>('any');
   const [sort, setSort] = useState<SortKey>('projects');
-  const [includeGrey, setIncludeGrey] = useState(false);
+  const [includeInsufficient, setIncludeInsufficient] = useState(false);
 
   const listQuery = useQuery({
-    queryKey: ['contractors', role, sort, includeGrey],
+    queryKey: ['contractors', role, sort, includeInsufficient],
     queryFn: () =>
-      api.get<{ items: IContractorRow[] }>(
-        `/api/contractors?role=${role}&sort=${sort}&includeGrey=${includeGrey}&limit=100`,
-      ),
+      api.get<IListResponse>(`/api/contractors?role=${role}&sort=${sort}&includeInsufficient=${includeInsufficient}&limit=100`),
   });
 
   const items = listQuery.data?.items ?? [];
+  const refresh = listQuery.data?.refresh;
 
   return (
     <>
       <h1>Статистика подрядчиков</h1>
       <p className={styles.lead}>
-        Собрано из открытых источников. Это не проверка контрагента, а повод задать вопросы.{' '}
-        {RISK_LEGACY_NOTE}
+        Собрано из открытых публикаций. Это не проверка контрагента и не оценка надёжности: числа показывают, что есть в выборке,
+        с правилом расчёта в карточке компании.
       </p>
+      {refresh?.active && (
+        <p className={styles.lead}>
+          Срез {formatDateTime(refresh.active.cutoffAt)} · правила {refresh.active.rulesVersion}
+          {refresh.stale && ` · устарело: ${refresh.staleReasons.join('; ')}`}
+        </p>
+      )}
 
       <div className={styles.controls}>
         <div className={styles.control}>
@@ -94,39 +105,33 @@ export const ContractorsPage: FC = () => {
         </div>
 
         <label className={styles.checkbox}>
-          <input
-            type="checkbox"
-            checked={includeGrey}
-            onChange={e => setIncludeGrey(e.target.checked)}
-          />
-          Показывать компании без данных
+          <input type="checkbox" checked={includeInsufficient} onChange={e => setIncludeInsufficient(e.target.checked)} />
+          Показывать компании без публикаций
         </label>
       </div>
 
       {listQuery.isLoading && <p className={styles.empty}>Загрузка…</p>}
-
-      {listQuery.isSuccess && items.length === 0 && (
-        <p className={styles.empty}>
-          Пусто. Либо данных ещё нет, либо все компании пока в статусе «мало данных» — включите их
-          галочкой выше.
-        </p>
+      {listQuery.data?.status === 'not_computed' && (
+        <p className={styles.empty}>Сигналы ещё не рассчитывались: выполните npm run metrics:refresh.</p>
+      )}
+      {listQuery.isSuccess && listQuery.data.status === 'ok' && items.length === 0 && (
+        <p className={styles.empty}>В выборке таких компаний не найдено.</p>
       )}
 
       {items.length > 0 && (
         <>
-          {/* Таблица — на планшете и десктопе. */}
           <div className={`scroll-x ${styles.tableWrap}`}>
             <table className={styles.table}>
               <thead>
                 <tr>
                   <th>Компания</th>
-                  <th>Оценка</th>
+                  <th>Идентификация</th>
                   <th className={styles.num}>Объектов</th>
-                  <th className={styles.num}>Активных</th>
-                  <th className={styles.num}>Срывов</th>
-                  <th className={styles.num}>Задержка</th>
-                  <th className={styles.num}>Негатив 90 дн</th>
-                  <th className={styles.num}>Суды</th>
+                  <th>Роли</th>
+                  <th className={styles.num}>События с датой, 12 мес</th>
+                  <th className={styles.num}>Без даты</th>
+                  <th>Суды (роль)</th>
+                  <th className={styles.num}>Публикаций / семей</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,20 +143,14 @@ export const ContractorsPage: FC = () => {
                       </Link>
                       {row.city && <span className={styles.city}>{row.city}</span>}
                     </td>
-                    <td>
-                      <RiskBadge light={row.riskLight} score={row.riskScore} />
-                    </td>
-                    <td className={styles.num}>{row.projectsTotal}</td>
-                    <td className={styles.num}>{row.activeProjects}</td>
-                    <td className={`${styles.num} ${row.delayedProjects > 0 ? styles.bad : ''}`}>
-                      {delayedText(row)}
-                    </td>
-                    <td className={styles.num}>{avgDelayText(row)}</td>
-                    <td className={`${styles.num} ${row.negative90d > 0 ? styles.bad : ''}`}>
-                      {negativeText(row)}
-                    </td>
-                    <td className={`${styles.num} ${row.hardEvents12m > 0 ? styles.bad : ''}`}>
-                      {row.hardEvents12m || '—'}
+                    <td>{IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}</td>
+                    <td className={styles.num}>{countText(row.projects)}</td>
+                    <td>{rolesText(row)}</td>
+                    <td className={styles.num}>{row.eventsDated12m}</td>
+                    <td className={styles.num}>{row.eventsUndated}</td>
+                    <td>{courtText(row)}</td>
+                    <td className={styles.num}>
+                      {row.publications === null ? 'нет данных' : `${row.publications} / ${row.families ?? 0}`}
                     </td>
                   </tr>
                 ))}
@@ -159,10 +158,24 @@ export const ContractorsPage: FC = () => {
             </table>
           </div>
 
-          {/* На телефоне восемь колонок нечитаемы — те же строки карточками. */}
           <div className={styles.cards}>
             {items.map(row => (
-              <ContractorCard key={row.companyId} row={row} />
+              <article key={row.companyId} className={styles.card}>
+                <div className={styles.cardHead}>
+                  <Link to={`/company/${row.companyId}`} className={styles.cardName}>
+                    {row.name}
+                  </Link>
+                </div>
+                <div className={styles.cardCity}>{IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}</div>
+                <dl className={styles.cardStats}>
+                  <CardStat label="Объектов" value={countText(row.projects)} />
+                  <CardStat label="Роли" value={rolesText(row)} />
+                  <CardStat label="События с датой, 12 мес" value={String(row.eventsDated12m)} />
+                  <CardStat label="Без даты" value={String(row.eventsUndated)} />
+                  <CardStat label="Суды" value={courtText(row)} />
+                  <CardStat label="Публикаций / семей" value={row.publications === null ? 'нет данных' : `${row.publications} / ${row.families ?? 0}`} />
+                </dl>
+              </article>
             ))}
           </div>
         </>
@@ -171,37 +184,9 @@ export const ContractorsPage: FC = () => {
   );
 };
 
-const ContractorCard: FC<{ row: IContractorRow }> = ({ row }) => (
-  <article className={styles.card}>
-    <div className={styles.cardHead}>
-      <Link to={`/company/${row.companyId}`} className={styles.cardName}>
-        {row.name}
-      </Link>
-      <RiskBadge light={row.riskLight} score={row.riskScore} />
-    </div>
-    {row.city && <div className={styles.cardCity}>{row.city}</div>}
-    <dl className={styles.cardStats}>
-      <CardStat label="Объектов" value={String(row.projectsTotal)} />
-      <CardStat label="Активных" value={String(row.activeProjects)} />
-      <CardStat label="Срывов" value={delayedText(row)} bad={row.delayedProjects > 0} />
-      <CardStat label="Задержка" value={avgDelayText(row)} bad={(row.avgDelayDays ?? 0) > 30} />
-      <CardStat label="Негатив 90 дн" value={negativeText(row)} bad={row.negative90d > 0} />
-      <CardStat
-        label="Суды"
-        value={row.hardEvents12m ? String(row.hardEvents12m) : '—'}
-        bad={row.hardEvents12m > 0}
-      />
-    </dl>
-  </article>
-);
-
-const CardStat: FC<{ label: string; value: string; bad?: boolean }> = ({
-  label,
-  value,
-  bad = false,
-}) => (
+const CardStat: FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className={styles.cardStat}>
     <dt className={styles.cardStatLabel}>{label}</dt>
-    <dd className={`${styles.cardStatValue} ${bad ? styles.bad : ''}`}>{value}</dd>
+    <dd className={styles.cardStatValue}>{value}</dd>
   </div>
 );

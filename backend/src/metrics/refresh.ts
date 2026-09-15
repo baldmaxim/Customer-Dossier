@@ -5,6 +5,7 @@
 // он создан в миграции 007 (company_metrics_pk).
 
 import { getPool } from '../db/pool.js';
+import { refreshSignals } from '../signals/refresh.js';
 
 let refreshing = false;
 
@@ -42,6 +43,9 @@ export const startMetricsScheduler = (signal: AbortSignal): void => {
   const tick = async (): Promise<void> => {
     if (signal.aborted) return;
     try {
+      // Снимок сигналов (этап 07): ошибка не стирает прежний снимок, а помечается в журнале пересчётов.
+      const signals = await refreshSignals({ requestedBy: 'scheduler' });
+      if (signals.outcome === 'failed') console.error(`[signals] пересчёт #${signals.refreshId} не удался: ${signals.error}`);
       const ms = await refreshCompanyMetrics();
       if (ms !== null && ms > 5000) {
         console.warn(`[metrics] пересчёт занял ${ms} мс — критерий приёмки M4 не выполняется`);

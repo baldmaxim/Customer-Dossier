@@ -5,27 +5,10 @@
 import type {
   AssertionStatus,
   PermissionStatus,
-  RiskLight,
   Role,
   Sentiment,
   TextCompleteness,
 } from '../api/types';
-
-/**
- * Старый светофор — эвристический индекс по новостям (веса 40/30/30 не
- * калиброваны). Он не оценивает надёжность контрагента, а отсутствие новостей
- * не означает отсутствия проблем. Подписи это говорят прямо.
- */
-export const RISK_LEGACY_LABELS: Record<RiskLight, string> = {
-  grey: 'Мало данных',
-  green: 'Сигналов не найдено',
-  yellow: 'Есть сигналы',
-  red: 'Много сигналов',
-};
-
-export const RISK_LEGACY_NOTE =
-  'Устаревший эвристический индекс по публикациям, не оценка надёжности. ' +
-  'Отсутствие сигналов в выборке не означает отсутствия проблем.';
 
 /** Полнота текста: «полный» — только при положительном признаке, не по длине. */
 export const COMPLETENESS_LABELS: Record<TextCompleteness, string> = {
@@ -348,4 +331,42 @@ export const COVERAGE_STOP_LABELS: Record<string, string> = {
   gap_closed: 'разрыв постов догружен',
   policy_blocked: 'остановлено: допуск отозван',
   identity_changed: 'остановлено: другой канал',
+};
+
+// ─── Сигналы (этап 07) ────────────────────────────────────────────────────
+
+export const IDENTITY_STATUS_LABELS: Record<string, string> = {
+  identified: 'реквизит с верной контрольной суммой',
+  identifier_unverified: 'реквизит не проверен',
+  name_only: 'только название, реквизитов нет',
+  ambiguous: 'идентичность под вопросом',
+};
+
+export const REVIEW_LEVEL_LABELS: Record<string, string> = {
+  reviewed: 'проверено аналитиком',
+  text_grounded: 'есть в тексте, не проверено',
+  legacy_unreviewed: 'из старого разбора, не проверено',
+  disputed: 'спорно',
+  rejected: 'отклонено аналитиком',
+};
+
+export const DATE_STATUS_LABELS: Record<string, string> = {
+  in_window: 'в окне 12 месяцев',
+  boundary: 'на границе окна (неточная дата)',
+  before_window: 'раньше окна',
+  future: 'дата позже среза',
+  undated: 'дата события неизвестна',
+};
+
+export const OVERLAP_LABELS: Record<string, string> = {
+  overlaps: 'периоды пересекаются',
+  no_overlap: 'периоды не пересекаются',
+  unknown: 'пересечение неизвестно',
+};
+
+export const CONTEXT_STATE_LABELS: Record<string, string> = {
+  construction: 'строится',
+  suspended: 'приостановлен',
+  cancelled: 'отменён',
+  commissioned: 'введён',
 };

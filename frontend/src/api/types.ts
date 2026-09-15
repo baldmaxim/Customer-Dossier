@@ -1,5 +1,3 @@
-export type RiskLight = 'grey' | 'green' | 'yellow' | 'red';
-
 export type Role =
   | 'customer'
   | 'general_contractor'
@@ -50,32 +48,8 @@ export interface ICompanyRelation {
   otherCompanyName: string;
 }
 
-export interface IRisk {
-  companyId: number;
-  name: string;
-  city: string | null;
-  projectsTotal: number;
-  activeProjects: number;
-  doneProjects: number;
-  projectsAsGc: number;
-  projectsAsContractor: number;
-  projectsAsCustomer: number;
-  avgDelayDays: number | null;
-  delayedProjects: number;
-  delayShare: number | null;
-  mentions90d: number;
-  negative90d: number;
-  negativeShare90d: number | null;
-  lastMentionAt: string | null;
-  hardEvents12m: number;
-  replacedCount: number;
-  riskScore: number;
-  riskLight: RiskLight;
-}
-
 export interface ICompanyResponse {
   company: ICompany;
-  risk: IRisk | null;
   aliases: Array<{ alias: string; hits: number }>;
   identifiers?: ICompanyIdentifier[];
   relations?: ICompanyRelation[];
@@ -261,8 +235,19 @@ export interface IEventRow {
   url: string | null;
 }
 
-export interface IContractorRow extends Omit<IRisk, 'lastMentionAt'> {
-  lastMentionAt?: string | null;
+/** Строка списка подрядчиков из снимка сигналов (этап 07). Индекса риска нет. */
+export interface IContractorRow {
+  companyId: number;
+  name: string;
+  city: string | null;
+  identityStatus: string;
+  projects: number | null;
+  roles: string[];
+  eventsDated12m: number;
+  eventsUndated: number;
+  publications: number | null;
+  families: number | null;
+  courtRoles: { plaintiff: number; defendant: number; other: number; unknown: number } | null;
 }
 
 export interface IPendingMerge {
@@ -388,4 +373,163 @@ export interface ICompensatingPlan {
   reason: string;
   changes: Array<{ dependency: string; added: string[]; removed: string[] }>;
   steps: string[];
+}
+
+// ─── Сигналы компании (этап 07, signals@1) ────────────────────────────────
+
+export type ReviewLevel = 'reviewed' | 'text_grounded' | 'legacy_unreviewed' | 'disputed' | 'rejected';
+
+export interface ISignalAggregate {
+  value: number | null;
+  status: 'ok' | 'insufficient_data';
+  rule: string;
+  window: { from: string; to: string; basis: 'event_date' | 'publication_date' } | null;
+  denominator: number | null;
+  ids: number[];
+  idsTruncated: boolean;
+}
+
+export interface ISignalEvent {
+  assertionId: number;
+  type: string;
+  companyRole: 'subject' | 'counterparty';
+  proceduralRole: string | null;
+  caseNumber: string | null;
+  stage: string | null;
+  outcome: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  periodPrecision: string;
+  dateStatus: 'in_window' | 'boundary' | 'before_window' | 'future' | 'undated';
+  review: ReviewLevel;
+  needsRevalidation: boolean;
+  modality: string;
+  value: { amount: string; currency: string | null; purpose: string | null } | null;
+  publications: number;
+  families: number;
+}
+
+export interface ISignalParticipation {
+  assertionId: number;
+  projectId: number;
+  role: string;
+  building: string | null;
+  workPackage: string | null;
+  workPackageLabel: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  periodPrecision: string;
+  review: ReviewLevel;
+  needsRevalidation: boolean;
+}
+
+export interface ICompanySignals {
+  rulesVersion: string;
+  cutoff: string;
+  companyId: number;
+  identity: {
+    status: 'identified' | 'identifier_unverified' | 'name_only' | 'ambiguous';
+    entityType: string | null;
+    identifiers: Record<string, number>;
+    aliases: number;
+    openAmbiguities: number;
+    pendingMerges: number;
+    coverage: {
+      publications: ISignalAggregate;
+      sources: number;
+      completeness: Record<string, number>;
+      legacyUnimported: { participations: number; events: number };
+      note: string;
+    };
+  };
+  experience: {
+    projects: ISignalAggregate;
+    byRole: Record<string, ISignalAggregate>;
+    byWorkPackage: Record<string, ISignalAggregate>;
+    reviewed: ISignalAggregate;
+    participations: ISignalParticipation[];
+    notCounted: Array<{ assertionId: number; projectId: number | null; role: string | null; modality: string; polarity: string; review: ReviewLevel }>;
+    contracts: Array<{
+      assertionId: number;
+      side: 'client' | 'performer';
+      role: string | null;
+      counterpartCompanyId: number | null;
+      projectId: number | null;
+      modality: string;
+      polarity: string;
+      value: { amount: string; currency: string | null; purpose: string | null } | null;
+      review: ReviewLevel;
+    }>;
+    note: string;
+  };
+  media: {
+    publications: ISignalAggregate;
+    publications90d: ISignalAggregate;
+    publicationsUndated: ISignalAggregate;
+    observations: number;
+    families: ISignalAggregate;
+    familiesByOrigin: { established: ISignalAggregate; named: ISignalAggregate; unknown: ISignalAggregate };
+    events: ISignalEvent[];
+    eventsDated12m: ISignalAggregate;
+    eventsBoundary12m: ISignalAggregate;
+    eventsUndated: ISignalAggregate;
+    eventsUndatedPublished90d: ISignalAggregate;
+    eventsFuture: ISignalAggregate;
+    eventsByReview: Record<ReviewLevel, number>;
+    reviewedShare: ISignalAggregate;
+    legalCases: Array<{
+      caseKey: string;
+      caseNumber: string | null;
+      companyProceduralRole: string | null;
+      stages: Array<{ assertionId: number; stage: string | null; outcome: string | null; validFrom: string | null; review: ReviewLevel }>;
+    }>;
+    courtRoles: { plaintiff: number; defendant: number; other: number; unknown: number };
+    notCounted: Array<{ assertionId: number; type: string | null; reason: string }>;
+    note: string;
+  };
+}
+
+export interface ISignalRefreshState {
+  active: { id: number; rulesVersion: string; cutoffAt: string; finishedAt: string } | null;
+  lastFailure: { id: number; error: string | null; finishedAt: string } | null;
+  running: boolean;
+  stale: boolean;
+  staleReasons: string[];
+}
+
+export interface ISignalsResponse {
+  status: 'ok' | 'not_computed' | 'not_in_snapshot';
+  refresh: ISignalRefreshState;
+  signals: ICompanySignals | null;
+}
+
+export interface IProjectContext {
+  cutoff: string;
+  participations: Array<{
+    assertionId: number;
+    role: string | null;
+    building: string | null;
+    workPackage: string | null;
+    validFrom: string | null;
+    validTo: string | null;
+    periodPrecision: string;
+    modality: string;
+    polarity: string;
+    review: ReviewLevel;
+    counted: boolean;
+  }>;
+  projectEvents: Array<{
+    assertionId: number;
+    type: string | null;
+    building: string | null;
+    validFrom: string | null;
+    validTo: string | null;
+    periodPrecision: string;
+    review: ReviewLevel;
+    overlap: 'overlaps' | 'no_overlap' | 'unknown';
+    sameBuilding: boolean | null;
+    namesCompany: boolean;
+  }>;
+  currentState: Array<{ building: string | null; state: string; validFrom: string; periodPrecision: string }>;
+  note: string;
 }

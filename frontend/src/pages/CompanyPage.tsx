@@ -3,73 +3,11 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type {
-  ICompanyResponse,
-  IEventRow,
-  IMention,
-  IProjectRow,
-  IRisk,
-  Sentiment,
-} from '../api/types';
-import { RiskBadge } from '../components/RiskBadge';
-import {
-  ROLE_LABELS,
-  STAGE_LABELS,
-  EVENT_LABELS,
-  SENTIMENT_LABELS,
-  RISK_LEGACY_NOTE,
-  formatDate,
-  formatMoney,
-} from '../lib/labels';
+import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } from '../api/types';
+import { CompanySignals } from '../components/CompanySignals';
+import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
 import styles from './CompanyPage.module.css';
-
-/**
- * Словесный вердикт вместо голых цифр: карточку читает прораб перед решением,
- * а не аналитик. Формулировки осторожные — данные собраны из новостей, а не
- * из реестра, и выдавать их за истину нельзя.
- */
-const buildVerdict = (risk: IRisk | null): string => {
-  if (!risk || risk.riskLight === 'grey') {
-    return 'Данных мало — по открытым источникам судить рано. Проверяйте компанию обычным порядком, портал здесь ничего не подсказывает.';
-  }
-
-  const parts: string[] = [];
-
-  if (risk.hardEvents12m > 0) {
-    parts.push(`за год упоминались суд, банкротство или отзыв лицензии (${risk.hardEvents12m})`);
-  }
-  if (risk.delayedProjects > 0) {
-    parts.push(`объектов со срывом сроков: ${risk.delayedProjects} из ${risk.projectsTotal}`);
-  }
-  if (risk.negative90d > 0) {
-    parts.push(`негативных упоминаний за 90 дней: ${risk.negative90d} из ${risk.mentions90d}`);
-  }
-  if (risk.replacedCount > 0) {
-    parts.push(`компанию меняли как подрядчика ${risk.replacedCount} раз`);
-  }
-
-  if (parts.length === 0) {
-    // Не «проблем нет»: портал видит только собранные публикации, и их
-    // отсутствие ничего не говорит о надёжности компании.
-    return `В собранных публикациях сигналов не найдено — это не оценка надёжности. Активных объектов: ${risk.activeProjects}, упоминаний за 90 дней: ${risk.mentions90d}.`;
-  }
-
-  const lead =
-    risk.riskLight === 'red'
-      ? 'Есть существенные основания насторожиться'
-      : 'Есть на что обратить внимание';
-
-  return `${lead}: ${parts.join('; ')}.`;
-};
-
-/** Цветная полоса на карточке вердикта — тот же светофор, что и в бейдже. */
-const HERO_CLASS: Record<string, string> = {
-  grey: styles.heroGrey ?? '',
-  green: styles.heroGreen ?? '',
-  yellow: styles.heroYellow ?? '',
-  red: styles.heroRed ?? '',
-};
 
 const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
   { value: 'all', label: 'Все' },
@@ -133,8 +71,7 @@ export const CompanyPage: FC = () => {
   if (data?.mergedInto) return <Navigate to={`/company/${data.mergedInto}`} replace />;
   if (!data?.company) return <p className={styles.empty}>Компания не найдена.</p>;
 
-  const { company, risk, aliases, identifiers = [], relations = [] } = data;
-  const light = risk?.riskLight ?? 'grey';
+  const { company, aliases, identifiers = [], relations = [] } = data;
   const projects = projectsQuery.data?.items ?? [];
   const events = eventsQuery.data?.items ?? [];
   const similar = similarQuery.data?.items ?? [];
@@ -158,8 +95,8 @@ export const CompanyPage: FC = () => {
 
   return (
     <>
-      {/* Шапка карточки. Вердикт и светофор должны читаться до прокрутки. */}
-      <header className={`${styles.hero} ${HERO_CLASS[light] ?? ''}`}>
+      {/* Шапка карточки: кто это и насколько установлена личность. Итоговой оценки нет (этап 07). */}
+      <header className={styles.hero}>
         <div className={styles.heroTop}>
           <div className={styles.heroTitle}>
             <h1 className={styles.name}>{company.name}</h1>
@@ -175,19 +112,11 @@ export const CompanyPage: FC = () => {
               )}
             </div>
           </div>
-          <RiskBadge light={light} score={risk?.riskScore} large />
         </div>
 
-        <p className={styles.verdict} role="status">
-          {buildVerdict(risk)}
+        <p className={styles.heroFoot}>
+          Сведения собраны из открытых публикаций и не являются проверкой контрагента или оценкой надёжности.
         </p>
-        <p className={styles.heroFoot}>{RISK_LEGACY_NOTE}</p>
-
-        {risk?.lastMentionAt && (
-          <p className={styles.heroFoot}>
-            Последнее упоминание — {formatDate(risk.lastMentionAt)}
-          </p>
-        )}
       </header>
 
       {similar.length > 0 && (
@@ -204,26 +133,7 @@ export const CompanyPage: FC = () => {
         </div>
       )}
 
-      {risk && (
-        <div className={styles.grid}>
-          <Stat value={risk.projectsTotal} label="Всего объектов" />
-          <Stat value={risk.activeProjects} label="Активных" />
-          <Stat value={risk.doneProjects} label="Сдано" />
-          <Stat
-            value={risk.delayedProjects}
-            label="Со срывом срока"
-            bad={risk.delayedProjects > 0}
-          />
-          <Stat
-            value={risk.avgDelayDays === null ? '—' : `${Math.round(risk.avgDelayDays)} дн`}
-            label="Средняя задержка"
-            bad={(risk.avgDelayDays ?? 0) > 30}
-          />
-          <Stat value={risk.mentions90d} label="Упоминаний за 90 дн" />
-          <Stat value={risk.negative90d} label="Из них негативных" bad={risk.negative90d > 0} />
-          <Stat value={risk.hardEvents12m} label="Суды и банкротства" bad={risk.hardEvents12m > 0} />
-        </div>
-      )}
+      <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
 
       <section className={styles.section}>
         <div className={styles.sectionHead}>
@@ -272,10 +182,10 @@ export const CompanyPage: FC = () => {
             {events.map(e => (
               <li
                 key={e.id}
-                className={`${styles.event} ${e.severity >= 2 ? styles.eventSevere : ''}`}
+                className={styles.event}
               >
                 <div className={styles.eventHead}>
-                  <span className={styles.eventType}>{EVENT_LABELS[e.type] ?? e.type}</span>
+                  <span className={styles.eventType}>По сообщению источника: {EVENT_LABELS[e.type] ?? e.type}</span>
                   <span className={styles.eventDate}>
                     {formatDate(e.occurredOn) || 'дата неизвестна'}
                   </span>
@@ -394,13 +304,3 @@ export const CompanyPage: FC = () => {
   );
 };
 
-const Stat: FC<{ value: number | string; label: string; bad?: boolean }> = ({
-  value,
-  label,
-  bad = false,
-}) => (
-  <div className={`${styles.stat} ${bad ? styles.statBad : ''}`}>
-    <div className={styles.statValue}>{value}</div>
-    <div className={styles.statLabel}>{label}</div>
-  </div>
-);
