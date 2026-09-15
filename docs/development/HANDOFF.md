@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этап 05A — код готов, ждёт прогона пользователя (TESTING_LOCAL A5 — 12 файлов / 135 тестов, раздел H). Этапы 02–04 — PASS.
+Этапы 02–05A — PASS (05A: интеграция 12 файлов / 135, раздел H, evidence/05A/USER_RUN.md). Следующий — 05B.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -38,7 +38,7 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 typecheck/build backend и frontend, unit 24 файла / 352 теста — PASS.
 
 ## Что НЕ проверено
-Интеграция 05A (12 файлов / 135), раздел H; живые сайты (approved нет); реальный LLM-smoke; визуальные проверки 390 px.
+Живые сайты (approved нет); реальный LLM-smoke; визуальные проверки 390 px.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -48,8 +48,7 @@ typecheck/build backend и frontend, unit 24 файла / 352 теста — PAS
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Дождаться отчёта пользователя по TESTING_LOCAL (A5, H). Исправить упавшее, обновить 05A_REPORT до PASS, commit/push.
-Затем `stages/STAGE_05B_TELEGRAM.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/telegramWeb.ts`, `telegramBot.ts`,
+Этап `stages/STAGE_05B_TELEGRAM.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/telegramWeb.ts`, `telegramBot.ts`,
 `scheduler.ts`, `ingest/sites/crawler.ts` (курсор и покрытие), миграции 011, 015.
 
 ## Запреты
