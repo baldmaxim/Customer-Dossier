@@ -35,7 +35,14 @@ export interface IObservationInput {
   sourceModifiedAt: Date | null;
   fetchedAt: Date;
   forwardOrigin: string | null;
+  /** Точность даты публикации и сырой текст даты (этап 05A). */
+  publishedAtPrecision?: PublishedAtPrecision | null;
+  publishedAtRaw?: string | null;
+  /** Версия парсера адаптера: смена вёрстки при том же тексте видна в наблюдении. */
+  parserVersion?: string | null;
 }
+
+export type PublishedAtPrecision = 'exact' | 'local_tz' | 'date_only' | 'no_year' | 'relative' | 'unparsed';
 
 export interface ILegacyLink {
   legacyDocumentId: number | null;
@@ -146,8 +153,9 @@ export const recordObservation = async (
       `INSERT INTO document_revisions
          (source_item_id, revision_no, title, body, body_representation, body_hash, dedup_hash,
           completeness, completeness_reason, attachments, published_at, source_modified_at,
-          first_observed_at, chronology, same_content_as_revision_id, legacy_document_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text_completeness, $9, $10::jsonb, $11, $12, $13, $14, $15, $16)
+          first_observed_at, chronology, same_content_as_revision_id, legacy_document_id,
+          published_at_precision, published_at_raw)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text_completeness, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
       [
         item.id,
@@ -166,6 +174,8 @@ export const recordObservation = async (
         decision.chronology,
         sameText?.id ?? null,
         legacyDocumentId,
+        input.publishedAtPrecision ?? null,
+        input.publishedAtRaw ?? null,
       ],
     );
     revisionId = inserted.rows[0]!.id;
@@ -198,9 +208,19 @@ export const recordObservation = async (
 
   await client.query(
     `INSERT INTO source_observations
-       (source_id, source_item_id, revision_id, source_run_id, fetched_at, observed_url, outcome, forward_origin)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [input.sourceId, item.id, revisionId, input.sourceRunId, input.fetchedAt, input.url, decision.outcome, input.forwardOrigin],
+       (source_id, source_item_id, revision_id, source_run_id, fetched_at, observed_url, outcome, forward_origin, parser_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      input.sourceId,
+      item.id,
+      revisionId,
+      input.sourceRunId,
+      input.fetchedAt,
+      input.url,
+      decision.outcome,
+      input.forwardOrigin,
+      input.parserVersion ?? null,
+    ],
   );
 
   if (legacyDocumentId === null && decision.outcome !== 'new_item') {

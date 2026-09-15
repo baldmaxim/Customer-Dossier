@@ -21,6 +21,7 @@
     "seed:test-assertions": "tsx src/__tests__/integration/seedAssertionsDemo.ts",
     "backfill:identity": "tsx src/resolve/cli.ts",
     "seed:test-identity": "tsx src/__tests__/integration/seedIdentityDemo.ts",
+    "seed:test-sites": "tsx src/__tests__/integration/seedSitesDemo.ts",
     "seed:test-reprocess": "tsx src/__tests__/integration/seedReprocessDemo.ts"
   },
   "dependencies": {

@@ -294,6 +294,37 @@ export interface ISourceRow {
   lastItemsNew: number | null;
   lastError: string | null;
   layoutStats: Record<string, number> | null;
+  /** Этап 05A: здоровье адаптера, итог и покрытие последнего запуска. */
+  health?: SourceHealth;
+  healthReason?: string | null;
+  lastAttemptAt?: string | null;
+  parserVersion?: string | null;
+  lastOutcome?: string | null;
+  lastFound?: number | null;
+  lastSaved?: number | null;
+  lastChanged?: number | null;
+  lastSkipped?: number | null;
+  lastFailed?: number | null;
+  lastPages?: number | null;
+  lastCoverage?: Record<string, unknown> | null;
+  lastDurationMs?: number | null;
+  retryAfterAt?: string | null;
+}
+
+export type SourceHealth = 'unknown' | 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid';
+
+export interface ISiteProbeReport {
+  outcome: string;
+  health: SourceHealth;
+  healthReason: string | null;
+  httpStatus: number | null;
+  counts: { found: number; saved: number; changed: number; skipped: number; failed: number };
+  pagesFetched: number;
+  coverage: Record<string, unknown>;
+  layoutStats: Record<string, number>;
+  parserVersion: string;
+  samples: Array<{ url: string; title: string; completeness: string; reason: string; preview: string }>;
+  errors: string[];
 }
 
 export interface IMergeEntitySummary {

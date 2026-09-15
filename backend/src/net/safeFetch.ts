@@ -79,9 +79,17 @@ export interface ISafeResponse {
 
 type LookupAll = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
 
+/**
+ * Транспорт одного запроса без редиректов. Подменяется только в тестах (локальные
+ * фикстуры без сети): проверки адреса, редиректов и размера остаются в safeFetch и
+ * применяются к ответу подменённого транспорта так же, как к настоящему.
+ */
+export type SafeTransport = (url: URL, request: ISafeRequest) => Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }>;
+
 export interface ISafeFetchDeps {
   lookup?: LookupAll;
   isAddressBlocked?: (address: string) => boolean;
+  transport?: SafeTransport;
 }
 
 const defaultLookup: LookupAll = async hostname =>
@@ -131,7 +139,7 @@ export const assertUrlAllowed = (
 
 const resolveAllowed = async (
   hostname: string,
-  deps: Required<ISafeFetchDeps>,
+  deps: Required<Omit<ISafeFetchDeps, 'transport'>>,
 ): Promise<Array<{ address: string; family: number }>> => {
   const host = normalizeHost(hostname);
   const family = net.isIP(host);
@@ -176,7 +184,7 @@ const requestOnce = (
   url: URL,
   request: ISafeRequest,
   policy: ISourceNetworkPolicy,
-  deps: Required<ISafeFetchDeps>,
+  deps: Required<Omit<ISafeFetchDeps, 'transport'>>,
   signal: AbortSignal,
 ): Promise<IRawResponse> =>
   new Promise<IRawResponse>((resolve, reject) => {
@@ -251,13 +259,26 @@ const requestOnce = (
     req.end();
   });
 
+/** Ответ подменённого транспорта проходит те же правила редиректа и размера. */
+const viaTransport = async (
+  transport: SafeTransport,
+  url: URL,
+  request: ISafeRequest,
+  policy: ISourceNetworkPolicy,
+): Promise<IRawResponse> => {
+  const res = await transport(url, request);
+  if (res.status >= 300 && res.status < 400 && res.headers.location) return { status: res.status, headers: res.headers, body: null };
+  if (res.body.length > policy.maxBytes) throw new NetworkPolicyError('oversize', `ответ больше ${policy.maxBytes} байт`);
+  return { status: res.status, headers: res.headers, body: res.body };
+};
+
 export const safeFetch = async (
   rawUrl: string | URL,
   policy: ISourceNetworkPolicy,
   request: ISafeRequest = {},
   depsIn: ISafeFetchDeps = {},
 ): Promise<ISafeResponse> => {
-  const deps: Required<ISafeFetchDeps> = {
+  const deps: Required<Omit<ISafeFetchDeps, 'transport'>> = {
     lookup: depsIn.lookup ?? defaultLookup,
     isAddressBlocked: depsIn.isAddressBlocked ?? isBlockedAddress,
   };
@@ -270,7 +291,9 @@ export const safeFetch = async (
     let current = request;
 
     for (let redirects = 0; ; redirects += 1) {
-      const raw = await requestOnce(url, current, policy, deps, controller.signal);
+      const raw = depsIn.transport
+        ? await viaTransport(depsIn.transport, url, current, policy)
+        : await requestOnce(url, current, policy, deps, controller.signal);
 
       if (raw.body === null) {
         if (redirects >= policy.maxRedirects) {

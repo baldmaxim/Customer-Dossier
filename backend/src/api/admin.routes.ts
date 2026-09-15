@@ -14,9 +14,12 @@ import {
   addTelegramSource,
   addWebsiteSource,
   deleteSource,
+  getSourceById,
   updateSourcePolicy,
 } from '../ingest/sources.js';
 import { PERMISSION_STATUSES, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
+import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
+import { parseSiteProfile } from '../ingest/sites/profile.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 
@@ -42,9 +45,15 @@ adminRouter.get('/sources', async (_req, res) => {
             s.policy_reference AS "policyReference", s.policy_owner AS "policyOwner",
             s.policy_decided_at AS "policyDecidedAt", s.policy_expires_at AS "policyExpiresAt",
             s.is_synthetic AS "isSynthetic",
+            s.health, s.health_reason AS "healthReason", s.last_attempt_at AS "lastAttemptAt",
+            s.parser_version AS "parserVersion",
             r.started_at AS "lastRunAt", r.status AS "lastRunStatus",
             r.items_seen AS "lastItemsSeen", r.items_new AS "lastItemsNew",
-            r.error AS "lastError", r.layout_stats AS "layoutStats"
+            r.error AS "lastError", r.layout_stats AS "layoutStats",
+            r.outcome AS "lastOutcome", r.items_found AS "lastFound", r.items_saved AS "lastSaved",
+            r.items_changed AS "lastChanged", r.items_skipped AS "lastSkipped", r.items_failed AS "lastFailed",
+            r.pages_fetched AS "lastPages", r.coverage AS "lastCoverage", r.duration_ms AS "lastDurationMs",
+            r.retry_after_at AS "retryAfterAt"
      FROM sources s
      LEFT JOIN LATERAL (
        SELECT * FROM source_runs WHERE source_id = s.id ORDER BY started_at DESC LIMIT 1
@@ -76,6 +85,7 @@ adminRouter.get('/sources/:id/health', async (req, res) => {
   }
   const source = await query<ISourceAdminRow>(
     `SELECT id, key, status, fail_streak AS "failStreak", last_ok_at AS "lastOkAt",
+            health, health_reason AS "healthReason", last_attempt_at AS "lastAttemptAt", parser_version AS "parserVersion",
             access_status AS "accessStatus", ai_processing_status AS "aiProcessingStatus",
             policy_expires_at AS "policyExpiresAt"
      FROM sources WHERE id = $1`,
@@ -88,7 +98,10 @@ adminRouter.get('/sources/:id/health', async (req, res) => {
   }
   const runs = await query(
     `SELECT started_at AS "startedAt", finished_at AS "finishedAt", status, items_seen AS "itemsSeen",
-            items_new AS "itemsNew", http_status AS "httpStatus", error, layout_stats AS "layoutStats"
+            items_new AS "itemsNew", http_status AS "httpStatus", error, layout_stats AS "layoutStats",
+            outcome, items_found AS "found", items_saved AS "saved", items_changed AS "changed",
+            items_skipped AS "skipped", items_failed AS "failed", pages_fetched AS "pages", coverage,
+            parser_version AS "parserVersion", duration_ms AS "durationMs", retry_after_at AS "retryAfterAt"
      FROM source_runs WHERE source_id = $1 ORDER BY started_at DESC LIMIT 10`,
     [id],
   );
@@ -116,6 +129,52 @@ adminRouter.get('/sources/:id/health', async (req, res) => {
     items: items[0] ?? null,
     latestCompleteness: completeness,
   });
+});
+
+/**
+ * Проба уже допущенного сайта: одна страница, до трёх записей, без записи в базу,
+ * без включения опроса и без изменения допуска. Живой сетевой запрос — только по действию оператора.
+ */
+adminRouter.post('/sources/:id/probe', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const source = Number.isFinite(id) ? await getSourceById(id) : null;
+  if (!source) {
+    res.status(404).json({ error: 'Источник не найден' });
+    return;
+  }
+  if (source.kind !== 'website') {
+    res.status(400).json({ error: 'Проба адаптера доступна для сайтов' });
+    return;
+  }
+  const decision = evaluateSourcePolicy(source, 'collect');
+  if (!decision.allowed) {
+    res.status(403).json({ error: decision.reason, code: 'policy_blocked' });
+    return;
+  }
+  res.json({ report: await probeWebsiteSource(source), limits: PROBE_LIMITS });
+});
+
+/** Профиль сайта: проверяется схемой до записи; допуск и статус не меняются. */
+adminRouter.put('/sources/:id/profile', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const source = Number.isFinite(id) ? await getSourceById(id) : null;
+  if (!source || source.kind !== 'website') {
+    res.status(404).json({ error: 'Сайт-источник не найден' });
+    return;
+  }
+  const config = (req.body as { profile?: unknown } | null)?.profile;
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    res.status(400).json({ error: 'Передайте profile объектом' });
+    return;
+  }
+  try {
+    parseSiteProfile(config as Record<string, unknown>);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err), code: 'profile_invalid' });
+    return;
+  }
+  await execute('UPDATE sources SET config = $2::jsonb, updated_at = now() WHERE id = $1', [id, JSON.stringify(config)]);
+  res.json({ ok: true });
 });
 
 const statusSchema = z.object({ status: z.enum(['active', 'paused', 'broken']) });

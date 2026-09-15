@@ -3,8 +3,8 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 04** (реквизиты, бренд/юрлицо, корпуса, слияние с отменой): шаги A1–A5, затем раздел G.
-Разделы B–F — проверки этапов 02, 01, 03A и 03B (пройдены 2026-09-14), повторять не обязательно.
+**Сейчас проверяется этап 05A** (адаптеры сайтов, догоняющий обход, здоровье источников): шаги A1–A5, затем раздел H.
+Разделы B–G — проверки этапов 01–04 (пройдены), повторять не обязательно.
 LM Studio не нужен: модель в тестах и seed подменена детерминированными ответами.
 
 ---
@@ -38,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **23 файла / 340 тестов passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **24 файла / 352 теста passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -76,15 +76,16 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **11 файлов / 123 теста passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **12 файлов / 135 тестов passed**:
 
 | Файл | Что проверяет |
 |---|---|
+| `ingest/sites/sites.int.test.ts` | **этап 05A**: TC-042…TC-046 — RSS-анонс → полная статья, честный анонс при недоступной статье, 304 по ETag, повтор без дублей, правка статьи, редирект вне allowlist, HTML-список с пагинацией и датами зоны профиля, значимый query-параметр, сбой второй страницы и продолжение, лимит страниц и хвост, parser_degraded, 429/403/oversize, неверный профиль, карточка объекта без ложных «новостей», проба без записи |
 | `resolve/identity.int.test.ts` | **этап 04**: TC-034…TC-041 — разные ИНН при одном имени, бренд и юрлицо, неоднозначность без выбора первой строки, ЖК в двух городах и неизвестный город, корпуса, поиск по реквизиту и алиасу, слияние с дубликатами, сбой в середине, коллизия уникальности, конкуренция и встречные операции, повтор, отмена и отказ небезопасной отмены, backfill идентичности |
 | `reprocess/reprocess.int.test.ts` | **этап 03B**: полный путь и цепочка evidence → chunk → run → revision, падение последнего чанка, непокрытый хвост, timeout, crash до/после commit, два worker'а и fencing, поздний старый разбор, нерелевантная новая версия при двух источниках и ручном решении, отзыв права ИИ, одинаковые имена с разными ИНН, идемпотентная публикация, 409, проекции карточки, без дублей при переразборе |
 | `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
 | `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–014 |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–015 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -365,6 +366,57 @@ $env:MERGE_APPLY_ENABLED = 'true'
 4. «Отменить» в журнале → «Слияние отменено…», пара вернулась в очередь.
 5. Карточка «Демо-Гранит» (поиск по `7707083893`): в шапке «юрлицо · ООО · ИНН 7707083893».
 6. Ширина 390 px: карточки сторон друг под другом, без горизонтального скролла.
+
+## H. Этап 05A — адаптеры сайтов и здоровье источников
+
+Сеть не нужна: seed отдаёт страницы синтетических сайтов `*.test` внедрённым транспортом внутри процесса.
+
+### H1. Данные
+
+Схема с нуля (переменные `DATABASE_URL`, `DATABASE_SSL`, `DOTENV_CONFIG_PATH` — как в разделе B), затем seed без `DATABASE_URL`:
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+Remove-Item Env:DATABASE_URL
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run seed:test-sites
+$env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+```
+
+Ожидается: `ok-sites-demo.test … ok`, `degraded-sites-demo.test … parser_degraded`, `limited-sites-demo.test … rate_limited`;
+строки `ok-sites-demo.test: ok, найдено 3, сохранено 3, ошибок 0` (две статьи и карточка объекта).
+
+### H2. База
+
+| Команда | Ожидается |
+|---|---|
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT key, health, health_reason FROM sources WHERE key LIKE '%sites-demo.test' ORDER BY key"` | degraded — `parser_degraded` («селектор списка нашёл 0…»); limited — `rate_limited` («HTTP 429»); ok — `ok` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT s.key, r.outcome, r.pages_fetched, r.coverage->>'stopReason' AS stop, r.retry_after_at IS NOT NULL AS retry FROM source_runs r JOIN sources s ON s.id = r.source_id ORDER BY r.id"` | ok: `ok`, 2 страницы, `exhausted`; degraded: `parser_degraded`; limited: `rate_limited`, `retry = t` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT i.item_key, r.body_representation, r.completeness, r.completeness_reason, r.published_at_precision, r.published_at_raw FROM document_revisions r JOIN source_items i ON i.id = r.source_item_id ORDER BY i.item_key"` | `/n1` — `site_article@1+title`, `full`, `local_tz`; `/n2` — `unknown`, `article_selector_missing`, `no_year`, сырой «11 сентября»; `/objects/1` — `project_card@1`, `full` |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT cursor FROM sources WHERE key = 'ok-sites-demo.test'"` | `"site": {"caughtUp": true, "backlogNext": null, …}` |
+
+### H3. CLI
+
+Файл с неверным профилем (например, `bad-profile.json` с содержимым `{"mode":"html_list","startUrls":["https://ok-sites-demo.test/news"],"onFetch":"eval(1)"}`):
+
+| Команда | Ожидается |
+|---|---|
+| `npm run ingest:once -- --site-profile ok-sites-demo.test --file bad-profile.json` | ошибка `профиль источника некорректен: …`, код 1, профиль в базе не изменился |
+| `npm run ingest:once -- --probe-site ok-sites-demo.test` | живой запрос к несуществующему домену `*.test`: исход `network`, «ничего не сохранено» по смыслу, код 1 |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -t -c "SELECT count(*) FROM source_runs"` | то же число, что до пробы (проба не пишет запусков) |
+| `npm run ingest:once -- --probe-site degraded-sites-demo.test` | тот же `network` (сети нет); допуск и статус источника не изменились |
+
+### H4. Админка
+
+API (`npm run dev` с переменными раздела B) и UI, вход токеном. «Админка» → «Источники»:
+
+1. Колонка «Здоровье и последний запуск»: у ok-сайта «в порядке», «успешно: найдено 3, сохранено 3…», «покрытие: пройдены все
+   страницы», время попытки и успеха, `site@1`; у degraded — «вёрстка изменилась?» и причина; у limited — «ограничение
+   частоты (429)» и «повтор не раньше …».
+2. Кнопка «Проба» у ok-сайта → блок «Проба: сеть недоступна…», «Ничего не сохранено».
+3. У telegram/manual-источников колонка показывает прежние «запуск …: новых N из M» без поломки.
+4. Ширина 390 px: таблица скроллится внутри, страница без горизонтального скролла.
 
 ---
 

@@ -3,6 +3,7 @@
 import { query, queryOne, execute, withTransaction } from '../db/pool.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import type { PermissionStatus } from './policy.js';
+import type { ICrawlReport } from './sites/crawler.js';
 
 export type SourceKind = 'telegram' | 'website' | 'manual';
 export type SourceStatus = 'active' | 'paused' | 'broken';
@@ -119,6 +120,78 @@ export const finishRun = async (
      WHERE id = $1`,
     [sourceId, MAX_FAIL_STREAK],
   );
+};
+
+/**
+ * Итог запуска адаптера сайта (этап 05A): исход, счётчики, покрытие, здоровье источника.
+ *  - ok/not_modified/partial — источник жив: fail_streak сбрасывается, следующий запуск по интервалу;
+ *  - rate_limited — пауза до Retry-After (не меньше интервала), без роста fail_streak;
+ *  - остальное — неудача с экспоненциальной отсрочкой и снятием после MAX_FAIL_STREAK.
+ */
+export const finishSiteRun = async (runId: number, sourceId: number, report: ICrawlReport, durationMs: number): Promise<void> => {
+  const alive = report.outcome === 'ok' || report.outcome === 'not_modified' || report.outcome === 'partial';
+  await execute(
+    `UPDATE source_runs
+     SET finished_at = now(), status = $2, items_seen = $3, items_new = $4, http_status = $5, error = $6,
+         layout_stats = $7, outcome = $8, items_found = $3, items_saved = $4, items_changed = $9,
+         items_skipped = $10, items_failed = $11, pages_fetched = $12, coverage = $13, parser_version = $14,
+         retry_after_at = $15, duration_ms = $16
+     WHERE id = $1`,
+    [
+      runId,
+      alive ? 'ok' : 'failed',
+      report.counts.found,
+      report.counts.saved,
+      report.httpStatus,
+      report.healthReason,
+      JSON.stringify(report.layoutStats),
+      report.outcome,
+      report.counts.changed,
+      report.counts.skipped,
+      report.counts.failed,
+      report.pagesFetched,
+      JSON.stringify(report.coverage),
+      report.parserVersion,
+      report.retryAfterAt,
+      durationMs,
+    ],
+  );
+  await execute(
+    `UPDATE sources SET health = $2, health_reason = $3, last_attempt_at = now(), parser_version = $4, updated_at = now()
+     WHERE id = $1`,
+    [sourceId, report.health, report.healthReason, report.parserVersion],
+  );
+  if (report.outcome === 'rate_limited') {
+    await execute(
+      `UPDATE sources
+       SET next_run_at = greatest(coalesce($2::timestamptz, now()), now() + (poll_interval_sec || ' seconds')::interval)
+       WHERE id = $1`,
+      [sourceId, report.retryAfterAt],
+    );
+    return;
+  }
+  if (alive) {
+    await execute(
+      `UPDATE sources SET last_ok_at = now(), fail_streak = 0,
+              next_run_at = now() + (poll_interval_sec || ' seconds')::interval
+       WHERE id = $1`,
+      [sourceId],
+    );
+    return;
+  }
+  await execute(
+    `UPDATE sources
+     SET fail_streak = fail_streak + 1,
+         next_run_at = now() + (poll_interval_sec * least(power(2, fail_streak + 1), 16) || ' seconds')::interval,
+         status = CASE WHEN fail_streak + 1 >= $2 THEN 'broken'::source_status ELSE status END
+     WHERE id = $1`,
+    [sourceId, MAX_FAIL_STREAK],
+  );
+};
+
+/** Профиль/настройки источника. Проверку схемы делает вызывающий код. */
+export const setSourceConfig = async (sourceId: number, config: Record<string, unknown>): Promise<void> => {
+  await execute('UPDATE sources SET config = $2::jsonb, updated_at = now() WHERE id = $1', [sourceId, JSON.stringify(config)]);
 };
 
 /** Сдвиг курсора чтения. Merge, а не замена: в cursor могут лежать другие ключи. */

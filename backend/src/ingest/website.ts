@@ -1,38 +1,12 @@
-// Чтение сайтов.
+// Разбор RSS/Atom и текста статьи — чистые функции прежнего адаптера (этап 01–02).
 //
-// Основной путь — RSS/Atom. Он стабильнее любых CSS-селекторов: лента редко
-// меняет формат, тогда как вёрстку сайта переделывают ежегодно. Кроме того,
-// это явно опубликованный для машин интерфейс, а не обход чужого дизайна.
-//
-// Если ленты нет, работает запасной путь: список ссылок по селектору. Он
-// намеренно вторичен — селекторы придётся чинить.
+// Сетевой обход сайтов с профилями, пагинацией, условными запросами и покрытием —
+// ingest/sites/* (этап 05A). Здесь остаются разборщики, на которые опираются тесты
+// и которые используются адаптером как запасной путь.
 
 import * as cheerio from 'cheerio';
 
-import { env } from '../config/env.js';
-import {
-  DEFAULT_SOURCE_LIMITS,
-  NetworkPolicyError,
-  hostMatchesPolicy,
-  safeFetch,
-  type ISafeFetchDeps,
-  type ISourceNetworkPolicy,
-} from '../net/safeFetch.js';
 import type { TextCompleteness } from '../revisions/store.js';
-
-/** Автообнаружение: где чаще всего лежит лента, если её адрес не указан. */
-const COMMON_FEED_PATHS = ['/rss', '/rss.xml', '/feed', '/feed/', '/atom.xml', '/index.xml'];
-
-export interface IWebsiteConfig {
-  /** Прямой адрес ленты. Если задан, автообнаружение не выполняется. */
-  rss?: string;
-  /** Запасной путь: селектор ссылок на статьи на странице раздела. */
-  listSelector?: string;
-  /** Селектор основного текста статьи. Пусто — берём общий алгоритм. */
-  articleSelector?: string;
-  /** Раздел сайта, если читаем не с корня. */
-  section?: string;
-}
 
 export interface IWebsiteArticle {
   externalId: string;
@@ -49,101 +23,6 @@ export interface IWebsiteArticle {
   completenessReason: string;
   representation: string;
 }
-
-export class WebsiteFetchError extends Error {
-  constructor(
-    message: string,
-    readonly httpStatus: number | null,
-    /** http — ответ не 2xx; network/timeout — сбой связи; остальное — запрет сетевой политики. */
-    readonly kind: string = 'http',
-  ) {
-    super(message);
-    this.name = 'WebsiteFetchError';
-  }
-}
-
-/**
- * Сетевая политика сайта: хост адреса сайта и хост ленты, с поддоменами.
- * Ссылка из ленты на чужой домен не открывается — анонс остаётся анонсом.
- */
-export const policyForSite = (baseUrl: string, config: Pick<IWebsiteConfig, 'rss'> = {}): ISourceNetworkPolicy => {
-  const hosts = new Set<string>();
-  for (const raw of [baseUrl, config.rss]) {
-    if (!raw) continue;
-    try {
-      hosts.add(new URL(raw).hostname.toLowerCase().replace(/^www\./, ''));
-    } catch {
-      // некорректный адрес в настройках не расширяет allowlist
-    }
-  }
-  return { allowedHosts: [...hosts], allowSubdomains: true, ...DEFAULT_SOURCE_LIMITS };
-};
-
-/** Для тестов: подмена DNS и проверки адресов. */
-let fetchDeps: ISafeFetchDeps = {};
-export const setWebsiteFetchDepsForTests = (deps: ISafeFetchDeps): void => {
-  fetchDeps = deps;
-};
-
-const fetchText = async (
-  url: string,
-  policy: ISourceNetworkPolicy,
-): Promise<{ text: string; httpStatus: number }> => {
-  let response;
-  try {
-    response = await safeFetch(
-      url,
-      policy,
-      { headers: { 'user-agent': env.INGEST_USER_AGENT, 'accept-language': 'ru,en;q=0.8' } },
-      fetchDeps,
-    );
-  } catch (err) {
-    if (err instanceof NetworkPolicyError) {
-      throw new WebsiteFetchError(`Запрос запрещён или не выполнен (${err.kind}): ${err.message}`, null, err.kind);
-    }
-    throw new WebsiteFetchError('Сеть недоступна', null, 'network');
-  }
-  if (response.status < 200 || response.status >= 300) {
-    throw new WebsiteFetchError(`HTTP ${response.status}`, response.status, 'http');
-  }
-  return { text: response.text, httpStatus: response.status };
-};
-
-/** Ищем ленту: сначала объявленную в <head>, потом типовые адреса. */
-export const discoverFeedUrl = async (baseUrl: string): Promise<string | null> => {
-  const policy = policyForSite(baseUrl);
-  try {
-    const { text } = await fetchText(baseUrl, policy);
-    const $ = cheerio.load(text);
-    const declared = $(
-      'link[type="application/rss+xml"], link[type="application/atom+xml"]',
-    ).attr('href');
-    // Объявленная лента на чужом домене не принимается автоматически.
-    if (declared) {
-      const url = new URL(declared, baseUrl);
-      if (hostMatchesPolicy(url.hostname, policy)) return url.toString();
-    }
-  } catch (err) {
-    // Главная может не открыться — не повод бросать поиск. Но запрет политики
-    // (внутренний адрес, чужой хост) — повод: типовые пути на том же хосте
-    // упрутся в тот же запрет.
-    if (err instanceof WebsiteFetchError && err.kind !== 'http' && err.kind !== 'network' && err.kind !== 'timeout') {
-      throw err;
-    }
-  }
-
-  for (const path of COMMON_FEED_PATHS) {
-    const candidate = new URL(path, baseUrl).toString();
-    try {
-      const { text } = await fetchText(candidate, policy);
-      if (looksLikeFeed(text)) return candidate;
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-};
 
 export const looksLikeFeed = (text: string): boolean =>
   /<rss[\s>]|<feed[\s>]|<rdf:RDF[\s>]/i.test(text.slice(0, 2000));
@@ -266,88 +145,4 @@ export const extractArticleTextWithMethod = (
   });
 
   return { text: best, method: best === '' ? 'none' : 'heuristic' };
-};
-
-export interface IFetchSiteResult {
-  articles: IWebsiteArticle[];
-  feedUrl: string | null;
-  layoutStats: Record<string, number>;
-  httpStatus: number;
-}
-
-/**
- * Один проход по сайту. Полный текст статей добираем только для новых ссылок
- * и не более limit штук: страница статьи — это отдельный запрос, и вежливость
- * тут важнее полноты.
- */
-export const fetchSite = async (
-  baseUrl: string,
-  config: IWebsiteConfig,
-  knownUrls: ReadonlySet<string>,
-  limit = 10,
-): Promise<IFetchSiteResult> => {
-  const feedUrl = config.rss ?? (await discoverFeedUrl(baseUrl));
-
-  if (!feedUrl) {
-    // listSelector объявлен в IWebsiteConfig, но разбор HTML-раздела ещё не
-    // реализован (этап 05A). Предлагать его как рабочий путь нельзя.
-    throw new WebsiteFetchError(
-      'RSS-лента не найдена. Укажите её адрес в настройках источника (config.rss). ' +
-        'Сайты без RSS пока не поддерживаются.',
-      null,
-    );
-  }
-
-  const policy = policyForSite(baseUrl, { rss: feedUrl });
-  const { text, httpStatus } = await fetchText(feedUrl, policy);
-  if (!looksLikeFeed(text)) {
-    throw new WebsiteFetchError(`По адресу ${feedUrl} не лента, а обычная страница`, httpStatus);
-  }
-
-  const { items, layoutStats } = parseFeed(text, baseUrl);
-
-  const fresh = items.filter(item => !knownUrls.has(item.url)).slice(0, limit);
-  let enriched = 0;
-  let blockedLinks = 0;
-
-  for (const item of fresh) {
-    // Анонса из ленты часто хватает, и лишний запрос тогда ни к чему.
-    if (item.body.length >= 400) continue;
-    // Ссылка на чужой домен не открывается: анонс остаётся как есть.
-    let linkHost = '';
-    try {
-      linkHost = new URL(item.url).hostname;
-    } catch {
-      linkHost = '';
-    }
-    if (!hostMatchesPolicy(linkHost, policy)) {
-      blockedLinks += 1;
-      item.completenessReason = `${item.completenessReason}; article_link_outside_source`;
-      continue;
-    }
-    try {
-      const page = await fetchText(item.url, policy);
-      const article = extractArticleTextWithMethod(page.text, config.articleSelector);
-      if (article.text.length > item.body.length) {
-        item.body = article.text;
-        item.representation = 'article_text@1';
-        // Явный или семантический контейнер статьи — full; эвристика «самый
-        // длинный блок абзацев» полноты не доказывает.
-        item.completeness = article.method === 'selector' || article.method === 'semantic' ? 'full' : 'unknown';
-        item.completenessReason = `article_page_${article.method}`;
-        enriched += 1;
-      }
-    } catch {
-      // Статья недоступна — оставляем анонс из ленты; полнота остаётся прежней.
-      item.completenessReason = `${item.completenessReason}; article_fetch_failed`;
-    }
-    await new Promise(resolve => setTimeout(resolve, env.TG_FETCH_DELAY_MS));
-  }
-
-  return {
-    articles: fresh,
-    feedUrl,
-    layoutStats: { ...layoutStats, fresh: fresh.length, enriched, blocked_links: blockedLinks },
-    httpStatus,
-  };
 };

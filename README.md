@@ -136,7 +136,8 @@ npm run ingest:once -- --source имя_канала   # разовый прог�
 npm run ingest:once -- --add <канал>        # добавить публичный канал (пауза, без допуска)
 npm run ingest:once -- --add-site <url> [--rss <лента>]  # добавить сайт без сетевых запросов
 npm run ingest:once -- --probe <канал>      # сверить селекторы с живой страницей (нужен допуск)
-npm run ingest:once -- --probe-site <ключ>  # проверить сайт, ничего не сохраняя (нужен допуск)
+npm run ingest:once -- --probe-site <ключ>  # проба: 1 страница, до 3 записей, ничего не сохраняет (нужен допуск)
+npm run ingest:once -- --site-profile <ключ> --file profile.json  # проверить и записать профиль сайта
 npm run ingest:once -- --remove <ключ>      # удалить источник без документов
 npm run ingest:once -- --env-check          # какие ключи видит программа в .env
 npm run ingest:once -- --bot-check          # проверить форвард-бота

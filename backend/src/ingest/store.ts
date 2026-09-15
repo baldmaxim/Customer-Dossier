@@ -19,6 +19,7 @@ import {
   recordObservation,
   type IAttachment,
   type ILegacyLink,
+  type PublishedAtPrecision,
   type TextCompleteness,
 } from '../revisions/store.js';
 import { computeHashes, isTooShortToProcess } from './dedup.js';
@@ -43,6 +44,9 @@ export interface IIncomingDocument {
   sourceModifiedAt?: Date | null;
   /** Когда адаптер получил ответ источника. По умолчанию — момент записи. */
   fetchedAt?: Date;
+  publishedAtPrecision?: PublishedAtPrecision | null;
+  publishedAtRaw?: string | null;
+  parserVersion?: string | null;
 }
 
 export type StoreOutcome =
@@ -155,6 +159,9 @@ const storeInTransaction = async (client: PoolClient, doc: IIncomingDocument): P
       sourceModifiedAt: doc.sourceModifiedAt ?? null,
       fetchedAt: doc.fetchedAt ?? new Date(),
       forwardOrigin: doc.forwardFrom,
+      publishedAtPrecision: doc.publishedAtPrecision ?? null,
+      publishedAtRaw: doc.publishedAtRaw ?? null,
+      parserVersion: doc.parserVersion ?? null,
     },
     async (): Promise<ILegacyLink> => {
       const legacy = await storeLegacy(client, doc);

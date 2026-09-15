@@ -12,14 +12,14 @@ import {
   looksLikeLayoutChange,
   TelegramFetchError,
 } from './telegramWeb.js';
-import { fetchSite, WebsiteFetchError, type IWebsiteConfig } from './website.js';
+import { crawlSite } from './sites/crawler.js';
 import { storeDocuments, emptyBatchStats, type IIncomingDocument, type IBatchStats } from './store.js';
-import { query } from '../db/pool.js';
 import { evaluateSourcePolicy } from './policy.js';
 import {
   getDueSources,
   startRun,
   finishRun,
+  finishSiteRun,
   updateCursor,
   markBroken,
   type ISource,
@@ -132,86 +132,29 @@ export const ingestTelegramSource = async (source: ISource): Promise<IIngestRepo
 };
 
 /**
- * Один проход по сайту через RSS.
- *
- * Курсор здесь — не номер, а набор уже виденных ссылок: ленты отдают записи
- * без монотонного идентификатора, и «всё, что новее последнего» не вычислить.
- * Ссылки берём из БД, а не из cursor: так работает и после ручной чистки.
+ * Один проход по сайту адаптером этапа 05A (sites/crawler.ts): профиль источника,
+ * RSS или HTML-список с пагинацией, статьи и карточки объектов. Курсор и записи
+ * страницы сохраняются вместе; исход, счётчики и покрытие — в source_runs, здоровье — в sources.
  */
 export const ingestWebsiteSource = async (source: ISource): Promise<IIngestReport> => {
   const blocked = policyBlocked(source);
   if (blocked) return blocked;
 
   const runId = await startRun(source.id);
-
-  let outcome: IRunOutcome = {
-    itemsSeen: 0,
-    itemsNew: 0,
-    httpStatus: null,
-    error: null,
-    layoutStats: {},
-  };
-  let stats = emptyBatchStats();
-
+  const startedAt = Date.now();
   try {
-    const seen = await query<{ url: string }>(
-      `SELECT url FROM raw_documents
-       WHERE source_id = $1 AND url IS NOT NULL
-       ORDER BY fetched_at DESC LIMIT 500`,
-      [source.id],
-    );
-    const knownUrls = new Set(seen.map(r => r.url));
-
-    const result = await fetchSite(
-      source.baseUrl ?? `https://${source.key}`,
-      source.config as IWebsiteConfig,
-      knownUrls,
-    );
-    const fetchedAt = new Date();
-
-    outcome = {
-      ...outcome,
-      httpStatus: result.httpStatus,
-      itemsSeen: result.articles.length,
-      layoutStats: result.layoutStats,
-    };
-
-    const docs: IIncomingDocument[] = result.articles.map(article => ({
-      sourceId: source.id,
-      sourceRunId: runId,
-      externalId: article.externalId,
-      url: article.url,
-      title: article.title,
-      // Заголовок в тело: он часто несёт главный факт, а извлечение видит
-      // только body.
-      body: article.title ? `${article.title}\n\n${article.body}` : article.body,
-      publishedAt: article.publishedAt,
-      forwardFrom: null,
-      // Заголовок + текст: версия представления фиксирует и эту склейку.
-      representation: `${article.representation}+title`,
-      completeness: article.completeness,
-      completenessReason: article.completenessReason,
-      attachments: [],
-      sourceModifiedAt: null,
-      fetchedAt,
-    }));
-
-    stats = await withTransaction(client => storeDocuments(docs, client));
-    outcome.itemsNew = stats.inserted;
-
-    if (result.feedUrl && source.config.rss !== result.feedUrl) {
-      // Найденный автоматически адрес запоминаем: второй раз искать незачем.
-      await updateCursor(source.id, { feed_url: result.feedUrl });
-    }
-
-    await finishRun(runId, source.id, outcome);
-    return { sourceKey: source.key, ok: true, stats, error: null };
+    const report = await crawlSite(source, { sourceRunId: runId });
+    await finishSiteRun(runId, source.id, report, Date.now() - startedAt);
+    const stats = emptyBatchStats();
+    stats.inserted = report.counts.saved;
+    stats.newRevision = report.counts.changed;
+    stats.unchanged = report.counts.skipped;
+    const ok = report.outcome === 'ok' || report.outcome === 'not_modified';
+    return { sourceKey: source.key, ok, stats, error: ok ? null : `${report.outcome}: ${report.healthReason ?? ''}` };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    outcome.error = message;
-    if (err instanceof WebsiteFetchError) outcome.httpStatus = err.httpStatus;
-    await finishRun(runId, source.id, outcome);
-    return { sourceKey: source.key, ok: false, stats, error: message };
+    await finishRun(runId, source.id, { itemsSeen: 0, itemsNew: 0, httpStatus: null, error: message, layoutStats: {} });
+    return { sourceKey: source.key, ok: false, stats: emptyBatchStats(), error: message };
   }
 };
 

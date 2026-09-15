@@ -83,7 +83,7 @@
 | R11 | **present** | допуск сбора/ИИ, журнал, единый gate | `policy.test.ts`, `policy.int.test.ts`, `cli-gates.log` |
 | R12 | partial | описание исправлено; догоняющего сбора нет — 05B | — |
 | R13 | **present** (этап 02) | правка поста — новая неизменяемая редакция; legacy-текст не переписывается | `revisions.test.ts`; интеграция `revisions.int.test.ts` — у пользователя |
-| R14 | partial | текст ошибки исправлен; HTML-адаптеры — 05A | — |
+| R14 | **present** (05A) | профиль сайта: RSS или HTML-список с пагинацией; анонс догружается статьёй по селектору, недоступная — честный excerpt; listSelector без профиля отвергается | `sites.test.ts`, `sites.int.test.ts` |
 | R15 | missing → 06 | — | — |
 | R16 | **present** (03B) | сущности чанков объединяются по ключу имени и ИНН/городу; события — только при той же позиции цитаты; mention-id в пространстве чанка | `reprocess.test.ts`, `reprocess.int.test.ts` |
 | R17 | **present** (04) | предпросмотр, версии, идемпотентность, стабильные блокировки, коллизии до записи, журнал ходов, tombstone, отмена при неизменных зависимостях; применение за флагом MERGE_APPLY_ENABLED | `identity.int.test.ts`, `guard.test.ts`, `api.int.test.ts` |

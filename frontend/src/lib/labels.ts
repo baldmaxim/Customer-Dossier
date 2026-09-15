@@ -209,3 +209,40 @@ export const MERGE_COUNT_LABELS: Record<string, string> = {
   pendingQueuePairs: 'других пар в очереди',
   priorMerges: 'прежних слияний сторон',
 };
+
+/** Здоровье источника (этап 05A). */
+export const SOURCE_HEALTH_LABELS: Record<string, string> = {
+  unknown: 'не проверялся',
+  ok: 'в порядке',
+  parser_degraded: 'вёрстка изменилась?',
+  rate_limited: 'ограничение частоты (429)',
+  blocked: 'доступ закрыт',
+  error: 'ошибка',
+  config_invalid: 'профиль некорректен',
+};
+
+export const RUN_OUTCOME_LABELS: Record<string, string> = {
+  ok: 'успешно',
+  not_modified: 'без изменений (304)',
+  partial: 'частично',
+  parser_degraded: 'селекторы не нашли записи',
+  rate_limited: 'ограничение частоты',
+  blocked: 'отказ доступа',
+  http_error: 'ошибка HTTP',
+  network: 'сеть недоступна',
+  oversize: 'ответ слишком большой',
+  config_invalid: 'профиль некорректен',
+  error: 'ошибка',
+};
+
+export const COVERAGE_STOP_LABELS: Record<string, string> = {
+  exhausted: 'пройдены все страницы',
+  caught_up: 'догнали уже сохранённое',
+  max_pages: 'лимит страниц — история не полная',
+  max_items: 'лимит записей — история не полная',
+  failed: 'остановлено сбоем',
+  not_modified: 'страница не менялась',
+  parser_degraded: 'остановлено: вёрстка',
+  feed_window: 'окно ленты — история не гарантируется',
+  empty_feed: 'лента пуста',
+};

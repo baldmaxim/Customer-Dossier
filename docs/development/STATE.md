@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-14 (+02:00). Текущий этап: **04**. Статус: **PASS** (прогон пользователя, evidence/04/USER_RUN.md); следующий — 05A.
+Обновлено: 2026-09-14 (+02:00). Текущий этап: **05A**. Статус: **код готов, ждёт прогона пользователя** (TESTING_LOCAL A5, H). LIVE_SOURCE=NOT_RUN.
 Последний этап с пройденными core-gates: 04 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -13,9 +13,9 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/04_REPORT.md` (00–03B — там же). Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/05A_REPORT.md` (00–04 — там же). Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
-ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние).
+ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
 
 ## Активные флаги (по умолчанию)
@@ -26,14 +26,15 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIVE_SOURCE_VALIDATED: нет. Production: не входит.
+LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIVE_SOURCE_VALIDATED: нет (approved-сайтов нет). Production: не входит.
 
 ## Неразрешённые действия
 
-Запись в рабочую БД (миграции 010–014, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
+Запись в рабочую БД (миграции 010–015, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
 включение источников; изменение `.env`; облачное размещение — без отдельного согласования.
 Commit/push в `dossier-stages` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-`stages/STAGE_05A_WEBSITES.md`.
+Получить результат прогона TESTING_LOCAL (A5 — 12 файлов / 135 тестов, H); исправить найденное; закрыть 05A (PASS),
+commit/push; затем `stages/STAGE_05B_TELEGRAM.md`.

@@ -2,11 +2,12 @@ import { FC, Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
-import type { ISourceRow } from '../api/types';
+import type { ISiteProbeReport, ISourceRow } from '../api/types';
 import { AssertionReviewPanel } from '../components/AssertionReviewPanel';
 import { MergeQueuePanel } from '../components/MergeQueuePanel';
+import { SiteProbeResult, SourceHealthCell } from '../components/SourceHealth';
 import { SourcePolicyEditor } from '../components/SourcePolicyEditor';
-import { PERMISSION_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
+import { PERMISSION_LABELS, SOURCE_KIND_LABELS } from '../lib/labels';
 import styles from './AdminPage.module.css';
 
 export const AdminPage: FC = () => {
@@ -16,6 +17,7 @@ export const AdminPage: FC = () => {
   const [pasteText, setPasteText] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<number | null>(null);
+  const [probeResult, setProbeResult] = useState<{ id: number; report: ISiteProbeReport } | null>(null);
 
   const sourcesQuery = useQuery({
     queryKey: ['sources'],
@@ -50,6 +52,13 @@ export const AdminPage: FC = () => {
       setNotice('Сайт добавлен на паузе. Лента найдётся при первом разрешённом проходе.');
       invalidate();
     },
+    onError: (err: Error) => setNotice(err.message),
+  });
+
+  // Проба уже допущенного сайта: живой запрос по действию оператора, без записи и без включения опроса.
+  const probe = useMutation({
+    mutationFn: (id: number) => api.post<{ report: ISiteProbeReport }>(`/api/admin/sources/${id}/probe`),
+    onSuccess: (result, id) => setProbeResult({ id, report: result.report }),
     onError: (err: Error) => setNotice(err.message),
   });
 
@@ -148,9 +157,10 @@ export const AdminPage: FC = () => {
       <section className={styles.section}>
         <h2>Добавить сайт</h2>
         <p className={styles.hint}>
-          Читаем через RSS — он стабильнее вёрстки. При добавлении запросов к сайту нет: адрес ленты
-          ищется при первом проходе после решения о допуске (обычно это <code>/rss</code> или{' '}
-          <code>/feed</code>).
+          Сайт читается по профилю: RSS/Atom (лента объявлена на главной или задана в профиле) либо HTML-список
+          с пагинацией и селекторами статьи. Профиль задаётся командой{' '}
+          <code>npm run ingest:once -- --site-profile &lt;ключ&gt; --file profile.json</code>. При добавлении запросов к
+          сайту нет; «Проба» доступна после решения о допуске и ничего не сохраняет.
         </p>
         <form
           className={styles.inlineForm}
@@ -181,9 +191,7 @@ export const AdminPage: FC = () => {
                 <th>Тип</th>
                 <th>Статус</th>
                 <th>Допуск</th>
-                <th>Последний запуск</th>
-                <th className={styles.num}>Найдено</th>
-                <th>Ошибка</th>
+                <th>Здоровье и последний запуск</th>
                 <th />
               </tr>
             </thead>
@@ -213,11 +221,9 @@ export const AdminPage: FC = () => {
                       <span className={styles.policyReason}>{s.collectBlockedReason ?? s.aiBlockedReason}</span>
                     )}
                   </td>
-                  <td className={styles.dim}>{formatDateTime(s.lastRunAt) || '—'}</td>
-                  <td className={styles.num}>
-                    {s.lastItemsSeen === null ? '—' : `${s.lastItemsNew ?? 0}/${s.lastItemsSeen}`}
+                  <td>
+                    <SourceHealthCell source={s} />
                   </td>
-                  <td className={styles.error}>{s.lastError ?? ''}</td>
                   <td>
                     <div className={styles.rowActions}>
                       <button
@@ -227,6 +233,17 @@ export const AdminPage: FC = () => {
                       >
                         Допуск
                       </button>
+                      {s.kind === 'website' && !s.collectBlockedReason && (
+                        <button
+                          type="button"
+                          className={styles.secondary}
+                          disabled={probe.isPending}
+                          title="Одна страница, до трёх записей, ничего не сохраняет"
+                          onClick={() => probe.mutate(s.id)}
+                        >
+                          Проба
+                        </button>
+                      )}
                       {s.kind !== 'manual' && (
                         <>
                           <button
@@ -257,9 +274,16 @@ export const AdminPage: FC = () => {
                     </div>
                   </td>
                 </tr>
+                {probeResult?.id === s.id && (
+                  <tr>
+                    <td colSpan={6}>
+                      <SiteProbeResult report={probeResult.report} onClose={() => setProbeResult(null)} />
+                    </td>
+                  </tr>
+                )}
                 {editingPolicy === s.id && (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={6}>
                       <SourcePolicyEditor
                         source={s}
                         onCancel={() => setEditingPolicy(null)}

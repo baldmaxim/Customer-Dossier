@@ -4,6 +4,7 @@
 //   npm run ingest:once -- --add-site <url> [--rss <feed>]  добавить сайт без сетевых запросов
 //   npm run ingest:once -- --probe kzbuild     проверить вёрстку канала (нужен допуск к сбору)
 //   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
+//   npm run ingest:once -- --site-profile <key> --file profile.json  проверить и записать профиль сайта
 //   npm run ingest:once -- --source kzbuild    прогнать один источник (нужен допуск)
 //   npm run ingest:once                        прогнать все просроченные источники с допуском
 //   npm run ingest:once -- --remove <key>      удалить источник без документов
@@ -16,7 +17,10 @@
 // выполняется только для зарегистрированного источника с подтверждённым
 // допуском (sources.access_status = approved). Допуск ставит оператор в админке.
 
+import fs from 'node:fs';
+
 import { closeDb } from '../db/pool.js';
+import { parseSiteProfile } from './sites/profile.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
 import { runIngestPass, ingestTelegramSource } from './scheduler.js';
 import {
@@ -24,11 +28,12 @@ import {
   addWebsiteSource,
   deleteSource,
   getSourceByKey,
+  setSourceConfig,
 } from './sources.js';
 import { getIngestSummary, getDuplicateRate } from './store.js';
 import { checkBot, pollBotUpdates } from './telegramBot.js';
 import { checkEnvFile, printEnvCheck } from '../config/env-check.js';
-import { discoverFeedUrl, fetchSite } from './website.js';
+import { printProbe, probeWebsiteSource } from './sites/probe.js';
 import { ingestWebsiteSource } from './scheduler.js';
 import { evaluateSourcePolicy } from './policy.js';
 import type { ISource } from './sources.js';
@@ -145,32 +150,26 @@ const main = async (): Promise<void> => {
   if (probeSite) {
     const source = await loadApprovedSource('website', probeSite.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''));
     if (!source) return;
-    const origin = source.baseUrl ?? `https://${source.key}`;
-    const rss = argValue('--rss') ?? (typeof source.config.rss === 'string' ? source.config.rss : null);
-    const feed = rss ?? (await discoverFeedUrl(origin));
-    if (!feed) {
-      console.error('[probe-site] RSS-лента не найдена. Укажите её через --rss.');
+    // Проба: одна страница, до трёх записей, ничего не пишет и не включает опрос.
+    const report = await probeWebsiteSource(source);
+    printProbe(report);
+    if (report.outcome !== 'ok' && report.outcome !== 'not_modified') process.exitCode = 1;
+    return;
+  }
+
+  const profileKey = argValue('--site-profile');
+  if (profileKey) {
+    const file = argValue('--file');
+    const source = await getSourceByKey('website', profileKey);
+    if (!source || !file) {
+      console.error('[site] нужен зарегистрированный сайт и --file <profile.json>');
       process.exitCode = 1;
       return;
     }
-    console.log(`[probe-site] лента: ${feed}`);
-    const result = await fetchSite(origin, { rss: feed }, new Set(), 2);
-    console.log(`[probe-site] записей в ленте: ${result.layoutStats.parsed ?? 0}`);
-    console.log(`[probe-site] дозагружено полных текстов: ${result.layoutStats.enriched ?? 0}`);
-    const first = result.articles[0];
-    if (first) {
-      console.log('\n[probe-site] свежая статья:');
-      console.log(`  ${first.title}`);
-      console.log(`  ${first.url}`);
-      console.log(`  дата:  ${first.publishedAt?.toISOString() ?? 'не разобрана'}`);
-      console.log(`  текст: ${first.body.slice(0, 400)}${first.body.length > 400 ? '…' : ''}`);
-      if (first.body.length < 200) {
-        console.warn('\n[probe-site] текст короткий — вероятно, только анонс.');
-        console.warn('[probe-site] Задайте articleSelector в настройках источника.');
-      }
-    } else {
-      console.warn('[probe-site] лента пуста или все записи уже известны.');
-    }
+    const profile = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const parsed = parseSiteProfile(profile);
+    await setSourceConfig(source.id, profile);
+    console.log(`[site] профиль ${source.key} записан: режим ${parsed.mode}, страниц до ${parsed.pagination?.maxPages ?? 1}, записей до ${parsed.limits.maxItemsPerRun}`);
     return;
   }
 
