@@ -26,6 +26,9 @@ interface ICaseResult {
   publishable: number;
   review: number;
   rejected: number;
+  /** Для разбора полноты: что ответила модель и что отбросила проверка (только синтетические тексты). */
+  answer: unknown;
+  reasons: string[];
 }
 
 const argValue = (flag: string): string | null => {
@@ -49,7 +52,7 @@ const main = async (): Promise<void> => {
     const answer = await extractSemantic({ body: c.text, publishedAt: null });
     const latencyMs = Date.now() - started;
     if (!answer.ok) {
-      results.push({ id: c.id, outcome: 'model_error', error: `${answer.failure}: ${answer.message}`, latencyMs, checks: [], publishable: 0, review: 0, rejected: 0 });
+      results.push({ id: c.id, outcome: 'model_error', error: `${answer.failure}: ${answer.message}`, latencyMs, checks: [], publishable: 0, review: 0, rejected: 0, answer: null, reasons: [] });
       console.log(`${c.id}  ошибка модели: ${answer.failure}`);
       continue;
     }
@@ -64,6 +67,11 @@ const main = async (): Promise<void> => {
       publishable: build.assertions.filter(a => a.grounded && !a.rejectedReason).length,
       review: build.assertions.filter(a => a.rejectedReason?.startsWith('на проверку')).length,
       rejected: build.rejected.length,
+      answer: answer.data,
+      reasons: [
+        ...build.rejected.map(r => `отброшено ${r.kind} «${r.name}»: ${r.reason}`),
+        ...build.assertions.filter(a => a.rejectedReason).map(a => `${a.content.predicate}/${a.content.role ?? a.content.eventType}: ${a.rejectedReason}`),
+      ],
     };
     results.push(result);
     const failed = checks.filter(x => !x.pass);

@@ -59,6 +59,11 @@ describe('isQuoteVerbatim', () => {
 });
 
 describe('isNameInQuote', () => {
+  it('ё в цитате и в имени не мешает совпадению', () => {
+    expect(isNameInQuote('Утёс-Демо', 'договор на ЖК «Утёс-Демо» подписан')).toBe(true);
+    expect(isNameInQuote('Утес-Демо', 'договор на ЖК «Утёс-Демо» подписан')).toBe(true);
+  });
+
   it('находит имя в цитате', () => {
     expect(isNameInQuote('BI Group', 'ТОО «BI Group» сорвало срок сдачи')).toBe(true);
   });

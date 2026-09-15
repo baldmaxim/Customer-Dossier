@@ -38,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **26 файлов / 384 теста passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **26 файлов / 385 тестов passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -76,7 +76,8 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **14 файлов / 155 тестов passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **14 файлов / 155 тестов passed**
+(после прогона этапа 06 исправлен дефект «ё»; unit — 26 файлов / 385):
 
 | Файл | Что проверяет |
 |---|---|

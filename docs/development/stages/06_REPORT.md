@@ -1,8 +1,9 @@
 # Отчёт этапа 06 — Смысл связей, история ролей и корректные события
 
 Дата/время: 2026-09-15 (+02:00). Исполнитель: Claude Code (Opus 5), единственный writer.
-Статус: **AWAITING_USER_RUN** — код, unit и сборки PASS в среде агента; интеграция и раздел J TESTING_LOCAL — у пользователя.
-`LOCAL_MODEL_VALIDATED=NOT_RUN`: LM Studio в среде агента недоступен; precision/recall не заявляются.
+Статус: **IN_PROGRESS** — прогон пользователя @ `8aeaa4b` ([evidence/06/USER_RUN.md](../evidence/06/USER_RUN.md)): unit, J1–J3 ок; A5 — 1 из 155 упал
+(дефект «ё» в проверке имени, исправлен, нужен повторный прогон A5). Пользователь разрешил переход к 07.
+`LOCAL_MODEL` на синтетике: qwen3-8b safety 21/21, recall 3/7, 3 llm_error при занятой VRAM — массовый переразбор на extract@3 не начинать.
 
 ## Исходная база
 
@@ -41,6 +42,7 @@
 | `backend/src/reprocess/cli-commands.ts`, `pipeline/cli.ts` | `--queue [--kind] [--limit]` | чтение |
 | `backend/src/reprocess/semantic/benchmark.ts` (новый), script `benchmark:model` | замер модели на синтетическом корпусе | только LM Studio, без базы |
 | `frontend/src/api/types.ts`, `lib/labels.ts`, `lib/describeAssertion.ts`, `components/AssertionDetail.tsx` | подписи договоров, связей, полярности, точности, стадий и сумм | — |
+| `backend/src/pipeline/verify.ts` (после прогона) | сравнение имени с цитатой сводит ё к е | объекты и компании с «ё» больше не отбрасываются |
 | тесты: `reprocess/semantic/semantic.test.ts` (unit, 28), `semantic.int.test.ts` (интеграция, 7), фикстуры `__fixtures__/corpus.ts`, `semanticAnswers.ts`, seed `seedSemanticDemo.ts` / `seed:test-semantic` | см. «Тесты» | интеграция — у пользователя |
 | `ADR-008-semantic-relations-events.md` (новый), `CLAUDE.md`, `README.md`, `TESTING_LOCAL.md` (A, J), `PATCH_COVERAGE.md` (R03, R04, R08/R09, R15) | решения и инструкция | — |
 
@@ -69,10 +71,10 @@
 | TC-057 состояние объекта: поздняя статья не меняет текущее; дата неизвестна — не состояние | то же | tg_info_test | — | AWAITING_USER_RUN | — |
 | TC-058 сумма у стороны рядом с числом | то же | tg_info_test | — | AWAITING_USER_RUN | — |
 | Слияние переносит объект договора | то же | tg_info_test | — | AWAITING_USER_RUN | — |
-| Регрессия 01–05B (13 файлов / 148) | `npm run test:integration` | tg_info_test | — | AWAITING_USER_RUN | ожидается 14 файлов / 155 |
-| Seed, CLI, API | TESTING_LOCAL J | tg_info_test | — | AWAITING_USER_RUN | — |
-| Замер локальной модели на синтетическом корпусе | `npm run benchmark:model` | LM Studio | — | NOT_RUN | LM Studio в среде агента нет; необязательный шаг J4 у пользователя |
-| Экран 390 px | браузер | — | — | NOT_RUN | — |
+| Регрессия 01–05B + 06 | `npm run test:integration` | tg_info_test | 1 | FAIL → исправлено | 154 / 155; падал перенос объекта договора из-за «ё»; повтор — RERUN_PENDING |
+| Seed, CLI, API, 390 px | TESTING_LOCAL J1–J3 | tg_info_test | 0 | PASS | evidence/06/USER_RUN.md |
+| Замер локальной модели на синтетическом корпусе | `npm run benchmark:model` | LM Studio у пользователя | 0 | safety PASS, recall 3/7 | 21/21 safety; промахи SYN-01, 02, 08, 12; llm_error SYN-06, 09, 11 при занятой VRAM; медиана 63 с |
+| Дефект «ё» в проверке имени | `verify.test.ts` | unit | 0 | PASS | 26 / 385 после исправления |
 
 ## Данные, безопасность и откат
 

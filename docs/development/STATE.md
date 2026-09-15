@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-15 (+02:00). Текущий этап: **06**. Статус: **AWAITING_USER_RUN** (unit/build PASS в среде агента; интеграция и раздел J — у пользователя). LIVE_SOURCE=NOT_RUN, LOCAL_MODEL=NOT_RUN.
+Обновлено: 2026-09-15 (+02:00). Текущий этап: **06**. Статус: **IN_PROGRESS** (прогон @8aeaa4b: J1–J3 ок, A5 154/155 — дефект «ё» исправлен, нужен повтор A5; evidence/06/USER_RUN.md). Переход к 07 разрешён пользователем. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика): safety 21/21, recall 3/7 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 05B (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -36,4 +36,4 @@ Commit/push в `dossier-stages` — разрешены пользователе�
 
 ## Что осталось и следующая безопасная операция
 
-Прогон пользователя по `TESTING_LOCAL.md` (A1–A5, J; J4 — замер модели по желанию); после PASS — `stages/STAGE_07_ANALYTICS.md`.
+Повтор A5 (`semantic.int.test.ts`) и повтор J4 на свободной VRAM; этап `stages/STAGE_07_ANALYTICS.md`.

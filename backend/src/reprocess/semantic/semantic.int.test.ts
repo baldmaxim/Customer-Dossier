@@ -51,8 +51,16 @@ const ingest = async (body: string, respond: ISemanticExtraction) => {
 const companyId = async (name: string): Promise<number> =>
   (await pool().query<{ id: number }>('SELECT id FROM companies WHERE name = $1 AND merged_into_id IS NULL ORDER BY id LIMIT 1', [name])).rows[0]!.id;
 
-const projectId = async (name: string): Promise<number> =>
-  (await pool().query<{ id: number }>('SELECT id FROM projects WHERE name = $1 AND merged_into_id IS NULL ORDER BY id LIMIT 1', [name])).rows[0]!.id;
+const projectId = async (name: string): Promise<number> => {
+  const row = (
+    await pool().query<{ id: number }>(
+      "SELECT id FROM projects WHERE replace(name, 'ё', 'е') = replace($1, 'ё', 'е') AND merged_into_id IS NULL ORDER BY id LIMIT 1",
+      [name],
+    )
+  ).rows[0];
+  if (!row) throw new Error(`объект «${name}» не создан`);
+  return row.id;
+};
 
 beforeAll(async () => {
   await resetAndMigrate();
