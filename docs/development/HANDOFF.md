@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этап 04 — код готов, ждёт прогона пользователя (TESTING_LOCAL A5 — 11 файлов / 123 теста, раздел G). Этапы 02, 03A, 03B — PASS.
+Этапы 02, 03A, 03B, 04 — PASS (04: интеграция 11 файлов / 123, раздел G, evidence/04/USER_RUN.md). Следующий — 05A.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -34,7 +34,7 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 typecheck/build backend и frontend, unit 23 файла / 340 тестов — PASS.
 
 ## Что НЕ проверено
-Интеграция 04 (11 файлов / 123), раздел G (CLI и админка); реальный LLM-smoke; визуальные проверки 390 px.
+Реальный LLM-smoke; визуальные проверки 390 px (02, 03A, 04).
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -44,8 +44,7 @@ typecheck/build backend и frontend, unit 23 файла / 340 тестов — P
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Дождаться отчёта пользователя по TESTING_LOCAL (A5, G). Исправить упавшее, обновить 04_REPORT до PASS, commit/push.
-Затем `stages/STAGE_05A_WEBSITES.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/website.ts`, `net/safeFetch.ts`,
+Этап `stages/STAGE_05A_WEBSITES.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/website.ts`, `net/safeFetch.ts`,
 `ingest/scheduler.ts`, `ingest/store.ts`, `revisions/*`, миграции 010, 011.
 
 ## Запреты
