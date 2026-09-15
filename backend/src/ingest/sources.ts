@@ -161,6 +161,16 @@ export const finishSiteRun = async (runId: number, sourceId: number, report: ICr
      WHERE id = $1`,
     [sourceId, report.health, report.healthReason, report.parserVersion],
   );
+  // Отзыв допуска во время прохода — не ошибка для повторов: счётчик неудач не растёт.
+  if (report.outcome === 'policy_blocked') {
+    await execute(`UPDATE sources SET next_run_at = now() + (poll_interval_sec || ' seconds')::interval WHERE id = $1`, [sourceId]);
+    return;
+  }
+  // Закрытый или несуществующий канал ретраями не чинится — снимаем сразу.
+  if (report.outcome === 'private' || report.outcome === 'not_found') {
+    await execute(`UPDATE sources SET status = 'broken', fail_streak = fail_streak + 1 WHERE id = $1`, [sourceId]);
+    return;
+  }
   if (report.outcome === 'rate_limited') {
     await execute(
       `UPDATE sources

@@ -81,8 +81,8 @@
 | R08, R09 | blocked/marked | UI: legacy-метка и формулировки; SQL не менялся — 06/07 | frontend build |
 | R10 | **present** | loopback-only, авторизация оператора, Host/Origin/CSRF, SSRF-клиент | `auth.test.ts`, `safeFetch.test.ts`, smoke |
 | R11 | **present** | допуск сбора/ИИ, журнал, единый gate | `policy.test.ts`, `policy.int.test.ts`, `cli-gates.log` |
-| R12 | partial | описание исправлено; догоняющего сбора нет — 05B | — |
-| R13 | **present** (этап 02) | правка поста — новая неизменяемая редакция; legacy-текст не переписывается | `revisions.test.ts`; интеграция `revisions.int.test.ts` — у пользователя |
+| R12 | **present** (05B) | курсор web-preview с записанным разрывом и ограниченной догрузкой `?before=`, граница истории первого запуска, курсор и посты одной транзакцией; бот — журнал обновлений вместо offset в курсоре | `telegram.test.ts`, `telegram.int.test.ts` — у пользователя |
+| R13 | **present** (этап 02; 05B) | правка поста — новая неизменяемая редакция; legacy-текст не переписывается; 05B: правки `edited_message` бота и перепроверка web-preview, короткое опровержение не отбрасывается фильтром длины | `revisions.test.ts`; интеграция `revisions.int.test.ts` — у пользователя |
 | R14 | **present** (05A) | профиль сайта: RSS или HTML-список с пагинацией; анонс догружается статьёй по селектору, недоступная — честный excerpt; listSelector без профиля отвергается | `sites.test.ts`, `sites.int.test.ts` |
 | R15 | missing → 06 | — | — |
 | R16 | **present** (03B) | сущности чанков объединяются по ключу имени и ИНН/городу; события — только при той же позиции цитаты; mention-id в пространстве чанка | `reprocess.test.ts`, `reprocess.int.test.ts` |

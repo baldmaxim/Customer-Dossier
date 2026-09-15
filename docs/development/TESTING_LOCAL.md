@@ -3,8 +3,8 @@
 Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
-**Сейчас проверяется этап 05A** (адаптеры сайтов, догоняющий обход, здоровье источников): шаги A1–A5, затем раздел H.
-Разделы B–G — проверки этапов 01–04 (пройдены), повторять не обязательно.
+**Сейчас проверяется этап 05B** (Telegram: курсоры и разрыв web-preview, журнал бота, правки): шаги A1–A5, затем раздел I.
+Разделы B–H — проверки этапов 01–05A (пройдены), повторять не обязательно.
 LM Studio не нужен: модель в тестах и seed подменена детерминированными ответами.
 
 ---
@@ -38,7 +38,7 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **24 файла / 352 теста passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — **25 файлов / 356 тестов passed**; сборка frontend успешна.
 
 ### A4. Тестовая база
 
@@ -76,16 +76,17 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **12 файлов / 135 тестов passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **13 файлов / 148 тестов passed**:
 
 | Файл | Что проверяет |
 |---|---|
+| `ingest/telegram/telegram.int.test.ts` | **этап 05B**: TC-047…TC-051 — первый запуск без истории, разрыв и ограниченная догрузка без дублей, сбой страницы разрыва, отзыв допуска во время прохода, чужой канал в data-post, правка и короткое опровержение, одинаковый текст в двух каналах, пересылка без источника; бот — повтор обновления и перезапуск, сбой посреди пачки, правка сообщения, скрытый автор и подпись без вложения, пустой allowlist, пропуск update_id и отзыв допуска |
 | `ingest/sites/sites.int.test.ts` | **этап 05A**: TC-042…TC-046 — RSS-анонс → полная статья, честный анонс при недоступной статье, 304 по ETag, повтор без дублей, правка статьи, редирект вне allowlist, HTML-список с пагинацией и датами зоны профиля, значимый query-параметр, сбой второй страницы и продолжение, лимит страниц и хвост, parser_degraded, 429/403/oversize, неверный профиль, карточка объекта без ложных «новостей», проба без записи |
 | `resolve/identity.int.test.ts` | **этап 04**: TC-034…TC-041 — разные ИНН при одном имени, бренд и юрлицо, неоднозначность без выбора первой строки, ЖК в двух городах и неизвестный город, корпуса, поиск по реквизиту и алиасу, слияние с дубликатами, сбой в середине, коллизия уникальности, конкуренция и встречные операции, повтор, отмена и отказ небезопасной отмены, backfill идентичности |
 | `reprocess/reprocess.int.test.ts` | **этап 03B**: полный путь и цепочка evidence → chunk → run → revision, падение последнего чанка, непокрытый хвост, timeout, crash до/после commit, два worker'а и fencing, поздний старый разбор, нерелевантная новая версия при двух источниках и ручном решении, отзыв права ИИ, одинаковые имена с разными ИНН, идемпотентная публикация, 409, проекции карточки, без дублей при переразборе |
 | `assertions/assertions.int.test.ts` | **этап 03A**: TC-019…TC-024 — два доказательства и отзыв, опровержение рядом, новый смысл без наследования решения, 409/идемпотентность, FK/CHECK, проверка цитаты базой, эмодзи |
 | `assertions/backfill.int.test.ts` | **этап 03A**: TC-025 — перенос legacy-канона, ручные статусы, неоднозначные цитаты, повтор |
-| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–015 |
+| `db/migrate.int.test.ts` | dry-run без DDL, отказ destructive без флага, миграции 001–016 |
 | `ingest/policy.int.test.ts` | допуск источников на всех входах |
 | `resolve/resolve.int.test.ts` | R01/R02 |
 | `api/api.int.test.ts` | поиск, заблокированные операции, R06 |
@@ -417,6 +418,50 @@ API (`npm run dev` с переменными раздела B) и UI, вход �
 2. Кнопка «Проба» у ok-сайта → блок «Проба: сеть недоступна…», «Ничего не сохранено».
 3. У telegram/manual-источников колонка показывает прежние «запуск …: новых N из M» без поломки.
 4. Ширина 390 px: таблица скроллится внутри, страница без горизонтального скролла.
+
+---
+
+## I. Этап 05B — Telegram: курсоры, разрыв, журнал бота
+
+Сеть и токены не нужны: seed отдаёт страницы `t.me/s/` внедрённым транспортом и подменяет Bot API внутри процесса.
+
+### I1. Данные
+
+Схема с нуля и seed — как в H1, последней командой `npm run seed:test-telegram` вместо `seed:test-sites`:
+
+```powershell
+docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+npx tsx src/db/migrate.ts --allow-destructive
+Remove-Item Env:DATABASE_URL
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run seed:test-telegram
+$env:DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+```
+
+Ожидается:
+- `[seed] demo_tg_gap: ok`;
+- `[seed] demo_tg_renamed: identity_changed: …`;
+- `[seed] бот: обработано 3, принято 2, отклонено 1; повтор: 3 уже обработанных`;
+- `[seed] demo_tg_gap: ok, gap_open_max_pages` и `[seed] demo_tg_renamed: identity_changed, identity_changed`.
+
+### I2. База
+
+| Команда | Ожидается |
+|---|---|
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT key, health, health_reason, cursor->'tg' AS tg FROM sources WHERE key LIKE 'demo_tg_%' ORDER BY key"` | gap: `ok`, «разрыв постов 101…149 ещё не догружен», `tg` с `"lastPostId": 160` и `"gap": {"after": 100, "before": 150}`; renamed: `identity_uncertain`, курсора `tg` нет |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT s.key, count(i.id) FROM sources s LEFT JOIN source_items i ON i.source_id = s.id WHERE s.key LIKE 'demo_tg_%' GROUP BY s.key ORDER BY s.key"` | gap — 11 (посты 150…160); renamed — 0 |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT update_id, update_kind, outcome FROM bot_processed_updates ORDER BY update_id"` | три строки: 9001 `message` `inserted`; 9002 `message` `rejected_sender`; 9003 `edited_message` `new_revision`. Повтор строк не добавил |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "SELECT r.revision_no, left(r.body, 30) AS body, o.transport_meta->>'updateKind' AS kind, o.transport_meta->'forwardOrigin'->>'type' AS origin, o.transport_meta->>'editDate' AS edit FROM document_revisions r JOIN source_items i ON i.id = r.source_item_id JOIN sources s ON s.id = i.source_id JOIN source_observations o ON o.revision_id = r.id WHERE s.key = 'bot' ORDER BY r.id, o.id"` | редакция 1 — `message`, origin `hidden_user`; редакция 2 — «Поправка: не так.», `edited_message`, дата правки заполнена |
+| `docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "UPDATE bot_processed_updates SET outcome = 'ignored' WHERE update_id = 9001"` | ошибка триггера append-only |
+
+### I3. Админка
+
+API и UI как в H4. «Админка» → «Источники»:
+
+1. `demo_tg_gap`: «в порядке», причина «разрыв постов 101…149 ещё не догружен», «успешно: найдено 11, сохранено 11…»,
+   «покрытие: разрыв постов ещё не догружен», `tg_web@2`.
+2. `demo_tg_renamed`: «канал не совпадает с источником», итог «другой канал на странице».
+3. Ширина 390 px: таблица скроллится внутри, страница без горизонтального скролла.
 
 ---
 

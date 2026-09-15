@@ -219,6 +219,7 @@ export const SOURCE_HEALTH_LABELS: Record<string, string> = {
   blocked: 'доступ закрыт',
   error: 'ошибка',
   config_invalid: 'профиль некорректен',
+  identity_uncertain: 'канал не совпадает с источником',
 };
 
 export const RUN_OUTCOME_LABELS: Record<string, string> = {
@@ -233,6 +234,10 @@ export const RUN_OUTCOME_LABELS: Record<string, string> = {
   oversize: 'ответ слишком большой',
   config_invalid: 'профиль некорректен',
   error: 'ошибка',
+  policy_blocked: 'допуск отозван во время прохода',
+  identity_changed: 'другой канал на странице',
+  not_found: 'канал не найден',
+  private: 'канал закрыт',
 };
 
 export const COVERAGE_STOP_LABELS: Record<string, string> = {
@@ -245,4 +250,11 @@ export const COVERAGE_STOP_LABELS: Record<string, string> = {
   parser_degraded: 'остановлено: вёрстка',
   feed_window: 'окно ленты — история не гарантируется',
   empty_feed: 'лента пуста',
+  up_to_date: 'новые посты сохранены',
+  history_not_collected: 'история канала не собиралась',
+  channel_start_reached: 'дошли до начала канала',
+  gap_open_max_pages: 'разрыв постов ещё не догружен',
+  gap_closed: 'разрыв постов догружен',
+  policy_blocked: 'остановлено: допуск отозван',
+  identity_changed: 'остановлено: другой канал',
 };

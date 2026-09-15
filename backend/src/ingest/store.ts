@@ -23,6 +23,7 @@ import {
   type TextCompleteness,
 } from '../revisions/store.js';
 import { computeHashes, isTooShortToProcess } from './dedup.js';
+import { itemIdentity } from '../revisions/identity.js';
 
 export interface IIncomingDocument {
   sourceId: number;
@@ -47,6 +48,7 @@ export interface IIncomingDocument {
   publishedAtPrecision?: PublishedAtPrecision | null;
   publishedAtRaw?: string | null;
   parserVersion?: string | null;
+  transportMeta?: Record<string, unknown> | null;
 }
 
 export type StoreOutcome =
@@ -162,6 +164,7 @@ const storeInTransaction = async (client: PoolClient, doc: IIncomingDocument): P
       publishedAtPrecision: doc.publishedAtPrecision ?? null,
       publishedAtRaw: doc.publishedAtRaw ?? null,
       parserVersion: doc.parserVersion ?? null,
+      transportMeta: doc.transportMeta ?? null,
     },
     async (): Promise<ILegacyLink> => {
       const legacy = await storeLegacy(client, doc);
@@ -195,12 +198,26 @@ const storeInTransaction = async (client: PoolClient, doc: IIncomingDocument): P
 };
 
 export const storeDocument = async (doc: IIncomingDocument, client?: PoolClient): Promise<IStoreResult> => {
-  if (isTooShortToProcess(doc.body)) {
-    return { outcome: 'too_short', documentId: null, sourceItemId: null, revisionId: null, revisionNo: null };
-  }
   // Публикация и legacy-документ пишутся атомарно: без транзакции блокировка
   // строки публикации не удержится, и параллельные наблюдения размножат редакции.
-  return client ? storeInTransaction(client, doc) : withTransaction(tx => storeInTransaction(tx, doc));
+  const run = async (tx: PoolClient): Promise<IStoreResult> => {
+    // Короткий текст отсекается только у новой публикации (реакция, стикер, голая ссылка).
+    // Правка уже известной публикации проходит всегда: короткое исправление или опровержение
+    // по длине не отбрасывается (этап 05B).
+    if (isTooShortToProcess(doc.body) && !(await publicationExists(tx, doc))) {
+      return { outcome: 'too_short', documentId: null, sourceItemId: null, revisionId: null, revisionNo: null };
+    }
+    return storeInTransaction(tx, doc);
+  };
+  return client ? run(client) : withTransaction(run);
+};
+
+const publicationExists = async (client: PoolClient, doc: IIncomingDocument): Promise<boolean> => {
+  if (!env.REVISION_WRITE_ENABLED) return false;
+  const key = itemIdentity({ externalId: doc.externalId, url: doc.url, body: doc.body }).key;
+  if (key.startsWith('text:')) return false;
+  const row = await client.query('SELECT 1 FROM source_items WHERE source_id = $1 AND item_key = $2', [doc.sourceId, key]);
+  return (row.rowCount ?? 0) > 0;
 };
 
 const recordSighting = async (client: PoolClient, documentId: number, doc: IIncomingDocument): Promise<void> => {

@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-14 (+02:00). Текущий этап: **05A**. Статус: **PASS** (прогон пользователя, evidence/05A/USER_RUN.md); следующий — 05B. LIVE_SOURCE=NOT_RUN.
+Обновлено: 2026-09-15 (+02:00). Текущий этап: **05B**. Статус: **AWAITING_USER_RUN** (unit/build PASS в среде агента; интеграция и раздел I — у пользователя). LIVE_SOURCE=NOT_RUN.
 Последний этап с пройденными core-gates: 05A (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -13,9 +13,9 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/05A_REPORT.md` (00–04 — там же). Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/05B_REPORT.md` (00–05A — там же). Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
-ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов).
+ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
 
 ## Активные флаги (по умолчанию)
@@ -26,14 +26,14 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIVE_SOURCE_VALIDATED: нет (approved-сайтов нет). Production: не входит.
+LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIVE_SOURCE_VALIDATED: нет (approved-сайтов и каналов нет, токен бота не задавался агентом). Production: не входит.
 
 ## Неразрешённые действия
 
-Запись в рабочую БД (миграции 010–015, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
+Запись в рабочую БД (миграции 010–016, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
 включение источников; изменение `.env`; облачное размещение — без отдельного согласования.
 Commit/push в `dossier-stages` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-`stages/STAGE_05B_TELEGRAM.md`.
+Прогон пользователя по `TESTING_LOCAL.md` (A1–A5, I); после PASS — `stages/STAGE_06_RELATIONS_EVENTS.md`.

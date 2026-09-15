@@ -311,7 +311,7 @@ export interface ISourceRow {
   retryAfterAt?: string | null;
 }
 
-export type SourceHealth = 'unknown' | 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid';
+export type SourceHealth = 'unknown' | 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid' | 'identity_uncertain';
 
 export interface ISiteProbeReport {
   outcome: string;

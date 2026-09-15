@@ -10,7 +10,7 @@
 import * as cheerio from 'cheerio';
 
 import { env } from '../config/env.js';
-import { DEFAULT_SOURCE_LIMITS, NetworkPolicyError, safeFetch, type ISourceNetworkPolicy } from '../net/safeFetch.js';
+import { DEFAULT_SOURCE_LIMITS, NetworkPolicyError, safeFetch, type ISourceNetworkPolicy, type SafeTransport } from '../net/safeFetch.js';
 import type { IAttachment, TextCompleteness } from '../revisions/store.js';
 
 /** Веб-версия каналов: только t.me, без поддоменов и чужих редиректов. */
@@ -30,6 +30,23 @@ export const TG_SELECTORS = {
   views: '.tgme_widget_message_views',
 } as const;
 
+/** Необязательные признаки: их отсутствие не считается сломом вёрстки. Сверять пробой на живой странице. */
+const TG_OPTIONAL = {
+  forwardedBlock: '.tgme_widget_message_forwarded_from',
+  forwardedName: '.tgme_widget_message_forwarded_from_name',
+  edited: '.tgme_widget_message_edited',
+  meta: '.tgme_widget_message_meta, .tgme_widget_message_footer',
+  grouped: '.tgme_widget_message_grouped_wrap',
+} as const;
+
+export interface ITelegramWebForward {
+  /** Имя, как показано в веб-версии. */
+  name: string | null;
+  /** Username канала-источника, если есть ссылка t.me/<username>/<id>. */
+  username: string | null;
+  messageId: number | null;
+}
+
 export interface ITelegramPost {
   /** 'channel/1234' — то же значение, что в data-post. */
   externalId: string;
@@ -44,6 +61,14 @@ export interface ITelegramPost {
   completeness: TextCompleteness;
   completenessReason: string;
   attachments: IAttachment[];
+  /** Канал из data-post: при переименовании может не совпасть с ключом источника. */
+  channel: string;
+  /** Веб-версия показывает только признак правки, без даты. */
+  edited: boolean;
+  /** Пересылка: null — не пересылка; name без username — источник скрыт или не ссылкой. */
+  forward: ITelegramWebForward | null;
+  /** Число элементов медиагруппы (альбома), если видно. */
+  mediaGroupSize: number;
 }
 
 /** Вложения веб-версии: наличие видно, содержимое не читается. */
@@ -127,6 +152,22 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       ? (forwardHref.replace(/^https?:\/\/t\.me\//, '').split('/')[0] ?? null)
       : null;
 
+    const forwardBlock = wrap.find(TG_OPTIONAL.forwardedBlock).first();
+    const forwardPath = forwardHref ? forwardHref.replace(/^https?:\/\/t\.me\//, '').split('/') : [];
+    const forward: ITelegramWebForward | null =
+      forwardBlock.length > 0
+        ? {
+            name: forwardBlock.find(TG_OPTIONAL.forwardedName).first().text().replace(/\s+/g, ' ').trim() || null,
+            username: forwardFrom,
+            messageId: forwardPath[1] && /^\d+$/.test(forwardPath[1]) ? Number(forwardPath[1]) : null,
+          }
+        : null;
+    const edited =
+      wrap.find(TG_OPTIONAL.edited).length > 0 || /(^|\s)(edited|изменено)(\s|$)/i.test(wrap.find(TG_OPTIONAL.meta).first().text());
+    const grouped = wrap.find(TG_OPTIONAL.grouped).first();
+    const mediaGroupSize =
+      grouped.length > 0 ? grouped.find('.tgme_widget_message_photo_wrap, .tgme_widget_message_video_player').length : 0;
+
     const attachments: IAttachment[] = Object.entries(MEDIA_SELECTORS)
       .filter(([, selector]) => wrap.find(selector).length > 0)
       .map(([kind]) => ({ kind, status: 'unsupported' as const }));
@@ -141,6 +182,10 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       completeness: attachments.length > 0 ? 'caption_only' : 'full',
       completenessReason: attachments.length > 0 ? 'telegram_web_media_caption' : 'telegram_web_message_text',
       attachments,
+      channel: dataPost.split('/')[0] ?? '',
+      edited,
+      forward,
+      mediaGroupSize,
     });
   });
 
@@ -167,6 +212,12 @@ export interface IFetchOptions {
   signal?: AbortSignal;
 }
 
+/** Тестовый транспорт: фикстуры без сети; проверки адреса и размера остаются в safeFetch. */
+let telegramTransport: SafeTransport | undefined;
+export const setTelegramTransportForTests = (next: SafeTransport | undefined): void => {
+  telegramTransport = next;
+};
+
 /**
  * Скачивание страницы канала. Троттлинг вызывающая сторона обеспечивает сама
  * (scheduler): здесь только один запрос.
@@ -182,12 +233,12 @@ export const fetchChannelPage = async (
 
   let response;
   try {
-    response = await safeFetch(url, TELEGRAM_WEB_POLICY, {
-      headers: {
-        'user-agent': env.INGEST_USER_AGENT,
-        'accept-language': 'ru,en;q=0.8',
-      },
-    });
+    response = await safeFetch(
+      url,
+      TELEGRAM_WEB_POLICY,
+      { headers: { 'user-agent': env.INGEST_USER_AGENT, 'accept-language': 'ru,en;q=0.8' } },
+      telegramTransport ? { transport: telegramTransport } : {},
+    );
   } catch (err) {
     const message = err instanceof NetworkPolicyError ? `${err.kind}: ${err.message}` : 'ошибка запроса';
     throw new TelegramFetchError(`Сеть недоступна или запрос запрещён (${message})`, null, 'network');

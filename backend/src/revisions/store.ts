@@ -40,6 +40,8 @@ export interface IObservationInput {
   publishedAtRaw?: string | null;
   /** Версия парсера адаптера: смена вёрстки при том же тексте видна в наблюдении. */
   parserVersion?: string | null;
+  /** Метаданные транспорта: канал/пост, правка, группа медиа, происхождение пересылки (этап 05B). */
+  transportMeta?: Record<string, unknown> | null;
 }
 
 export type PublishedAtPrecision = 'exact' | 'local_tz' | 'date_only' | 'no_year' | 'relative' | 'unparsed';
@@ -208,8 +210,8 @@ export const recordObservation = async (
 
   await client.query(
     `INSERT INTO source_observations
-       (source_id, source_item_id, revision_id, source_run_id, fetched_at, observed_url, outcome, forward_origin, parser_version)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       (source_id, source_item_id, revision_id, source_run_id, fetched_at, observed_url, outcome, forward_origin, parser_version, transport_meta)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       input.sourceId,
       item.id,
@@ -220,6 +222,7 @@ export const recordObservation = async (
       decision.outcome,
       input.forwardOrigin,
       input.parserVersion ?? null,
+      input.transportMeta ? JSON.stringify(input.transportMeta) : null,
     ],
   );
 

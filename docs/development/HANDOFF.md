@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–05A — PASS (05A: интеграция 12 файлов / 135, раздел H, evidence/05A/USER_RUN.md). Следующий — 05B.
+Этапы 02–05A — PASS. 05B — код готов, ждёт прогона пользователя (ожидается интеграция 13 файлов / 148, раздел I). Затем — 06.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -27,18 +27,21 @@ Docker и проверки с базой агент не запускает: п�
 - 05A: миграция 015 — здоровье источника, итоги и покрытие запусков, `http_cache`, точность дат, версия парсера;
   `ingest/sites/*` (профиль, даты, разборщики, fetcher, crawler, probe), транспорт тестов в `safeFetch`,
   `--site-profile`, `--probe-site`, API `/sources/:id/probe|profile`, колонка здоровья в админке (ADR-006).
-  Следующая миграция — 016.
+- 05B: миграция 016 — `bot_processed_updates` (append-only), `source_observations.transport_meta`, исходы
+  `policy_blocked/identity_changed/not_found/private`; `ingest/telegram/webCrawler.ts` (курсор `cursor.tg`, разрыв,
+  граница истории, перепроверка правок, идентичность канала), `capabilities.ts`, журнал и `edited_message` в
+  `telegramBot.ts`, `seed:test-telegram` (ADR-007). Следующая миграция — 017.
 
 ## Принятые решения
-ADR-001…ADR-006. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
+ADR-001…ADR-007. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
 Публикация снимает только вклад своей публикации (evidence → superseded). Completed — только при полном покрытии.
 Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck/build backend и frontend, unit 24 файла / 352 теста — PASS.
+typecheck/build backend и frontend, unit 25 файлов / 356 тестов — PASS.
 
 ## Что НЕ проверено
-Живые сайты (approved нет); реальный LLM-smoke; визуальные проверки 390 px.
+Живые сайты и каналы, живой бот (допуска и токена нет); интеграция 05B; реальный LLM-smoke; визуальные проверки 390 px.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -48,13 +51,13 @@ typecheck/build backend и frontend, unit 24 файла / 352 теста — PAS
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Этап `stages/STAGE_05B_TELEGRAM.md`: читать COMMON_RULES, DATA_CONTRACTS, `ingest/telegramWeb.ts`, `telegramBot.ts`,
-`scheduler.ts`, `ingest/sites/crawler.ts` (курсор и покрытие), миграции 011, 015.
+После PASS 05B — этап `stages/STAGE_06_RELATIONS_EVENTS.md`: читать COMMON_RULES, DATA_CONTRACTS, отчёты 03B и 04,
+`reprocess/*`, `pipeline/verify.ts`, `llm/schema.ts`, миграции 012–014.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/05A_REPORT.md`, ADR-006,
-`TESTING_LOCAL.md`; ключевые файлы: `backend/src/ingest/sites/*.ts`, `docs/migrations/015_website_adapters.sql`.
+`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/05B_REPORT.md`, ADR-007,
+`TESTING_LOCAL.md`; ключевые файлы: `backend/src/ingest/telegram/*.ts`, `telegramBot.ts`, `docs/migrations/016_telegram_cursors.sql`.

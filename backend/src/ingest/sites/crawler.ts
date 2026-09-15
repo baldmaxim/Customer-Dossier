@@ -41,9 +41,13 @@ export type SiteRunOutcome =
   | 'network'
   | 'oversize'
   | 'config_invalid'
-  | 'error';
+  | 'error'
+  | 'policy_blocked'
+  | 'identity_changed'
+  | 'not_found'
+  | 'private';
 
-export type SiteHealth = 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid';
+export type SiteHealth = 'ok' | 'parser_degraded' | 'rate_limited' | 'blocked' | 'error' | 'config_invalid' | 'identity_uncertain';
 
 export interface ICrawlCounts {
   found: number;

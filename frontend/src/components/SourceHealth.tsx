@@ -11,6 +11,7 @@ const HEALTH_CLASS: Record<string, string> = {
   blocked: styles.bad ?? '',
   error: styles.bad ?? '',
   config_invalid: styles.bad ?? '',
+  identity_uncertain: styles.warn ?? '',
 };
 
 /** Здоровье источника и итог последнего запуска: числа и причина словами. */
