@@ -28,6 +28,7 @@ process.env.BOT_ENABLED = 'false';
 // менять поведение unit-тестов.
 process.env.REPROCESS_AUTO_PUBLISH = 'false';
 process.env.MERGE_APPLY_ENABLED = 'false';
+process.env.GRAPH_EXPORT_ENABLED = 'true';
 process.env.REVISION_WRITE_ENABLED = 'true';
 process.env.HOST = '127.0.0.1';
 // UTC, а не часовой пояс разработчика: даты не должны зависеть от машины.

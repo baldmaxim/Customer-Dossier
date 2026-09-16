@@ -711,3 +711,100 @@ export interface IReviewQueueItem {
   detail: Record<string, unknown>;
   since: string;
 }
+
+// Схема связей и снимки досье (этап 08B)
+
+export type GraphEdgeType = 'participation' | 'contract' | 'corporate' | 'hierarchy' | 'co_mentioned';
+
+export interface IGraphNode {
+  key: string;
+  kind: 'company' | 'project';
+  id: number;
+  label: string;
+  subtype: string | null;
+  details: string[];
+  depth: number;
+  seed: boolean;
+}
+
+export interface IGraphEdge {
+  key: string;
+  type: GraphEdgeType;
+  from: string;
+  to: string;
+  assertionId: number | null;
+  role: string | null;
+  building: string | null;
+  workPackage: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  periodPrecision: string;
+  status: string;
+  polarity: string;
+  modality: string;
+  supports: number;
+  contradicts: number;
+  contextProjectId: number | null;
+  details: string[];
+}
+
+export interface IGraph {
+  nodes: IGraphNode[];
+  edges: IGraphEdge[];
+  truncated: boolean;
+  notes: string[];
+}
+
+export interface ISnapshotListItem {
+  id: number;
+  caseId: number;
+  caseVersion: number;
+  generatedAt: string;
+  knowledgeCutoff: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  rulesVersion: string;
+  templateVersion: string;
+  payloadHash: string;
+  redactions: number;
+}
+
+export interface ISnapshotSource {
+  evidenceId: number;
+  assertionId: number;
+  stance: string;
+  status: string;
+  quote: string | null;
+  withheldReason: string | null;
+  revisionId: number;
+  revisionNo: number;
+  sourceId: number;
+  sourceKey: string;
+  sourceTitle: string;
+  url: string | null;
+  publishedAt: string | null;
+  completeness: string;
+}
+
+export interface ISnapshotView {
+  meta: { id: number; caseId: number; caseVersion: number; schemaVersion: string; generatedAt: string; knowledgeCutoff: string; effectiveFrom: string | null; effectiveTo: string | null; payloadHash: string; hashAlgorithm: string };
+  integrity: { algorithm: string; storedHash: string; computedHash: string; verified: boolean };
+  availability: { checkedAt: string; withheldSources: Array<{ sourceId: number; sourceKey: string; reason: string }>; withheldEvidence: number };
+  redactions: Array<{ evidenceId: number; reason: string; actor: string; redactedAt: string }>;
+  payload: {
+    schemaVersion: string;
+    generatedAt: string;
+    knowledgeCutoff: string;
+    effective: { from: string | null; to: string | null; undatedIncluded: number; excluded: number; note: string };
+    versions: { template: string; signalsRules: string; graph: string; signalsCutoff: string | null; signalsStale: boolean };
+    case: { id: number; version: number; title: string; companyNameClaimed: string | null; projectNameClaimed: string | null; scopeBuilding: string | null; requestDate: string };
+    company: { id: number; name: string; legalForm: string | null; entityType: string; identifiers: string[] } | null;
+    project: { id: number; name: string; level: string; levelLabel: string | null; city: string | null } | null;
+    dossier: ICaseDossier;
+    reviews: Array<{ id: number; assertionId: number; decision: string; scope: string; reason: string | null; assertionVersion: number; decidedAt: string }>;
+    openQueue: Array<{ kind: string; assertionId: number; priority: number }>;
+    sources: ISnapshotSource[];
+    graph: IGraph;
+    limitations: string[];
+  };
+}

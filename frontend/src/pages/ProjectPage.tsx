@@ -4,6 +4,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { IProjectDossier } from '../api/types';
+import { GraphPanel } from '../components/GraphPanel';
 import { StatementList } from '../components/StatementList';
 import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, IN_PERIOD_LABELS, PRECISION_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../lib/labels';
 import styles from './Dossier.module.css';
@@ -153,6 +154,8 @@ export const ProjectPage: FC = () => {
           <StatementList items={d.events} empty="Событий в выборке не найдено." />
         </section>
       </div>
+
+      <GraphPanel projectId={projectId} />
 
       {d.cases.length > 0 && (
         <section className={styles.section} aria-labelledby="cases">

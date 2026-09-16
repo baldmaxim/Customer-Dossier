@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } from '../api/types';
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
+import { GraphPanel } from '../components/GraphPanel';
 import { DOSSIER_UI_ENABLED } from '../lib/features';
 import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
@@ -136,6 +137,8 @@ export const CompanyPage: FC = () => {
       )}
 
       {DOSSIER_UI_ENABLED && <CompanySummary companyId={companyId} companyName={company.name} />}
+
+      {DOSSIER_UI_ENABLED && <GraphPanel companyId={companyId} />}
 
       <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
 

@@ -14,6 +14,7 @@ import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProjectPage } from './pages/ProjectPage';
+import { SnapshotPage } from './pages/SnapshotPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
 import { SearchPage } from './pages/SearchPage';
 
@@ -51,6 +52,7 @@ const AuthGate: FC = () => {
         {DOSSIER_UI_ENABLED && <Route path="/cases/:id" element={<CasePage />} />}
         {DOSSIER_UI_ENABLED && <Route path="/projects/:id" element={<ProjectPage />} />}
         {DOSSIER_UI_ENABLED && <Route path="/review" element={<ReviewQueuePage />} />}
+        {DOSSIER_UI_ENABLED && <Route path="/snapshots/:id" element={<SnapshotPage />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

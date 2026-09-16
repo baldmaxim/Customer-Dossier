@@ -23,6 +23,7 @@ process.env.BOT_ENABLED = 'false';
 // Флаги записи из сессии разработчика не должны менять поведение интеграционных тестов.
 process.env.REPROCESS_AUTO_PUBLISH = 'false';
 process.env.MERGE_APPLY_ENABLED = 'false';
+process.env.GRAPH_EXPORT_ENABLED = 'true';
 process.env.REVISION_WRITE_ENABLED = 'true';
 process.env.HOST = '127.0.0.1';
 process.env.TZ = 'UTC';

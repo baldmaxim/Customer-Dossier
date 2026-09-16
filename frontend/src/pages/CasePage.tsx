@@ -5,6 +5,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import type { ICaseDossier, ICaseInput, ICaseRow } from '../api/types';
 import { CaseForm } from '../components/CaseForm';
+import { GraphPanel } from '../components/GraphPanel';
+import { SnapshotsPanel } from '../components/SnapshotsPanel';
 import { StatementList } from '../components/StatementList';
 import { CASE_CHAIN_STATUS_LABELS, CASE_ROLE_STATUS_LABELS, formatDateTime } from '../lib/labels';
 import styles from './Dossier.module.css';
@@ -178,6 +180,10 @@ export const CasePage: FC = () => {
           </section>
         </>
       )}
+
+      <GraphPanel caseId={caseId} />
+
+      <SnapshotsPanel caseId={caseId} />
 
       <section className={styles.section} aria-labelledby="history">
         <h2 id="history" className={styles.sectionTitle}>История обращения</h2>
