@@ -28,7 +28,10 @@
     "seed:test-dossier": "tsx src/__tests__/integration/seedDossierDemo.ts",
     "benchmark:model": "tsx src/reprocess/semantic/benchmark.ts",
     "release:check": "tsx src/release/cli.ts",
-    "release:bench": "tsx src/release/cli.ts --bench-run",
+    "release:bench": "tsx src/release/benchCli.ts",
+    "release:manifest": "tsx src/release/manifestCli.ts",
+    "release:probe": "tsx src/release/probe.ts",
+    "release:fingerprint": "tsx src/release/treeFingerprint.ts",
     "seed:test-release": "tsx src/__tests__/integration/seedReleaseDemo.ts"
   },
   "dependencies": {

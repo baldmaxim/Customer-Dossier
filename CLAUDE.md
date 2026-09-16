@@ -50,8 +50,12 @@ npm run pipeline:once -- --skipped        # тексты, признанные �
 npm run pipeline:once -- --doc <id>       # документ целиком: текст, разбор, канон
 npm run pipeline:once -- --queue          # очередь проверки: идентичность, конфликт ролей, исправление, спор
 npm run benchmark:model                   # замер локальной модели на синтетическом корпусе этапа 06
-npm run release:check [-- --out f.json | --compare f.json]  # контрольные числа установки, связность, флаги (этап 09)
-npm run release:bench [-- --runs 5]       # фактические времена поиска, карточки, схемы, снимка (только тестовая база)
+npm run release:check [-- --out f.json | --compare f.json]  # контрольные числа (local-inventory@2), связность; exit 1 при проблемах
+npm run release:manifest [-- --out f.json | --compare f.json]  # content-manifest@1: содержимое строк, схема, последовательности, hash снимков (только чтение)
+npm run release:bench [-- --runs 5] [-- --pipeline-synthetic]  # замеры: только TEST_DATABASE_URL, общий preflight; невалидный шаг — exit 1
+npm run release:probe -- --snapshot <id> [--case <id>] [--out f | --compare f]  # GET-проба запущенного API (перезапуск процесса, restore)
+npm run release:fingerprint [-- --out f.json]  # HEAD + sha256 рабочего дерева для привязки логов
+# frontend: npm run build && npm run check:build   # sw не кэширует /api, секретов-маркеров в бандле нет
 npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на срез (этап 07) + legacy company_metrics
 ```
 
@@ -173,10 +177,22 @@ npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на 
   готовности не заявляем. Старт API сам ничего не собирает и не разбирает (`jobs.ts`, флаги по умолчанию
   выключены). Резервная копия — дамп всей базы целиком: редакции, доказательства, решения аналитика,
   обращения и снимки связаны между собой и по отдельности не восстанавливаются. Восстановление проверяется
-  только в отдельной цели и сверяется `npm run release:check --compare` (контрольные числа, связность,
-  допуск источников, решения, снимки). Автоматической очистки нет: снимки и решения не удаляются,
+  только в отдельной цели: писатели остановлены → baseline → дамп → restore с `--exit-on-error --single-transaction`
+  → `release:check --compare` (количества) **и** `release:manifest --compare` (содержимое строк, схема, миграции,
+  последовательности, пересчитанные hash снимков; `docs/development/CONTENT_MANIFEST.md`) → чтение через приложение.
+  Совпадение количеств содержимое не доказывает. Новая таблица в миграции обязана попасть в `release/manifestSpec.ts`
+  (иначе `UNCLASSIFIED_TABLE`) и в `COUNTED_TABLES`. Автоматической очистки нет: снимки и решения не удаляются,
   безопасный ручной порядок — в `docs/development/LOCAL_RUNBOOK.md`. Времена работы — измеренные
-  (`npm run release:bench`), а не обещанные.
+  (`npm run release:bench`: выборка засчитывается только при ожидаемом коде и содержимом), а не обещанные.
+- **Запись в тестовую цель — только через общий preflight** (`db/testTargetBootstrap.ts`, закрытие приёмки 09):
+  интеграционные тесты, сиды, `release:bench`, `migrate --upto`. Адрес — только `TEST_DATABASE_URL`, без запасного
+  `DATABASE_URL`; имя `tg_info_test[_суффикс]`, loopback, роль; не совпадает с `DATABASE_URL` оболочки и `backend/.env`;
+  после подключения — база, `current_user` и маркер `tg_info:test-target`, всё до первой записи. Слово `test` в имени
+  ничего не разрешает. Новая записывающая команда обязана вызывать preflight до импорта пула.
+- **Решение аналитика при слиянии не переносится, но видно.** Досье читает линию слияния
+  (`dossier/facts.ts::loadPriorDecisions`: `evidence.copied_from_evidence_id` + неотменённый `merge_id`) и показывает
+  решение по исходному утверждению в `priorDecisions` с пометкой «нужен пересмотр»; статус и атрибуция перенесённого
+  утверждения не меняются. Массовый перенос решений UPDATE-ом не делать.
 - **Роль `not_participant` — не редкость, а частый случай.** Без неё модель обязана
   выбрать строительную роль для любой упомянутой компании: аналитики из пресс-релизов
   становились «проектировщиками» (15 при 1 генподрядчике). Если в `--audit`

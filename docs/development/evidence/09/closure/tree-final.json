@@ -1,0 +1,9 @@
+{
+  "version": "tree-fingerprint@1",
+  "takenAt": "2026-09-16T13:10:37.119Z",
+  "head": "7c76c35ac3ee0b05fc5b03e6849ab28799dec09b",
+  "dirtyPaths": 46,
+  "filesHashed": 306,
+  "treeSha256": "22dbe00f4c0e231e2536c45120affe26a11233ef4e5aad3d4ffb91bb164fda0a",
+  "excluded": ".env*, backend/.local, *.zip, node_modules, dist, docs/development/, prompts/, *.md в корне"
+}

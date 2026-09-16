@@ -2,14 +2,12 @@
 
 import { getPool } from '../../db/pool.js';
 import { runMigrations } from '../../db/migrate.js';
-import { assertTestDatabaseUrl, verifyConnectedTestDatabase } from '../../db/testTarget.js';
+import { verifyConnectedTestDatabase } from '../../db/testTarget.js';
+import { assertPreparedTestTarget } from '../../db/testTargetBootstrap.js';
 
-/** Повторная проверка цели перед каждым разрушительным действием. */
+/** Повторная проверка цели перед каждым разрушительным действием: адрес, база, роль, маркер. */
 export const assertIsolatedTarget = async (): Promise<void> => {
-  const target = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL, process.env.TG_INFO_ORIGINAL_DATABASE_URL);
-  if (process.env.DATABASE_URL !== process.env.TEST_DATABASE_URL) {
-    throw new Error('DATABASE_URL в тестах не указывает на тестовую цель');
-  }
+  const target = assertPreparedTestTarget();
   await verifyConnectedTestDatabase(getPool(), target);
 };
 

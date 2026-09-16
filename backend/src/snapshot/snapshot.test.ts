@@ -140,6 +140,32 @@ describe('TC-072: экспорт без исполнения опасного т
     expect(JSON.stringify(json)).not.toMatch(/token|password|stack|DATABASE_URL|LMSTUDIO/i);
   });
 
+  it('опасный URL источника (javascript:/data:/vbscript:/file:, регистр, пробелы, кавычки) не становится ссылкой ни в HTML, ни в Markdown', () => {
+    const urls = [
+      'javascript:alert(1)',
+      ' JaVaScRiPt:alert(2)',
+      'data:text/html,<script>alert(3)</script>',
+      'vbscript:msgbox(4)',
+      'file:///etc/passwd',
+      'https://t.me/demo/1"><script>alert(5)</script>',
+      "https://t.me/demo/1' onmouseover='alert(6)",
+    ];
+    for (const url of urls) {
+      const p = payload();
+      p.sources = p.sources.map(s => ({ ...s, url }));
+      const html = snapshotToHtml(meta, p);
+      const md = snapshotToMarkdown(meta, p);
+      expect(html).not.toMatch(/href="\s*(javascript|data|vbscript|file):/i);
+      expect(html).not.toMatch(/<script/i);
+      expect(html).not.toMatch(/<[a-z][^>]*\son\w+=/i);
+      expect(md).not.toMatch(/<\s*(javascript|data|vbscript|file):/i);
+      expect(md).not.toMatch(/\]\(\s*(javascript|data|vbscript|file):/i);
+      expect(md).not.toContain('<script>');
+      // Ссылка в HTML — только http(s) и только с экранированными кавычками внутри атрибута.
+      for (const m of html.matchAll(/href="([^"]*)"/g)) expect(m[1]).toMatch(/^https?:\/\/[^"<>]*$/);
+    }
+  });
+
   it('форматы согласованы по существенному содержанию', () => {
     const html = snapshotToHtml(meta, payload());
     const md = snapshotToMarkdown(meta, payload());

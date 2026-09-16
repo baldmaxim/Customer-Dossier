@@ -95,6 +95,7 @@ const fact = (over: Partial<IFact>, quotes: string[] = ['цитата']): IFact 
       publishedAt: '2026-09-10T09:00:00Z',
       dedupHash: 'h',
     })),
+    priorDecisions: [],
     ...over,
   };
 };
@@ -123,6 +124,24 @@ describe('обращение: заявленное отдельно от уст�
     expect(d.role.established[0]).toMatchObject({ attribution: 'analyst_reviewed', assertionIds: [reviewed.assertionId], evidenceIds: [reviewed.evidence[0]!.id] });
     expect(d.role.established[0]!.text).toMatch(/^Аналитиком проверено/);
     expect(d.observations[0]!.assertionIds).toEqual([reviewed.assertionId]);
+  });
+
+  it('решение до слияния видно через линию слияния, но не переносится: атрибуция остаётся «в публикации сообщается»', () => {
+    const prior = { assertionId: 7, mergeId: 3, decisionId: 41, decision: 'reviewed_supported', reviewer: 'analyst', decidedAt: '2026-09-14T08:00:00Z' };
+    const merged = fact({ status: 'text_grounded', priorDecisions: [prior] }, ['«Альфа-Демо» выполняет ВК корпуса 2 ЖК «Берег-Демо»']);
+    const d = buildCaseDossier(input({ companyFacts: [merged] }));
+    const statement = d.role.established[0]!;
+    expect(statement.attribution).toBe('source_reported');
+    expect(statement.assertionIds).toEqual([merged.assertionId]);
+    expect(statement.priorDecisions).toEqual([prior]);
+    expect(statement.text).toContain('#7 — проверено (analyst, 2026-09-14, слияние #3)');
+    expect(statement.text).toContain('нужен пересмотр');
+    expect(d.role.status).not.toBe('reviewed');
+
+    // Утверждение без слияния: поля нет, фраза прежняя.
+    const plain = buildCaseDossier(input({ companyFacts: [fact({})] })).role.established[0]!;
+    expect(plain).not.toHaveProperty('priorDecisions');
+    expect(plain.text).not.toContain('слияни');
   });
 
   it('ничего не найдено — «не установлено в выборке» и вопросы по пробелам, а не выдуманные проблемы', () => {

@@ -5,9 +5,10 @@
 import pg from 'pg';
 
 import { assertTestDatabaseUrl, verifyConnectedTestDatabase } from '../../db/testTarget.js';
+import { readDotenvDatabaseUrl } from '../../db/testTargetBootstrap.js';
 
 export default async (): Promise<void> => {
-  const target = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL, process.env.DATABASE_URL);
+  const target = assertTestDatabaseUrl(process.env.TEST_DATABASE_URL, [process.env.DATABASE_URL, readDotenvDatabaseUrl()]);
   const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1, ssl: false });
   try {
     await verifyConnectedTestDatabase(pool, target);

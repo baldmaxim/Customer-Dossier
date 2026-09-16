@@ -29,7 +29,7 @@ Hash подтверждает целостность содержания; эт�
 | `versions` | object | `template`, `signalsRules`, `graph`, `signalsCutoff`, `signalsStale` |
 | `case` | object | обращение на момент снимка: `id`, `version`, `title`, заявленные роль, заказчик и условия, `requestDate`, `provenance = operator_recorded_claim` |
 | `company`, `claimedClient`, `project` | object \| null | подписи сущностей, скопированные в снимок (переименование позже их не меняет); `company.identifiers` — строки вида `inn 5001007329` |
-| `dossier` | object | досье обращения (`dossier-template@1`): `subject`, `observations`, `role`, `chain`, `terms`, `projectContext`, `companyEvents`, `uncertainties`, `questions`, `disclaimer`. Каждая фраза — `{ code, text, attribution, assertionIds[], evidenceIds[], quotes[] }` |
+| `dossier` | object | досье обращения (`dossier-template@1`): `subject`, `observations`, `role`, `chain`, `terms`, `projectContext`, `companyEvents`, `uncertainties`, `questions`, `disclaimer`. Каждая фраза — `{ code, text, attribution, assertionIds[], evidenceIds[], quotes[] }`; с 2026-09-16 у фразы по утверждению, перенесённому слиянием, есть необязательное `priorDecisions[]` (`{ assertionId, mergeId, decisionId, decision, reviewer, decidedAt }` — решения по исходному утверждению, не перенесённые; прежние снимки без поля) |
 | `assertions` | array | утверждения выборки: `id`, `version`, `predicate`, `role`, `eventType`, `status`, `needsRevalidation`, `polarity`, `modality`, `supports`, `contradicts` |
 | `reviews` | array | решения аналитика: `id`, `assertionId`, `decision`, `scope`, `reason`, `assertionVersion`, `decidedAt` |
 | `openQueue` | array | открытые вопросы проверки на момент снимка: `kind`, `assertionId`, `priority` |

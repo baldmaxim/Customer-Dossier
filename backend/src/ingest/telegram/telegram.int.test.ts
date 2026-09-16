@@ -170,6 +170,32 @@ describe('web-preview: курсор, разрыв и покрытие (TC-047, T
     expect((await sourceState(id)).health).toBe('error');
   });
 
+  it('TC-077: инъекция ошибки записи курсора — публикации страницы откатываются вместе с курсором, повтор после снятия отказа догружает', async () => {
+    // Контролируемая инъекция на тестовой базе (триггер только для этого источника), а не заполнение диска:
+    // проверяется, что публикации и курсор не расходятся при сбое записи.
+    const id = await channelSource('synthetic_write_fail');
+    await updateCursor(id, { tg: { lastPostId: 40, lastRecheckAt: null } });
+    pages.set('https://t.me/s/synthetic_write_fail', () => ({ status: 200, body: channelPage('synthetic_write_fail', range(41, 43)) }));
+    await pool().query(`
+      CREATE OR REPLACE FUNCTION tg_test_fail_cursor_write() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'инъекция: ошибка записи курсора'; END $$`);
+    await pool().query(
+      `CREATE TRIGGER tg_test_fail_cursor_write BEFORE UPDATE ON sources FOR EACH ROW
+       WHEN (NEW.id = ${Number(id)} AND NEW.cursor IS DISTINCT FROM OLD.cursor) EXECUTE FUNCTION tg_test_fail_cursor_write()`,
+    );
+    try {
+      await run(id).catch(() => undefined);
+      expect(await postIds(id)).toEqual([]);
+      expect((await sourceState(id)).cursor.tg).toMatchObject({ lastPostId: 40 });
+    } finally {
+      await pool().query('DROP TRIGGER IF EXISTS tg_test_fail_cursor_write ON sources');
+      await pool().query('DROP FUNCTION IF EXISTS tg_test_fail_cursor_write()');
+    }
+    await run(id);
+    expect(await postIds(id)).toEqual([41, 42, 43]);
+    expect((await sourceState(id)).cursor.tg).toMatchObject({ lastPostId: 43 });
+  });
+
   it('отзыв допуска во время прохода: страница не записана, курсор не сдвинут, не ошибка для повторов', async () => {
     const id = await channelSource('synthetic_revoke', { maxPagesPerRun: 3 });
     await updateCursor(id, { tg: { lastPostId: 1, lastRecheckAt: null } });

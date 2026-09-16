@@ -243,6 +243,61 @@ describe('неполные запуски не становятся completed', 
     expect(old.rows[0]!.status).toBe('partial');
   });
 
+  it('TC-076: сбой позднего чанка ПОСЛЕ релевантного успешного — partial, канон и решения аналитика прежние, повтор публикует целиком', async () => {
+    // Опубликованная первая редакция с решением аналитика.
+    const Q_LATE = '«Демо-Поздний» — подрядчик ЖК «Берег-Демо»';
+    const v1 = await store(sourceMain, `Первая редакция. ${Q_LATE}.`, 'synthetic_reprocess/late-chunk');
+    const answerLate = extraction({ companies: [company('Демо-Поздний', Q_LATE)], projects: [project('Берег-Демо', Q_LATE)], links: [link('Демо-Поздний', 'Берег-Демо', 'contractor')] });
+    const first = fakeProvider(() => ok(answerLate));
+    const run1 = await execute(await enqueue(v1.revisionId, first), first);
+    expect((await publishCandidateSet({ setId: run1.candidateSetId!, expectedVersion: 0, actor: 'test' })).outcome).toBe('published');
+    const reviewed = (await pool().query<{ id: number; version: number }>(
+      `SELECT a.id, a.version FROM assertions a JOIN companies c ON c.id = a.subject_company_id WHERE c.name = 'Демо-Поздний' ORDER BY a.id LIMIT 1`,
+    )).rows[0]!;
+    await withTransaction(client =>
+      recordReviewDecision(client, { assertionId: reviewed.id, decision: 'reviewed_supported', scope: 'reflects_source', reason: 'сверено (синтетика)', reviewer: 'operator', expectedVersion: reviewed.version, idempotencyKey: 'reprocess-late-chunk-review' }),
+    );
+    const publication = await publicationOf(v1.sourceItemId);
+    const reviewsBefore = (await pool().query('SELECT id, assertion_id, decision, reviewer, decided_at FROM review_decisions ORDER BY id')).rows;
+
+    // Правка: длинный текст, первый чанк релевантен и успешен, последний падает.
+    const edited = `Вторая редакция. ${Q_LATE}.\n${Array.from({ length: 8 }, (_, i) => `Абзац ${i}: ${'строительные новости '.repeat(4)}`).join('\n')}\nПОСЛЕДНИЙ-late2 абзац ${'хвост '.repeat(10)}`;
+    const v2 = await store(sourceMain, edited, 'synthetic_reprocess/late-chunk');
+    expect(v2.sourceItemId).toBe(v1.sourceItemId);
+    const failing = fakeProvider((text): ILlmResult =>
+      text.includes('ПОСЛЕДНИЙ-late2')
+        ? { ok: false, failure: 'invalid_json', message: 'обрыв', usage: { tokensIn: 1, tokensOut: 1, latencyMs: 1 }, rawResponse: '{"doc' }
+        : text.includes(Q_LATE)
+          ? ok(answerLate)
+          : ok(extraction({ doc_relevant: false })),
+    );
+    const before = await counts();
+    const run2 = await execute(await enqueue(v2.revisionId, failing, { chunkSize: 200, maxChunks: 20, overlap: 20 }), failing);
+    expect(run2.status).toBe('partial');
+    expect(run2.candidateSetId).toBeNull();
+    const outcomes = (await pool().query<{ outcome: string; n: number }>(
+      `SELECT resp.outcome, count(*)::int AS n FROM extraction_chunk_responses resp JOIN extraction_chunks c ON c.id = resp.chunk_id
+       WHERE c.run_id = $1 GROUP BY resp.outcome`,
+      [run2.runId],
+    )).rows;
+    expect(outcomes.find(o => o.outcome === 'ok')?.n ?? 0).toBeGreaterThan(0);
+    expect(outcomes.some(o => o.outcome !== 'ok')).toBe(true);
+    const after = await counts();
+    expect({ ...after, responses: 0 }).toEqual({ ...before, responses: 0 });
+    expect(await publicationOf(v1.sourceItemId)).toEqual(publication);
+    expect((await pool().query('SELECT id, assertion_id, decision, reviewer, decided_at FROM review_decisions ORDER BY id')).rows).toEqual(reviewsBefore);
+
+    // Повтор новым запуском: полный разбор публикуется одной транзакцией, прежнее решение не удаляется.
+    const fixed = fakeProvider(text => (text.includes(Q_LATE) ? ok(answerLate) : ok(extraction({ doc_relevant: false }))));
+    const retry = await retryRun(run2.runId, fixed, 'test');
+    expect(retry.outcome).toBe('queued');
+    const retried = await execute((retry as { runId: number }).runId, fixed);
+    expect(retried.status).toBe('completed');
+    expect((await publishCandidateSet({ setId: retried.candidateSetId!, expectedVersion: publication.version, actor: 'test' })).outcome).toBe('published');
+    const reviewsNow = (await pool().query('SELECT id, assertion_id, decision, reviewer, decided_at FROM review_decisions ORDER BY id')).rows;
+    expect(reviewsNow).toEqual(reviewsBefore);
+  });
+
   it('непокрытый хвост (лимит чанков) → failed без вызова модели', async () => {
     const item = await store(sourceMain, longBody('tail'));
     const provider = fakeProvider(() => ok(extraction({ doc_relevant: false })));

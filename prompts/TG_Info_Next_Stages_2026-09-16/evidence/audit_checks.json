@@ -1,0 +1,150 @@
+{
+  "version": "archive-audit@1",
+  "source": "/mnt/data/review_current/Customer-Dossier-main",
+  "node": "v22.16.0",
+  "checkedAt": "2026-09-16T11:51:54.269Z",
+  "results": [
+    {
+      "id": "R01",
+      "name": "Contract without project marks case chain documented",
+      "observed": {
+        "status": "documented",
+        "text": "В публикации сообщается: SYN_Client — заказчик по договору (договор субподряда), исполнитель SYN_Company; объект договора в публикации не назван."
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R02",
+      "name": "Negative about another building overrides case role",
+      "observed": {
+        "status": "contradicted",
+        "contradictions": 1
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R03",
+      "name": "Rejected negative still overrides case role",
+      "observed": {
+        "status": "contradicted",
+        "text": "Аналитик отклонил сообщение: SYN_Company — не подрядчик на объекте SYN_Project."
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R04",
+      "name": "Unknown building counted as established for selected building",
+      "observed": {
+        "status": "reported",
+        "established": 1
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R05",
+      "name": "Contract for another building/work package confirms chain",
+      "observed": {
+        "status": "documented",
+        "documented": 1
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "C01",
+      "name": "Positive control: explicitly different building is separated",
+      "observed": {
+        "status": "not_established",
+        "otherBuildings": 1
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R06",
+      "name": "Migration mismatch only note, comparison equal",
+      "observed": {
+        "equal": true,
+        "notes": [
+          "последняя миграция отличается: 020_dossier_snapshots.sql → 019_dossier_cases.sql"
+        ]
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R07",
+      "name": "Missing empty table is treated as zero",
+      "observed": {
+        "equal": true,
+        "counts": []
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Not a PostgreSQL/browser/integration test."
+    },
+    {
+      "id": "R08",
+      "name": "Snapshot key replay bypasses request case/filters check",
+      "observed": {
+        "returned": {
+          "id": 7,
+          "replayed": true,
+          "payloadHash": "old-case-payload"
+        },
+        "buildCalls": 0
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "DB lookup mocked to return an existing key. Confirms replay branch, not a real concurrency test."
+    },
+    {
+      "id": "R09",
+      "name": "No policy recheck between two provider calls",
+      "observed": {
+        "providerCalls": 2,
+        "policyLookups": 0,
+        "revokedAfterFirst": true
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Executor and chunk planning mocked; no source text/model/DB contacted. Does not test racing revocation during an already in-flight call."
+    },
+    {
+      "id": "R10",
+      "name": "processRun does not validate runtime provider fingerprint",
+      "observed": {
+        "providerCalls": 2,
+        "fingerprintReads": 0
+      },
+      "reproduced": true,
+      "method": "isolated execution of repository code with synthetic inputs",
+      "limit": "Confirms processRun accepts externally supplied provider without querying recorded fingerprint. Queue/DB integration not executed."
+    }
+  ],
+  "scan": {
+    "typescript": "5.8.3",
+    "files": 222,
+    "transpiled": 220,
+    "syntaxDiagnostics": [],
+    "relativeImports": 830,
+    "unresolvedRelativeImports": [],
+    "note": "Syntactic parsing/transpilation and local path checks only; NOT typecheck, full build, or dependency API validation."
+  },
+  "limitations": [
+    "No Docker/PostgreSQL/browser/model/live sources were started.",
+    "npm ci failed due to EAI_AGAIN registry.npmjs.org; full unit/typecheck/build not rerun.",
+    "Mocks isolate code branches, not database transactions or runtime concurrency."
+  ]
+}

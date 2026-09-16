@@ -4,10 +4,13 @@
 // Запуск: npm run migrate -- --dry                 — план без единой записи в БД
 //         npm run migrate                          — применить (кроме destructive)
 //         npm run migrate -- --allow-destructive   — применить, включая destructive
-//         npm run migrate -- --upto 9              — только до указанного номера (синтетическая legacy-база, этап 09)
+//         npm run migrate -- --upto 9              — только до указанного номера (синтетическая legacy-база, этап 09);
+//                                                    только в тестовую цель TEST_DATABASE_URL через общий preflight
 //
 // Повторный запуск ничего не делает: уже применённые файлы пропускаются.
 // Применённые файлы не переписываются: история схемы неизменна.
+//
+// Пул импортируется лениво: для --upto окружение сначала переключается на проверенную тестовую цель.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 
 import type { Pool } from 'pg';
 
-import { getPool, closeDb } from './pool.js';
+import { prepareTestTargetProcess } from './testTargetBootstrap.js';
+import { verifyConnectedTestDatabase } from './testTarget.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // backend/src/db (или backend/dist/db) -> backend/src -> backend -> TG_Info
@@ -101,7 +105,7 @@ export interface IRunMigrationsOptions {
 }
 
 export const runMigrations = async (options: IRunMigrationsOptions = {}): Promise<IMigrationPlan> => {
-  const pool = options.pool ?? getPool();
+  const pool = options.pool ?? (await import('./pool.js')).getPool();
   const dir = options.dir ?? MIGRATIONS_DIR;
   const log = options.log ?? ((line: string) => console.log(line));
 
@@ -167,20 +171,51 @@ export const runMigrations = async (options: IRunMigrationsOptions = {}): Promis
   return plan;
 };
 
+export interface IMigrateArgs {
+  dryRun: boolean;
+  allowDestructive: boolean;
+  upto?: number;
+}
+
+const KNOWN_FLAGS = new Set(['--dry', '--allow-destructive', '--upto']);
+
+/** Разбор аргументов CLI. Неизвестный флаг или некорректный --upto — ошибка, а не «нечего применять». */
+export const parseMigrateArgs = (argv: readonly string[]): IMigrateArgs => {
+  const args: IMigrateArgs = { dryRun: false, allowDestructive: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (!KNOWN_FLAGS.has(arg)) throw new Error(`неизвестный аргумент: ${arg}`);
+    if (arg === '--dry') args.dryRun = true;
+    if (arg === '--allow-destructive') args.allowDestructive = true;
+    if (arg === '--upto') {
+      if (args.upto !== undefined) throw new Error('--upto указан дважды');
+      const raw = argv[i + 1] ?? '';
+      if (!/^\d{1,3}$/.test(raw) || Number(raw) < 1) throw new Error('--upto ожидает номер миграции от 1 до 999');
+      args.upto = Number(raw);
+      i += 1;
+    }
+  }
+  return args;
+};
+
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (isDirectRun) {
-  const uptoArg = process.argv.indexOf('--upto');
-  runMigrations({
-    dryRun: process.argv.includes('--dry'),
-    allowDestructive: process.argv.includes('--allow-destructive'),
-    ...(uptoArg >= 0 ? { upto: Number.parseInt(process.argv[uptoArg + 1] ?? '', 10) } : {}),
-  })
-    .then(() => closeDb())
+  const main = async (): Promise<void> => {
+    const args = parseMigrateArgs(process.argv.slice(2));
+    // Частично накаченная схема — не поддерживаемое состояние рабочей базы: --upto только в тестовую цель.
+    const target = args.upto !== undefined ? prepareTestTargetProcess() : null;
+    const { getPool } = await import('./pool.js');
+    if (target) await verifyConnectedTestDatabase(getPool(), target);
+    await runMigrations(args);
+  };
+  const close = async (): Promise<void> => (await import('./pool.js')).closeDb();
+  main()
+    .then(() => close())
     .then(() => process.exit(0))
     .catch(async err => {
       console.error('[migrate] прервано:', err instanceof Error ? err.message : String(err));
-      await closeDb().catch(() => undefined);
+      await close().catch(() => undefined);
       process.exit(1);
     });
 }

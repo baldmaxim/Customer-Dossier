@@ -114,6 +114,12 @@ describe('safeFetch — с настоящим HTTP-сервером', () => {
       } else if (req.url === '/loop') {
         res.writeHead(302, { location: '/loop' });
         res.end();
+      } else if (req.url === '/hang') {
+        // Заголовки не отправляются: имитация зависшего сервера (TC-077, таймаут сети).
+        req.on('close', () => undefined);
+      } else if (req.url === '/slow-body') {
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.write('начало');
       } else if (req.url === '/big') {
         res.writeHead(200, { 'content-type': 'text/plain' });
         res.end('x'.repeat(5000));
@@ -130,6 +136,7 @@ describe('safeFetch — с настоящим HTTP-сервером', () => {
   });
 
   afterAll(async () => {
+    server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
 
@@ -210,6 +217,15 @@ describe('safeFetch — с настоящим HTTP-сервером', () => {
     );
   });
 
+  it('зависший сервер: исход timeout в пределах лимита, а не бесконечное ожидание и не «пусто» (TC-077)', async () => {
+    const started = Date.now();
+    await expectPolicyError(safeFetch(`http://site.test:${port}/hang`, testPolicy({ timeoutMs: 300 }), {}, deps), 'timeout');
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it('тело, оборванное на середине: timeout, частичный текст не отдаётся как ответ (TC-077)', async () => {
+    await expectPolicyError(safeFetch(`http://site.test:${port}/slow-body`, testPolicy({ timeoutMs: 300 }), {}, deps), 'timeout');
+  });
   it('по умолчанию loopback-сервер недоступен, даже если он реально слушает', async () => {
     const before = hits.length;
     await expectPolicyError(

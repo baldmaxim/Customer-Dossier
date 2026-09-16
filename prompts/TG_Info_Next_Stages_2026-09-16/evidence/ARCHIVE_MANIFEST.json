@@ -1,0 +1,95 @@
+{
+  "version": "input-archive-manifest@1",
+  "analysisDate": "2026-09-16",
+  "inputFile": "Customer-Dossier-main(1).zip",
+  "sha256": "0fd90f90089eee3a4d385891a3cbcaa30563f494809e8dcedce968351efb14a3",
+  "archiveEntries": 444,
+  "inputUncompressedBytes": 3595764,
+  "gitHeadVerified": false,
+  "repositoryDeclaredBranch": "dossier-stages",
+  "repositoryDeclaredStage09": "PASS core-gates; user evidence dated 2026-09-16",
+  "authorFullSuiteRerun": false,
+  "sourceFilesChanged": false,
+  "syntaxScan": {
+    "typescript": "5.8.3",
+    "files": 222,
+    "transpiled": 220,
+    "syntaxDiagnostics": [],
+    "relativeImports": 830,
+    "unresolvedRelativeImports": [],
+    "note": "Syntactic parsing/transpilation and local path checks only; NOT typecheck, full build, or dependency API validation."
+  },
+  "stagePromptCount": 12,
+  "acceptanceScenarioCount": 103,
+  "syntheticExampleCount": 24,
+  "importantFiles": {
+    "docs/development/STATE.md": {
+      "sha256": "ee66797cfdd07295336e0bc989e1f8799162104d8c5ca7ef98f058cd4ad06950",
+      "bytes": 4458
+    },
+    "docs/development/RELEASE_READINESS.md": {
+      "sha256": "508b7ea9503646a1389d5d55fe5b4a5b4c8347f249c6ffa46b6cb3de019704a1",
+      "bytes": 6452
+    },
+    "docs/development/evidence/09/USER_RUN.md": {
+      "sha256": "0046a80f2531767cbed599002370725a27f1560d1d98854094c910641b7595dd",
+      "bytes": 4782
+    },
+    "backend/src/dossier/caseDossier.ts": {
+      "sha256": "ce1eaa34af66c7a6fa0cdb4fd19a1d8d7e816e9271f131c4de23c9dd1dfc9a94",
+      "bytes": 21528
+    },
+    "backend/src/reprocess/runs.ts": {
+      "sha256": "b5c4b522133a56e4f8b1fa3e9a8014339a92267a6b7c3da99483ed75b67a2308",
+      "bytes": 20208
+    },
+    "backend/src/reprocess/provider.ts": {
+      "sha256": "0b219a158d4933d4f5c81ba7642cef44d18245483740a6bff61b1816e1cdcac3",
+      "bytes": 3678
+    },
+    "backend/src/snapshot/repository.ts": {
+      "sha256": "4137333f664fc8e74561b7de5e6cb8720f70524edee37ff33747abc6f55f0e1e",
+      "bytes": 8862
+    },
+    "backend/src/snapshot/build.ts": {
+      "sha256": "7b229e47bc9f02589118a21c4acfbe922723b8e4d0178beaa3f88a5bf1cb2ae2",
+      "bytes": 14654
+    },
+    "backend/src/signals/refresh.ts": {
+      "sha256": "b73011066ba4310794d780fb69a2bc386a407f0686428bc0f79b3deb0390bcea",
+      "bytes": 7872
+    },
+    "backend/src/signals/load.ts": {
+      "sha256": "0476f08ac734869cc8c18f8e51beed13c08969f9f5b90a0143f254ce38a3ecbb",
+      "bytes": 7081
+    },
+    "backend/src/dossier/facts.ts": {
+      "sha256": "ab051011aa3c16e3ac761fb33951905b5c6ac74cc2c185b6a96f2fbd7359652c",
+      "bytes": 6930
+    },
+    "backend/src/graph/load.ts": {
+      "sha256": "6d1385cc42dc40c67c6551107fc10f23e6b15c2c95a2f9eadeb1f098b9aa4f0c",
+      "bytes": 8484
+    },
+    "backend/src/pipeline/compare.ts": {
+      "sha256": "4dae54d43c20c412bdcb4cf6d8d991a15f7d0050949b0c2393d7b7335f1f304d",
+      "bytes": 8721
+    },
+    "backend/src/reprocess/semantic/benchmark.ts": {
+      "sha256": "7cfc181e45c63c910d388f0d6cb468aece8205d9405c35772504f9fd43c8aad2",
+      "bytes": 5665
+    },
+    "backend/src/release/inventory.ts": {
+      "sha256": "08969a0056879cd34ce50a9c8750a44c82bb927bc8ca1f2fb7daa2c3eb71356e",
+      "bytes": 12115
+    },
+    "backend/src/release/cli.ts": {
+      "sha256": "057247349d4d3e48ae01237fdd8b3137bcfc87302225b8addc4523370c986eaf",
+      "bytes": 6288
+    },
+    "backend/src/release/bench.ts": {
+      "sha256": "d73f7ee1acaa3db845130ba425434c78b426de354f73a82d160cc63b8778bd82",
+      "bytes": 7739
+    }
+  }
+}

@@ -4,6 +4,7 @@
 Статус: **PASS (core-gates)** (2026-09-16, прогон пользователя — [evidence/09/USER_RUN.md](../evidence/09/USER_RUN.md)):
 интеграция 18 файлов / 196, N1–N8, копия восстановлена в отдельную цель и совпала по контрольным числам.
 `PRINT_PDF=NOT_RUN`; время поиска не измерено (замер по старому пути).
+**Корректировка 2026-09-16** (раздел «Закрытие приёмки» в конце): усиленные условия — CODE_READY, пользовательские проверки NOT_RUN.
 
 Это не объявление промышленной готовности и не заявление о юридической достоверности или полноте сведений
 о компаниях. Итоговые статусы готовности — в `docs/development/RELEASE_READINESS.md`.
@@ -128,6 +129,82 @@
 - Автоматических резервных копий и очистки нет; сохранность равна сохранности диска и дисциплине копий.
 - Решения аналитика при слиянии сущностей остаются в истории исходной сущности (B-33).
 - Автотестов интерфейса нет: регрессии UI ловятся только ручным проходом.
+
+## Закрытие приёмки (корректировка, 2026-09-16)
+
+Статус корректировки: **CODE_READY — подготовлено к пользовательской приёмке; обязательные пользовательские проверки NOT_RUN.**
+Исторический PASS выше относится к коду `bc4aa36`+фиксы и старому `local-inventory@1` и не переписывается. Новые условия
+(`09_USER_ACCEPTANCE.md`, замечания F01–F03 и R06/R07 пакета `prompts/TG_Info_Next_Stages_2026-09-16/`) проверяются заново.
+Этап 10 не открывался; офлайн-часть его T10-01…T10-09 покрыта этой корректировкой (см. матрицу), приёмка — по логам пользователя.
+
+Основа: HEAD `7c76c35`, незакоммиченные правки (commit/push не выполнялись). Отпечаток кода — заголовки логов в
+`evidence/09/closure/`. Матрица gates — [evidence/09/CLOSURE_MATRIX.md](../evidence/09/CLOSURE_MATRIX.md), команды — [evidence/09/USER_RUN_CLOSURE.md](../evidence/09/USER_RUN_CLOSURE.md).
+
+### Подтверждённые дефекты (найдены чтением кода, исправлены)
+
+| # | Дефект | Исправление |
+|---|---|---|
+| D1 | `release:bench` разрешал запись по `/test/i` в имени базы из `DATABASE_URL`, общий guard не использовал (F01) | новый вход `release/benchCli.ts`: общий preflight `db/testTargetBootstrap.ts` до импорта пула, проверка базы, роли и маркера до входа и записи |
+| D2 | `diffInventory`: разные миграции — только примечание; отсутствующая таблица = 0; нарушения связности без exit≠0; 7 таблиц не учитывались (F02, R06/R07) | `local-inventory@2`: миграции и `missingTables`/`skippedIntegrity` дают расхождение, разные версии — `incompatible`, `release:check` exit 1 при проблемах |
+| D3 | Совпадение количеств принималось за доказательство восстановления | `release:manifest` (`content-manifest@1`), контракт — `CONTENT_MANIFEST.md` |
+| D4 | bench засчитывал любой HTTP-код (поиск 400 за 1 мс) (F03) | успех только при ожидаемом коде и содержимом; ошибки и прогрев в отчёте; обязательный шаг без успеха — exit 1 |
+| D5 | `migrate --upto` без значения или с мусором давал NaN → «нечего применять»; неизвестные флаги молча игнорировались | `parseMigrateArgs`: ошибка; `--upto` — только через preflight тестовой цели |
+| D6 | guard тестовой цели не проверял роль и не сравнивал с `DATABASE_URL` из `backend/.env`; сиды дублировали guard | роль и `.env` в `testTarget.ts`/`testTargetBootstrap.ts`; девять сидов, `integration/setup.ts`, `db.ts` используют общий preflight |
+| D7 | Порядок runbook: дамп до baseline; `>`/`<` в PowerShell 5.1 портят бинарный дамп; `pg_restore` без остановки при ошибке и без проверки кода; restore-база без маркера | `LOCAL_RUNBOOK.md` §5, `USER_RUN_CLOSURE.md` E |
+| D8 | После слияния сущности решение аналитика оставалось у исходного утверждения, а досье цели показывало перенесённое утверждение как «в публикации сообщается» без следа решения (merge→dossier терял решение при чтении) | чтение: `dossier/facts.ts::loadPriorDecisions` (линия `evidence.copied_from_evidence_id` + `merge_id`, неотменённые слияния), фраза и поле `priorDecisions` в `statements.ts`. Решение **не переносится**, статус и атрибуция не меняются, текст говорит «нужен пересмотр». Новые снимки несут поле, старые не меняются |
+
+### Новые проверки
+
+Unit (агент): `release/manifest.test.ts` (26), `release/inventory.test.ts` (9), `release/bench.test.ts` (12),
+`release/secrets.test.ts` (4), `api/dbDown.test.ts` (7), `db/migrate.test.ts` (6), `db/testTarget.test.ts` (+8),
+`net/safeFetch.test.ts` (+2 таймаута), `snapshot/snapshot.test.ts` (+1 опасные URL), `dossier/dossier.test.ts` (+1 решение до слияния).
+Интеграция (пользователь): `release/manifest.int.test.ts` (10), `release.int` (+2: merge→review, prompt injection),
+`reprocess.int` (+1: поздний сбой после релевантного чанка), `telegram.int` (+1: инъекция ошибки записи курсора).
+Статическая проверка сборки: `frontend/scripts/check-build.mjs` (`npm run check:build`).
+Инструменты пользователя: `release:manifest`, `release:probe` (перезапуск отдельного процесса, только GET),
+`release:fingerprint` (привязка логов к коду), `release:bench --pipeline-synthetic`.
+
+### Изменённые файлы
+
+Backend: `db/testTarget.ts`, `db/testTargetBootstrap.ts` (новый), `db/migrate.ts`, `release/{inventory,cli,bench}.ts`,
+`release/{benchCli,benchPipeline,manifest,manifestSpec,manifestCollect,manifestCli,probe,treeFingerprint}.ts` (новые),
+`dossier/{facts,statements}.ts`, `__tests__/integration/{setup,db,globalSetup}.ts`, девять `seed*Demo.ts`, `package.json`
+(`release:bench` → `benchCli.ts`, `release:manifest`, `release:probe`, `release:fingerprint`), тесты выше.
+Frontend: `scripts/check-build.mjs` (новый), `package.json` (`check:build`), `src/lib/labels.ts` (подпись «источники
+противоречат — противоречие сохраняется и после решения аналитика»).
+Документы: `CONTENT_MANIFEST.md` (новый), `evidence/09/{CLOSURE_MATRIX,USER_RUN_CLOSURE}.md` (новые), `LOCAL_RUNBOOK.md`
+§5–6, `TESTING_LOCAL.md` (A3, A5, примечание к N), `RELEASE_READINESS.md`, `BACKLOG.md`, `STATE.md`, `HANDOFF.md`,
+`evidence/09/USER_RUN.md` (примечание), `CLAUDE.md`. Пакет 10–19 распакован в `prompts/TG_Info_Next_Stages_2026-09-16/`.
+
+Миграций нет. Контракты: формат `release:check` → `local-inventory@2` (файлы `@1` сравниваются как несовместимые);
+`release:bench` — `local-bench@2`, только `TEST_DATABASE_URL`; payload новых снимков может содержать `priorDecisions`
+у фраз с решением до слияния (схема снимка `dossier-snapshot@1` расширена необязательным полем, старые payload и hash не меняются).
+
+### Прогоны агента
+
+| Проверка | Exit | Итог | Лог |
+|---|---|---|---|
+| backend typecheck + build | 0 / 0 | PASS | `evidence/09/closure/backend-typecheck-build.log` |
+| unit, `--maxWorkers=2` | 0 | PASS — см. лог | `evidence/09/closure/unit-final.log` |
+| frontend build + `check:build` с маркерами | 0 / 0 | PASS | `evidence/09/closure/frontend-build.log`; попытки 1 (ложные срабатывания правил) и 2 (exit 127 на шаге PWA без вывода, отдельный `vite build` прошёл) сохранены |
+
+Интеграция, dump/restore, браузер, перезапуск процесса, отказ БД и замеры — NOT_RUN (выполняет пользователь).
+
+### Не сделано и ограничения
+
+- Реальное заполнение диска не проверяется: только инъекция ошибки записи курсора.
+- Устойчивость настоящей модели к инструкциям в тексте — NOT_RUN; проверены ограничения приложения на mock.
+- XSS — строки выгрузок, не браузер.
+- `release:probe` сравнивает `case_dossier` без `generatedAt`; если живое досье окажется недетерминированным — это разбор,
+  а не дефект снимка.
+- Замечания F04–F20 пакета 10–19 (конфигурация модели в запуске, отзыв допуска между чанками, scope роли, ключ снимка,
+  транзакционное чтение, скрытые лимиты, оценка модели) — этапы 11–19, здесь не исправлялись.
+
+### Откат
+
+Код: `git checkout`/`revert` правок. Отдельно: не использовать `release:manifest`/`release:probe`; вернуть
+`release:bench` к прежнему нельзя без потери защиты — не рекомендуется. Чтение `priorDecisions` безопасно отключить
+возвратом `dossier/facts.ts`/`statements.ts`: данные и решения не менялись.
 
 ## Завершение
 

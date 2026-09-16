@@ -1,8 +1,8 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-16 (+02:00). Текущий этап: **09 (последний)**. Статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Обновлено: 2026-09-16 (+02:00). Текущий этап: **09 — закрытие приёмки (корректировка)**. Исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Корректировка: **CODE_READY — подготовлено к пользовательской приёмке; пользовательские проверки NOT_RUN** (evidence/09/USER_RUN_CLOSURE.md, CLOSURE_MATRIX.md). Этап 10 не открыт. Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 09 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`, `09`).
-Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
+Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя. Для закрытия приёмки 09 commit/push не выполнялись (запрет задания) — правки не закоммичены.
 
 ## Фактическая среда
 
@@ -13,7 +13,7 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/09_REPORT.md` (00–08B — там же). Эксплуатация: `LOCAL_RUNBOOK.md`, готовность: `RELEASE_READINESS.md`. Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/09_REPORT.md` (раздел «Закрытие приёмки»; 00–08B — там же). Manifest: `CONTENT_MANIFEST.md`. Эксплуатация: `LOCAL_RUNBOOK.md`, готовность: `RELEASE_READINESS.md`. Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
 ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота), ADR-008 (смысл связей, время, события), ADR-009 (объяснимые сигналы), ADR-010 (обращения и рабочее досье), ADR-011 (схема связей, снимки, выгрузки).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
@@ -26,7 +26,7 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: да (core-gates, 2026-09-16). LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
+LOCAL_FIXTURE_READY: да по историческим core-gates 09; по усиленным условиям закрытия приёмки — NOT_RUN. LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
 
 ## Неразрешённые действия
 
@@ -36,4 +36,4 @@ Commit/push в `dossier-stages` — разрешены пользователе�
 
 ## Что осталось и следующая безопасная операция
 
-Пакет этапов закрыт. Дальше — `BACKLOG.md` (P2 первыми) и условия смены статусов в `RELEASE_READINESS.md`. Отдельно: повторить замер поиска (`release:bench`); разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
+**Следующее действие пользователя:** прогнать `docs/development/evidence/09/USER_RUN_CLOSURE.md` (G01, A–G) на текущем коде и прислать папку логов. Затем агент принимает gates по содержанию логов и обновляет матрицу. Решение о commit правок закрытия — за пользователем. После приёмки — пакет `prompts/TG_Info_Next_Stages_2026-09-16/` с этапа 10 (по одному этапу). Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).

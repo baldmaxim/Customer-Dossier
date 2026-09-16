@@ -4,7 +4,7 @@
 // «в публикации сообщается» (есть в тексте), «аналитиком проверено» (в указанном объёме), «со слов
 // обратившегося» (запись оператора), «не установлено в выборке» (отсутствие сведений, не факт отсутствия).
 
-import type { IFact } from './facts.js';
+import type { IFact, IPriorDecision } from './facts.js';
 
 export type Attribution = 'source_reported' | 'analyst_reviewed' | 'analyst_disputed' | 'analyst_rejected' | 'operator_claim' | 'not_established' | 'system_context';
 
@@ -15,6 +15,11 @@ export interface IStatement {
   assertionIds: number[];
   evidenceIds: number[];
   quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string }>;
+  /**
+   * Решения аналитика по исходному утверждению до слияния сущностей. Не переносятся на это утверждение и не меняют
+   * атрибуцию; поле есть только когда такие решения найдены (фразы без слияния и прежние снимки не меняются).
+   */
+  priorDecisions?: IPriorDecision[];
 }
 
 const ROLE: Record<string, string> = {
@@ -131,16 +136,32 @@ const LEAD: Record<Attribution, string> = {
 
 export const lead = (attribution: Attribution): string => LEAD[attribution];
 
+const DECISION: Record<string, string> = {
+  reviewed_supported: 'проверено',
+  disputed: 'спорно',
+  rejected: 'отклонено',
+  candidate: 'возвращено в кандидаты',
+};
+
+/** Пояснение о решениях до слияния: что решено, кем, по какому утверждению — и что решение не перенесено. */
+export const priorDecisionsNote = (decisions: readonly IPriorDecision[]): string =>
+  decisions.length === 0
+    ? ''
+    : `; до слияния сущностей аналитик принимал решения по исходному утверждению: ${decisions
+        .map(d => `#${d.assertionId} — ${DECISION[d.decision] ?? d.decision} (${d.reviewer}, ${d.decidedAt.slice(0, 10)}, слияние #${d.mergeId})`)
+        .join('; ')}; на перенесённое утверждение решение не распространяется — нужен пересмотр`;
+
 /** Фраза по утверждению: текст с атрибуцией, id утверждения и цитаты его доказательств. */
 export const factStatement = (code: string, fact: IFact, body: string, attribution: Attribution = attributionOf(fact)): IStatement => {
   const evidence = fact.evidence.filter(e => e.stance !== 'mentions');
   return {
     code,
-    text: `${LEAD[attribution]}: ${body}${fact.needsRevalidation ? ' (основание изменилось — нужен пересмотр)' : ''}.`,
+    text: `${LEAD[attribution]}: ${body}${fact.needsRevalidation ? ' (основание изменилось — нужен пересмотр)' : ''}${priorDecisionsNote(fact.priorDecisions ?? [])}.`,
     attribution,
     assertionIds: [fact.assertionId],
     evidenceIds: evidence.map(e => e.id),
     quotes: evidence.slice(0, 3).map(e => ({ evidenceId: e.id, quote: e.quote, sourceTitle: e.sourceTitle, publishedAt: e.publishedAt, stance: e.stance })),
+    ...(fact.priorDecisions?.length ? { priorDecisions: fact.priorDecisions.map(d => ({ ...d })) } : {}),
   };
 };
 

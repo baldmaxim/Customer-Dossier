@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). 09 — PASS по core-gates (интеграция 18 файлов / 196, N1–N8, копия восстановлена и совпала; печать в PDF NOT_RUN). Пакет этапов закрыт.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). 09 — PASS по core-gates (интеграция 18 файлов / 196, N1–N8, копия восстановлена и совпала по количествам; печать в PDF NOT_RUN). **Закрытие приёмки 09 (2026-09-16): CODE_READY, пользовательские проверки NOT_RUN**, правки не закоммичены. Следующий пакет — prompts/TG_Info_Next_Stages_2026-09-16/ (этапы 10–19), не начат.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -52,16 +52,22 @@ Docker и проверки с базой агент не запускает: п�
   CLI `release:check` / `release:bench`), `--upto` у раннера миграций, seed `seed:test-release`,
   сквозной тест `release/release.int.test.ts`; `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, BACKLOG с severity.
 
+- Закрытие приёмки 09: общий preflight записи в тестовую цель `db/testTargetBootstrap.ts` (тесты, сиды, bench, `migrate --upto`);
+  `release:check` → `local-inventory@2`; содержательный `release:manifest` (`content-manifest@1`, `CONTENT_MANIFEST.md`);
+  валидный `release:bench` (`benchCli.ts`, `--pipeline-synthetic`); `release:probe` (перезапуск процесса), `release:fingerprint`;
+  решения до слияния видны в досье (`dossier/facts.ts::loadPriorDecisions`, поле `priorDecisions`), без переноса;
+  `frontend: npm run check:build`; порядок backup/restore — `LOCAL_RUNBOOK.md` §5.
+
 ## Принятые решения
 ADR-001…ADR-011. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
 Публикация снимает только вклад своей публикации (evidence → superseded). Completed — только при полном покрытии.
 Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck/build backend и frontend, unit 29 файлов / 421 тест — PASS; аудит: старт без сбора, допуск без обходов, в бандле нет секретов.
+Закрытие приёмки 09: typecheck/build backend, unit 35 файлов / 497 (`--maxWorkers=2`), сборка фронтенда и `check:build` с маркерами — PASS, логи `evidence/09/closure/`. Ранее: unit 29 / 421; у пользователя позже 405 + 1 файл OOM (BLOCKED_ENV).
 
 ## Что НЕ проверено
-Живые сайты и каналы, живой бот (допуска и токена нет); печать снимка в PDF; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
+Всё пользовательское из `evidence/09/USER_RUN_CLOSURE.md` (интеграция на текущем коде, restore с manifest, перезапуск процесса, отказ БД, bench); живые сайты и каналы, живой бот; печать снимка в PDF; качество Qwen3-8B на extract@3; реальный LLM-smoke; 390 px; реальный disk-full.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -71,13 +77,13 @@ typecheck/build backend и frontend, unit 29 файлов / 421 тест — PAS
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Пакет этапов закрыт. Дальнейшие работы — из `BACKLOG.md` и `RELEASE_READINESS.md` (условия смены статусов),
-новые большие функции — отдельным решением пользователя. Мелкое: повторить замер поиска `release:bench`.
+Пользователь прогоняет `evidence/09/USER_RUN_CLOSURE.md` и присылает логи; агент принимает gates по содержанию и обновляет
+`CLOSURE_MATRIX`, `09_REPORT`, `RELEASE_READINESS`. Commit правок закрытия — по решению пользователя. Этап 10 не начинать до этого.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, ADR-011,
+`09_USER_ACCEPTANCE.md`, `prompts/TG_Info_Next_Stages_2026-09-16/README_START_HERE.md` и `COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `evidence/09/CLOSURE_MATRIX.md`, `evidence/09/USER_RUN_CLOSURE.md`, `CONTENT_MANIFEST.md`, `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, ADR-011,
 `TESTING_LOCAL.md`; ключевые файлы: `backend/src/snapshot/*.ts`, `backend/src/graph/*.ts`, `docs/migrations/020_dossier_snapshots.sql`, `frontend/src/pages/SnapshotPage.tsx`.

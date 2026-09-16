@@ -14,6 +14,19 @@ export interface IFactEvidence {
   dedupHash: string;
 }
 
+/**
+ * Решение аналитика по исходному утверждению, которое слияние сущностей перенесло в это (evidence.copied_from_evidence_id,
+ * merge_id). Решение не переносится и не меняет статус: оно показывается как история того же утверждения, требующая пересмотра.
+ */
+export interface IPriorDecision {
+  assertionId: number;
+  mergeId: number;
+  decisionId: number;
+  decision: string;
+  reviewer: string;
+  decidedAt: string;
+}
+
 export interface IFact {
   assertionId: number;
   version: number;
@@ -51,6 +64,8 @@ export interface IFact {
   valueCurrency: string | null;
   attributedTo: string | null;
   evidence: IFactEvidence[];
+  /** Решения по утверждениям, из которых это перенесено слиянием (не отменённым). Пусто — переноса не было. */
+  priorDecisions: IPriorDecision[];
 }
 
 const COLUMNS = `
@@ -103,11 +118,46 @@ const loadFacts = async (exec: DbExecutor, where: string, params: unknown[]): Pr
       [rows.map(r => r.assertionId)],
     )
   ).rows;
+  const prior = await loadPriorDecisions(exec, rows.map(r => r.assertionId));
   return rows.map(r => ({
     ...r,
     evidence: evidence.filter(e => e.assertionId === r.assertionId).map(({ assertionId: _a, ...e }) => e),
+    priorDecisions: prior.filter(d => d.forAssertionId === r.assertionId).map(({ forAssertionId: _f, ...d }) => d),
   }));
 };
+
+/**
+ * Линия слияний: активное доказательство утверждения скопировано слиянием из доказательства исходного утверждения;
+ * рекурсивно — через несколько слияний. Отменённые слияния не учитываются. Только чтение.
+ */
+export const loadPriorDecisions = async (exec: DbExecutor, assertionIds: readonly number[]): Promise<Array<IPriorDecision & { forAssertionId: number }>> =>
+  assertionIds.length === 0
+    ? []
+    : (
+        await exec.query<IPriorDecision & { forAssertionId: number }>(
+          `WITH RECURSIVE lineage (for_id, assertion_id, merge_id, depth) AS (
+             SELECT DISTINCT e.assertion_id, src.assertion_id, e.merge_id, 1
+             FROM evidence e
+             JOIN evidence src ON src.id = e.copied_from_evidence_id
+             JOIN entity_merges m ON m.id = e.merge_id AND m.undone_at IS NULL
+             WHERE e.assertion_id = ANY($1::bigint[]) AND e.status = 'active' AND e.merge_id IS NOT NULL
+             UNION
+             SELECT l.for_id, src.assertion_id, e.merge_id, l.depth + 1
+             FROM lineage l
+             JOIN evidence e ON e.assertion_id = l.assertion_id AND e.merge_id IS NOT NULL
+             JOIN evidence src ON src.id = e.copied_from_evidence_id
+             JOIN entity_merges m ON m.id = e.merge_id AND m.undone_at IS NULL
+             WHERE l.depth < 10
+           )
+           SELECT DISTINCT l.for_id AS "forAssertionId", l.assertion_id AS "assertionId", l.merge_id AS "mergeId",
+                  d.id AS "decisionId", d.decision, d.reviewer,
+                  to_char(d.decided_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "decidedAt"
+           FROM lineage l JOIN review_decisions d ON d.assertion_id = l.assertion_id
+           WHERE l.assertion_id <> l.for_id
+           ORDER BY "forAssertionId", "decisionId"`,
+          [[...assertionIds]],
+        )
+      ).rows;
 
 export const loadCompanyFacts = (exec: DbExecutor, companyId: number): Promise<IFact[]> =>
   loadFacts(exec, '$1 IN (a.subject_company_id, a.object_company_id, a.counterparty_company_id)', [companyId]);

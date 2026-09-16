@@ -38,7 +38,9 @@ npm run build
 cd ..
 ```
 
-Ожидается: typecheck без ошибок; unit — **29 файлов / 421 тест passed**; сборка frontend успешна.
+Ожидается: typecheck без ошибок; unit — все файлы passed, 0 skipped (на коде закрытия приёмки 09 у агента **35 файлов / 497 тестов**;
+исторически на 09 — 29 / 421); сборка frontend успешна. При нехватке памяти: `npx vitest run --maxWorkers=2` или
+`--maxWorkers=1 --no-file-parallelism` — изоляцию не отключать; OOM — BLOCKED_ENV, не PASS.
 
 ### A4. Тестовая база
 
@@ -61,7 +63,9 @@ docker exec tg-info-test-db psql -U tg_test -d tg_info_test -c "COMMENT ON DATAB
 ### A5. Интеграционные тесты
 
 `DATABASE_URL` в этой сессии должен быть не задан (или указывать не на тестовую базу) — иначе guard откажет
-«совпадает с DATABASE_URL». PowerShell: `Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue`.
+«совпадает с DATABASE_URL». PowerShell: `Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue`. То же для
+`DATABASE_URL` в `backend/.env`: он сравнивается с тестовой целью (значение не печатается). Guard проверяет также
+роль из адреса (`current_user`) и маркер базы.
 
 ```powershell
 # PowerShell
@@ -76,7 +80,8 @@ export TEST_DATABASE_URL=postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_te
 npm run test:integration
 ```
 
-Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем **18 файлов / 196 тестов passed**:
+Ожидается: `[integration] тестовая цель: 127.0.0.1:55433/tg_info_test`, затем все файлы passed, 0 skipped (исторически на 09 —
+18 файлов / 196; на коде закрытия приёмки ориентир 19 / около 210, см. `evidence/09/USER_RUN_CLOSURE.md`):
 
 | Файл | Что проверяет |
 |---|---|
@@ -728,6 +733,11 @@ LM Studio не нужен. Данные — те же, что в L1 (`seed:test-
 «Версия для печати» отдаёт ошибку. Снимки в базе не тронуты. Верните переменную (`Remove-Item Env:GRAPH_EXPORT_ENABLED`).
 
 ## N. Этап 09 — сквозная приёмка, копия и восстановление, замеры
+
+> **Закрытие приёмки 09 (2026-09-16):** N2, N3 и N6 заменены усиленной процедурой
+> `evidence/09/USER_RUN_CLOSURE.md` (одна точка данных, `release:manifest`, restore с остановкой при ошибке без `>`/`<`,
+> проба перезапуска отдельного процесса, валидный bench). Команды N2/N3/N6 ниже — история прогона 09 на старом
+> `local-inventory@1` и старом bench; повторять их не нужно.
 
 LM Studio не нужен: модель везде подменена детерминированными ответами. Всё — на тестовой базе.
 

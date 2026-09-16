@@ -7,13 +7,9 @@
 // похожие юрлица с разными ИНН (слияние блокируется реквизитами),
 // одинаковый ЖК в двух городах (слияние блокируется географией).
 
-process.env.TG_INFO_ORIGINAL_DATABASE_URL ??= process.env.DATABASE_URL ?? '';
-
-const { assertTestDatabaseUrl } = await import('../../db/testTarget.js');
-assertTestDatabaseUrl(process.env.TEST_DATABASE_URL, process.env.TG_INFO_ORIGINAL_DATABASE_URL);
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-process.env.DATABASE_SSL = 'false';
-process.env.DOTENV_CONFIG_PATH = 'seed-no-dotenv.env';
+// Общий preflight тестовой цели — до импорта env и пула (src/db/testTargetBootstrap.ts).
+const { prepareTestTargetProcess } = await import('../../db/testTargetBootstrap.js');
+prepareTestTargetProcess();
 
 const { closeDb, getPool, withTransaction } = await import('../../db/pool.js');
 const { assertIsolatedTarget, insertSyntheticSource } = await import('./db.js');

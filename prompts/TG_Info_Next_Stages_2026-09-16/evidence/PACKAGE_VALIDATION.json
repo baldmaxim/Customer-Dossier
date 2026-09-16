@@ -1,0 +1,13 @@
+{
+  "version": "prompt-package-validation@1",
+  "date": "2026-09-16",
+  "errors": [],
+  "stageFiles": 12,
+  "uniqueScenarios": 103,
+  "syntheticCases": 24,
+  "localMarkdownLinksChecked": 21,
+  "sourceFilesComparedWithOriginalArchive": true,
+  "sourceFilesChanged": [],
+  "portableProbeRerun": "completed; ten findings and one positive control reproduced; no DB/network",
+  "important": "This validates package structure and source-level probes, not implementation of stages 10–19 or full application tests."
+}
