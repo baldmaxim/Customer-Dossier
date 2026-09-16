@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — реализован, ждёт прогона пользователя (A, M). Следующий — 09.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). Следующий — 09.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -58,7 +58,7 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 typecheck/build backend и frontend, unit 29 файлов / 421 тест — PASS.
 
 ## Что НЕ проверено
-Живые сайты и каналы, живой бот (допуска и токена нет); интеграция 08B (`snapshot.int.test.ts`), печать в PDF; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
+Живые сайты и каналы, живой бот (допуска и токена нет); печать снимка в PDF; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -68,7 +68,7 @@ typecheck/build backend и frontend, unit 29 файлов / 421 тест — PAS
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-После прогона 08B — этап `stages/STAGE_09_LOCAL_RELEASE.md`: читать COMMON_RULES, ADR-001…ADR-011, `TESTING_LOCAL.md`,
+Этап `stages/STAGE_09_LOCAL_RELEASE.md`: читать COMMON_RULES, ADR-001…ADR-011, `TESTING_LOCAL.md`,
 `backend/src/db/migrate.ts`, миграции 001–020, `package.json` обоих пакетов, `frontend/vite.config.ts`.
 
 ## Запреты

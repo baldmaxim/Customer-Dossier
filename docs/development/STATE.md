@@ -1,7 +1,7 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-15 (+02:00). Текущий этап: **08B**. Статус: **IMPLEMENTED, ожидает прогона пользователя** (TESTING_LOCAL A, M); 08A — PASS (core-gates). LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
-Последний этап с пройденными core-gates: 08A (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`).
+Обновлено: 2026-09-15 (+02:00). Текущий этап: **08B**. Статус: **PASS (core-gates)** (прогон пользователя, evidence/08B/USER_RUN.md; PRINT_PDF=NOT_RUN); следующий — 09. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Последний этап с пройденными core-gates: 08B (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
 ## Фактическая среда
@@ -36,4 +36,4 @@ Commit/push в `dossier-stages` — разрешены пользователе�
 
 ## Что осталось и следующая безопасная операция
 
-Прогон пользователя 08B (TESTING_LOCAL A1–A5, M), затем `stages/STAGE_09_LOCAL_RELEASE.md`. Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
+`stages/STAGE_09_LOCAL_RELEASE.md`. Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
