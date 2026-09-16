@@ -50,6 +50,7 @@ const ingest = async (
     forwardFrom: null,
   });
   if (!stored.revisionId) return { outcome: stored.outcome, revisionId: null };
+  if (stored.outcome === 'unchanged') return { outcome: stored.outcome, revisionId: stored.revisionId };
   const provider = fx.semanticProvider(() => answer);
   const queued = await enqueueRun(getPool(), { revisionId: stored.revisionId, provider, chunker: { chunkSize: 4000, maxChunks: 6, overlap: 50 }, requestedBy: 'seed' });
   if (queued.outcome !== 'queued') throw new Error(`запуск не поставлен: ${queued.outcome}`);

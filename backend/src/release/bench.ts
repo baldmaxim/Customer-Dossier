@@ -75,7 +75,7 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number } = {}
       const query = encodeURIComponent(company.name.slice(0, 6));
       steps.push(
         await measure('search', 'поиск компании по части названия', runs, async () => {
-          const res = await api.call('GET', `/api/companies/search?q=${query}`, undefined, api.auth);
+          const res = await api.call('GET', `/api/companies?q=${query}`, undefined, api.auth);
           return `HTTP ${res.status}`;
         }),
       );

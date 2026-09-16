@@ -56,6 +56,8 @@ const ingest = async (
     forwardFrom: null,
   });
   if (!stored.revisionId) return { outcome: stored.outcome, revisionId: null };
+  // Повтор той же редакции — только наблюдение: разбор заново не ставится.
+  if (stored.outcome === 'unchanged') return { outcome: stored.outcome, revisionId: stored.revisionId };
   const provider = options.provider ?? semanticProvider(() => respond!);
   const queued = await enqueueRun(pool(), { revisionId: stored.revisionId, provider, chunker: { chunkSize: 4000, maxChunks: 6, overlap: 50 }, requestedBy: 'release-test' });
   if (queued.outcome !== 'queued') return { outcome: queued.outcome, revisionId: stored.revisionId };
@@ -136,7 +138,7 @@ describe('TC-076: путь источник → досье → снимок и �
     alfa = byInn.find(r => r.value === INN_A)!.company_id;
     projectId = (await pool().query<{ id: number }>(`SELECT id FROM projects WHERE name = 'Причал-Приёмка'`)).rows[0]!.id;
 
-    const search = await api.call('GET', '/api/companies/search?q=Альфа-Приёмка', undefined, api.auth);
+    const search = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Приёмка')}`, undefined, api.auth);
     expect(search.status).toBe(200);
     expect((search.body.items as unknown[]).length).toBe(2);
 
@@ -169,7 +171,10 @@ describe('TC-076: путь источник → досье → снимок и �
 
     const dossier = await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, api.auth);
     expect(dossier.status).toBe(200);
-    expect((dossier.body as { role: { status: string } }).role.status).toBe('reviewed');
+    // Отрицание из другой публикации остаётся противоречием и после решения аналитика; само решение видно в атрибуции.
+    const role = (dossier.body as { role: { status: string; established: Array<{ attribution: string }> } }).role;
+    expect(role.status).toBe('contradicted');
+    expect(role.established.some(s => s.attribution === 'analyst_reviewed')).toBe(true);
 
     const snapshot = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
     expect(snapshot.status).toBe(201);
@@ -204,7 +209,7 @@ describe('TC-076: путь источник → досье → снимок и �
       projects: [project('Причал-Приёмка', EDIT)],
       relations: [relation({ type: 'participation', kind: 'contractor', subject: 'Альфа-Приёмка', project: 'Причал-Приёмка', building: 'корпус 2', work_package: 'монтаж систем ВК', date_from: '2026-06', date_to: '2026-09', date_precision: 'month', quote: EDIT })],
     }), { externalId: 'release-int/1' });
-    expect(edited.outcome).toBe('revision_created');
+    expect(edited.outcome).toBe('new_revision');
 
     // Слияние: дубль без реквизитов вливается в компанию с ИНН.
     const dup = (await pool().query<{ id: number }>(`INSERT INTO companies (name, name_norm, name_latin) VALUES ('Альфа Приёмка Дубль', 'альфа приёмка дубль', 'alfa priemka dubl') RETURNING id`)).rows[0]!.id;
@@ -266,7 +271,7 @@ describe('TC-077: отказы видны и не выглядят как «св
     expect(first.runStatus).toBe('completed');
     const afterOne = await collectInventory(pool());
     const repeat = await ingest(channel, DOWN, good, { externalId: 'release-int/echo' });
-    expect(repeat.outcome).toBe('duplicate_revision');
+    expect(repeat.outcome).toBe('unchanged');
     const afterTwo = await collectInventory(pool());
     expect(afterTwo.counts.events).toBe(afterOne.counts.events);
     expect(afterTwo.counts.assertions).toBe(afterOne.counts.assertions);

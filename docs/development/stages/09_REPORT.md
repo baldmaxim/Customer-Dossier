@@ -49,7 +49,7 @@
 | `backend/src/release/cli.ts` (новый), `package.json` | `release:check`, `release:bench` | — |
 | `backend/src/db/migrate.ts` | параметр `upto` и флаг `--upto` | поведение по умолчанию не изменилось |
 | `backend/src/__tests__/integration/seedReleaseDemo.ts` (новый), `package.json` | `seed:test-release` | только тестовая база |
-| `backend/src/release/release.int.test.ts` (новый) | TC-074…TC-077 (12 тестов) | интеграция — у пользователя |
+| `backend/src/release/release.int.test.ts` (новый) | TC-074…TC-077 (14 тестов) | интеграция — у пользователя |
 | `docs/development/LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md` (новые) | эксплуатация и готовность | — |
 | `docs/development/BACKLOG.md`, `STATE.md`, `HANDOFF.md`, `TESTING_LOCAL.md` (раздел N), `CLAUDE.md` | severity, состояние, инструкция прогона | — |
 
@@ -59,7 +59,7 @@
 
 | Gate/сценарий | Команда | Target | Exit | Статус | Лог/наблюдение |
 |---|---|---|---|---|---|
-| Воспроизводимая установка | `npm ci` (backend, frontend) | — | 0 | PASS | по lock-файлам |
+| Воспроизводимая установка | `npm ci` (backend, frontend) | — | 0 | PASS | прогон пользователя 08B (A2); на этапе 09 агентом не повторялся, зависимости не менялись |
 | Typecheck/build | `tsc --noEmit`, `npm run build` | — | 0/0 | PASS | среда агента |
 | Unit | `npm test` | мёртвый URL | 0 | PASS: 29 / 421 | среда агента |
 | Старт портала не начинает сбор и разбор | чтение `jobs.ts` + unit-тесты флагов | — | 0 | PASS | все фоновые задания по умолчанию выключены, причины печатаются при старте |
@@ -71,7 +71,7 @@
 | TC-077 модель недоступна, ответ не по схеме, отзыв допуска, доступ, опасный фрагмент, повтор без дублей | то же | tg_info_test | — | NOT_RUN | прогон пользователя (N5, N7) |
 | TC-075 копия → восстановление в отдельную цель → сверка контрольных чисел | `release:check --out/--compare` + pg_dump/pg_restore | tg_info_test → tg_info_test_restore | — | NOT_RUN | прогон пользователя (N3) |
 | TC-078 замеры на описанном объёме и машине | `npm run release:bench` | tg_info_test | — | NOT_RUN | прогон пользователя (N6): числа идут в отчёт как факт |
-| Регрессия 01–08B | `npm run test:integration` | tg_info_test | — | NOT_RUN | ожидается 18 файлов / 194 |
+| Регрессия 01–08B | `npm run test:integration` | tg_info_test | — | NOT_RUN | ожидается 18 файлов / 196 |
 | Браузерный проход, печать в PDF, 390 px | вручную | браузер | — | NOT_RUN | прогон пользователя (N4) |
 | Отключение PostgreSQL на ходу | вручную (`docker stop`) | — | — | NOT_RUN | прогон пользователя (N5.1): Docker агент не запускает |
 | Живые источники, живой бот, реальная модель | — | — | — | NOT_RUN | допуска и ключей нет; вне области этапа |
