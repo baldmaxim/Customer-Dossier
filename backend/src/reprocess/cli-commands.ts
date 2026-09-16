@@ -3,7 +3,7 @@
 import { getPool } from '../db/pool.js';
 import { approvedPolicySql } from '../ingest/policy.js';
 import { previewCandidateSet, publishCandidateSet, type IPreviewItem } from './publish.js';
-import { lmStudioProvider } from './provider.js';
+import { buildFingerprint, defaultChunkerParams, lmStudioProvider } from './provider.js';
 import { enqueueRun, retryRun } from './runs.js';
 import { runReprocessPass, type IPassResult } from './worker.js';
 
@@ -103,18 +103,20 @@ export const reextractCommand = async (options: {
 };
 
 export const retryRunsCommand = async (limit: number): Promise<void> => {
+  const provider = lmStudioProvider();
+  const modelIdentityHash = buildFingerprint(provider, defaultChunkerParams()).modelIdentityHash;
   const rows = (
     await getPool().query<{ id: number }>(
       `SELECT er.id FROM extraction_runs er
-       WHERE er.status IN ('failed', 'partial')
+       WHERE (er.status IN ('failed', 'partial', 'cancelled')
+              OR (er.status = 'queued' AND er.fingerprint_json->>'modelIdentityHash' IS DISTINCT FROM $2))
          AND NOT EXISTS (
            SELECT 1 FROM extraction_runs newer
            WHERE newer.revision_id = er.revision_id AND newer.id > er.id)
        ORDER BY er.id DESC LIMIT $1`,
-      [Math.min(limit, REEXTRACT_MAX_LIMIT)],
+      [Math.min(limit, REEXTRACT_MAX_LIMIT), modelIdentityHash],
     )
   ).rows;
-  const provider = lmStudioProvider();
   let queued = 0;
   for (const row of rows) {
     const result = await retryRun(row.id, provider, 'cli-retry');

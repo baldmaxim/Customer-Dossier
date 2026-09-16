@@ -77,8 +77,14 @@ export interface IExtractOptions {
   /** Понижение temperature на повторе после невалидного JSON. */
   temperature?: number;
   maxTokens?: number;
+  /** Внешняя отмена (best-effort): уже отправленный запрос мог дойти до модели. Таймаут действует всегда. */
   signal?: AbortSignal;
+  /** Вызывается перед КАЖДОЙ попыткой, включая повторы; исключение прекращает попытки (допуск отозван, аренда потеряна). */
+  beforeAttempt?: () => Promise<void>;
 }
+
+/** Политика повторов ниже — часть идентичности исполнения запуска (reprocess/provider.ts). */
+export const RETRY_POLICY_VERSION = 'retry@1:llm_error×3(2s,8s);invalid_json→1×temp0,70%';
 
 const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
   const startedAt = Date.now();
@@ -107,7 +113,9 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
           json_schema: { name: spec.schemaName, strict: true, schema: spec.jsonSchema },
         },
       }),
-      signal: options.signal ?? AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS),
+      signal: options.signal
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS)])
+        : AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -186,6 +194,7 @@ export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpe
   let last: ILlmResult<T> | null = null;
 
   for (let attempt = 0; attempt < BACKOFF_MS.length; attempt += 1) {
+    if (options.beforeAttempt) await options.beforeAttempt();
     const result = await callOnce(options, spec);
     if (result.ok || result.failure !== 'llm_error') {
       last = result;
@@ -202,6 +211,7 @@ export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpe
 
   const shortened = options.body.slice(0, Math.floor(options.body.length * 0.7));
   console.warn('[llm] невалидный JSON, повтор при temperature=0 и укороченном тексте');
+  if (options.beforeAttempt) await options.beforeAttempt();
   const retry = await callOnce({ ...options, body: shortened, temperature: 0 }, spec);
   // Хвост текста модель не видела — вызывающий код обязан это знать.
   return retry.ok ? { ...retry, truncatedInput: true } : retry;

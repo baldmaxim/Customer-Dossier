@@ -55,7 +55,8 @@ export const runReprocessPass = async (
   const results: IPassResult[] = [];
   const maxRuns = options.maxRuns ?? env.EXTRACT_BATCH_SIZE;
   for (let i = 0; i < maxRuns; i += 1) {
-    const claim = await claimNextRun(owner);
+    // Только запуски идентичности модели этого исполнителя: чужую конфигурацию не исполняем и не переписываем.
+    const claim = await claimNextRun(owner, { provider });
     if (!claim) break;
     try {
       const run = await processRun(provider, claim);

@@ -7,6 +7,7 @@
 | Этап | Код агента | Пользователь | Отчёт |
 |---|---|---|---|
 | 10 | IMPLEMENTED (основа — закрытие 09; +timeout выборки bench, выравнивание CLAUDE/README) | T10-04/05/07/08 PASS в прогоне 09; остальное NOT_RUN | `stages/10_REPORT.md` |
+| 11 | IMPLEMENTED: execution-identity@1, сверка конфигурации до вызова, допуск и аренда перед каждым вызовом; миграция 021 | NOT_RUN (`evidence/11/USER_RUN.md`) | `stages/11_REPORT.md` |
 
 Этап 09 — исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Закрытие приёмки по усиленным условиям: **PASS (core-gates)** — прогон пользователя 2026-09-16 (`evidence/09/USER_RUN_CLOSURE.md`, `CLOSURE_MATRIX.md`); печать в PDF, 390 px и Cache Storage — NOT_RUN. Этап 10 не открыт. Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 09 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`, `09`).

@@ -6,7 +6,17 @@
 //  - транзакция не держится, пока модель отвечает: каждый ответ пишется своей
 //    короткой транзакцией с проверкой fencing-токена;
 //  - completed — только когда все чанки ok и объединение диапазонов покрыло весь текст;
-//  - канон здесь не пишется: набор кандидатов публикуется отдельно (publish.ts).
+//  - канон здесь не пишется: набор кандидатов публикуется отдельно (publish.ts);
+//  - этап 11: запуск выполняется только исполнителем с той же идентичностью (provider.ts), иначе ни одного вызова
+//    модели и статус blocked; перед каждым вызовом и повтором — действующий ИИ-допуск и своя аренда.
+//
+// Переходы статуса:
+//   queued ─claim─▶ running ─все чанки ok, покрытие, допуск─▶ completed
+//                    │ ├─ не все чанки ok ─▶ partial / failed
+//                    │ ├─ допуск отозван (перед вызовом, в полёте, перед итогом) ─▶ cancelled (набора нет)
+//                    │ ├─ идентичность исполнителя ≠ запуска ─▶ queued (lease снят, error = config_mismatch; вызовов 0)
+//                    │ └─ аренда потеряна ─▶ StaleLeaseError, запись отвергнута (продолжает новый держатель)
+//   failed/partial/cancelled, устаревшая конфигурация queued ─retryRun─▶ новый запуск (previous_run_id), прежний не меняется
 
 import { createHash } from 'node:crypto';
 
@@ -19,6 +29,14 @@ import type { ISemanticExtraction } from '../llm/semantic/schema.js';
 import { buildCandidates, type IAssertionCandidate, type IEntityCandidate } from './candidates.js';
 import { computeCoverage, planCodePointChunks } from './chunking.js';
 import { buildFingerprint, defaultChunkerParams, type IChunkerParams, type IModelProvider } from './provider.js';
+
+/** Новая попытка вызова модели запрещена текущим ИИ-допуском источника. */
+export class PolicyRevokedError extends Error {
+  constructor(readonly runId: number, readonly reason: string) {
+    super(`запуск ${runId}: ИИ-допуск источника не действует — ${reason}`);
+    this.name = 'PolicyRevokedError';
+  }
+}
 
 /** Сколько раз запуск можно захватить (падения worker'а), прежде чем признать его провальным. */
 export const MAX_CLAIMS = 3;
@@ -37,6 +55,8 @@ export interface IRunClaim {
   fencingToken: number;
   owner: string;
   chunker: IChunkerParams;
+  /** Отпечаток, с которым запуск поставлен. Исполнитель обязан совпасть с ним полностью. */
+  fingerprint: string;
 }
 
 export type EnqueueResult =
@@ -83,7 +103,7 @@ export const loadRevisionPolicy = async (
 /** Постановка запуска. Живой запуск с тем же отпечатком не дублируется. */
 export const enqueueRun = async (
   exec: DbExecutor,
-  input: { revisionId: number; provider: IModelProvider; chunker?: IChunkerParams; requestedBy: string },
+  input: { revisionId: number; provider: IModelProvider; chunker?: IChunkerParams; requestedBy: string; previousRunId?: number | null },
 ): Promise<EnqueueResult> => {
   const policy = await loadRevisionPolicy(exec, input.revisionId);
   if (!policy) return { outcome: 'not_found' };
@@ -92,11 +112,11 @@ export const enqueueRun = async (
   const fp = buildFingerprint(input.provider, input.chunker ?? defaultChunkerParams());
   const inserted = (
     await exec.query<{ id: number }>(
-      `INSERT INTO extraction_runs (revision_id, fingerprint, fingerprint_json, requested_by)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO extraction_runs (revision_id, fingerprint, fingerprint_json, requested_by, previous_run_id)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (revision_id, fingerprint) WHERE status IN ('queued', 'running') DO NOTHING
        RETURNING id`,
-      [input.revisionId, fp.fingerprint, JSON.stringify(fp.json), input.requestedBy],
+      [input.revisionId, fp.fingerprint, JSON.stringify(fp.json), input.requestedBy, input.previousRunId ?? null],
     )
   ).rows[0];
   if (inserted) return { outcome: 'queued', runId: inserted.id };
@@ -119,8 +139,10 @@ export const enqueueRun = async (
  */
 export const claimNextRun = async (
   owner: string,
-  options: { leaseMs?: number; runId?: number } = {},
+  options: { leaseMs?: number; runId?: number; provider?: IModelProvider } = {},
 ): Promise<IRunClaim | null> => {
+  // Исполнитель с моделью берёт только запуски своей идентичности модели; чужие и historical остаются в очереди.
+  const modelIdentityHash = options.provider ? buildFingerprint(options.provider, defaultChunkerParams()).modelIdentityHash : null;
   const pool = getPool();
   // Исчерпавшие попытки запуски с истёкшим lease — провал, а не вечная очередь.
   await pool.query(
@@ -132,7 +154,7 @@ export const claimNextRun = async (
   );
 
   const row = (
-    await pool.query<{ id: number; revision_id: number; fencing_token: string; fingerprint_json: { chunker: IChunkerParams } }>(
+    await pool.query<{ id: number; revision_id: number; fencing_token: string; fingerprint: string; fingerprint_json: { chunker: IChunkerParams } }>(
       `UPDATE extraction_runs r
        SET status = 'running', lease_owner = $1, lease_expires_at = now() + ($2::int * interval '1 millisecond'),
            fencing_token = r.fencing_token + 1, claim_count = r.claim_count + 1,
@@ -145,13 +167,14 @@ export const claimNextRun = async (
          WHERE (r2.status = 'queued' OR (r2.status = 'running' AND r2.lease_expires_at < now()))
            AND r2.claim_count < $3
            AND ($4::bigint IS NULL OR r2.id = $4)
+           AND ($5::text IS NULL OR r2.fingerprint_json->>'modelIdentityHash' = $5)
            AND ${approvedPolicySql('s', 'ai_processing')}
          ORDER BY r2.created_at, r2.id
          FOR UPDATE OF r2 SKIP LOCKED
          LIMIT 1
        )
-       RETURNING r.id, r.revision_id, r.fencing_token, r.fingerprint_json`,
-      [owner, options.leaseMs ?? DEFAULT_LEASE_MS, MAX_CLAIMS, options.runId ?? null],
+       RETURNING r.id, r.revision_id, r.fencing_token, r.fingerprint, r.fingerprint_json`,
+      [owner, options.leaseMs ?? DEFAULT_LEASE_MS, MAX_CLAIMS, options.runId ?? null, modelIdentityHash],
     )
   ).rows[0];
   if (!row) return null;
@@ -161,7 +184,31 @@ export const claimNextRun = async (
     fencingToken: Number(row.fencing_token),
     owner,
     chunker: row.fingerprint_json.chunker,
+    fingerprint: row.fingerprint,
   };
+};
+
+/**
+ * Проверка перед вызовом модели (одна короткая команда, без транзакции и без блокировок на время inference):
+ * аренда всё ещё наша — тогда она продлевается (heartbeat), иначе StaleLeaseError; ИИ-допуск источника действует сейчас.
+ */
+export const assertCanCallModel = async (exec: DbExecutor, claim: IRunClaim, leaseMs: number = DEFAULT_LEASE_MS): Promise<void> => {
+  const renewed = await exec.query(
+    `UPDATE extraction_runs SET lease_expires_at = now() + ($3::int * interval '1 millisecond')
+     WHERE id = $1 AND status = 'running' AND fencing_token = $2`,
+    [claim.runId, claim.fencingToken, leaseMs],
+  );
+  if ((renewed.rowCount ?? 0) === 0) throw new StaleLeaseError(claim.runId);
+  const policy = await loadRevisionPolicy(exec, claim.revisionId);
+  if (!policy?.allowed) throw new PolicyRevokedError(claim.runId, policy?.reason ?? 'источник не найден');
+};
+
+/** Сверка полной идентичности исполнителя с запуском. Несовпадение — ни одного вызова модели. */
+export const executionMismatch = (provider: IModelProvider, claim: IRunClaim): string | null => {
+  const actual = buildFingerprint(provider, claim.chunker);
+  return actual.fingerprint === claim.fingerprint
+    ? null
+    : `config_mismatch: запуск поставлен отпечатком ${claim.fingerprint.slice(0, 12)}…, исполнитель ${actual.fingerprint.slice(0, 12)}… (${provider.provider}/${provider.model})`;
 };
 
 /** Проверка, что lease всё ещё наш. Вызывается под FOR UPDATE внутри транзакции записи. */
@@ -199,7 +246,8 @@ const isTimeout = (err: unknown): boolean =>
 
 export interface IRunResult {
   runId: number;
-  status: 'completed' | 'partial' | 'failed';
+  /** blocked — исполнитель не той конфигурации, запуск возвращён в очередь; cancelled — ИИ-допуск перестал действовать. */
+  status: 'completed' | 'partial' | 'failed' | 'cancelled' | 'blocked';
   candidateSetId: number | null;
   coveredChars: number;
   totalChars: number;
@@ -211,7 +259,11 @@ export interface IProcessOptions {
   leaseMs?: number;
   /** Точка сбоя для интеграционных тестов: вызывается перед записью итога запуска. */
   beforeFinalize?: () => Promise<void>;
+  /** Как часто во время ответа модели перепроверять аренду и допуск (best-effort отмена). По умолчанию 5 с. */
+  watchMs?: number;
 }
+
+const DEFAULT_WATCH_MS = 5000;
 
 /** Выполнение захваченного запуска: чанки → модель → ответы → итог. */
 export const processRun = async (
@@ -228,6 +280,18 @@ export const processRun = async (
     )
   ).rows[0];
   if (!revision) throw new Error(`редакция ${claim.revisionId} не найдена`);
+
+  // Запуск модели A не выполняется моделью B и не получает её атрибуцию: вызовов нет, запуск возвращается в очередь.
+  const mismatch = executionMismatch(provider, claim);
+  if (mismatch) {
+    const released = await pool.query(
+      `UPDATE extraction_runs SET status = 'queued', lease_owner = NULL, lease_expires_at = NULL, error = $3
+       WHERE id = $1 AND status = 'running' AND fencing_token = $2`,
+      [claim.runId, claim.fencingToken, mismatch],
+    );
+    if (released.rowCount === 0) throw new StaleLeaseError(claim.runId);
+    return { runId: claim.runId, status: 'blocked', candidateSetId: null, coveredChars: 0, totalChars: Array.from(revision.body).length, relevant: null, error: mismatch };
+  }
 
   const plan = planCodePointChunks(
     revision.body,
@@ -264,8 +328,19 @@ export const processRun = async (
     return finalizeRun(claim, leaseMs, { forcedStatus: 'failed', error, totalChars, publishedAt: revision.published_at, options });
   }
 
+  let revoked: string | null = null;
   for (const chunk of chunks) {
     if (chunk.status === 'ok') continue; // повторный захват не спрашивает модель заново о готовом
+    // Перед каждым новым запросом: своя аренда и действующий ИИ-допуск. Отозван — дальше не отправляем ничего.
+    try {
+      await assertCanCallModel(pool, claim, leaseMs);
+    } catch (err) {
+      if (err instanceof PolicyRevokedError) {
+        revoked = err.reason;
+        break;
+      }
+      throw err;
+    }
     const text = plan[chunk.chunk_index]?.text ?? '';
     let outcome: ChunkOutcome;
     let payload: IExtraction | ISemanticExtraction | null = null;
@@ -278,8 +353,23 @@ export const processRun = async (
     };
 
     const startedAt = Date.now();
+    // Best-effort отмена ушедшего запроса: пока модель отвечает, аренда и допуск перепроверяются. Отмена не гарантирует,
+    // что текст не дошёл до модели, — она лишь прекращает ожидание и повторы.
+    const controller = new AbortController();
+    let watchFailure: unknown = null;
+    const watcher = setInterval(() => {
+      assertCanCallModel(pool, claim, leaseMs).catch(err => {
+        // Сбой самой проверки (база моргнула) запрос не отменяет; отменяют только потерянная аренда и отзыв допуска.
+        if (!(err instanceof StaleLeaseError) && !(err instanceof PolicyRevokedError)) return;
+        watchFailure = err;
+        controller.abort(err);
+      });
+    }, options.watchMs ?? DEFAULT_WATCH_MS);
     try {
-      const result = await provider.extract(text, revision.published_at);
+      const result = await provider.extract(text, revision.published_at, {
+        signal: controller.signal,
+        beforeAttempt: () => assertCanCallModel(pool, claim, leaseMs),
+      });
       usage = result.usage;
       if (result.ok && result.truncatedInput) {
         outcome = 'truncated_input';
@@ -294,10 +384,24 @@ export const processRun = async (
         error = result.message;
       }
     } catch (err) {
+      if (err instanceof StaleLeaseError) throw err;
+      if (err instanceof PolicyRevokedError) {
+        // Попытка не сделана (повтор внутри клиента остановлен до отправки).
+        revoked = err.reason;
+        break;
+      }
       outcome = isTimeout(err) ? 'timeout' : 'llm_error';
       error = err instanceof Error ? err.message : String(err);
       usage = { tokensIn: null, tokensOut: null, latencyMs: Date.now() - startedAt };
+    } finally {
+      clearInterval(watcher);
     }
+    if (watchFailure instanceof StaleLeaseError) throw watchFailure;
+
+    // Ответ пришёл после отзыва допуска: сохраняется как ответ этой попытки (история запуска),
+    // но запуск не завершается набором кандидатов и дальше не отправляет ничего.
+    const after = await loadRevisionPolicy(pool, claim.revisionId);
+    if (!after?.allowed) revoked = after?.reason ?? 'источник не найден';
 
     await withTransaction(async client => {
       await lockOwnedRun(client, claim, leaseMs);
@@ -333,8 +437,12 @@ export const processRun = async (
         error,
       ]);
     });
+    if (revoked) break;
   }
 
+  if (revoked) {
+    return finalizeRun(claim, leaseMs, { forcedStatus: 'cancelled', error: `policy_revoked: ${revoked}`, totalChars, publishedAt: revision.published_at, options });
+  }
   return finalizeRun(claim, leaseMs, { forcedStatus: null, error: null, totalChars, publishedAt: revision.published_at, options });
 };
 
@@ -369,7 +477,7 @@ const finalizeRun = async (
   claim: IRunClaim,
   leaseMs: number,
   input: {
-    forcedStatus: 'failed' | null;
+    forcedStatus: 'failed' | 'cancelled' | null;
     error: string | null;
     totalChars: number;
     publishedAt: Date | null;
@@ -399,8 +507,13 @@ const finalizeRun = async (
 
     let status: IRunResult['status'];
     let error = input.error;
+    // Допуск проверяется и в момент итога: отозванный между последним ответом и итогом — не completed, набора нет.
+    const policy = input.forcedStatus ? null : await loadRevisionPolicy(client, claim.revisionId);
     if (input.forcedStatus) {
       status = input.forcedStatus;
+    } else if (!policy?.allowed) {
+      status = 'cancelled';
+      error = `policy_revoked: ${policy?.reason ?? 'источник не найден'}`;
     } else if (okChunks.length === chunks.length && coverage.complete) {
       status = 'completed';
     } else {
@@ -475,19 +588,34 @@ const finalizeRun = async (
   });
 };
 
-/** Повтор провалившегося или частичного запуска — новым запуском; прежний остаётся как был. */
+/**
+ * Повтор провалившегося, частичного или отменённого запуска — новым запуском со ссылкой на прежний; прежний не меняется.
+ * Поставленный, но не начатый запуск другой конфигурации (в т. ч. historical, до этапа 11) заменяется: прежний
+ * помечается cancelled с причиной, новый ставится текущей конфигурацией. Ответы прежних чанков в новый запуск не переносятся.
+ * Отзыв допуска проверяет enqueueRun: при отозванном допуске повтор не ставится.
+ */
 export const retryRun = async (runId: number, provider: IModelProvider, requestedBy: string): Promise<EnqueueResult> => {
   const run = (
-    await getPool().query<{ revision_id: number; status: string; fingerprint_json: { chunker: IChunkerParams } }>(
-      'SELECT revision_id, status, fingerprint_json FROM extraction_runs WHERE id = $1',
+    await getPool().query<{ revision_id: number; status: string; fingerprint: string; fingerprint_json: { chunker: IChunkerParams } }>(
+      'SELECT revision_id, status, fingerprint, fingerprint_json FROM extraction_runs WHERE id = $1',
       [runId],
     )
   ).rows[0];
-  if (!run || !['failed', 'partial', 'cancelled'].includes(run.status)) return { outcome: 'not_found' };
-  return enqueueRun(getPool(), {
-    revisionId: run.revision_id,
-    provider,
-    chunker: run.fingerprint_json.chunker,
-    requestedBy,
+  if (!run) return { outcome: 'not_found' };
+  const chunker = run.fingerprint_json.chunker ?? defaultChunkerParams();
+  const staleQueued = run.status === 'queued' && buildFingerprint(provider, chunker).fingerprint !== run.fingerprint;
+  if (!['failed', 'partial', 'cancelled'].includes(run.status) && !staleQueued) return { outcome: 'not_found' };
+
+  return withTransaction(async client => {
+    const result = await enqueueRun(client, { revisionId: run.revision_id, provider, chunker, requestedBy, previousRunId: runId });
+    if (staleQueued && result.outcome === 'queued') {
+      await client.query(
+        `UPDATE extraction_runs SET status = 'cancelled', finished_at = now(),
+                error = 'config_mismatch: заменён запуском #' || $2::text || ' текущей конфигурации'
+         WHERE id = $1 AND status = 'queued'`,
+        [runId, result.runId],
+      );
+    }
+    return result;
   });
 };

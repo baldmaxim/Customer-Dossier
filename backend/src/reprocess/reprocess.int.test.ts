@@ -661,3 +661,138 @@ describe('повторная публикация новой редакции', 
     expect(roles.rowCount).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('этап 11: идентичность исполнения, допуск перед каждым вызовом, аренда', () => {
+  const small: IChunkerParams = { chunkSize: 200, maxChunks: 20, overlap: 20 };
+  const body = (tag: string): string => Array.from({ length: 4 }, (_, i) => `Часть ${i} ${tag}: ${'новости стройки '.repeat(5)}`).join('\n');
+  const irrelevant = () => ok(extraction({ doc_relevant: false }));
+  const runRow = async (runId: number) =>
+    (await pool().query<{ status: string; error: string | null; fingerprint: string; previous_run_id: number | null }>(
+      'SELECT status, error, fingerprint, previous_run_id FROM extraction_runs WHERE id = $1',
+      [runId],
+    )).rows[0]!;
+  const setsOf = async (runId: number) => (await pool().query('SELECT 1 FROM candidate_sets WHERE run_id = $1', [runId])).rowCount;
+
+  it('T11-01: запуск модели A у исполнителя B — ноль вызовов, blocked, запуск остаётся в очереди; A выполняет', async () => {
+    const item = await store(sourceMain, body('a-b'));
+    const a = fakeProvider(irrelevant, 'stage11-model-a');
+    const b = fakeProvider(irrelevant, 'stage11-model-b');
+    const runId = await enqueue(item.revisionId, a, small);
+    const fingerprint = (await runRow(runId)).fingerprint;
+
+    expect(await claimNextRun('worker-b', { runId, provider: b })).toBeNull();
+    const manual = await claimNextRun('manual', { runId });
+    const blocked = await processRun(b, manual!);
+    expect(blocked.status).toBe('blocked');
+    expect(b.calls).toHaveLength(0);
+    expect(await runRow(runId)).toMatchObject({ status: 'queued', fingerprint, error: expect.stringMatching(/^config_mismatch/) });
+
+    const byA = await claimNextRun('worker-a', { runId, provider: a });
+    expect(byA).not.toBeNull();
+    expect((await processRun(a, byA!)).status).toBe('completed');
+    expect(a.calls.length).toBeGreaterThan(1);
+  });
+
+  it('T11-02: частичный запуск A не продолжается моделью B — новый запуск со ссылкой, ответы A не переиспользуются', async () => {
+    const item = await store(sourceMain, `${body('resume')}\nХВОСТ-stage11 ${'конец '.repeat(10)}`);
+    const a = fakeProvider(text => (text.includes('ХВОСТ-stage11') ? { ok: false, failure: 'invalid_json', message: 'обрыв', usage: { tokensIn: 1, tokensOut: 1, latencyMs: 1 }, rawResponse: '{' } : irrelevant()), 'stage11-resume-a');
+    const b = fakeProvider(irrelevant, 'stage11-resume-b');
+    const partial = await execute(await enqueue(item.revisionId, a, small), a);
+    expect(partial.status).toBe('partial');
+
+    const retry = await retryRun(partial.runId, b, 'test');
+    expect(retry.outcome).toBe('queued');
+    const nextId = (retry as { runId: number }).runId;
+    expect(await runRow(nextId)).toMatchObject({ status: 'queued', previous_run_id: partial.runId });
+    expect((await runRow(partial.runId)).status).toBe('partial');
+
+    const done = await execute(nextId, b);
+    expect(done.status).toBe('completed');
+    const chunks = (await pool().query<{ n: number }>('SELECT count(*)::int AS n FROM extraction_chunks WHERE run_id = $1', [nextId])).rows[0]!.n;
+    expect(b.calls).toHaveLength(chunks);
+  });
+
+  it('поставленный прежней конфигурацией и не начатый запуск заменяется новым, а не исполняется', async () => {
+    const item = await store(sourceMain, body('stale-queued'));
+    const a = fakeProvider(irrelevant, 'stage11-old-config');
+    const b = fakeProvider(irrelevant, 'stage11-new-config');
+    const oldId = await enqueue(item.revisionId, a, small);
+    const retry = await retryRun(oldId, b, 'test');
+    expect(retry.outcome).toBe('queued');
+    expect(await runRow(oldId)).toMatchObject({ status: 'cancelled', error: expect.stringMatching(/^config_mismatch/) });
+    expect((await runRow((retry as { runId: number }).runId)).previous_run_id).toBe(oldId);
+    expect(a.calls).toHaveLength(0);
+  });
+
+  it('T11-03: ИИ-допуск отозван после первого из нескольких чанков — следующий не отправлен, cancelled, набора нет; повтор не ставится', async () => {
+    const src = await insertSyntheticSource({ kind: 'telegram', key: 'stage11_revoke_between', access: 'approved', ai: 'approved' });
+    const item = await store(src, body('revoke-between'));
+    const provider = fakeProvider(async (_text, call) => {
+      if (call === 1) await pool().query(`UPDATE sources SET ai_processing_status = 'revoked' WHERE id = $1`, [src]);
+      return irrelevant();
+    });
+    const runId = await enqueue(item.revisionId, provider, small);
+    const result = await processRun(provider, (await claimNextRun('w-revoke', { runId }))!);
+    expect(provider.calls).toHaveLength(1);
+    expect(result.status).toBe('cancelled');
+    expect(result.error).toMatch(/^policy_revoked/);
+    expect(await setsOf(runId)).toBe(0);
+    expect((await retryRun(runId, provider, 'test')).outcome).toBe('refused_policy');
+  });
+
+  it('T11-04: допуск истёк между захватом и вызовом — вызовов нет; сбор разрешён, ИИ неизвестен — запуск не ставится', async () => {
+    const src = await insertSyntheticSource({ kind: 'telegram', key: 'stage11_expired', access: 'approved', ai: 'approved' });
+    const item = await store(src, body('expired'));
+    const provider = fakeProvider(irrelevant);
+    const runId = await enqueue(item.revisionId, provider, small);
+    const claim = await claimNextRun('w-expired', { runId });
+    await pool().query(`UPDATE sources SET policy_expires_at = now() - interval '1 minute' WHERE id = $1`, [src]);
+    const result = await processRun(provider, claim!);
+    expect(provider.calls).toHaveLength(0);
+    expect(result.status).toBe('cancelled');
+
+    const collectOnly = await insertSyntheticSource({ kind: 'telegram', key: 'stage11_collect_only', access: 'approved', ai: 'unknown' });
+    const other = await store(collectOnly, body('collect-only'));
+    expect((await enqueueRun(pool(), { revisionId: other.revisionId, provider, chunker: small, requestedBy: 'test' })).outcome).toBe('refused_policy');
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it('T11-05: ответ пришёл после отзыва — сохранён как ответ попытки, но не становится набором; канон и решения не меняются', async () => {
+    const src = await insertSyntheticSource({ kind: 'telegram', key: 'stage11_inflight', access: 'approved', ai: 'approved' });
+    const item = await store(src, `Новости. ${Q_ROLE}. Кроме того, ${Q_COURT_1}.`);
+    const provider = fakeProvider(async () => {
+      await pool().query(`UPDATE sources SET ai_processing_status = 'revoked' WHERE id = $1`, [src]);
+      return ok(fullAnswer);
+    });
+    const runId = await enqueue(item.revisionId, provider);
+    const before = await counts();
+    const result = await processRun(provider, (await claimNextRun('w-inflight', { runId }))!);
+    expect(result.status).toBe('cancelled');
+    expect(await setsOf(runId)).toBe(0);
+    const after = await counts();
+    expect({ ...after, responses: 0 }).toEqual({ ...before, responses: 0 });
+    expect(after.responses).toBe(before.responses + 1);
+    expect((await publicationOf(item.sourceItemId)).active_set_id).toBeNull();
+  });
+
+  it('T11-08: аренда перехвачена после первого чанка — второй вызов не делается, запись отвергнута', async () => {
+    const item = await store(sourceMain, body('lease-lost'));
+    let runId = 0;
+    const provider = fakeProvider(async (_text, call) => {
+      if (call === 1) await pool().query('UPDATE extraction_runs SET fencing_token = fencing_token + 1 WHERE id = $1', [runId]);
+      return irrelevant();
+    });
+    runId = await enqueue(item.revisionId, provider, small);
+    const claim = await claimNextRun('w-lease', { runId });
+    await expect(processRun(provider, claim!)).rejects.toBeInstanceOf(StaleLeaseError);
+    expect(provider.calls).toHaveLength(1);
+    const written = await pool().query(
+      `SELECT 1 FROM extraction_chunk_responses resp JOIN extraction_chunks c ON c.id = resp.chunk_id WHERE c.run_id = $1 AND resp.fencing_token = $2`,
+      [runId, claim!.fencingToken],
+    );
+    expect(written.rowCount).toBe(0);
+    expect(await setsOf(runId)).toBe(0);
+  });
+});

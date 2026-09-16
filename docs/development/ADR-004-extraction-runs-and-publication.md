@@ -81,3 +81,37 @@ worker'а и поздний старый разбор не различалис�
 Остановить writer: `PIPELINE_ENABLED=false`, `REPROCESS_AUTO_PUBLISH=false`. Карточки продолжают читать
 последний опубликованный набор. Вернуть прежний набор — `--publish <старый набор> --allow-stale` (отдельное
 решение оператора). Не возвращать `clearDocumentContribution`, не удалять строки 013.
+
+## Дополнение этапа 11 (2026-09-16): неизменная конфигурация исполнения и допуск перед каждым вызовом
+
+Миграция 021 (additive): `extraction_runs.previous_run_id`, индекс очереди по `fingerprint_json->>'modelIdentityHash'`.
+
+**EXECUTION_IDENTITY (`execution-identity@1`, `reprocess/provider.ts`).** `fingerprint_json` = идентичность модели
+(`identityVersion`, `promptVersion`, `promptHash`, `systemMessageHash` — эффективное системное сообщение с `/no_think`,
+`userTemplateHash`, `schemaVersion`/`schemaHash`, `provider`, `model`, `params`, `retryPolicy`, `candidateBuildVersion`,
+`serverReported` — не сообщённое сервером `unknown`) + `modelIdentityHash` + нарезка (`chunker` с версией).
+`fingerprint` = sha256 всего. Адрес модели и секреты не входят. `CANDIDATE_BUILD_VERSION` меняется вручную при смысловой
+правке сборки/проверки кандидатов.
+
+**Контракт исполнения.**
+- Worker захватывает только запуски своего `modelIdentityHash` (`claimNextRun(owner, { provider })`).
+- `processRun` до первого вызова сверяет полный отпечаток исполнителя с запуском. Несовпадение — ноль вызовов, результат
+  `blocked`, запуск возвращается в `queued` с `error = config_mismatch…`; `fingerprint` и прежние ответы не переписываются.
+- Смена конфигурации — только новый запуск (`retryRun`): для `failed/partial/cancelled` и для не начатого `queued` другой
+  конфигурации (прежний → `cancelled`); `previous_run_id` указывает на прежний; ответы прежних чанков не переносятся.
+- Перед каждым вызовом и каждой попыткой внутри клиента (`beforeAttempt`): аренда наша — продлевается (heartbeat), иначе
+  `StaleLeaseError`; ИИ-допуск источника действует сейчас, иначе дальше ничего не отправляется и запуск `cancelled`
+  (`policy_revoked`). Во время ответа модели аренда и допуск перепроверяются (по умолчанию каждые 5 с) — при потере
+  запрос отменяется best-effort: текст мог уже дойти до модели, отмена этого не отменяет.
+- Ответ, пришедший после отзыва, записывается как ответ попытки (история запуска, append-only), но запуск не получает
+  набора кандидатов. Допуск проверяется и в момент итога. Публикация по-прежнему проверяет допуск отдельно.
+- Транзакции и блокировки на время inference не держатся.
+
+**Старые запуски.** Запуски до этапа 11 — `historical` (`isHistoricalIdentity`): неполная идентичность не реконструируется.
+Новые исполнители их не захватывают; `pipeline:once -- --retry` ставит вместо не начатых новые запуски текущей конфигурации.
+
+**Переходы.** `queued → running → completed | partial | failed | cancelled`; `running → queued` (blocked, config_mismatch);
+`running → StaleLeaseError` (продолжает новый держатель); повтор — новый запуск с `previous_run_id`.
+
+**Откат.** Код: `git revert`; колонка 021 остаётся и не мешает прежнему коду. Прежний код захватывал бы запуски без
+сверки конфигурации — не рекомендуется.
