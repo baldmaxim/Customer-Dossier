@@ -4,6 +4,7 @@
 // Запуск: npm run migrate -- --dry                 — план без единой записи в БД
 //         npm run migrate                          — применить (кроме destructive)
 //         npm run migrate -- --allow-destructive   — применить, включая destructive
+//         npm run migrate -- --upto 9              — только до указанного номера (синтетическая legacy-база, этап 09)
 //
 // Повторный запуск ничего не делает: уже применённые файлы пропускаются.
 // Применённые файлы не переписываются: история схемы неизменна.
@@ -88,6 +89,12 @@ export class DestructiveMigrationError extends Error {
 export interface IRunMigrationsOptions {
   dryRun?: boolean;
   allowDestructive?: boolean;
+  /**
+   * Применить только миграции с номером не выше указанного (например 9 — состояние до этапа 01).
+   * Нужно, чтобы собрать синтетическую legacy-базу и проверить на ней апгрейд (этап 09).
+   * На рабочей базе смысла не имеет: частично накаченная схема — не поддерживаемое состояние.
+   */
+  upto?: number;
   pool?: Pool;
   dir?: string;
   log?: (line: string) => void;
@@ -98,7 +105,15 @@ export const runMigrations = async (options: IRunMigrationsOptions = {}): Promis
   const dir = options.dir ?? MIGRATIONS_DIR;
   const log = options.log ?? ((line: string) => console.log(line));
 
-  const plan = await planMigrations(pool, dir);
+  const full = await planMigrations(pool, dir);
+  const plan: IMigrationPlan =
+    options.upto === undefined
+      ? full
+      : {
+          ...full,
+          pending: full.pending.filter(f => Number.parseInt(f.slice(0, 3), 10) <= options.upto!),
+          destructivePending: full.destructivePending.filter(d => Number.parseInt(d.filename.slice(0, 3), 10) <= options.upto!),
+        };
 
   if (plan.pending.length === 0) {
     log(`[migrate] нечего применять, все ${plan.applied.length} миграций уже накачены`);
@@ -155,9 +170,11 @@ export const runMigrations = async (options: IRunMigrationsOptions = {}): Promis
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (isDirectRun) {
+  const uptoArg = process.argv.indexOf('--upto');
   runMigrations({
     dryRun: process.argv.includes('--dry'),
     allowDestructive: process.argv.includes('--allow-destructive'),
+    ...(uptoArg >= 0 ? { upto: Number.parseInt(process.argv[uptoArg + 1] ?? '', 10) } : {}),
   })
     .then(() => closeDb())
     .then(() => process.exit(0))

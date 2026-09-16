@@ -26,7 +26,10 @@
     "seed:test-reprocess": "tsx src/__tests__/integration/seedReprocessDemo.ts",
     "seed:test-semantic": "tsx src/__tests__/integration/seedSemanticDemo.ts",
     "seed:test-dossier": "tsx src/__tests__/integration/seedDossierDemo.ts",
-    "benchmark:model": "tsx src/reprocess/semantic/benchmark.ts"
+    "benchmark:model": "tsx src/reprocess/semantic/benchmark.ts",
+    "release:check": "tsx src/release/cli.ts",
+    "release:bench": "tsx src/release/cli.ts --bench-run",
+    "seed:test-release": "tsx src/__tests__/integration/seedReleaseDemo.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

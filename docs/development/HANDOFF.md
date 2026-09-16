@@ -4,7 +4,7 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). Следующий — 09.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). 09 — реализован, ждёт прогона пользователя (A, N): это последний этап пакета.
 Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
@@ -48,6 +48,9 @@ Docker и проверки с базой агент не запускает: п�
   при выдаче, вымарывание, выгрузки MD/JSON/HTML); API `/graph`, `/cases/:id/snapshots`, `/snapshots/:id`, `/snapshots/:id/export.:format`,
   `/snapshots/:id/redactions`; флаг `GRAPH_EXPORT_ENABLED`; `GraphPanel` (SVG без библиотеки, таблица), `SnapshotsPanel`, `SnapshotPage` (ADR-011).
   Следующая миграция — 021.
+- 09: сквозная приёмка без новых миграций — `backend/src/release/*` (контрольные числа и связность, замеры,
+  CLI `release:check` / `release:bench`), `--upto` у раннера миграций, seed `seed:test-release`,
+  сквозной тест `release/release.int.test.ts`; `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, BACKLOG с severity.
 
 ## Принятые решения
 ADR-001…ADR-011. Offsets — code points. Решения аналитика append-only и не удаляются переразбором.
@@ -55,7 +58,7 @@ ADR-001…ADR-011. Offsets — code points. Решения аналитика ap
 Legacy apply и `clearDocumentContribution` не возвращать. Слияние — только `resolve/entityMerge.ts`; новая ссылка на компанию/объект → в перенос и `dependencyState`.
 
 ## Что проверено (среда агента)
-typecheck/build backend и frontend, unit 29 файлов / 421 тест — PASS.
+typecheck/build backend и frontend, unit 29 файлов / 421 тест — PASS; аудит: старт без сбора, допуск без обходов, в бандле нет секретов.
 
 ## Что НЕ проверено
 Живые сайты и каналы, живой бот (допуска и токена нет); печать снимка в PDF; качество Qwen3-8B на extract@3;  реальный LLM-smoke; визуальные проверки 390 px.
@@ -68,13 +71,13 @@ typecheck/build backend и frontend, unit 29 файлов / 421 тест — PAS
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Этап `stages/STAGE_09_LOCAL_RELEASE.md`: читать COMMON_RULES, ADR-001…ADR-011, `TESTING_LOCAL.md`,
-`backend/src/db/migrate.ts`, миграции 001–020, `package.json` обоих пакетов, `frontend/vite.config.ts`.
+Прогон пользователя 09 (TESTING_LOCAL A1–A5, N), затем пакет этапов закрыт: дальнейшие работы — из `BACKLOG.md`
+и `RELEASE_READINESS.md` (условия смены статусов), новые большие функции — отдельным решением.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/08B_REPORT.md`, ADR-011,
+`prompts/Customer_Dossier_Prompts/COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, ADR-011,
 `TESTING_LOCAL.md`; ключевые файлы: `backend/src/snapshot/*.ts`, `backend/src/graph/*.ts`, `docs/migrations/020_dossier_snapshots.sql`, `frontend/src/pages/SnapshotPage.tsx`.

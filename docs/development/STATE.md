@@ -1,6 +1,6 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-15 (+02:00). Текущий этап: **08B**. Статус: **PASS (core-gates)** (прогон пользователя, evidence/08B/USER_RUN.md; PRINT_PDF=NOT_RUN); следующий — 09. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Обновлено: 2026-09-15 (+02:00). Текущий этап: **09**. Статус: **IMPLEMENTED, ожидает прогона пользователя** (TESTING_LOCAL A, N); 08B — PASS (core-gates). LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 08B (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
@@ -13,7 +13,7 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/08B_REPORT.md` (00–08A — там же). Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/09_REPORT.md` (00–08B — там же). Эксплуатация: `LOCAL_RUNBOOK.md`, готовность: `RELEASE_READINESS.md`. Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
 ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота), ADR-008 (смысл связей, время, события), ADR-009 (объяснимые сигналы), ADR-010 (обращения и рабочее досье), ADR-011 (схема связей, снимки, выгрузки).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
@@ -26,7 +26,7 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: нет. LOCAL_MODEL_VALIDATED: не проверено. LIVE_SOURCE_VALIDATED: нет (approved-сайтов и каналов нет, токен бота не задавался агентом). Production: не входит.
+LOCAL_FIXTURE_READY: ожидает прогона пользователя (код, unit и сборка — PASS). LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
 
 ## Неразрешённые действия
 
@@ -36,4 +36,4 @@ Commit/push в `dossier-stages` — разрешены пользователе�
 
 ## Что осталось и следующая безопасная операция
 
-`stages/STAGE_09_LOCAL_RELEASE.md`. Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
+Прогон пользователя 09 (TESTING_LOCAL A1–A5, N). Пакет этапов после этого закрыт. Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
