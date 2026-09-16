@@ -94,7 +94,7 @@ export const INTEGRITY_CHECKS: Array<{ code: string; description: string; sql: s
   // компании ещё есть активные основания (перенос не завершён).
   {
     code: 'assertion_company_merged',
-    description: 'утверждение со активными основаниями ссылается на слитую компанию',
+    description: 'утверждение с активными основаниями ссылается на слитую компанию',
     sql: `SELECT count(*)::int AS n FROM assertions a
           JOIN companies c ON c.id = a.subject_company_id
           WHERE c.merged_into_id IS NOT NULL

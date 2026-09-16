@@ -1,6 +1,6 @@
 # Проверка у себя — пошагово
 
-Все команды — из корня `TG_Info`, ветка `dossier-stages`. Для PowerShell и bash даны оба варианта там,
+Все команды — из корня `TG_Info`, ветка `main`. Для PowerShell и bash даны оба варианта там,
 где они различаются. Рабочая база, `.env` и живые источники не используются.
 
 **Все этапы пакета пройдены** (09 — PASS по core-gates). Разделы B–N — проверки этапов 01–09; для
@@ -21,7 +21,7 @@ LM Studio не нужен: модель в тестах и seed подменен
 Перед `npm ci` остановите прежние `npm run dev` (иначе `EPERM` на `esbuild.exe`).
 
 ```bash
-git fetch origin && git switch dossier-stages && git pull
+git fetch origin && git switch main && git pull
 cd backend && npm ci && cd ..
 cd frontend && npm ci && cd ..
 ```

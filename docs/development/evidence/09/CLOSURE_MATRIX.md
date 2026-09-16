@@ -77,11 +77,22 @@
 
 Найдено и исправлено в прогоне: `assertion_company_merged` считал исторические утверждения на tombstone после
 слияния (ложная связность после merge→review). Правка: только утверждения с **активными** основаниями —
-`backend/src/release/inventory.ts` (незакоммичено на момент конца прогона). Первый B2: 1 failed / 210; после фикса:
+`backend/src/release/inventory.ts` (коммит `c289cb1`). Первый B2: 1 failed / 210; после фикса:
 19 / 210 exit 0.
 
-Открытые оговорки: fingerprint ≠ `closure/tree-final.json`; `release:probe` — нестабильный sha256 у `export_json` при
-неизменном hash снимка; визуал браузера (PDF, 390 px, Cache Storage) — NOT_RUN.
+Разбор оговорок (агент, после прогона):
+
+- **`export_json` sha плавает — не дефект снимка.** JSON-выгрузка содержит `availability.checkedAt` — время проверки
+  текущего допуска при выдаче (`snapshot/availability.ts`), оно новое на каждый запрос. HTML и MD его не содержат и совпали;
+  hash и payload снимка стабильны. `release:probe` исправлен: `export_json` сравнивается без `availability.checkedAt`.
+  D1/E6 → PASS по содержанию; повторная проба новой версией желательна, но не обязательна.
+- **fingerprint ≠ `tree-final.json`.** Две причины: правка `inventory.ts` во время прогона и `tree-fingerprint@1`, который
+  хешировал сырые байты — при `core.autocrlf=true` у вас рабочее дерево в CRLF, у агента файлы в LF. `tree-fingerprint@2`
+  хеширует git blob с нормализацией окончаний строк (проверено: CRLF и LF дают один blob). Код прогона = `10d83d9` +
+  правка `inventory.ts` из `c289cb1`, это подтверждается коммитом, а не отпечатком.
+- Визуал браузера (печать в PDF, 390 px, Cache Storage) — NOT_RUN, UI_USER; сборка проверена статически (`check:build`).
+
+Сырые логи лежат на машине пользователя; агент принимает gates по присланной сводке `RESULTS.md`.
 
 ## Прогоны агента на текущем коде
 

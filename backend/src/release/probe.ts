@@ -79,9 +79,16 @@ const main = async (): Promise<void> => {
     const body = JSON.parse(text) as { payload: unknown; integrity: { verified: boolean; storedHash: string } };
     return { sha256: payloadHash(body.payload), note: `integrity.verified=${body.integrity.verified}, storedHash=${body.integrity.storedHash}` };
   });
-  for (const format of ['html', 'md', 'json']) {
+  for (const format of ['html', 'md']) {
     await get(`export_${format}`, `/api/snapshots/${snapshotId}/export.${format}`, text => ({ sha256: sha256(text), note: `байт ${Buffer.byteLength(text)}` }));
   }
+  // JSON-выгрузка несёт availability.checkedAt — время проверки допуска при выдаче, оно законно меняется на каждый запрос.
+  // Сравнивается всё остальное: снимок, payload, решения о доступности источников.
+  await get('export_json', `/api/snapshots/${snapshotId}/export.json`, text => {
+    const body = JSON.parse(text) as { availability?: Record<string, unknown> };
+    const { checkedAt: _c, ...availability } = body.availability ?? {};
+    return { sha256: payloadHash({ ...body, availability }), note: `байт ${Buffer.byteLength(text)}, без availability.checkedAt` };
+  });
   if (caseId !== null) {
     // Живое досье строится при открытии (generatedAt меняется) — сравнивается без времени построения.
     await get('case_dossier', `/api/cases/${caseId}/dossier`, text => {

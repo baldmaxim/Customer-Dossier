@@ -1,13 +1,13 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-16 (+02:00). Текущий этап: **09 — закрытие приёмки (корректировка)**. Исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Корректировка: **CODE_READY — подготовлено к пользовательской приёмке; пользовательские проверки NOT_RUN** (evidence/09/USER_RUN_CLOSURE.md, CLOSURE_MATRIX.md). Этап 10 не открыт. Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Обновлено: 2026-09-16 (+02:00). Текущий этап: **09 — закрытие приёмки (корректировка)**. Исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Закрытие приёмки по усиленным условиям: **PASS (core-gates)** — прогон пользователя 2026-09-16 (`evidence/09/USER_RUN_CLOSURE.md`, `CLOSURE_MATRIX.md`); печать в PDF, 390 px и Cache Storage — NOT_RUN. Этап 10 не открыт. Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 09 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`, `09`).
-Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя. Для закрытия приёмки 09 commit/push не выполнялись (запрет задания) — правки не закоммичены.
+Порядок работы: после этапа — отчёт, commit, push в `main`; проверки с Docker — пауза и прогон пользователя.
 
 ## Фактическая среда
 
 OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, npm 11.11.0 (у пользователя Node v24.13.0).
-Ветка: `dossier-stages` (origin). Test target: `127.0.0.1:55433/tg_info_test` с маркером — поднимает пользователь
+Ветка: `main` (origin; `dossier-stages` влита fast-forward и удалена 2026-09-16). Test target: `127.0.0.1:55433/tg_info_test` с маркером — поднимает пользователь
 (`backend/test-db/docker-compose.yml` или запасной `docker run`, `docs/development/TESTING_LOCAL.md`). В среде агента Docker не используется.
 Рабочая БД не изменялась; не идентифицирована. Модель runtime: не проверялась.
 
@@ -26,14 +26,14 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: да по историческим core-gates 09; по усиленным условиям закрытия приёмки — NOT_RUN. LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
+LOCAL_FIXTURE_READY: да (core-gates по усиленным условиям закрытия приёмки, 2026-09-16). LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
 
 ## Неразрешённые действия
 
 Запись в рабочую БД (миграции 010–020, пересчёт сигналов, backfill, переразбор, публикация, слияние); массовый reextract/renormalize/merge;
 включение источников; изменение `.env`; облачное размещение — без отдельного согласования.
-Commit/push в `dossier-stages` — разрешены пользователем.
+Commit/push в `main` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-**Следующее действие пользователя:** прогнать `docs/development/evidence/09/USER_RUN_CLOSURE.md` (G01, A–G) на текущем коде и прислать папку логов. Затем агент принимает gates по содержанию логов и обновляет матрицу. Решение о commit правок закрытия — за пользователем. После приёмки — пакет `prompts/TG_Info_Next_Stages_2026-09-16/` с этапа 10 (по одному этапу). Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
+**Следующее действие:** этап 10 пакета `prompts/TG_Info_Next_Stages_2026-09-16/` — по решению пользователя, по одному этапу. По желанию: повторить `release:probe` новой версией (JSON без `availability.checkedAt`) и визуальный проход (PDF, 390 px, Cache Storage). Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).

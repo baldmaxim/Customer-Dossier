@@ -229,8 +229,12 @@ Frontend: `scripts/check-build.mjs` (новый), `package.json` (`check:build`)
 | G | cleanup ок |
 
 Дефект прогона (D9): `assertion_company_merged` ломал TC-075 после merge→review — считал историю на tombstone.
-Исправление в `backend/src/release/inventory.ts` (только утверждения с активными `evidence`). Не закоммичено
-в этом ответе — нужно решение оператора.
+Исправление в `backend/src/release/inventory.ts` (только утверждения с активными `evidence`) — коммит `c289cb1`.
 
-Статус этапа после прогона: **PASS с оговорками** (fingerprint, `export_json`, визуал браузера). Этап 10 по-прежнему
-не открывался автоматически.
+Разбор оговорок (агент): дрейф `export_json` — поле `availability.checkedAt` (время выдачи), снимок не меняется; `release:probe`
+теперь сравнивает JSON без него. Расхождение отпечатка — правка inventory и CRLF рабочего дерева; `tree-fingerprint@2`
+нормализует окончания строк.
+
+Статус этапа после прогона: **PASS (core-gates) по усиленным условиям**; печать в PDF, 390 px и Cache Storage в браузере —
+NOT_RUN (не блокируют, как и в историческом 09). Сырые логи на машине пользователя, агент принял по сводке.
+Этап 10 не открывался.

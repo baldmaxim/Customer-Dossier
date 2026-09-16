@@ -2,7 +2,7 @@
 //
 //   npm run release:fingerprint [-- --out tree.json]
 //
-// HEAD + sha256 по содержимому всех отслеживаемых и неигнорируемых неотслеживаемых файлов рабочего дерева
+// HEAD + sha256 по git blob (окончания строк нормализованы) всех отслеживаемых и неигнорируемых неотслеживаемых файлов рабочего дерева
 // (то есть с незакоммиченными правками). Исключены: .env*, backend/.local, архивы *.zip, node_modules, dist,
 // а также отчёты и логи docs/development/ и пакеты промтов prompts/ — иначе запись лога меняла бы отпечаток кода,
 // к которому лог относится. Миграции docs/migrations входят в отпечаток.
@@ -29,20 +29,24 @@ const main = (): void => {
     .filter(Boolean)
     .filter(f => !isExcluded(f))
     .sort();
-  const hash = createHash('sha256');
-  let hashed = 0;
-  for (const file of files) {
+  // Удалённые в рабочем дереве файлы пропускаются.
+  const present = files.filter(file => {
     const full = path.join(ROOT, file);
-    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue; // удалённый в рабочем дереве файл
-    hash.update(`${file}\0`);
-    hash.update(fs.readFileSync(full));
-    hash.update('\0');
-    hashed += 1;
-  }
+    return fs.existsSync(full) && fs.statSync(full).isFile();
+  });
+  // Содержимое берётся как git blob с нормализацией окончаний строк (core.autocrlf/.gitattributes):
+  // одинаковый код на машинах с CRLF и LF в рабочем дереве даёт одинаковый отпечаток (@1 хешировал сырые байты).
+  const blobs = execFileSync('git', ['hash-object', '--stdin-paths'], { cwd: ROOT, input: present.join('\n'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    .trim()
+    .split('\n');
+  if (blobs.length !== present.length) throw new Error('git hash-object вернул не все файлы');
+  const hash = createHash('sha256');
+  present.forEach((file, i) => hash.update(`${file}\0${blobs[i]}\n`));
+  const hashed = present.length;
   const status = git(['status', '--porcelain=v1', '-z']).split('\0').filter(Boolean);
   const dirty = status.map(s => s.slice(3)).filter(f => f && !isExcluded(f));
   const report = {
-    version: 'tree-fingerprint@1',
+    version: 'tree-fingerprint@2',
     takenAt: new Date().toISOString(),
     head,
     dirtyPaths: dirty.length,

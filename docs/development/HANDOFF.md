@@ -4,11 +4,11 @@
 Локальный портал доказательного досье строительных компаний и обращений (рынок РФ). Код — `TG_Info`. План — `prompts/Customer_Dossier_Prompts/` (00–09).
 
 ## Текущее состояние
-Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). 09 — PASS по core-gates (интеграция 18 файлов / 196, N1–N8, копия восстановлена и совпала по количествам; печать в PDF NOT_RUN). **Закрытие приёмки 09 (2026-09-16): CODE_READY, пользовательские проверки NOT_RUN**, правки не закоммичены. Следующий пакет — prompts/TG_Info_Next_Stages_2026-09-16/ (этапы 10–19), не начат.
-Ветка `dossier-stages`. Проверить при открытии: `git log --oneline -5`, `git status`.
+Этапы 02–06 — PASS по core-gates. Замер qwen3-8b на extract@3: safety 24/25, recall 3/9 — переразбор рабочей базы не начинать. 07 — PASS. 08A — PASS по core-gates (интеграция 16 файлов / 173, L через API; визуальный проход NOT_RUN). 08B — PASS по core-gates (интеграция 17 файлов / 182, M1–M6; печать в PDF NOT_RUN). 09 — PASS по core-gates (интеграция 18 файлов / 196, N1–N8, копия восстановлена и совпала по количествам; печать в PDF NOT_RUN). **Закрытие приёмки 09 (2026-09-16): PASS (core-gates) по усиленным условиям** — прогон пользователя: unit 35/497, интеграция 19/210, restore `release:manifest` MATCH, перезапуск процесса, отказ БД, bench; PDF/390 px/Cache Storage NOT_RUN. Фикс `assertion_company_merged` — `c289cb1`. Следующий пакет — `prompts/TG_Info_Next_Stages_2026-09-16/` (этапы 10–19), не начат.
+Ветка `main` (`dossier-stages` удалена). Проверить при открытии: `git log --oneline -5`, `git status`.
 
 ## Порядок работы (указание пользователя 2026-09-14)
-После каждого этапа: отчёт → commit (русский, 1–2 предложения, без Co-Authored-By) → push `origin dossier-stages` → следующий этап.
+После каждого этапа: отчёт → commit (русский, 1–2 предложения, без Co-Authored-By) → push `origin main` → следующий этап.
 Docker и проверки с базой агент не запускает: пишет инструкцию в `docs/development/TESTING_LOCAL.md`, делает паузу, ждёт отчёт пользователя.
 
 ## Уже сделано
@@ -67,7 +67,7 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 Закрытие приёмки 09: typecheck/build backend, unit 35 файлов / 497 (`--maxWorkers=2`), сборка фронтенда и `check:build` с маркерами — PASS, логи `evidence/09/closure/`. Ранее: unit 29 / 421; у пользователя позже 405 + 1 файл OOM (BLOCKED_ENV).
 
 ## Что НЕ проверено
-Всё пользовательское из `evidence/09/USER_RUN_CLOSURE.md` (интеграция на текущем коде, restore с manifest, перезапуск процесса, отказ БД, bench); живые сайты и каналы, живой бот; печать снимка в PDF; качество Qwen3-8B на extract@3; реальный LLM-smoke; 390 px; реальный disk-full.
+Печать снимка в PDF, 390 px и Cache Storage в браузере (закрытие 09 — NOT_RUN); живые сайты и каналы, живой бот; качество Qwen3-8B на extract@3; реальный LLM-smoke; реальный disk-full.
 
 ## Остаточные риски
 Метрики светофора по legacy-таблицам (этап 07); отзыв права ИИ не снимает опубликованное; UI для запусков и
@@ -77,8 +77,8 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 Рабочая база не подключалась; 010–014/backfill/переразбор/слияния к ней не применялись; `.env` не трогался; источники не включались.
 
 ## Следующий шаг
-Пользователь прогоняет `evidence/09/USER_RUN_CLOSURE.md` и присылает логи; агент принимает gates по содержанию и обновляет
-`CLOSURE_MATRIX`, `09_REPORT`, `RELEASE_READINESS`. Commit правок закрытия — по решению пользователя. Этап 10 не начинать до этого.
+Этап 10 (`prompts/TG_Info_Next_Stages_2026-09-16/stages/STAGE_10_RELEASE_HARDENING.md`) — по решению пользователя.
+Часть его офлайн-требований (T10-01…T10-09) уже закрыта в 09; начинать с DELTA_BASELINE, не дублировать.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
