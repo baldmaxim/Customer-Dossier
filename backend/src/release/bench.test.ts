@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ITestResponse } from '../__tests__/integration/http.js';
-import { REQUIRED_STEPS, benchValidity, median, summarizeStep, validators, type ISample } from './bench.js';
+import { REQUIRED_STEPS, benchValidity, median, summarizeStep, timedSample, validators, type ISample } from './bench.js';
 
 const res = (status: number, body: Record<string, unknown>): ITestResponse => ({ status, headers: {}, body });
 const ok: ISample = { ok: true, status: 200, detail: 'HTTP 200' };
@@ -90,5 +90,19 @@ describe('benchValidity', () => {
 
   it('все обязательные шаги успешны — действительно', () => {
     expect(benchValidity(REQUIRED_STEPS.map(c => step(c, 'ok')), REQUIRED_STEPS, [])).toEqual({ valid: true, reasons: [] });
+  });
+});
+
+describe('timedSample', () => {
+  it('зависший ответ — исход timeout, а не успех и не бесконечное ожидание', async () => {
+    const { sample } = await timedSample(() => new Promise<ISample>(() => undefined), 50);
+    expect(sample).toEqual({ ok: false, status: 0, detail: 'timeout 50 мс' });
+  });
+
+  it('исключение запроса — ошибка выборки', async () => {
+    const { sample } = await timedSample(async () => {
+      throw new Error('ECONNRESET');
+    }, 1000);
+    expect(sample).toMatchObject({ ok: false, detail: 'исключение: ECONNRESET' });
   });
 });

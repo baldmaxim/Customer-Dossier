@@ -140,20 +140,29 @@ export const validators = {
     }),
 };
 
-const timed = async (fn: () => Promise<ISample>): Promise<{ sample: ISample; ms: number }> => {
+export const DEFAULT_STEP_TIMEOUT_MS = 30_000;
+
+/** Одна выборка с ограничением времени: зависший ответ — исход timeout, а не бесконечное ожидание и не успех. */
+export const timedSample = async (fn: () => Promise<ISample>, timeoutMs: number = DEFAULT_STEP_TIMEOUT_MS): Promise<{ sample: ISample; ms: number }> => {
   const started = performance.now();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<ISample>(resolve => {
+    timer = setTimeout(() => resolve({ ok: false, status: 0, detail: `timeout ${timeoutMs} мс` }), timeoutMs);
+  });
   try {
-    const sample = await fn();
+    const sample = await Promise.race([fn(), timeout]);
     return { sample, ms: performance.now() - started };
   } catch (err) {
     return { sample: { ok: false, status: 0, detail: `исключение: ${err instanceof Error ? err.message : String(err)}` }, ms: performance.now() - started };
+  } finally {
+    clearTimeout(timer);
   }
 };
 
 const measure = async (meta: { code: string; title: string; required: boolean }, runs: number, fn: () => Promise<ISample>): Promise<IBenchStep> => {
-  const warmup = (await timed(fn)).sample;
+  const warmup = (await timedSample(fn)).sample;
   const samples: Array<{ sample: ISample; ms: number }> = [];
-  for (let i = 0; i < runs; i += 1) samples.push(await timed(fn));
+  for (let i = 0; i < runs; i += 1) samples.push(await timedSample(fn));
   return summarizeStep(meta, warmup, samples);
 };
 
