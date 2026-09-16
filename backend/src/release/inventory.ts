@@ -89,7 +89,20 @@ export const INTEGRITY_CHECKS: Array<{ code: string; description: string; sql: s
   { code: 'item_without_source', description: 'публикация без источника', sql: 'SELECT count(*)::int AS n FROM source_items i LEFT JOIN sources s ON s.id = i.source_id WHERE s.id IS NULL' },
   { code: 'snapshot_without_case', description: 'снимок без обращения', sql: 'SELECT count(*)::int AS n FROM dossier_snapshots s LEFT JOIN dossier_cases c ON c.id = s.case_id WHERE c.id IS NULL' },
   { code: 'case_company_merged', description: 'обращение ссылается на слитую компанию', sql: 'SELECT count(*)::int AS n FROM dossier_cases c JOIN companies co ON co.id = c.company_id WHERE co.merged_into_id IS NOT NULL' },
-  { code: 'assertion_company_merged', description: 'утверждение ссылается на слитую компанию', sql: 'SELECT count(*)::int AS n FROM assertions a JOIN companies c ON c.id = a.subject_company_id WHERE c.merged_into_id IS NOT NULL' },
+  // После слияния исходное утверждение остаётся на tombstone (история + решение аналитика);
+  // живое — копия на целевой сущности. Нарушение — только если у утверждения на слитой
+  // компании ещё есть активные основания (перенос не завершён).
+  {
+    code: 'assertion_company_merged',
+    description: 'утверждение со активными основаниями ссылается на слитую компанию',
+    sql: `SELECT count(*)::int AS n FROM assertions a
+          JOIN companies c ON c.id = a.subject_company_id
+          WHERE c.merged_into_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM evidence e
+              WHERE e.assertion_id = a.id AND e.status = 'active'
+            )`,
+  },
   { code: 'identifier_conflict', description: 'один реквизит у двух живых компаний', sql: "SELECT coalesce(sum(cnt - 1), 0)::int AS n FROM (SELECT count(DISTINCT company_id) AS cnt FROM entity_identifiers WHERE status = 'active' GROUP BY identifier_type, value HAVING count(DISTINCT company_id) > 1) t" },
   { code: 'approved_without_basis', description: 'допуск подтверждён без основания', sql: "SELECT count(*)::int AS n FROM sources WHERE (access_status = 'approved' OR ai_processing_status = 'approved') AND (policy_basis IS NULL OR policy_owner IS NULL)" },
 ];

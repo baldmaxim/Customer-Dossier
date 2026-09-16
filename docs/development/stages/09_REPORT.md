@@ -211,3 +211,26 @@ Frontend: `scripts/check-build.mjs` (новый), `package.json` (`check:build`)
 Это последний этап пакета `prompts/Customer_Dossier_Prompts/`. После прогона пользователя (разделы A и N)
 и внесения фактических чисел замеров работы продолжаются по `BACKLOG.md` и условиям в `RELEASE_READINESS.md`;
 новых промтов пакета не осталось.
+
+## Итог корректировки после пользовательского закрытия (2026-09-16)
+
+Прогон: `USER_RUN_CLOSURE.md` G01, A–G. Логи: `%USERPROFILE%\tg-info-09-closure` (без дампа и `.env`).
+Матрица TC-074…TC-078: [evidence/09/CLOSURE_MATRIX.md](../evidence/09/CLOSURE_MATRIX.md).
+
+| Шаг | Итог |
+|---|---|
+| G01 | PASS* — HEAD `10d83d9`, docker `test-only`; fingerprint **≠** `closure/tree-final.json` |
+| A | PASS — typecheck; unit **35/497**; frontend build + `check:build` |
+| B1–B2 | PASS — guards; интеграция **19 файлов / 210** (после фикса inventory) |
+| C1–C2 | PASS* — seed; API-сценарий (поиск/обращение/review/снимок/выгрузки/отзыв допуска). PDF/390px NOT_RUN |
+| D1–D2 | PARTIAL / PASS — перезапуск и 503 ок; **sha `export_json` плавает**, hash снимка стабилен |
+| E1–E7 | PASS — dump/restore MATCH; негативный контроль MISMATCH `evidence` |
+| F0–F1 | PASS — отказ без маркера; `local-bench@2` все OK 5/5 + `pipeline_synthetic` |
+| G | cleanup ок |
+
+Дефект прогона (D9): `assertion_company_merged` ломал TC-075 после merge→review — считал историю на tombstone.
+Исправление в `backend/src/release/inventory.ts` (только утверждения с активными `evidence`). Не закоммичено
+в этом ответе — нужно решение оператора.
+
+Статус этапа после прогона: **PASS с оговорками** (fingerprint, `export_json`, визуал браузера). Этап 10 по-прежнему
+не открывался автоматически.
