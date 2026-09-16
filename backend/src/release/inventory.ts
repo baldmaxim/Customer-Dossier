@@ -72,7 +72,7 @@ const INTEGRITY_CHECKS: Array<{ code: string; description: string; sql: string }
   { code: 'evidence_without_revision', description: 'доказательство без своей редакции', sql: 'SELECT count(*)::int AS n FROM evidence e LEFT JOIN document_revisions r ON r.id = e.revision_id WHERE r.id IS NULL' },
   { code: 'evidence_without_assertion', description: 'доказательство без утверждения', sql: 'SELECT count(*)::int AS n FROM evidence e LEFT JOIN assertions a ON a.id = e.assertion_id WHERE a.id IS NULL' },
   { code: 'review_without_assertion', description: 'решение аналитика без утверждения', sql: 'SELECT count(*)::int AS n FROM review_decisions d LEFT JOIN assertions a ON a.id = d.assertion_id WHERE a.id IS NULL' },
-  { code: 'revision_without_item', description: 'редакция без публикации', sql: 'SELECT count(*)::int AS n FROM document_revisions r LEFT JOIN source_items i ON i.id = r.item_id WHERE i.id IS NULL' },
+  { code: 'revision_without_item', description: 'редакция без публикации', sql: 'SELECT count(*)::int AS n FROM document_revisions r LEFT JOIN source_items i ON i.id = r.source_item_id WHERE i.id IS NULL' },
   { code: 'item_without_source', description: 'публикация без источника', sql: 'SELECT count(*)::int AS n FROM source_items i LEFT JOIN sources s ON s.id = i.source_id WHERE s.id IS NULL' },
   { code: 'snapshot_without_case', description: 'снимок без обращения', sql: 'SELECT count(*)::int AS n FROM dossier_snapshots s LEFT JOIN dossier_cases c ON c.id = s.case_id WHERE c.id IS NULL' },
   { code: 'case_company_merged', description: 'обращение ссылается на слитую компанию', sql: 'SELECT count(*)::int AS n FROM dossier_cases c JOIN companies co ON co.id = c.company_id WHERE co.merged_into_id IS NOT NULL' },

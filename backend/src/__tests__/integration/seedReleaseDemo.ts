@@ -55,7 +55,12 @@ const ingest = async (
   const queued = await enqueueRun(getPool(), { revisionId: stored.revisionId, provider, chunker: { chunkSize: 4000, maxChunks: 6, overlap: 50 }, requestedBy: 'seed' });
   if (queued.outcome !== 'queued') throw new Error(`запуск не поставлен: ${queued.outcome}`);
   const run = await processRun(provider, (await claimNextRun('seed-release', { runId: queued.runId }))!);
-  await publishCandidateSet({ setId: run.candidateSetId!, expectedVersion: 0, actor: 'seed' });
+  // Повторная публикация той же публикации (правка новости) ждёт текущую версию указателя, а не 0.
+  const expectedVersion = (await getPool().query<{ version: number }>(
+      `SELECT p.version FROM item_publications p JOIN candidate_sets s ON s.source_item_id = p.source_item_id WHERE s.id = $1`,
+      [run.candidateSetId],
+    )).rows[0]?.version ?? 0;
+  await publishCandidateSet({ setId: run.candidateSetId!, expectedVersion, actor: 'seed' });
   return { outcome: stored.outcome, revisionId: stored.revisionId };
 };
 

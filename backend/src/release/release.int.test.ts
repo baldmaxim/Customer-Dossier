@@ -62,7 +62,14 @@ const ingest = async (
   const queued = await enqueueRun(pool(), { revisionId: stored.revisionId, provider, chunker: { chunkSize: 4000, maxChunks: 6, overlap: 50 }, requestedBy: 'release-test' });
   if (queued.outcome !== 'queued') return { outcome: queued.outcome, revisionId: stored.revisionId };
   const run = await processRun(provider, (await claimNextRun('w-release', { runId: queued.runId }))!);
-  if (run.candidateSetId) await publishCandidateSet({ setId: run.candidateSetId, expectedVersion: 0, actor: 'release-test' });
+  if (run.candidateSetId) {
+    // Правка уже опубликованной публикации: ожидается текущая версия указателя, а не 0.
+    const expectedVersion = (await pool().query<{ version: number }>(
+      `SELECT p.version FROM item_publications p JOIN candidate_sets s ON s.source_item_id = p.source_item_id WHERE s.id = $1`,
+      [run.candidateSetId],
+    )).rows[0]?.version ?? 0;
+    await publishCandidateSet({ setId: run.candidateSetId, expectedVersion, actor: 'release-test' });
+  }
   return { outcome: stored.outcome, revisionId: stored.revisionId, runStatus: run.status };
 };
 
@@ -140,10 +147,11 @@ describe('TC-076: путь источник → досье → снимок и �
 
     const search = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Приёмка')}`, undefined, api.auth);
     expect(search.status).toBe(200);
-    expect((search.body.items as unknown[]).length).toBe(2);
+    // Поиск нечёткий и может вернуть похожие названия; одноимённых юрлиц с этим именем — ровно два.
+    expect((search.body.items as Array<{ name: string }>).filter(i => i.name === 'Альфа-Приёмка').length).toBe(2);
 
     const assertions = (await pool().query<{ id: number; predicate: string }>('SELECT id, predicate FROM assertions ORDER BY id')).rows;
-    participationId = assertions.find(a => a.predicate === 'participation')!.id;
+    participationId = assertions.find(a => a.predicate === 'participates_in_project')!.id;
     const detail = await api.call('GET', `/api/assertions/${participationId}`, undefined, api.auth);
     expect((detail.body.evidence as Array<{ quote: string }>).map(e => e.quote)).toContain(Q_PART);
   });

@@ -1,7 +1,7 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-15 (+02:00). Текущий этап: **09**. Статус: **IMPLEMENTED, ожидает прогона пользователя** (TESTING_LOCAL A, N); 08B — PASS (core-gates). LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
-Последний этап с пройденными core-gates: 08B (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`).
+Обновлено: 2026-09-16 (+02:00). Текущий этап: **09 (последний)**. Статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Последний этап с пройденными core-gates: 09 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`, `09`).
 Порядок работы: после этапа — отчёт, commit, push в `dossier-stages`; проверки с Docker — пауза и прогон пользователя.
 
 ## Фактическая среда
@@ -26,7 +26,7 @@ Legacy apply заблокирован в `pipeline/guard.ts`; слияние —
 
 ## Уровни готовности
 
-LOCAL_FIXTURE_READY: ожидает прогона пользователя (код, unit и сборка — PASS). LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
+LOCAL_FIXTURE_READY: да (core-gates, 2026-09-16). LOCAL_MODEL_VALIDATED: нет (полнота 3/9 на extract@3). LIVE_SOURCE_VALIDATED: нет, перечень пуст. Production: не заявляется. Подробно — `RELEASE_READINESS.md`.
 
 ## Неразрешённые действия
 
@@ -36,4 +36,4 @@ Commit/push в `dossier-stages` — разрешены пользователе�
 
 ## Что осталось и следующая безопасная операция
 
-Прогон пользователя 09 (TESTING_LOCAL A1–A5, N). Пакет этапов после этого закрыт. Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
+Пакет этапов закрыт. Дальше — `BACKLOG.md` (P2 первыми) и условия смены статусов в `RELEASE_READINESS.md`. Отдельно: повторить замер поиска (`release:bench`); разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).
