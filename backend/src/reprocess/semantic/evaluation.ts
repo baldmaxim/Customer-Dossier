@@ -73,6 +73,20 @@ export interface IRecordedChunk {
 
 export type CaseStatus = 'extracted' | 'not_publishable' | 'infrastructure_error';
 
+/**
+ * Этап 14B: на какой стадии потерян факт (каталог ошибок качества). Стадии «текст не получен», «сущность не
+ * сопоставилась» и «досье отфильтровало» на синтетическом корпусе без базы не определяются — только в сквозном прогоне.
+ */
+export type MissStage = 'text_coverage' | 'infrastructure' | 'output_invalid' | 'verification_rejected' | 'provider_not_extracted';
+
+export interface IMissDiagnosis {
+  label: string;
+  stage: MissStage;
+  /** Эвристика: по наличию отвергнутых кандидатов, без эталонного набора фактов. */
+  heuristic: boolean;
+  detail: string[];
+}
+
 export interface ICaseEvaluation {
   id: string;
   status: CaseStatus;
@@ -84,6 +98,8 @@ export interface ICaseEvaluation {
   publishable: number;
   review: number;
   rejected: number;
+  /** Причины непройденных recall-проверок (этап 14B). */
+  missDiagnosis: IMissDiagnosis[];
 }
 
 const INFRA: ReadonlySet<ChunkOutcome> = new Set(['llm_error', 'timeout']);
@@ -119,6 +135,14 @@ export const evaluateCase = (c: ICorpusCase, chunker: IChunkerParams, recorded: 
       publishable: 0,
       review: 0,
       rejected: 0,
+      missDiagnosis: c.checks
+        .filter(k => k.kind === 'recall')
+        .map(k => ({
+          label: k.label,
+          stage: !planCoverage.complete ? 'text_coverage' : infra ? 'infrastructure' : 'output_invalid',
+          heuristic: false,
+          detail: [reason],
+        })),
     };
   }
 
@@ -127,16 +151,26 @@ export const evaluateCase = (c: ICorpusCase, chunker: IChunkerParams, recorded: 
     ok.map(x => ({ chunkId: x.p.index, index: x.p.index, start: x.p.start, text: chars.slice(x.p.start, x.p.end).join(''), extraction: x.c.payload! })),
     null,
   );
+  const checks: ICheckResult[] = c.checks.map(k => ({ label: k.label, kind: k.kind, status: k.pass(build) ? 'passed' : 'failed', reason: null }));
+  const rejectedDetail = [
+    ...build.rejected.map(r => `отброшено ${r.kind} «${r.name}»: ${r.reason}`),
+    ...build.assertions.filter(a => a.rejectedReason).map(a => `${a.content.predicate}/${a.content.role ?? a.content.eventType ?? '—'}: ${a.rejectedReason}`),
+  ];
   return {
     id: c.id,
     status: 'extracted',
     chunkOutcomes: outcomes,
     coverageComplete: true,
     reason: null,
-    checks: c.checks.map(k => {
-      const pass = k.pass(build);
-      return { label: k.label, kind: k.kind, status: pass ? 'passed' : 'failed', reason: null };
-    }),
+    checks,
+    missDiagnosis: checks
+      .filter(k => k.kind === 'recall' && k.status !== 'passed')
+      .map(k => ({
+        label: k.label,
+        stage: rejectedDetail.length > 0 ? 'verification_rejected' : 'provider_not_extracted',
+        heuristic: true,
+        detail: rejectedDetail,
+      })),
     publishable: build.assertions.filter(a => a.grounded && !a.rejectedReason).length,
     review: build.assertions.filter(a => a.rejectedReason?.startsWith('на проверку')).length,
     rejected: build.rejected.length,

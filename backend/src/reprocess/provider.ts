@@ -15,7 +15,7 @@ import { env } from '../config/env.js';
 import { LEGACY_SPEC, SEMANTIC_SPEC, extractFromText, extractSemantic, RETRY_POLICY_VERSION, type ILlmResult } from '../llm/client.js';
 import { SYSTEM_PROMPT } from '../llm/prompt.js';
 import { EXTRACT_JSON_SCHEMA, SCHEMA_VERSION, type IExtraction } from '../llm/schema.js';
-import { SEMANTIC_PROMPT_VERSION, SEMANTIC_SYSTEM_PROMPT } from '../llm/semantic/prompt.js';
+import { SEMANTIC_PROMPT_VERSION, SEMANTIC_SYSTEM_PROMPT, buildSemanticSystemMessage } from '../llm/semantic/prompt.js';
 import { SEMANTIC_JSON_SCHEMA, SEMANTIC_SCHEMA_VERSION, type ISemanticExtraction } from '../llm/semantic/schema.js';
 import { CHUNKER_VERSION } from './chunking.js';
 
@@ -67,18 +67,24 @@ export const UNKNOWN_SERVER_METADATA: Readonly<Record<string, string>> = {
   runtimeVersion: 'unknown',
 };
 
-export const lmStudioProvider = (): IModelProvider => ({
+/** `promptVariant` — только для оценки (этап 14B): рабочий конвейер создаёт провайдер без варианта. */
+export const lmStudioProvider = (options: { promptVariant?: string | null } = {}): IModelProvider => ({
   provider: 'lmstudio',
   model: env.LMSTUDIO_MODEL,
   schemaVersion: env.EXTRACT_SCHEMA_VERSION,
   // Совпадает с llm/client.ts. Окно контекста задаётся в LM Studio, а не здесь;
   // размер чанка в символах — приближение к токенам с запасом, не точный лимит.
-  params: { temperature: 0.1, maxTokens: 2048, contextNote: 'ctx задаётся в LM Studio; чанк в символах — приближение' },
+  params: {
+    temperature: 0.1,
+    maxTokens: 2048,
+    contextNote: 'ctx задаётся в LM Studio; чанк в символах — приближение',
+    ...(options.promptVariant ? { promptVariant: options.promptVariant } : {}),
+  },
   // LM Studio по OpenAI-совместимому API не сообщает квантизацию и окно контекста загруженной модели.
   serverReported: { ...UNKNOWN_SERVER_METADATA },
   extract: (text, publishedAt, ctx) =>
     env.EXTRACT_SCHEMA_VERSION === SEMANTIC_SCHEMA_VERSION
-      ? extractSemantic({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt })
+      ? extractSemantic({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt, promptVariant: options.promptVariant ?? null })
       : extractFromText({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt }),
 });
 
@@ -98,7 +104,8 @@ export interface IFingerprint {
 /** Идентичность модели и её вызова, без нарезки текста. */
 export const buildModelIdentity = (provider: IModelProvider): Record<string, unknown> => {
   const semantic = provider.schemaVersion === SEMANTIC_SCHEMA_VERSION;
-  const spec = semantic ? SEMANTIC_SPEC : LEGACY_SPEC;
+  const variant = typeof provider.params.promptVariant === 'string' ? provider.params.promptVariant : null;
+  const spec = semantic ? { ...SEMANTIC_SPEC, system: () => buildSemanticSystemMessage(variant) } : LEGACY_SPEC;
   return {
     identityVersion: EXECUTION_IDENTITY_VERSION,
     promptVersion: semantic ? `${env.PROMPT_VERSION}+${SEMANTIC_PROMPT_VERSION}` : env.PROMPT_VERSION,

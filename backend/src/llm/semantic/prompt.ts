@@ -34,7 +34,25 @@ amount — число строкой без пробелов («12000000»), т�
 
 export const NO_THINK = '/no_think';
 
-export const buildSemanticSystemMessage = (): string => `${SEMANTIC_SYSTEM_PROMPT}\n\n${NO_THINK}`;
+/**
+ * Экспериментальные дополнения промта (этап 14B). Применяются ТОЛЬКО оценкой (`benchmark:model -- --variant`),
+ * меняют идентичность исполнения и не включаются рабочим конвейером автоматически. Базовый промпт не переписывается.
+ */
+export const SEMANTIC_PROMPT_VARIANTS: Readonly<Record<string, string>> = {
+  'recall-a@1': `ПОЛНОТА (эксперимент). Перечисли ВСЕ компании и объекты, названные в тексте, даже если у них нет роли — роль тогда не выдумывай.
+Для каждой пары «компания — объект» и «компания — компания», про которую прямо сказано, создай отдельную связь со своей цитатой; несколько подрядчиков в одном предложении — несколько связей.
+ИНН, ОГРН и сумма относятся к той компании или событию, рядом с которыми написаны; не переносить на соседнюю компанию.
+Отрицание («не является», «не участвует») — отдельная связь с polarity=negative только для названных в нём роли, корпуса и работ.
+План и заявление не превращай в reported_fact. Корпус и вид работ — только если написаны у этой связи; не распространяй на весь объект.
+Отсутствие сведений — null, не догадка.`,
+};
+
+export const buildSemanticSystemMessage = (variant: string | null = null): string => {
+  if (variant === null) return `${SEMANTIC_SYSTEM_PROMPT}\n\n${NO_THINK}`;
+  const addendum = SEMANTIC_PROMPT_VARIANTS[variant];
+  if (!addendum) throw new Error(`неизвестный вариант промта: ${variant}`);
+  return `${SEMANTIC_SYSTEM_PROMPT}\n\n${addendum}\n\n${NO_THINK}`;
+};
 
 export const TEXT_START = '<<<ТЕКСТ>>>';
 export const TEXT_END = '<<<КОНЕЦ>>>';

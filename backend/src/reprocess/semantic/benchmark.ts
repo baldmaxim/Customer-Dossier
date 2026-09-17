@@ -1,6 +1,7 @@
 // Оценка текущей конфигурации извлечения на синтетическом корпусе (current-eval@1, этап 14A).
 //
-//   npm run benchmark:model [-- --case SYN-05,SYN-07] [-- --out report.json]   — вызвать настроенную модель (LM Studio)
+//   npm run benchmark:model [-- --experiment ID] [-- --case SYN-05,SYN-07] [-- --out report.json] — вызвать настроенную модель
+//                                                                              (ID из experiments.ts; по умолчанию baseline-semantic@1)
 //   npm run benchmark:model -- --replay report.json [-- --out new.json]        — пересчитать по сохранённым ответам, без сети
 //   npm run benchmark:model -- --compare before.json after.json                 — парное сравнение двух отчётов
 //   npm run benchmark:model -- --import-legacy benchmark-06.json                — разбор отчёта прежнего формата
@@ -17,6 +18,8 @@ import { SEMANTIC_SCHEMA_VERSION } from '../../llm/semantic/schema.js';
 import { planCodePointChunks } from '../chunking.js';
 import { buildFingerprint, buildModelIdentity, defaultChunkerParams, lmStudioProvider, type IChunkerParams } from '../provider.js';
 import { CORPUS } from './__fixtures__/corpus.js';
+import { PROPOSED_CASES, PROPOSED_CASES_VERSION } from './__fixtures__/proposedCases.js';
+import { experimentForRun } from './experiments.js';
 import {
   DEFAULT_GATES,
   EVALUATION_CONTRACT_VERSION,
@@ -47,6 +50,7 @@ const printSummary = (report: IEvaluationReport): void => {
   for (const c of report.cases) {
     const failed = c.checks.filter(x => x.status !== 'passed');
     console.log(`  ${c.id} ${c.status}${c.reason ? ` (${c.reason})` : ''}${failed.length ? ` — ${failed.map(x => `[${x.kind}:${x.status}] ${x.label}`).join('; ')}` : ''}`);
+    for (const m of c.missDiagnosis ?? []) console.log(`      пропуск «${m.label}»: ${m.stage}${m.heuristic ? ' (эвристика)' : ''}${m.detail.length ? ` — ${m.detail.slice(0, 3).join('; ')}` : ''}`);
   }
 };
 
@@ -72,14 +76,17 @@ const finish = (report: IEvaluationReport): void => {
 
 const runModel = async (): Promise<void> => {
   const cases = selectCases(CORPUS, selector());
+  experimentForRun(argValue('--experiment') ?? 'baseline-semantic@1');
   const connection = await checkLlmConnection();
   if (!connection.ok) {
     console.error(`[eval] LM Studio недоступен: ${connection.error}. Оценка NOT_RUN.`);
     process.exitCode = 1;
     return;
   }
-  const provider = lmStudioProvider();
+  const experiment = experimentForRun(argValue('--experiment') ?? 'baseline-semantic@1');
+  const provider = lmStudioProvider({ promptVariant: experiment.change.promptVariant ?? null });
   const chunker: IChunkerParams = defaultChunkerParams();
+  console.log(`[eval] эксперимент ${experiment.id} (${experiment.factor}): ${experiment.change.note}`);
   const recorded: Record<string, IRecordedChunk[]> = {};
   for (const c of cases) {
     recorded[c.id] = [];
@@ -101,7 +108,12 @@ const runModel = async (): Promise<void> => {
       schemaVersion: provider.schemaVersion ?? 'extract@2',
       gates: DEFAULT_GATES,
     },
-    meta: { takenAt: new Date().toISOString(), mode: 'model', modelReported: { ...(buildModelIdentity(provider).serverReported as Record<string, string>), model: env.LMSTUDIO_MODEL, loadedModels: connection.models.join(',') }, code: null },
+    meta: {
+      takenAt: new Date().toISOString(),
+      mode: 'model',
+      modelReported: { ...(buildModelIdentity(provider).serverReported as Record<string, string>), model: env.LMSTUDIO_MODEL, loadedModels: connection.models.join(','), experiment: experiment.id, proposedCases: `${PROPOSED_CASES_VERSION}: ${PROPOSED_CASES.length} не оцениваются (разметка не сопоставлена со схемой)` },
+      code: null,
+    },
     cases: evaluated,
     recorded,
     summary: summarize(cases, evaluated, DEFAULT_GATES),

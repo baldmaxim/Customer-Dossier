@@ -81,6 +81,8 @@ export interface IExtractOptions {
   signal?: AbortSignal;
   /** Вызывается перед КАЖДОЙ попыткой, включая повторы; исключение прекращает попытки (допуск отозван, аренда потеряна). */
   beforeAttempt?: () => Promise<void>;
+  /** Экспериментальный вариант промта extract@3 (этап 14B, только оценка). */
+  promptVariant?: string | null;
 }
 
 /** Политика повторов ниже — часть идентичности исполнения запуска (reprocess/provider.ts). */
@@ -222,7 +224,7 @@ export const extractFromText = (options: IExtractOptions): Promise<ILlmResult> =
 
 /** extract@3 — типизированные связи и события (этап 06). */
 export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<ISemanticExtraction>> =>
-  extractWith(options, SEMANTIC_SPEC);
+  extractWith(options, options.promptVariant ? { ...SEMANTIC_SPEC, system: () => buildSemanticSystemMessage(options.promptVariant ?? null) } : SEMANTIC_SPEC);
 
 /** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */
 export const checkLlmConnection = async (): Promise<{ ok: boolean; models: string[]; error?: string }> => {
