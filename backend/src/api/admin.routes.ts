@@ -22,6 +22,8 @@ import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
 import { parseSiteProfile } from '../ingest/sites/profile.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
+import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
+import { classifySourceHealth } from '../ingest/sourceHealth.js';
 
 export const adminRouter = asyncRouter();
 
@@ -74,8 +76,21 @@ adminRouter.get('/sources', async (_req, res) => {
     ...row,
     collectBlockedReason: evaluateSourcePolicy(row, 'collect').reason,
     aiBlockedReason: evaluateSourcePolicy(row, 'ai_processing').reason,
+    // Этап 16: состояние для оператора — никогда не запускался / деградация / временная ошибка / неполная история.
+    healthState: classifySourceHealth({
+      key: row.key,
+      accessStatus: row.accessStatus,
+      aiProcessingStatus: row.aiProcessingStatus,
+      policyExpiresAt: row.policyExpiresAt,
+      health: (row.health as string | null) ?? null,
+      healthReason: (row.healthReason as string | null) ?? null,
+      lastAttemptAt: (row.lastAttemptAt as string | null) ?? null,
+      cursor: (row.cursor as Record<string, unknown> | null) ?? null,
+      lastOutcome: (row.lastOutcome as string | null) ?? null,
+      lastCoverage: (row.lastCoverage as Record<string, unknown> | null) ?? null,
+    }),
   }));
-  res.json({ items });
+  res.json({ items, capabilities: SOURCE_CAPABILITIES });
 });
 
 /**

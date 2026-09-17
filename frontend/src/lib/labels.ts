@@ -484,3 +484,13 @@ export const CANDIDATE_SET_STATUS_LABELS: Record<string, string> = {
   rejected_stale: 'отклонён: устарел',
   discarded: 'отброшен',
 };
+
+/** Этап 16: состояние источника (source-health@1) — словами, не цветом. */
+export const SOURCE_HEALTH_STATE_LABELS: Record<string, string> = {
+  never_run: 'не запускался',
+  healthy: 'работает',
+  degraded: 'разбор деградировал',
+  policy_blocked: 'доступ закрыт',
+  temporary_error: 'временная ошибка',
+  partial_history: 'неполная история',
+};

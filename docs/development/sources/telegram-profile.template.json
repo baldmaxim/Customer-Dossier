@@ -1,0 +1,19 @@
+{
+  "maxPagesPerRun": 2,
+  "initialPages": 1,
+  "recheckIntervalSec": 3600,
+  "delayMs": 4000,
+  "meta": {
+    "contract": "source-profile@1",
+    "owner": null,
+    "collectionMethod": "telegram_web_preview",
+    "allowedOrigins": ["t.me"],
+    "allowedPathPrefixes": [],
+    "expectedCompleteness": "unknown",
+    "dateNotes": "дата поста из разметки t.me/s/; дата правки не показывается",
+    "restrictions": ["только публичная страница t.me/s/<канал>; история — окно свежих постов и ограниченная догрузка разрыва"],
+    "frequency": { "pollIntervalSec": null, "maxRequestsPerRun": 2 },
+    "permissionsEvidence": { "collect": null, "aiProcessing": null },
+    "reviewStatus": "draft"
+  }
+}

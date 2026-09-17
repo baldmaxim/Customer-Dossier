@@ -272,7 +272,17 @@ export interface IPendingMerge {
 
 export type PermissionStatus = 'unknown' | 'approved' | 'blocked' | 'revoked' | 'expired';
 
+/** Этап 16 (source-health@1): состояние источника для оператора. */
+export interface ISourceHealthState {
+  version: string;
+  state: 'never_run' | 'healthy' | 'degraded' | 'policy_blocked' | 'temporary_error' | 'partial_history';
+  reason: string;
+  coverage: { totalKnown: false; gaps: string[] };
+  aiAllowed: boolean;
+}
+
 export interface ISourceRow {
+  healthState?: ISourceHealthState;
   id: number;
   kind: 'telegram' | 'website' | 'manual';
   key: string;

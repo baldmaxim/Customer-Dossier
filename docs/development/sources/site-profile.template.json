@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "mode": "html_list",
+  "allowedHosts": [],
+  "startUrls": ["https://replace-me.invalid/news/"],
+  "list": {
+    "itemSelector": ".news-item",
+    "linkSelector": "a.news-item__title",
+    "dateSelector": "time",
+    "dateAttribute": "datetime",
+    "teaserSelector": ".news-item__lead"
+  },
+  "pagination": { "nextSelector": "a.pagination__next", "maxPages": 2 },
+  "article": {
+    "bodySelector": ".article__body",
+    "titleSelector": "h1",
+    "dateSelector": "time",
+    "dateAttribute": "datetime",
+    "removeSelectors": [".article__related"],
+    "truncatedSelector": ".paywall"
+  },
+  "dates": { "timezone": "Europe/Moscow" },
+  "refetchKnown": false,
+  "limits": { "maxItemsPerRun": 10, "delayMs": 4000 },
+  "expectations": { "minItemsOnList": 1 },
+  "meta": {
+    "contract": "source-profile@1",
+    "owner": null,
+    "collectionMethod": "html_list",
+    "allowedOrigins": ["replace-me.invalid"],
+    "allowedPathPrefixes": ["/news/"],
+    "expectedCompleteness": "unknown",
+    "dateNotes": null,
+    "restrictions": [],
+    "frequency": { "pollIntervalSec": null, "maxRequestsPerRun": 12 },
+    "permissionsEvidence": { "collect": null, "aiProcessing": null },
+    "reviewStatus": "draft"
+  }
+}

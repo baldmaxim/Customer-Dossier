@@ -5,6 +5,7 @@
 //   npm run ingest:once -- --probe kzbuild     проверить вёрстку канала (нужен допуск к сбору)
 //   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
 //   npm run ingest:once -- --site-profile <key> --file profile.json  проверить и записать профиль сайта
+//   npm run ingest:once -- --telegram-profile <канал> --file profile.json  проверить и записать профиль канала
 //   npm run ingest:once -- --source kzbuild    прогнать один источник (нужен допуск)
 //   npm run ingest:once                        прогнать все просроченные источники с допуском
 //   npm run ingest:once -- --remove <key>      удалить источник без документов
@@ -21,6 +22,7 @@ import fs from 'node:fs';
 
 import { closeDb } from '../db/pool.js';
 import { parseSiteProfile } from './sites/profile.js';
+import { telegramProfileSchema } from './telegram/webCrawler.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
 import { runIngestPass, ingestTelegramSource } from './scheduler.js';
 import {
@@ -170,6 +172,28 @@ const main = async (): Promise<void> => {
     const parsed = parseSiteProfile(profile);
     await setSourceConfig(source.id, profile);
     console.log(`[site] профиль ${source.key} записан: режим ${parsed.mode}, страниц до ${parsed.pagination?.maxPages ?? 1}, записей до ${parsed.limits.maxItemsPerRun}`);
+    return;
+  }
+
+  // Этап 16: профиль канала (параметры прохода + meta source-profile@1). Без сети; допуск не меняется.
+  const channelProfileKey = argValue('--telegram-profile');
+  if (channelProfileKey) {
+    const file = argValue('--file');
+    const source = await getSourceByKey('telegram', channelProfileKey.replace(/^@/, ''));
+    if (!source || !file) {
+      console.error('[telegram] нужен зарегистрированный канал и --file <profile.json>');
+      process.exitCode = 1;
+      return;
+    }
+    const profile = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const parsed = telegramProfileSchema.safeParse(profile);
+    if (!parsed.success) {
+      console.error(`[telegram] профиль некорректен: ${parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+      process.exitCode = 1;
+      return;
+    }
+    await setSourceConfig(source.id, profile);
+    console.log(`[telegram] профиль ${source.key} записан: страниц за проход до ${parsed.data.maxPagesPerRun}, допуск не изменён (${source.accessStatus}/${source.aiProcessingStatus})`);
     return;
   }
 

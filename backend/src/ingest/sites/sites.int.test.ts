@@ -335,3 +335,42 @@ describe('карточка объекта и проба', () => {
     expect((await sourceRow(s.id)).cursor).toEqual({});
   });
 });
+
+// ---------------------------------------------------------------------------
+// Этап 16: зацикленная пагинация и префиксы пути профиля
+
+describe('этап 16: цикл пагинации и разрешённые пути', () => {
+  it('T16-05: цикл A→B→A — остановка с parser_degraded, записи сохранены один раз, разрыв виден в покрытии', async () => {
+    const s = await site(listProfile('loop16-demo.test', { pagination: { nextSelector: 'a.next', maxPages: 5 } }), 'loop16-demo.test');
+    routes.set(s.url('/news'), html(listPage(['/l1'], '/news?page=2')));
+    routes.set(s.url('/news?page=2'), html(listPage(['/l2'], '/news')));
+    routes.set(s.url('/l1'), articleFor('l1'));
+    routes.set(s.url('/l2'), articleFor('l2'));
+
+    await run(s.id);
+    expect((await lastRun(s.id)).coverage.stopReason).toBe('pagination_loop');
+    expect((await lastRun(s.id)).pages_fetched).toBe(2);
+    expect((await sourceRow(s.id)).health).toBe('parser_degraded');
+    expect((await revisions(s.id)).map(r => r.item_key.split('/').pop())).toEqual(['l1', 'l2']);
+  });
+
+  it('T16-02: адрес вне allowedPathPrefixes не открывается и не сохраняется', async () => {
+    const s = await site(listProfile('paths16-demo.test', { meta: { allowedPathPrefixes: ['/news/'] } }), 'paths16-demo.test');
+    routes.set(s.url('/news'), html(listPage(['/news/ok1', '/promo/ad1'], null)));
+    routes.set(s.url('/news/ok1'), articleFor('ok1'));
+    let promoOpened = false;
+    routes.set(s.url('/promo/ad1'), () => {
+      promoOpened = true;
+      return { status: 200, body: '<div>реклама</div>' };
+    });
+
+    await run(s.id);
+    expect(promoOpened).toBe(false);
+    expect((await revisions(s.id)).map(r => r.item_key.split('/').pop())).toEqual(['ok1']);
+    const stats = await pool().query<{ n: number }>(
+      `SELECT (layout_stats->>'outside_path_prefix')::int AS n FROM source_runs WHERE source_id = $1 ORDER BY started_at DESC LIMIT 1`,
+      [s.id],
+    );
+    expect(stats.rows[0]!.n).toBe(1);
+  });
+});

@@ -36,6 +36,7 @@ npm run ingest:once -- --env-check        # какие ключи видит п�
 npm run ingest:once -- --bot-check        # проверить форвард-бота
 npm run ingest:once -- --stats            # документы, очередь, доля дублей
 npm run ingest:once -- --site-profile <ключ> --file profile.json  # проверить и записать профиль сайта
+npm run ingest:once -- --telegram-profile <канал> --file profile.json  # то же для канала (этап 16)
 npm run ingest:once -- --probe-site <ключ> # проба допущенного сайта: 1 страница, 3 записи, без записи
 
 # Пайплайн: запуск → чанки → набор кандидатов → публикация (этап 03B)
@@ -204,6 +205,11 @@ npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на 
   `DATABASE_URL`; имя `tg_info_test[_суффикс]`, loopback, роль; не совпадает с `DATABASE_URL` оболочки и `backend/.env`;
   после подключения — база, `current_user` и маркер `tg_info:test-target`, всё до первой записи. Слово `test` в имени
   ничего не разрешает. Новая записывающая команда обязана вызывать preflight до импорта пула.
+- **Подключение источника (этап 16, ADR-006 дополнение).** Профиль = настройки адаптера + `meta` (`source-profile@1`,
+  `ingest/profileMeta.ts`): всё неизвестное — unknown, основания — ссылки; профиль допуск не выдаёт. `allowedPathPrefixes`
+  только сужает обход. Состояние для оператора — `source-health@1` (`ingest/sourceHealth.ts`): never_run / healthy / degraded /
+  policy_blocked / temporary_error / partial_history, общая полнота истории всегда неизвестна. Шаблоны, контракт и runbook —
+  `docs/development/sources/`; `VALIDATED_SOURCES.md` заполняется только по прогону пользователя.
 - **Рабочее место запусков (этап 15B, ADR-004 дополнение).** `/runs` и `reprocess/workbench.ts` — поверх тех же запусков;
   действия только по одному id (enqueue редакции, retry — повтор команды не плодит запусков, cancel — fencing +1, ушедший
   запрос не отзывается). Публикация через API — только с `previewToken` предпросмотра (`publish-preview@1`, иначе 409

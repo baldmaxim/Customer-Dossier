@@ -62,3 +62,15 @@
 
 Пауза конкретного источника (`status=paused`) — тексты, редакции и история запусков сохраняются. Поломка парсера не
 удаляет прежние данные: при `parser_degraded` новые записи не пишутся, курсор не двигается.
+
+## Дополнение этапа 16 (2026-09-17): контракт подключения и состояние источника
+
+- `source-profile@1` (`ingest/profileMeta.ts`) — `meta` в профиле сайта и канала: владелец, способ сбора, хосты, префиксы пути,
+  ожидаемая полнота, ограничения, бюджет, ссылки на основания, `draft/operator_checked`. Всё неизвестное — unknown. Допуск профилем
+  не выдаётся: сбор и ИИ — только `access_status`/`ai_processing_status`.
+- `allowedPathPrefixes` сужает обход: записи вне префиксов не открываются (`layout_stats.outside_path_prefix`).
+- Цикл пагинации A→B→A останавливается в пределах прохода: `coverage.stopReason = pagination_loop`, `health = parser_degraded`.
+- `source-health@1` (`ingest/sourceHealth.ts`): never_run / healthy / degraded / policy_blocked / temporary_error / partial_history;
+  общая полнота истории источника всегда неизвестна. Реестр возможностей — `ingest/capabilities.ts`.
+- Контракт и runbook — `docs/development/sources/SOURCE_PROFILE_CONTRACT.md`; проверенные источники — `VALIDATED_SOURCES.md` (пусто до прогона).
+

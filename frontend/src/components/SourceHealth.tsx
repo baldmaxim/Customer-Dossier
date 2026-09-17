@@ -1,8 +1,17 @@
 import { FC } from 'react';
 
 import type { ISiteProbeReport, ISourceRow } from '../api/types';
-import { COMPLETENESS_LABELS, COVERAGE_STOP_LABELS, RUN_OUTCOME_LABELS, SOURCE_HEALTH_LABELS, formatDateTime } from '../lib/labels';
+import { COMPLETENESS_LABELS, COVERAGE_STOP_LABELS, RUN_OUTCOME_LABELS, SOURCE_HEALTH_LABELS, SOURCE_HEALTH_STATE_LABELS, formatDateTime } from '../lib/labels';
 import styles from './SourceHealth.module.css';
+
+const STATE_CLASS: Record<string, string> = {
+  healthy: styles.ok ?? '',
+  never_run: styles.warn ?? '',
+  partial_history: styles.warn ?? '',
+  degraded: styles.bad ?? '',
+  temporary_error: styles.warn ?? '',
+  policy_blocked: styles.bad ?? '',
+};
 
 const HEALTH_CLASS: Record<string, string> = {
   ok: styles.ok ?? '',
@@ -20,6 +29,22 @@ export const SourceHealthCell: FC<{ source: ISourceRow }> = ({ source }) => {
   const stop = typeof source.lastCoverage?.stopReason === 'string' ? source.lastCoverage.stopReason : null;
   return (
     <div className={styles.cell}>
+      {source.healthState && (
+        <>
+          <span className={`${styles.badge} ${STATE_CLASS[source.healthState.state] ?? ''}`}>
+            {SOURCE_HEALTH_STATE_LABELS[source.healthState.state] ?? source.healthState.state}
+          </span>
+          <span className={styles.reason}>{source.healthState.reason}</span>
+          {source.healthState.coverage.gaps.map(g => (
+            <span key={g} className={styles.meta}>
+              разрыв: {g}
+            </span>
+          ))}
+          <span className={styles.meta}>
+            полнота истории источника: неизвестна · ИИ-обработка {source.healthState.aiAllowed ? 'допущена' : 'не допущена'}
+          </span>
+        </>
+      )}
       <span className={`${styles.badge} ${HEALTH_CLASS[health] ?? ''}`}>{SOURCE_HEALTH_LABELS[health] ?? health}</span>
       {source.healthReason && <span className={styles.reason}>{source.healthReason}</span>}
       {source.lastOutcome && (

@@ -29,6 +29,8 @@ import {
   type IListPage,
 } from './parsers.js';
 import { SITE_PARSER_VERSION, SiteProfileError, parseSiteProfile, policyForProfile, type ISiteProfile } from './profile.js';
+import { pathAllowed } from '../profileMeta.js';
+import { listPageDegraded } from '../sourceHealth.js';
 
 export type SiteRunOutcome =
   | 'ok'
@@ -300,6 +302,8 @@ export const crawlSite = async (source: ISource, options: ICrawlOptions = {}): P
     }
   };
 
+  const pathPrefixes = profile.meta?.allowedPathPrefixes ?? [];
+
   /** Записи одной страницы: известные пропускаются (кроме refetchKnown), новые — через статью. */
   const processItems = async (page: IListPage): Promise<{ docs: IIncomingDocument[]; fresh: number }> => {
     const known = await loadKnown(source.id, page.items);
@@ -308,6 +312,12 @@ export const crawlSite = async (source: ISource, options: ICrawlOptions = {}): P
     for (const item of page.items) {
       if (report.counts.found >= maxItems) break;
       report.counts.found += 1;
+      // Этап 16: адрес вне разрешённых префиксов пути профиля не открывается и не сохраняется.
+      if (!pathAllowed(item.url, pathPrefixes)) {
+        report.counts.skipped += 1;
+        report.layoutStats.outside_path_prefix = (report.layoutStats.outside_path_prefix ?? 0) + 1;
+        continue;
+      }
       const key = itemIdentity({ externalId: item.externalId, url: item.url, body: '' }).key;
       const knownItem = known.get(key);
       if (!knownItem) fresh += 1;
@@ -323,7 +333,7 @@ export const crawlSite = async (source: ISource, options: ICrawlOptions = {}): P
   };
 
   const isDegraded = (page: IListPage): boolean =>
-    page.items.length < profile.expectations.minItemsOnList && (page.htmlLength > 2000 || (cursor.lastListCount ?? 0) > 0);
+    listPageDegraded({ items: page.items.length, htmlLength: page.htmlLength, minItems: profile.expectations.minItemsOnList, lastListCount: cursor.lastListCount ?? null });
 
   // --- RSS -----------------------------------------------------------------
   if (profile.mode === 'rss') {
@@ -398,8 +408,18 @@ export const crawlSite = async (source: ISource, options: ICrawlOptions = {}): P
     let headPhase = backlogResume !== null;
     // Головные страницы не расходуют бюджет страниц: иначе при maxPages=1 хвост не дочитался бы никогда.
     let headPages = 0;
+    // Этап 16: страница, уже прочитанная в этом проходе, — зацикленная пагинация, а не новые записи.
+    const visited = new Set<string>();
 
     while (pageUrl) {
+      if (visited.has(pageUrl)) {
+        stopReason = 'pagination_loop';
+        report.health = 'parser_degraded';
+        report.healthReason = `пагинация вернулась на уже прочитанную страницу ${pageUrl} — проверьте nextSelector`;
+        if (report.outcome === 'ok') report.outcome = 'partial';
+        break;
+      }
+      visited.add(pageUrl);
       if (report.pagesFetched - headPages >= maxPages) {
         stopReason = 'max_pages';
         break;

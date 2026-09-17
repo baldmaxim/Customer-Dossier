@@ -27,10 +27,11 @@ import {
   type ITelegramPost,
 } from '../telegramWeb.js';
 import { WEB_PREVIEW_CAPABILITIES } from './capabilities.js';
+import { sourceProfileMetaSchema } from '../profileMeta.js';
 
 export const TELEGRAM_WEB_PARSER_VERSION = 'tg_web@2';
 
-const telegramProfileSchema = z
+export const telegramProfileSchema = z
   .object({
     /** Страниц за проход: первая плюс догрузка разрыва. */
     maxPagesPerRun: z.number().int().min(1).max(10).default(3),
@@ -41,6 +42,8 @@ const telegramProfileSchema = z
     delayMs: z.number().int().min(0).max(60_000).optional(),
     /** Когда оператор сверил возможности транспорта с документацией и условиями. */
     capabilitiesCheckedAt: z.string().max(40).optional(),
+    /** Этап 16: контракт подключения (source-profile@1). Допуск не выдаёт. */
+    meta: sourceProfileMetaSchema.optional(),
   })
   .passthrough();
 

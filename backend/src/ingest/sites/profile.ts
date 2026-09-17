@@ -7,6 +7,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_SOURCE_LIMITS, type ISourceNetworkPolicy } from '../../net/safeFetch.js';
+import { sourceProfileMetaSchema } from '../profileMeta.js';
 
 /** Версия правил разбора: меняется при правке парсеров, пишется в запуск и наблюдение. */
 export const SITE_PARSER_VERSION = 'site@1';
@@ -122,6 +123,8 @@ export const siteProfileSchema = z
       .object({ minItemsOnList: z.number().int().min(0).max(100).default(1) })
       .strict()
       .default({}),
+    /** Этап 16: контракт подключения (source-profile@1). Допуск не выдаёт. */
+    meta: sourceProfileMetaSchema.optional(),
   })
   .strict()
   .superRefine((p, ctx) => {
