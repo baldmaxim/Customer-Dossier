@@ -5,6 +5,7 @@
 // обратившегося» (запись оператора), «не установлено в выборке» (отсутствие сведений, не факт отсутствия).
 
 import type { IFact, IPriorDecision } from './facts.js';
+import type { IScopeMatch } from './scope.js';
 
 export type Attribution = 'source_reported' | 'analyst_reviewed' | 'analyst_disputed' | 'analyst_rejected' | 'operator_claim' | 'not_established' | 'system_context';
 
@@ -20,6 +21,8 @@ export interface IStatement {
    * атрибуцию; поле есть только когда такие решения найдены (фразы без слияния и прежние снимки не меняются).
    */
   priorDecisions?: IPriorDecision[];
+  /** Применимость утверждения к предмету обращения (scope-match@1, этап 12); только у фраз досье обращения. */
+  scope?: IScopeMatch;
 }
 
 const ROLE: Record<string, string> = {

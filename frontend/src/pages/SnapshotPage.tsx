@@ -98,8 +98,8 @@ export const SnapshotPage: FC = () => {
       {block('Существенные наблюдения', d.observations, 'Наблюдений нет.')}
       {block('Предмет обращения', d.subject, '')}
       <div className={styles.columns}>
-        {block('Роль', [...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings], 'Роль не установлена.', CASE_ROLE_STATUS_LABELS[d.role.status] ?? d.role.status)}
-        {block('Кто заказывает работы', [...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants], 'Договоров не найдено.', CASE_CHAIN_STATUS_LABELS[d.chain.status] ?? d.chain.status)}
+        {block('Роль', [...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings, ...(d.role.context ?? [])], 'Роль не установлена.', CASE_ROLE_STATUS_LABELS[d.role.status] ?? d.role.status)}
+        {block('Кто заказывает работы', [...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants, ...(d.chain.context ?? [])], 'Договоров не найдено.', CASE_CHAIN_STATUS_LABELS[d.chain.status] ?? d.chain.status)}
       </div>
       {block('Условия', [...(d.terms.claimed ? [d.terms.claimed] : []), ...d.terms.fromSources], 'Условия в источниках не указаны.')}
       {block('События и контекст объекта', [...d.projectContext.state, ...d.projectContext.events, ...d.companyEvents], 'Событий не найдено.')}

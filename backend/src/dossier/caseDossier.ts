@@ -8,9 +8,11 @@ import { overlap } from '../signals/intervals.js';
 import type { IRefreshState } from '../signals/refresh.js';
 import type { ICaseRow } from './cases.js';
 import type { IFact } from './facts.js';
+import { matchScope, scopeNote, type ICaseScope, type IScopeMatch } from './scope.js';
 import { dateText, eventText, factStatement, outcomeText, plainStatement, proceduralText, roleText, stageText, type IStatement } from './statements.js';
 
-export const DOSSIER_TEMPLATE_VERSION = 'dossier-template@1';
+// @2 (этап 12): применимость по scope-match@1, контекстные списки role.context/chain.context, статусы scope_unknown.
+export const DOSSIER_TEMPLATE_VERSION = 'dossier-template@2';
 
 export interface ICaseDossierInput {
   caseRow: ICaseRow;
@@ -24,8 +26,8 @@ export interface ICaseDossierInput {
   openQueue: Array<{ kind: string; assertionId: number; priority: number }>;
 }
 
-export type RoleStatus = 'reviewed' | 'reported' | 'contradicted' | 'not_established' | 'no_project' | 'no_company';
-export type ChainStatus = 'documented' | 'differs_from_claim' | 'not_documented' | 'no_project' | 'no_company';
+export type RoleStatus = 'reviewed' | 'reported' | 'contradicted' | 'scope_unknown' | 'not_established' | 'no_project' | 'no_company';
+export type ChainStatus = 'documented' | 'differs_from_claim' | 'scope_unknown' | 'not_documented' | 'no_project' | 'no_company';
 
 export interface ICaseDossier {
   templateVersion: string;
@@ -35,8 +37,9 @@ export interface ICaseDossier {
   freshness: { signalsCutoff: string | null; stale: boolean; staleReasons: string[]; latestEvidenceAt: string | null };
   subject: IStatement[];
   observations: IStatement[];
-  role: { claimed: IStatement | null; status: RoleStatus; established: IStatement[]; otherBuildings: IStatement[]; contradictions: IStatement[] };
-  chain: { claimed: IStatement | null; status: ChainStatus; documented: IStatement[]; subcontracts: IStatement[]; coParticipants: IStatement[] };
+  /** context — сведения, не применимые к обращению или с неизвестной частью scope (снимки до @2 поля не имеют). */
+  role: { claimed: IStatement | null; status: RoleStatus; established: IStatement[]; otherBuildings: IStatement[]; contradictions: IStatement[]; context?: IStatement[] };
+  chain: { claimed: IStatement | null; status: ChainStatus; documented: IStatement[]; subcontracts: IStatement[]; coParticipants: IStatement[]; context?: IStatement[] };
   terms: { claimed: IStatement | null; fromSources: IStatement[] };
   projectContext: { state: IStatement[]; events: IStatement[] };
   companyEvents: IStatement[];
@@ -83,25 +86,63 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
     ? plainStatement('claimed_role', 'operator_claim', `Со слов обратившегося компания — ${roleText(c.claimedRole)}${c.scopeBuilding ? ` (${c.scopeBuilding})` : ''}. Это запись оператора, не подтверждённый факт.`)
     : null;
 
+  // Каждое утверждение сравнивается с предметом обращения по объекту, корпусу, виду работ, роли и дате (scope-match@1).
+  // Неизвестное в источнике не подтверждает обращение: такие сведения — контекст с пометкой, что не указано.
+  const scope: ICaseScope = { projectId, building: c.scopeBuilding, workPackage: c.workPackage, role: c.claimedRole, onDate: c.requestDate };
+  const withScope = (s: IStatement, m: IScopeMatch): IStatement => ({ ...s, text: `${s.text.replace(/\.$/, '')}${scopeNote(m)}.`, scope: m });
+
   const participations = input.companyFacts.filter(f => f.predicate === 'participates_in_project' && f.subjectCompanyId === companyId && projectId !== null && f.objectProjectId === projectId);
-  const sameBuilding = (f: IFact): boolean => !building || !f.scopeBuilding || f.scopeBuilding.toLowerCase() === building;
   const positive = participations.filter(isFact);
-  const established = positive.filter(sameBuilding).map(f =>
-    factStatement(
-      'role_established',
-      f,
-      `${f.subjectCompanyName} — ${roleText(f.role)} на объекте ${f.objectProjectName}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}${f.workPackage ?? f.workPackageLabel ? `; работы: ${f.workPackage ?? f.workPackageLabel}` : ''}${f.validFrom ? `; с ${dateText(f.validFrom, f.periodPrecision)}` : ''}`,
-    ),
-  );
+  // Роль у участия — не условие применимости (расхождение роли — отдельный пробел role_differs).
+  const matchOf = (f: IFact): IScopeMatch => matchScope(f, scope, { project: f.objectProjectId, roleOf: null });
+  const describe = (f: IFact): string =>
+    `${f.subjectCompanyName} — ${roleText(f.role)} на объекте ${f.objectProjectName}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}${f.workPackage ?? f.workPackageLabel ? `; работы: ${f.workPackage ?? f.workPackageLabel}` : ''}${f.validFrom ? `; с ${dateText(f.validFrom, f.periodPrecision)}` : ''}${f.validTo ? ` по ${dateText(f.validTo, f.periodPrecision)}` : ''}`;
+  const appliesTo = (m: IScopeMatch): boolean => m.conflicts.length === 0 && m.dimensions.building !== 'unknown';
+
+  const establishedFacts = positive.filter(f => appliesTo(matchOf(f)));
+  const established = establishedFacts.map(f => withScope(factStatement('role_established', f, describe(f)), matchOf(f)));
   const otherBuildings = positive
-    .filter(f => !sameBuilding(f))
-    .map(f => factStatement('role_other_building', f, `${f.subjectCompanyName} — ${roleText(f.role)}, но на ${f.scopeBuilding}, а не на ${c.scopeBuilding}`));
+    .filter(f => matchOf(f).dimensions.building === 'conflict')
+    .map(f => withScope(factStatement('role_other_building', f, `${f.subjectCompanyName} — ${roleText(f.role)}, но на ${f.scopeBuilding}, а не на ${c.scopeBuilding}`), matchOf(f)));
+  const roleContext: IStatement[] = [
+    // Корпус в источнике не указан при выбранном корпусе: сведения по объекту, для корпуса не установлено.
+    ...positive
+      .filter(f => matchOf(f).dimensions.building === 'unknown' && matchOf(f).conflicts.length === 0)
+      .map(f => withScope(factStatement('role_project_level', f, `${describe(f)} — корпус в источнике не указан, для ${c.scopeBuilding} участие этим не установлено`), matchOf(f))),
+    // Другой период или вид работ: смена подрядчика или другие работы — не текущая роль по обращению.
+    ...positive
+      .filter(f => matchOf(f).dimensions.building !== 'conflict' && matchOf(f).conflicts.some(d => d === 'period' || d === 'work'))
+      .map(f => withScope(factStatement('role_other_scope', f, `${describe(f)} — относится к другому ${matchOf(f).conflicts.includes('period') ? 'периоду' : 'виду работ'}`), matchOf(f))),
+  ];
+
+  // Отрицание применимо, если не отклонено аналитиком и не противоречит обращению по корпусу, работам, периоду и роли.
+  // Асимметрия намеренная: неизвестный корпус не ПОДТВЕРЖДАЕТ участие, но отрицание по объекту без корпуса остаётся
+  // противоречием с пометкой «корпус не указан» — ошибка в сторону проверки, а не ложного подтверждения.
+  const establishedRoles = new Set(establishedFacts.map(f => f.role));
+  const negativeMatch = (f: IFact): IScopeMatch => {
+    const roleConflict = f.role !== null && (c.claimedRole !== null || establishedRoles.size > 0) && f.role !== c.claimedRole && !establishedRoles.has(f.role);
+    const m = matchOf(f);
+    return roleConflict ? { ...m, dimensions: { ...m.dimensions, role: 'conflict' }, conflicts: [...m.conflicts, 'role'] } : m;
+  };
+  const negatives = participations.filter(f => f.polarity === 'negative');
+  const activeNegatives = negatives.filter(f => f.status !== 'rejected');
+  const applicableNegatives = activeNegatives.filter(f => negativeMatch(f).conflicts.length === 0);
   const contradictions = [
-    ...participations.filter(f => f.polarity === 'negative').map(f => factStatement('role_denied', f, `${f.subjectCompanyName} — не ${roleText(f.role)} на объекте ${f.objectProjectName}`)),
-    ...participations
-      .filter(f => f.polarity === 'positive' && f.evidence.some(e => e.stance === 'contradicts'))
+    ...applicableNegatives.map(f => withScope(factStatement('role_denied', f, `${f.subjectCompanyName} — не ${roleText(f.role)} на объекте ${f.objectProjectName}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}`), negativeMatch(f))),
+    ...establishedFacts
+      .filter(f => f.evidence.some(e => e.stance === 'contradicts'))
       .map(f => factStatement('role_contradicted', f, `сведения о роли «${roleText(f.role)}» опровергаются другой публикацией`)),
   ];
+  const unscopedNegatives = applicableNegatives.filter(f => negativeMatch(f).dimensions.building === 'unknown');
+  roleContext.push(
+    ...activeNegatives
+      .filter(f => negativeMatch(f).conflicts.length > 0)
+      .map(f => withScope(factStatement('role_denied_other_scope', f, `${f.subjectCompanyName} — не ${roleText(f.role)} на объекте ${f.objectProjectName}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''} — отрицание относится к другому корпусу, роли, работам или периоду и роль по обращению не опровергает`), negativeMatch(f))),
+    // Отклонённое аналитиком отрицание остаётся в истории, но вывод не определяет.
+    ...negatives
+      .filter(f => f.status === 'rejected')
+      .map(f => factStatement('role_denied_rejected', f, `${f.subjectCompanyName} — не ${roleText(f.role)} на объекте ${f.objectProjectName}; отрицание отклонено аналитиком и в выводе не учитывается`)),
+  );
   const roleStatus: RoleStatus =
     companyId === null
       ? 'no_company'
@@ -109,21 +150,43 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
         ? 'no_project'
         : contradictions.length > 0
           ? 'contradicted'
-          : positive.some(f => sameBuilding(f) && f.status === 'reviewed_supported')
+          : establishedFacts.some(f => f.status === 'reviewed_supported')
             ? 'reviewed'
             : established.length > 0
               ? 'reported'
-              : 'not_established';
+              : roleContext.some(s => s.code === 'role_project_level' || s.code === 'role_other_scope')
+                ? 'scope_unknown'
+                : 'not_established';
 
-  // --- цепочка: кто заказывает работы
-  const onProject = (f: IFact): boolean => projectId !== null && (f.contextProjectId === projectId || f.contextProjectId === null);
-  const contracts = input.companyFacts.filter(f => f.predicate === 'contract' && isFact(f) && onProject(f));
-  const documented = contracts
-    .filter(f => f.objectCompanyId === companyId)
-    .map(f => factStatement('contract_client', f, `${f.subjectCompanyName} — заказчик по договору (${roleText(f.role)}), исполнитель ${f.objectCompanyName}${f.contextProjectId === null ? '; объект договора в публикации не назван' : ''}`));
-  const subcontracts = contracts
-    .filter(f => f.subjectCompanyId === companyId)
-    .map(f => factStatement('contract_subcontract', f, `${f.subjectCompanyName} заказывает работы у ${f.objectCompanyName} (${roleText(f.role)})`));
+  // --- цепочка: кто заказывает работы. Договор подтверждает обращение только по этому объекту, корпусу, работам и дате.
+  const contracts = input.companyFacts.filter(f => f.predicate === 'contract' && isFact(f));
+  const contractMatch = (f: IFact): IScopeMatch => matchScope(f, scope, { project: f.contextProjectId, roleOf: null });
+  const contractDocuments = (f: IFact): boolean => {
+    const m = contractMatch(f);
+    return projectId !== null && m.dimensions.project === 'match' && appliesTo(m);
+  };
+  const documentedFacts = contracts.filter(f => f.objectCompanyId === companyId && contractDocuments(f));
+  const documented = documentedFacts.map(f =>
+    withScope(factStatement('contract_client', f, `${f.subjectCompanyName} — заказчик по договору (${roleText(f.role)}), исполнитель ${f.objectCompanyName}`), contractMatch(f)),
+  );
+  const subcontractFacts = contracts.filter(f => f.subjectCompanyId === companyId && contractDocuments(f));
+  const subcontracts = subcontractFacts.map(f =>
+    withScope(factStatement('contract_subcontract', f, `${f.subjectCompanyName} заказывает работы у ${f.objectCompanyName} (${roleText(f.role)})`), contractMatch(f)),
+  );
+  const chainContext = contracts
+    .filter(f => (f.objectCompanyId === companyId || f.subjectCompanyId === companyId) && !contractDocuments(f))
+    .map(f => {
+      const m = contractMatch(f);
+      const why =
+        m.dimensions.project === 'unknown'
+          ? 'объект договора в публикации не назван — общий фон отношений, не подтверждение по этому объекту'
+          : m.dimensions.project === 'conflict'
+            ? 'договор по другому объекту'
+            : m.dimensions.building === 'unknown'
+              ? 'корпус в договоре не указан — для корпуса обращения не установлено'
+              : 'договор по другому корпусу, виду работ или периоду';
+      return withScope(factStatement('contract_context', f, `${f.subjectCompanyName} → ${f.objectCompanyName} (${roleText(f.role)}): ${why}`), m);
+    });
   const claimedClientName = c.claimedClientCompanyName ?? c.claimedClientName;
   const claimedChain = claimedClientName
     ? plainStatement('claimed_client', 'operator_claim', `Со слов обратившегося работы заказывает ${claimedClientName}. Это запись оператора, не подтверждённый договор.`)
@@ -139,19 +202,21 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
       : projectId === null
         ? 'no_project'
         : documented.length === 0
-          ? 'not_documented'
-          : c.claimedClientCompanyId !== null && !contracts.some(f => f.objectCompanyId === companyId && f.subjectCompanyId === c.claimedClientCompanyId)
+          ? chainContext.length > 0
+            ? 'scope_unknown'
+            : 'not_documented'
+          : c.claimedClientCompanyId !== null && !documentedFacts.some(f => f.subjectCompanyId === c.claimedClientCompanyId)
             ? 'differs_from_claim'
             : 'documented';
 
-  // --- условия
+  // --- условия: только из договоров, применимых к обращению
   const termsClaimed = c.claimedTerms ? plainStatement('claimed_terms', 'operator_claim', `Условия со слов обратившегося: ${c.claimedTerms}. Не проверено, не рассчитывалось.`) : null;
-  const termsFromSources = contracts
-    .filter(f => f.valueNumeric && (f.objectCompanyId === companyId || f.subjectCompanyId === companyId))
+  const termsFromSources = [...documentedFacts, ...subcontractFacts]
+    .filter(f => f.valueNumeric)
     .map(f => factStatement('contract_value', f, `сумма по договору ${f.subjectCompanyName} → ${f.objectCompanyName}: ${f.valueNumeric} ${f.valueCurrency ?? '(валюта не указана)'}${f.valueType && f.valueType !== 'contract' ? ` (${f.valueType})` : ''}`));
 
   // --- контекст объекта: события объекта и пересечение с участием компании
-  const periods = positive.filter(sameBuilding).map(f => ({ validFrom: f.validFrom, validTo: f.validTo }));
+  const periods = establishedFacts.map(f => ({ validFrom: f.validFrom, validTo: f.validTo }));
   const projectEvents = input.projectFacts
     .filter(f => f.predicate === 'event' && f.polarity === 'positive' && ['reported_fact', 'claim', 'unknown'].includes(f.modality) && f.status !== 'rejected')
     .filter(f => f.subjectCompanyId === null || f.subjectCompanyId !== companyId)
@@ -224,7 +289,12 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
   if (roleStatus === 'contradicted') {
     gap('role_contradicted', 'Источники противоречат друг другу о роли компании на объекте.', 'Прояснить противоречие о роли компании на объекте (есть сообщения «за» и «против»).');
   }
-  const establishedRoles = new Set(positive.filter(sameBuilding).map(f => f.role));
+  if (roleStatus === 'scope_unknown') {
+    gap('role_scope_unknown', 'Сведения об участии есть, но корпус, вид работ или период в источниках не указаны или другие — для предмета обращения не установлено.', 'Уточнить корпус, вид работ и период участия компании документом.');
+  }
+  if (unscopedNegatives.length > 0 && c.scopeBuilding) {
+    gap('contradiction_scope_unknown', 'Отрицание участия не называет корпус — учтено как противоречие по объекту; к корпусу обращения относится ли, не установлено.', 'Прояснить сообщение об отрицании участия: к какому корпусу оно относится.');
+  }
   if (c.claimedRole && establishedRoles.size > 0 && !establishedRoles.has(c.claimedRole)) {
     gap('role_differs', `Заявленная роль (${roleText(c.claimedRole)}) не совпадает с ролью в источниках (${[...establishedRoles].map(roleText).join(', ')}).`, 'Уточнить фактическую роль компании на объекте.');
   }
@@ -234,13 +304,13 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
   if (c.scopeBuilding === null && projectId !== null) {
     gap('building_unspecified', 'Корпус или очередь в обращении не указаны.', 'Уточнить корпус или очередь.');
   }
-  if (projectId !== null && companyId !== null && chainStatus === 'not_documented') {
-    gap('chain_not_documented', 'Договорная цепочка (кто заказывает работы у компании) по источникам не установлена.', 'Кто заказчик работ и на основании какого договора (номер, дата)?');
+  if (projectId !== null && companyId !== null && (chainStatus === 'not_documented' || chainStatus === 'scope_unknown')) {
+    gap('chain_not_documented', 'Прямой договор по этому объекту, корпусу и работам (кто заказывает работы у компании) по источникам не установлен.', 'Кто заказчик работ и на основании какого договора (номер, дата)?');
   }
   if (chainStatus === 'differs_from_claim') {
     gap('chain_differs', 'Заявленный заказчик работ не совпадает с заказчиком в документированных договорах.', 'Пояснить, кто заказывает работы: в источниках указан другой заказчик.');
   }
-  if (!c.workPackageLabel && !positive.some(f => f.workPackage || f.workPackageLabel)) {
+  if (!c.workPackageLabel && !establishedFacts.some(f => f.workPackage || f.workPackageLabel)) {
     gap('work_package_unknown', 'Объём и вид работ не установлены.', 'Уточнить объём работ и границы ответственности.');
   }
   if (termsFromSources.length === 0) {
@@ -272,8 +342,8 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
     },
     subject,
     observations,
-    role: { claimed: claimedRole, status: roleStatus, established, otherBuildings, contradictions },
-    chain: { claimed: claimedChain, status: chainStatus, documented, subcontracts, coParticipants },
+    role: { claimed: claimedRole, status: roleStatus, established, otherBuildings, contradictions, context: roleContext },
+    chain: { claimed: claimedChain, status: chainStatus, documented, subcontracts, coParticipants, context: chainContext },
     terms: { claimed: termsClaimed, fromSources: termsFromSources },
     projectContext: { state, events: projectEvents },
     companyEvents,

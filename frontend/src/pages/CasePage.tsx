@@ -138,12 +138,19 @@ export const CasePage: FC = () => {
               <p className={styles.statusLine}>Установленная роль: {CASE_ROLE_STATUS_LABELS[dossier.role.status] ?? dossier.role.status}</p>
               <StatementList items={dossier.role.claimed ? [dossier.role.claimed] : []} />
               <StatementList items={[...dossier.role.contradictions, ...dossier.role.established, ...dossier.role.otherBuildings]} />
+          {(dossier.role.context ?? []).length > 0 && (
+            <>
+              <h4>Контекст: не применимо к предмету обращения или часть не указана в источнике</h4>
+              <StatementList items={dossier.role.context ?? []} />
+            </>
+          )}
             </section>
             <section className={styles.section} aria-labelledby="chain">
               <h2 id="chain" className={styles.sectionTitle}>Кто заказывает работы</h2>
               <p className={styles.statusLine}>{CASE_CHAIN_STATUS_LABELS[dossier.chain.status] ?? dossier.chain.status}</p>
               <StatementList items={dossier.chain.claimed ? [dossier.chain.claimed] : []} />
-              <StatementList items={[...dossier.chain.documented, ...dossier.chain.subcontracts]} empty="Документированных договоров с участием компании по этому объекту в выборке нет." />
+              {(dossier.chain.context ?? []).length > 0 && <StatementList items={dossier.chain.context ?? []} />}
+          <StatementList items={[...dossier.chain.documented, ...dossier.chain.subcontracts]} empty="Документированных договоров с участием компании по этому объекту в выборке нет." />
               {dossier.chain.coParticipants.length > 0 && (
                 <>
                   <h3 className={styles.sectionTitle}>Совместное участие на объекте (не договор)</h3>

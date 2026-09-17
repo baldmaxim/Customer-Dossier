@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { buildGraph, edgeMatches, DEFAULT_FILTERS, type IGraphEdge, type IGraphLoader, type IGraphNode, type NodeKey } from '../graph/graph.js';
+import { buildGraph, edgeMatches, edgeScopeNote, DEFAULT_FILTERS, type IGraphEdge, type IGraphLoader, type IGraphNode, type NodeKey } from '../graph/graph.js';
 import type { ICaseDossier } from '../dossier/caseDossier.js';
 import { applyAvailability, redactEvidence, REDACTED_QUOTE } from './availability.js';
 import { withinEffective, type ISnapshotPayload } from './build.js';
@@ -261,5 +261,21 @@ describe('TC-069: схема связей', () => {
     expect(edgeMatches(e, { ...DEFAULT_FILTERS, from: '2025-01-01', to: '2025-12-31' })).toBe(false);
     expect(edgeMatches(e, { ...DEFAULT_FILTERS, from: '2026-01-01', to: '2026-12-31' })).toBe(true);
     expect(edgeMatches({ ...e, type: 'co_mentioned' }, DEFAULT_FILTERS)).toBe(false);
+  });
+});
+
+describe('этап 12: схема связей по тому же правилу области', () => {
+  const edge = (over: Partial<IGraphEdge>): IGraphEdge => ({
+    key: 'e', type: 'participation', from: 'c:1', to: 'p:2', assertionId: 1, role: 'contractor', building: null, workPackage: null,
+    validFrom: null, validTo: null, periodPrecision: 'unknown', status: 'text_grounded', polarity: 'positive', modality: 'reported_fact',
+    supports: 1, contradicts: 0, contextProjectId: null, details: [], ...over,
+  });
+  it('другой корпус скрыт с учётом записи «корп. № 2»; неуказанный корпус остаётся с пометкой', () => {
+    const filters = { ...DEFAULT_FILTERS, building: 'корпус 2' };
+    expect(edgeMatches(edge({ building: 'Корп. № 2' }), filters)).toBe(true);
+    expect(edgeMatches(edge({ building: 'корпус 1' }), filters)).toBe(false);
+    expect(edgeMatches(edge({ building: null }), filters)).toBe(true);
+    expect(edgeScopeNote(edge({ building: null }), filters)).toContain('корпус в источнике не указан');
+    expect(edgeScopeNote(edge({ building: 'корпус 2' }), filters)).toBeNull();
   });
 });

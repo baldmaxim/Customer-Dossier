@@ -154,8 +154,9 @@ describe('обращение: заявленное отдельно от уст�
     expect(JSON.stringify(d)).not.toMatch(/аванс \d|%/);
   });
 
-  it('отрицание роли — противоречие наверху и вопрос о нём; совместное участие — не договор', () => {
-    const denied = fact({ polarity: 'negative', role: 'general_contractor' });
+  it('отрицание заявленной роли — противоречие наверху и вопрос о нём; совместное участие — не договор', () => {
+    // С этапа 12 отрицание другой роли заявленную роль не опровергает (T12-10) — здесь отрицается заявленная.
+    const denied = fact({ polarity: 'negative', role: 'contractor' });
     const other = fact({ subjectCompanyId: 30, subjectCompanyName: 'Бета-Демо', role: 'general_contractor' });
     const d = buildCaseDossier(input({ companyFacts: [denied], projectFacts: [other] }));
     expect(d.role.status).toBe('contradicted');
@@ -245,5 +246,119 @@ describe('ввод обращения и решения', () => {
     expect(dateText('2026-03-12', 'day')).toBe('12 марта 2026');
     expect(dateText('2024-01-01', 'year')).toBe('2024 год');
     expect(dateText(null, 'unknown')).toBe('дата не указана');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Этап 12: применимость по предмету обращения (scope-match@1). Обращение: объект 20, корпус 2, работы ВК,
+// заявлена роль подрядчика, дата обращения 2026-09-15. R01–R05 — исходные ошибки аудита, C01 — положительный контроль.
+
+describe('этап 12: область роли и договорной цепочки', () => {
+  const contract = (over: Partial<IFact>): IFact =>
+    fact({ predicate: 'contract', role: 'subcontract', subjectCompanyId: 30, subjectCompanyName: 'Бета-Демо', objectCompanyId: 10, objectCompanyName: 'Альфа-Демо', contextProjectId: 20, ...over });
+
+  it('R01 / T12-01: договор без объекта — общий фон отношений, а не documented по выбранной стройке', () => {
+    const d = buildCaseDossier(input({ companyFacts: [contract({ contextProjectId: null })] }));
+    expect(d.chain.status).toBe('scope_unknown');
+    expect(d.chain.documented).toEqual([]);
+    expect(d.chain.context![0]!.text).toContain('объект договора в публикации не назван');
+    expect(d.questions.map(q => q.code)).toContain('ask_chain_not_documented');
+  });
+
+  it('R02 / T12-02: отрицание по корпусу 1 не опровергает корпус 2', () => {
+    const positive = fact({});
+    const denied = fact({ polarity: 'negative', scopeBuilding: 'корпус 1' });
+    const d = buildCaseDossier(input({ companyFacts: [positive, denied] }));
+    expect(d.role.status).toBe('reported');
+    expect(d.role.contradictions).toEqual([]);
+    expect(d.role.context!.map(s => s.code)).toContain('role_denied_other_scope');
+  });
+
+  it('R03 / T12-03: отклонённое аналитиком отрицание видно в истории, но не определяет статус', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({}), fact({ polarity: 'negative', status: 'rejected' })] }));
+    expect(d.role.status).toBe('reported');
+    expect(d.role.contradictions).toEqual([]);
+    expect(d.role.context!.find(s => s.code === 'role_denied_rejected')!.text).toContain('отклонено аналитиком');
+  });
+
+  it('R04 / T12-04: участие без корпуса при выбранном корпусе — контекст объекта, не established', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({ scopeBuilding: null })] }));
+    expect(d.role.established).toEqual([]);
+    expect(d.role.status).toBe('scope_unknown');
+    const ctx = d.role.context!.find(s => s.code === 'role_project_level')!;
+    expect(ctx.scope!.missing).toContain('building');
+    expect(ctx.text).toContain('в источнике не указано: корпус');
+    expect(d.questions.map(q => q.code)).toContain('ask_role_scope_unknown');
+  });
+
+  it('R05 / T12-05: договор на другой корпус или другие работы того же объекта не подтверждает цепочку', () => {
+    const otherBuilding = buildCaseDossier(input({ companyFacts: [contract({ scopeBuilding: 'корпус 1' })] }));
+    expect(otherBuilding.chain.documented).toEqual([]);
+    expect(otherBuilding.chain.status).toBe('scope_unknown');
+    const otherWork = buildCaseDossier(input({ companyFacts: [contract({ workPackage: 'ЭОМ' })] }));
+    expect(otherWork.chain.documented).toEqual([]);
+    expect(otherWork.chain.context![0]!.scope!.conflicts).toEqual(['work']);
+    // сумма из неприменимого договора в условия обращения не попадает
+    const priced = buildCaseDossier(input({ companyFacts: [contract({ workPackage: 'ЭОМ', valueNumeric: '5000000.00', valueCurrency: 'RUB' })] }));
+    expect(priced.terms.fromSources).toEqual([]);
+  });
+
+  it('C01 / T12-06: участие на явно другом корпусе по-прежнему отдельно', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({ scopeBuilding: 'корпус 1' })] }));
+    expect(d.role.otherBuildings).toHaveLength(1);
+    expect(d.role.established).toEqual([]);
+    expect(d.role.status).toBe('not_established');
+  });
+
+  it('документированный договор по объекту, корпусу и работам — documented с источником', () => {
+    const d = buildCaseDossier(input({ caseRow: caseRow({ claimedClientCompanyId: 30 }), companyFacts: [contract({ scopeBuilding: 'Корп. № 2' })] }));
+    expect(d.chain.status).toBe('documented');
+    expect(d.chain.documented[0]!.scope!.dimensions).toMatchObject({ project: 'match', building: 'match', work: 'match' });
+  });
+
+  it('T12-07: последовательная смена подрядчика — закончившееся участие не текущая роль и не конфликт', () => {
+    const ended = fact({ validFrom: '2025-03-01', validTo: '2026-03-31', periodPrecision: 'month' });
+    const d = buildCaseDossier(input({ companyFacts: [ended] }));
+    expect(d.role.established).toEqual([]);
+    expect(d.role.contradictions).toEqual([]);
+    expect(d.role.context!.find(s => s.code === 'role_other_scope')!.text).toContain('другому периоду');
+    const current = buildCaseDossier(input({ companyFacts: [fact({ validFrom: '2026-04-01', periodPrecision: 'month' })] }));
+    expect(current.role.established[0]!.scope!.dimensions.period).toBe('match');
+  });
+
+  it('T12-08: план стать подрядчиком не участие; отрицание плана не отрицание участия', () => {
+    const plan = fact({ modality: 'planned' });
+    expect(buildCaseDossier(input({ companyFacts: [plan] })).role.established).toEqual([]);
+    const negPlan = fact({ polarity: 'negative', modality: 'planned' });
+    const d = buildCaseDossier(input({ companyFacts: [fact({}), negPlan] }));
+    // отрицательная модальность «план» проходит как отрицание — но только если применима; здесь это отрицание плана
+    expect(d.role.established).toHaveLength(1);
+  });
+
+  it('T12-09: null корпуса не означает «весь объект» — корпус из него не выводится', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({ scopeBuilding: null, workPackage: null })] }));
+    expect(d.role.established).toEqual([]);
+  });
+
+  it('T12-10: отрицание роли генподрядчика не опровергает заявленную роль подрядчика', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({}), fact({ polarity: 'negative', role: 'general_contractor' })] }));
+    expect(d.role.status).toBe('reported');
+    expect(d.role.contradictions).toEqual([]);
+    expect(d.role.context!.find(s => s.code === 'role_denied_other_scope')!.scope!.conflicts).toContain('role');
+  });
+
+  it('T12-11: применимое неотклонённое отрицание сохраняется рядом с решением аналитика', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({ status: 'reviewed_supported' }), fact({ polarity: 'negative' })] }));
+    expect(d.role.status).toBe('contradicted');
+    expect(d.role.established[0]!.attribution).toBe('analyst_reviewed');
+    expect(d.role.contradictions[0]!.code).toBe('role_denied');
+  });
+
+  it('отрицание по объекту без корпуса — противоречие с пометкой «корпус не указан» и вопросом, а не молчаливое подтверждение', () => {
+    const d = buildCaseDossier(input({ companyFacts: [fact({}), fact({ polarity: 'negative', scopeBuilding: null })] }));
+    expect(d.role.status).toBe('contradicted');
+    expect(d.role.contradictions[0]!.scope!.missing).toContain('building');
+    expect(d.role.contradictions[0]!.text).toContain('в источнике не указано: корпус');
+    expect(d.questions.map(q => q.code)).toContain('ask_contradiction_scope_unknown');
   });
 });

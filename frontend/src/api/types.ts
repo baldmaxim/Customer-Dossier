@@ -562,6 +562,9 @@ export interface IStatement {
   assertionIds: number[];
   evidenceIds: number[];
   quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string }>;
+  /** Применимость к обращению (scope-match@1, этап 12). */
+  scope?: { version: string; dimensions: Record<string, 'match' | 'compatible' | 'unknown' | 'conflict'>; missing: string[]; conflicts: string[] };
+  priorDecisions?: Array<{ assertionId: number; mergeId: number; decisionId: number; decision: string; reviewer: string; decidedAt: string }>;
 }
 
 export interface ICaseRow {
@@ -619,17 +622,20 @@ export interface ICaseDossier {
   observations: IStatement[];
   role: {
     claimed: IStatement | null;
-    status: 'reviewed' | 'reported' | 'contradicted' | 'not_established' | 'no_project' | 'no_company';
+    status: 'reviewed' | 'reported' | 'contradicted' | 'scope_unknown' | 'not_established' | 'no_project' | 'no_company';
     established: IStatement[];
     otherBuildings: IStatement[];
     contradictions: IStatement[];
+    /** Не применимо к предмету обращения или часть не указана (снимки до этапа 12 — без поля). */
+    context?: IStatement[];
   };
   chain: {
     claimed: IStatement | null;
-    status: 'documented' | 'differs_from_claim' | 'not_documented' | 'no_project' | 'no_company';
+    status: 'documented' | 'differs_from_claim' | 'scope_unknown' | 'not_documented' | 'no_project' | 'no_company';
     documented: IStatement[];
     subcontracts: IStatement[];
     coParticipants: IStatement[];
+    context?: IStatement[];
   };
   terms: { claimed: IStatement | null; fromSources: IStatement[] };
   projectContext: { state: IStatement[]; events: IStatement[] };

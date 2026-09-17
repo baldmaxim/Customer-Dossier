@@ -4,6 +4,7 @@
 // корпоративная связь, структура объекта (корпус → комплекс), совместное упоминание (по умолчанию скрыто).
 // Путь А→Б→В не превращается в ребро А→В: транзитивных рёбер нет вовсе. Толщина и цвет не кодируют надёжность.
 
+import { normalizeBuilding } from '../dossier/scope.js';
 import { overlap } from '../signals/intervals.js';
 
 export const GRAPH_EDGE_TYPES = ['participation', 'contract', 'corporate', 'hierarchy', 'co_mentioned'] as const;
@@ -89,13 +90,20 @@ export const edgeMatches = (edge: IGraphEdge, filters: IGraphFilters): boolean =
     const touchesProject = edge.from === `p:${filters.projectId}` || edge.to === `p:${filters.projectId}` || edge.contextProjectId === filters.projectId;
     if ((edge.type === 'participation' || edge.type === 'contract') && !touchesProject) return false;
   }
-  if (filters.building && edge.building && edge.building.toLowerCase() !== filters.building.toLowerCase()) return false;
+  // Тот же scope-match@1, что у досье: другой корпус скрывается, неуказанный корпус остаётся с пометкой (edgeScopeNote).
+  if (filters.building && edge.building && normalizeBuilding(edge.building) !== normalizeBuilding(filters.building)) return false;
   if ((filters.from || filters.to) && edge.validFrom) {
     const o = overlap({ validFrom: filters.from ?? '0001-01-01', validTo: filters.to ?? '9999-12-31' }, edge);
     if (o === 'no_overlap') return false;
   }
   return true;
 };
+
+/** Пометка ребра, у которого корпус в источнике не указан при фильтре по корпусу: для корпуса не установлено. */
+export const edgeScopeNote = (edge: IGraphEdge, filters: Pick<IGraphFilters, 'building'>): string | null =>
+  filters.building && !edge.building && (edge.type === 'participation' || edge.type === 'contract')
+    ? `корпус в источнике не указан — для ${filters.building} не установлено`
+    : null;
 
 export interface IGraphLoader {
   nodes: (keys: readonly NodeKey[]) => Promise<IGraphNode[]>;
@@ -131,6 +139,10 @@ export const buildGraph = async (seeds: readonly NodeKey[], rawFilters: Partial<
   for (let depth = 0; depth < filters.depth && frontier.length > 0; depth += 1) {
     const found = (await loader.edges(frontier, filters.types))
       .filter(e => edgeMatches(e, filters))
+      .map(e => {
+        const note = edgeScopeNote(e, filters);
+        return note && !e.details.includes(note) ? { ...e, details: [...e.details, note] } : e;
+      })
       .sort((a, b) => TYPE_PRIORITY[a.type] - TYPE_PRIORITY[b.type] || (a.assertionId ?? 0) - (b.assertionId ?? 0) || a.key.localeCompare(b.key));
     const next: NodeKey[] = [];
     for (const edge of found) {

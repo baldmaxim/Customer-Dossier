@@ -111,9 +111,9 @@ ${htmlStatements(d.subject, '')}
 <h2>Существенные наблюдения</h2>
 ${htmlStatements(d.observations, 'Наблюдений нет.')}
 <h2>Роль</h2>
-${htmlStatements([...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings], 'Роль не установлена.')}
+${htmlStatements([...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings, ...(d.role.context ?? [])], 'Роль не установлена.')}
 <h2>Кто заказывает работы</h2>
-${htmlStatements([...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants], 'Договоров не найдено.')}
+${htmlStatements([...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants, ...(d.chain.context ?? [])], 'Договоров не найдено.')}
 <h2>Условия</h2>
 ${htmlStatements([...(d.terms.claimed ? [d.terms.claimed] : []), ...d.terms.fromSources], 'Условия в источниках не указаны.')}
 <h2>События и контекст объекта</h2>
@@ -177,8 +177,8 @@ export const snapshotToMarkdown = (meta: ISnapshotMeta, p: ISnapshotPayload): st
   );
   lines.push(mdStatements(d.subject, ''));
   lines.push('## Существенные наблюдения', '', mdStatements(d.observations, 'Наблюдений нет.'));
-  lines.push('## Роль', '', mdStatements([...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings], 'Роль не установлена.'));
-  lines.push('## Кто заказывает работы', '', mdStatements([...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants], 'Договоров не найдено.'));
+  lines.push('## Роль', '', mdStatements([...(d.role.claimed ? [d.role.claimed] : []), ...d.role.contradictions, ...d.role.established, ...d.role.otherBuildings, ...(d.role.context ?? [])], 'Роль не установлена.'));
+  lines.push('## Кто заказывает работы', '', mdStatements([...(d.chain.claimed ? [d.chain.claimed] : []), ...d.chain.documented, ...d.chain.subcontracts, ...d.chain.coParticipants, ...(d.chain.context ?? [])], 'Договоров не найдено.'));
   lines.push('## Условия', '', mdStatements([...(d.terms.claimed ? [d.terms.claimed] : []), ...d.terms.fromSources], 'Условия в источниках не указаны.'));
   lines.push('## События и контекст объекта', '', mdStatements([...d.projectContext.state, ...d.projectContext.events, ...d.companyEvents], 'Событий не найдено.'));
   lines.push('## Что не установлено', '', mdStatements(d.uncertainties, 'Существенных пробелов не выявлено.'));
