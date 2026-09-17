@@ -242,14 +242,21 @@ export const listAmbiguities = async (filter: {
 }): Promise<IAmbiguityPage> => {
   const limit = Math.max(1, Math.min(AMBIGUITY_PAGE_LIMIT, filter.limit));
   const params: unknown[] = [filter.status, filter.kind ?? null];
-  const base = `status = $1 AND ($2::entity_kind IS NULL OR entity_kind = $2::entity_kind)`;
-  const total = (await query<{ n: number }>(`SELECT count(*)::int AS n FROM resolution_ambiguities WHERE ${base}`, params))[0]?.n ?? 0;
+  // Условие фильтра написано в обоих запросах целиком: статическая проверка SQL сверяет плейсхолдеры по тексту запроса.
+  const total =
+    (
+      await query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM resolution_ambiguities WHERE status = $1 AND ($2::entity_kind IS NULL OR entity_kind = $2::entity_kind)`,
+        params,
+      )
+    )[0]?.n ?? 0;
   const pageParams = [...params, filter.cursor?.updatedAt ?? null, filter.cursor?.id ?? null, limit + 1];
   const rows = await query<IAmbiguityRow>(
     `SELECT id, entity_kind, surface, name_key, candidate_ids, revision_id, occurrences, status, resolved_entity_id, version,
             created_at, to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
      FROM resolution_ambiguities
-     WHERE ${base} AND ($3::timestamptz IS NULL OR (updated_at, id) < ($3::timestamptz, $4::bigint))
+     WHERE status = $1 AND ($2::entity_kind IS NULL OR entity_kind = $2::entity_kind)
+       AND ($3::timestamptz IS NULL OR (updated_at, id) < ($3::timestamptz, $4::bigint))
      ORDER BY updated_at DESC, id DESC LIMIT $5`,
     pageParams,
   );

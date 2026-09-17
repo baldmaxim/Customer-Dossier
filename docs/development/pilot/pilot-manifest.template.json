@@ -1,0 +1,24 @@
+{
+  "contract": "pilot-manifest@1",
+  "status": "draft",
+  "owner": "не назначен",
+  "decidedAt": null,
+  "target": {
+    "database": "tg_info_test",
+    "kind": "test",
+    "identifiedBy": "заполняет оператор: как убедился в цели (маркер tg_info:test-target / идентификация рабочей базы)"
+  },
+  "window": { "from": "2026-01-01", "to": "2026-01-31", "maxItemsPerSource": 20, "maxItemsTotal": 100 },
+  "sources": [],
+  "subjects": { "companies": [], "projects": [] },
+  "model": { "executionFingerprint": null, "qualityDecision": "pending" },
+  "review": { "mandatory": true, "reviewers": ["не назначен"] },
+  "forbidden": {
+    "autopublish": true,
+    "mergeApply": true,
+    "workingDatabaseMigration": true,
+    "publicAccess": true,
+    "externalTransfer": true
+  },
+  "retention": { "rawAttemptsDays": null, "resultsAccess": ["владелец"] }
+}

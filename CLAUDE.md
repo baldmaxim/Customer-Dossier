@@ -55,6 +55,7 @@ npm run release:check [-- --out f.json | --compare f.json]  # контрольн
 npm run release:manifest [-- --out f.json | --compare f.json]  # content-manifest@1: содержимое строк, схема, последовательности, hash снимков (только чтение)
 npm run release:bench [-- --runs 5] [-- --pipeline-synthetic] [-- --profile-queries] [-- --case-id N]  # замеры: только TEST_DATABASE_URL, общий preflight; невалидный шаг — exit 1; профиль SQL без значений, p95 только при 20+ выборках
 npm run seed:test-large -- --facts 1200 --edges 2100  # этап 18: большой синтетический набор (≤ 5000), только тестовая цель
+npm run pilot:check -- --manifest <файл>  # этап 19: проверка перед пилотом (только чтение), BLOCKED — exit 1
 npm run release:probe -- --snapshot <id> [--case <id>] [--out f | --compare f]  # GET-проба запущенного API (перезапуск процесса, restore)
 npm run release:fingerprint [-- --out f.json]  # HEAD + sha256 рабочего дерева для привязки логов
 # frontend: npm run build && npm run check:build   # sw не кэширует /api, секретов-маркеров в бандле нет
@@ -206,6 +207,10 @@ npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на 
   `DATABASE_URL`; имя `tg_info_test[_суффикс]`, loopback, роль; не совпадает с `DATABASE_URL` оболочки и `backend/.env`;
   после подключения — база, `current_user` и маркер `tg_info:test-target`, всё до первой записи. Слово `test` в имени
   ничего не разрешает. Новая записывающая команда обязана вызывать preflight до импорта пула.
+- **Пилот — только по манифесту (этап 19).** `pilot-manifest@1` + `npm run pilot:check` (`release/pilotManifest.ts`, только чтение):
+  без утверждённого манифеста, названных источников с действующим допуском, совпадающей базы и выключенного фона — BLOCKED.
+  Запреты (автопубликация, применение слияний, миграция рабочей базы, публичный доступ, внешняя передача) и ручная проверка —
+  литералы схемы. Агент пилот не запускает и источники не подбирает; порядок, остановки, копии и хранение — `docs/development/pilot/`.
 - **Краткое досье для переговоров (этап 17, ADR-010 дополнение).** `brief` (`negotiation-brief@1`, `dossier/brief.ts`) строится
   из досье `dossier-template@3` без модели: статус словами, scope, свежесть, происхождение (перепечатки — одно подтверждение, разные
   тексты — независимость не доказана), новая редакция, ограничения данных в самом резюме. Общий фон — отдельно. Запрещены оценки
