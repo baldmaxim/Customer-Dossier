@@ -49,5 +49,8 @@ cd ..\backend; npm audit --json 2>$null | Out-File -Encoding utf8 "$L\A3-npm-aud
 `fixAvailable` и `isSemVerMajor`. До этого: обновление зависимостей backend **не выполнять**; A1 и B-шаги не блокируются
 (набор зависимостей тот же, что в прогоне закрытия 09). Решение — отдельным исправлением (промт 04) с повторным A1 и B1.
 
-## Прочие зависимости Новые dev-зависимости этапа 18 (vitest, jsdom, Testing Library,
-Playwright) в runtime и бандл не входят; браузер Playwright скачивается пользователем отдельно (`npx playwright install chromium`).
+## Прочие зависимости
+
+Новые dev-зависимости этапа 18 (vitest, jsdom, Testing Library, Playwright) в runtime и бандл не входят; браузер Playwright
+скачивается пользователем отдельно (`npx playwright install chromium`). По отчёту A3 других уязвимостей, кроме перечисленных
+(frontend: 1 high в `sharp`; backend: 2 moderate в `qs` и `express`), не заявлено.
