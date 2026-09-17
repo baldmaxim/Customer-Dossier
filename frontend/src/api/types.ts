@@ -194,6 +194,8 @@ export interface IEvidenceRow {
   revisionNo: number;
   completeness: TextCompleteness;
   legacyDocumentId: number | null;
+  /** Запуск нового конвейера, из чанка которого пришло доказательство (этап 15B); null — legacy или вручную. */
+  runId?: number | null;
   sourceTitle: string;
   url: string | null;
   publishedAt: string | null;
@@ -873,4 +875,109 @@ export interface IAmbiguityDetail extends IAmbiguityListItem {
   candidates: IAmbiguityCandidate[];
   decisions: IAmbiguityDecision[];
   scopeNote: string;
+}
+
+// Этап 15B: рабочее место запусков
+export type RunStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
+
+export interface IRunListItem {
+  id: number;
+  revisionId: number;
+  revisionNo: number;
+  latestRevisionNo: number;
+  sourceItemId: number;
+  source: { id: number; key: string };
+  status: RunStatus;
+  error: string | null;
+  fingerprint: string;
+  model: string | null;
+  schemaVersion: string | null;
+  promptVersion: string | null;
+  previousRunId: number | null;
+  coverage: { coveredChars: number | null; totalChars: number | null; chunks: number; chunksOk: number; chunksFailed: number };
+  relevant: boolean | null;
+  requestedBy: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  usage: { responses: number; tokensIn: number | null; tokensOut: number | null; latencyMs: number | null };
+  policy: { allowed: boolean; reason: string | null };
+  candidateSet: { id: number; status: string } | null;
+}
+
+export interface IRunPage {
+  items: IRunListItem[];
+  total: number;
+  nextBeforeId: number | null;
+  worker: { pipelineEnabled: boolean; autoPublish: boolean };
+}
+
+export interface IRunDetail extends IRunListItem {
+  identity: { historical: boolean; candidateBuildVersion: string | null; candidateBuildCurrent: boolean; provider: string | null };
+  lineage: { previous: Array<{ id: number; status: string }>; retries: Array<{ id: number; status: string }> };
+  inFlight: boolean;
+  lease: { owner: string | null; expiresAt: string | null; claimCount: number };
+  revision: { id: number; no: number; title: string | null; publishedAt: string | null; bodyChars: number };
+  latestRevision: { id: number; no: number } | null;
+  publication: { activeSetId: number | null; activeRunId: number | null; activeRevisionNo: number | null; version: number };
+  chunks: Array<{
+    index: number;
+    rangeStart: number;
+    rangeEnd: number;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    responses: Array<{ attemptNo: number; outcome: string; error: string | null; tokensIn: number | null; tokensOut: number | null; latencyMs: number | null; createdAt: string }>;
+  }>;
+  candidates: Array<{
+    id: number;
+    predicate: string;
+    role: string | null;
+    grounded: boolean;
+    verdict: 'publishable' | 'review' | 'ungrounded';
+    rejectedReason: string | null;
+    confidence: number | null;
+    parties: string[];
+    evidence: Array<{ quote: string; spanStart: number; spanEnd: number; stance: string; chunkId: number }>;
+  }>;
+  ambiguities: Array<{ id: number; surface: string; status: string; candidates: number }>;
+  runComplete: boolean;
+}
+
+export interface IPublishPreviewItem {
+  signature: string;
+  predicate: string;
+  grounded: boolean;
+  quotes: string[];
+}
+
+export interface IPublishPreview {
+  previewToken: string;
+  run: { id: number; status: string; coveredChars: number | null; totalChars: number | null; complete: boolean };
+  setId: number;
+  sourceItemId: number;
+  status: string;
+  relevant: boolean;
+  activeSetId: number | null;
+  expectedVersion: number;
+  stale: { stale: boolean; reason: string | null };
+  policy: { allowed: boolean; reason: string | null };
+  added: IPublishPreviewItem[];
+  removed: IPublishPreviewItem[];
+  kept: IPublishPreviewItem[];
+  changed: Array<{ before: string; after: string }>;
+  ungrounded: IPublishPreviewItem[];
+  reviewImpact: Array<{ assertionId: number; status: string; decisions: number }>;
+  contradictions: Array<{ assertionId: number }>;
+}
+
+export interface IPublishResult {
+  outcome: 'published' | 'already_published' | 'rejected_policy' | 'rejected_stale';
+  setId: number;
+  version: number;
+  reason: string | null;
+  nextStep: string | null;
+  assertions: number;
+  evidenceAdded: number;
+  evidenceSuperseded: number;
 }

@@ -146,6 +146,10 @@ describe('защита API (TC-004, TC-005)', () => {
       ['POST', '/api/admin/sources/website', { url: 'example.ru' }],
       ['DELETE', '/api/admin/sources/1', undefined],
       ['POST', '/api/admin/merges/1/merge', {}],
+      ['POST', '/api/reprocess/revisions/1/runs', {}],
+      ['POST', '/api/reprocess/runs/1/retry', {}],
+      ['POST', '/api/reprocess/runs/1/cancel', {}],
+      ['POST', '/api/reprocess/sets/1/publish', { expectedVersion: 0, expectedPreviewToken: 'a'.repeat(64) }],
       ['POST', '/api/entities/ambiguities/1/decisions', { decision: 'kept_unknown', reason: 'тест', expectedVersion: 1, idempotencyKey: 'ambiguity-auth-01' }],
       ['POST', '/api/admin/merges/1/reject', {}],
       ['POST', '/api/admin/metrics/refresh', {}],
@@ -187,6 +191,14 @@ describe('защита API (TC-004, TC-005)', () => {
     });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('csrf');
+  });
+
+  it('отмена и повтор запуска без CSRF-токена не выполняются (этап 15B)', async () => {
+    const { cookie } = await login();
+    for (const path of ['/api/reprocess/runs/1/cancel', '/api/reprocess/runs/1/retry', '/api/reprocess/revisions/1/runs']) {
+      const res = await request('POST', path, { headers: { cookie, origin: ORIGIN }, body: {} });
+      expect(res.status, path).toBe(403);
+    }
   });
 
   it('с сессией и неверным CSRF-токеном — 403', async () => {

@@ -138,6 +138,7 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
           <span>{COMPLETENESS_LABELS[e.completeness]}</span>
           {e.publishedAt && <span>{formatDate(e.publishedAt)}</span>}
           {e.legacyDocumentId !== null && <Link to={`/documents/${e.legacyDocumentId}`}>версии</Link>}
+          {e.runId != null && <Link to={`/runs/${e.runId}`}>запуск #{e.runId}</Link>}
           {e.url && (
             <a href={e.url} target="_blank" rel="noreferrer noopener">
               оригинал

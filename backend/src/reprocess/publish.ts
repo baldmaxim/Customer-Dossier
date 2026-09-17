@@ -9,6 +9,8 @@
 // трогаются; компания не удаляется. reviewed_supported машина не выставляет —
 // статус утверждения выводится из доказательств и решений человека.
 
+import { createHash } from 'node:crypto';
+
 import type { PoolClient } from 'pg';
 
 import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
@@ -31,11 +33,22 @@ export class PublicationConflictError extends Error {
 }
 
 export class NotPublishableError extends Error {
-  constructor(reason: string) {
+  constructor(reason: string, readonly nextStep: string | null = null) {
     super(reason);
     this.name = 'NotPublishableError';
   }
 }
+
+/** Этап 15B: между предпросмотром и публикацией изменилось состояние, от которого зависел расчёт. */
+export class PublishPreviewStaleError extends Error {
+  readonly nextStep = 'Откройте предпросмотр заново и проверьте изменения перед публикацией.';
+  constructor(readonly currentToken: string) {
+    super('Предпросмотр публикации устарел: изменились допуск, редакции, решения аналитика, статус набора или публикация.');
+    this.name = 'PublishPreviewStaleError';
+  }
+}
+
+export const PUBLISH_PREVIEW_VERSION = 'publish-preview@1';
 
 type StoredContent = ICandidateContent & { parties: Record<string, PartyDescriptor> };
 
@@ -156,6 +169,9 @@ export interface IPreviewItem {
 }
 
 export interface IPreview {
+  /** publish-preview@1: публикация с другим состоянием отвергается (409), а не пересчитывается молча. */
+  previewToken: string;
+  run: { id: number; status: string; coveredChars: number | null; totalChars: number | null; complete: boolean };
   setId: number;
   sourceItemId: number;
   status: string;
@@ -175,6 +191,53 @@ export interface IPreview {
   /** Утверждения прежнего набора, у которых есть активные опровержения из других источников. */
   contradictions: Array<{ assertionId: number }>;
 }
+
+/**
+ * Состояние, от которого зависит предпросмотр: статус набора и запуска, отпечаток запуска, публикация (версия и активный
+ * набор), последняя редакция, допуск источника, последние решения аналитика по утверждениям активного набора и решения
+ * по неоднозначным упоминаниям этой редакции (этап 15A). Решения по утверждениям, которые набор создаст впервые,
+ * до публикации неизвестны и не входят (ограничение).
+ */
+const previewToken = async (exec: DbExecutor, set: ISetRow, publication: IPublicationRow): Promise<string> => {
+  const row = (
+    await exec.query<Record<string, string | number | null>>(
+      `SELECT er.status AS run_status, er.fingerprint, er.covered_chars, er.total_chars,
+              (SELECT max(r.revision_no) FROM document_revisions r WHERE r.source_item_id = $2) AS latest_no,
+              (SELECT s.access_status || ':' || s.ai_processing_status || ':' || coalesce(s.policy_expires_at::text, '')
+               FROM source_items si JOIN sources s ON s.id = si.source_id WHERE si.id = $2) AS policy,
+              (SELECT coalesce(max(rd.id), 0) FROM review_decisions rd
+               WHERE rd.assertion_id IN (SELECT e.assertion_id FROM candidate_set_evidence cse JOIN evidence e ON e.id = cse.evidence_id
+                                         WHERE cse.set_id = $3)) AS last_review,
+              (SELECT coalesce(max(d.id), 0) FROM ambiguity_decisions d JOIN resolution_ambiguities m ON m.id = d.ambiguity_id
+               WHERE m.revision_id = $4) AS last_ambiguity
+       FROM extraction_runs er WHERE er.id = $1`,
+      [set.run_id, set.source_item_id, publication.active_set_id ?? 0, set.revision_id],
+    )
+  ).rows[0] ?? {};
+  const state = [
+    PUBLISH_PREVIEW_VERSION,
+    set.id,
+    set.status,
+    publication.active_set_id,
+    publication.version,
+    ...['run_status', 'fingerprint', 'covered_chars', 'total_chars', 'latest_no', 'policy', 'last_review', 'last_ambiguity'].map(k =>
+      row[k] === null || row[k] === undefined ? null : String(row[k]),
+    ),
+  ];
+  return createHash('sha256').update(JSON.stringify(state), 'utf8').digest('hex');
+};
+
+interface IRunState {
+  status: string;
+  covered_chars: number | null;
+  total_chars: number | null;
+}
+
+const loadRunState = async (exec: DbExecutor, runId: number): Promise<IRunState | null> =>
+  (await exec.query<IRunState>('SELECT status, covered_chars, total_chars FROM extraction_runs WHERE id = $1', [runId])).rows[0] ?? null;
+
+export const runComplete = (run: IRunState | null): boolean =>
+  run !== null && run.status === 'completed' && run.total_chars !== null && run.covered_chars === run.total_chars;
 
 const toItem = (row: ICandidateRow): IPreviewItem => ({
   signature: candidateSignature(row),
@@ -237,7 +300,16 @@ export const previewCandidateSet = async (setId: number, exec: DbExecutor = getP
     )
   ).rows.map(r => ({ assertionId: r.assertion_id }));
 
+  const run = await loadRunState(exec, set.run_id);
   return {
+    previewToken: await previewToken(exec, set, publication),
+    run: {
+      id: set.run_id,
+      status: run?.status ?? 'unknown',
+      coveredChars: run?.covered_chars ?? null,
+      totalChars: run?.total_chars ?? null,
+      complete: runComplete(run),
+    },
     setId,
     sourceItemId: set.source_item_id,
     status: set.status,
@@ -263,6 +335,8 @@ export interface IPublishResult {
   setId: number;
   version: number;
   reason: string | null;
+  /** Следующая безопасная операция при отказе. */
+  nextStep: string | null;
   assertions: number;
   evidenceAdded: number;
   evidenceSuperseded: number;
@@ -274,6 +348,8 @@ export interface IPublishInput {
   actor: string;
   /** Отдельное решение оператора: опубликовать разбор, который новее не является. */
   allowStale?: boolean;
+  /** Токен предпросмотра (publish-preview@1). API требует его; CLI без токена сверяет только версию публикации. */
+  expectedPreviewToken?: string | null;
   /** Точка сбоя для интеграционных тестов: внутри транзакции, перед переключением указателя. */
   beforeCommit?: () => Promise<void>;
 }
@@ -338,14 +414,22 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
       set.source_item_id,
     ]);
     const publication = await loadPublication(client, set.source_item_id, true);
-    const base = { setId: set.id, assertions: 0, evidenceAdded: 0, evidenceSuperseded: 0 };
+    const base = { setId: set.id, assertions: 0, evidenceAdded: 0, evidenceSuperseded: 0, nextStep: null };
 
     // Повтор того же apply: набор уже активен — прежний результат, без записи.
     if (publication.active_set_id === set.id) {
       return { ...base, outcome: 'already_published', version: publication.version, reason: null };
     }
     if (!PUBLISHABLE_STATUSES.has(set.status)) {
-      throw new NotPublishableError(`набор #${set.id} в статусе ${set.status} не публикуется`);
+      throw new NotPublishableError(`набор #${set.id} в статусе ${set.status} не публикуется`, 'Поставьте новый запуск по последней редакции.');
+    }
+    // Неполный, обрезанный, упавший или отменённый разбор не публикуется ни при каком флаге.
+    const run = await loadRunState(client, set.run_id);
+    if (!runComplete(run)) {
+      throw new NotPublishableError(
+        `запуск #${set.run_id} не завершён полностью (${run?.status ?? 'не найден'}, покрыто ${run?.covered_chars ?? '?'} из ${run?.total_chars ?? '?'})`,
+        'Повторите запуск (новый run) и публикуйте его набор.',
+      );
     }
     if (publication.version !== input.expectedVersion) throw new PublicationConflictError(publication.version);
 
@@ -364,7 +448,13 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
         actor: input.actor,
         note: policy.reason,
       });
-      return { ...base, outcome: 'rejected_policy', version: publication.version, reason: policy.reason };
+      return {
+        ...base,
+        outcome: 'rejected_policy',
+        version: publication.version,
+        reason: policy.reason,
+        nextStep: 'Допуск ИИ-обработки источника оформляет оператор с основанием; затем новый предпросмотр.',
+      };
     }
 
     const stale = await checkStale(client, set, publication.active_set_id);
@@ -381,7 +471,19 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
         actor: input.actor,
         note: stale.reason,
       });
-      return { ...base, outcome: 'rejected_stale', version: publication.version, reason: stale.reason };
+      return {
+        ...base,
+        outcome: 'rejected_stale',
+        version: publication.version,
+        reason: stale.reason,
+        nextStep: 'Поставьте запуск по последней редакции и публикуйте его набор.',
+      };
+    }
+
+    // Отказы политики и устаревшей редакции записаны выше; остальные изменения состояния — 409 без записи.
+    if (input.expectedPreviewToken != null) {
+      const current = await previewToken(client, set, publication);
+      if (current !== input.expectedPreviewToken) throw new PublishPreviewStaleError(current);
     }
 
     const revision = (
@@ -541,6 +643,7 @@ export const publishCandidateSet = async (input: IPublishInput): Promise<IPublis
       outcome: 'published',
       version,
       reason: null,
+      nextStep: null,
       assertions: assertionCount,
       evidenceAdded,
       evidenceSuperseded,

@@ -1,15 +1,28 @@
 // Новый конвейер: запуски, предпросмотр набора кандидатов и публикация.
-// Доступ — после входа оператора; публикация — с CSRF (app.ts).
+// Доступ — после входа оператора; изменяющие запросы — с CSRF (app.ts).
+// Этап 15B: список с фильтрами и курсором, карточка запуска, точечные enqueue/retry/cancel, публикация с токеном предпросмотра.
 
 import { z } from 'zod';
 
-import { query } from '../db/pool.js';
+import { env } from '../config/env.js';
 import {
   NotPublishableError,
   PublicationConflictError,
+  PublishPreviewStaleError,
   previewCandidateSet,
   publishCandidateSet,
 } from '../reprocess/publish.js';
+import { lmStudioProvider } from '../reprocess/provider.js';
+import {
+  RUN_PAGE_LIMIT,
+  RUN_STATUSES,
+  RunNotFoundError,
+  cancelRun,
+  enqueueRevision,
+  getRunDetail,
+  listRuns,
+  retryRunOnce,
+} from '../reprocess/workbench.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 
 export const reprocessRouter = asyncRouter();
@@ -20,8 +33,14 @@ const idOf = (raw: string | undefined): number | null => {
 };
 
 const runsSchema = z.object({
+  sourceId: z.coerce.number().int().positive().optional(),
   sourceItemId: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  revisionId: z.coerce.number().int().positive().optional(),
+  status: z.enum(RUN_STATUSES).optional(),
+  schemaVersion: z.string().trim().min(1).max(40).optional(),
+  fingerprint: z.string().regex(/^[0-9a-f]{4,64}$/).optional(),
+  beforeId: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(RUN_PAGE_LIMIT).default(50),
 });
 
 reprocessRouter.get('/reprocess/runs', async (req, res) => {
@@ -30,22 +49,70 @@ reprocessRouter.get('/reprocess/runs', async (req, res) => {
     res.status(400).json({ error: 'Некорректные параметры' });
     return;
   }
-  const runs = await query(
-    `SELECT er.id, er.revision_id AS "revisionId", r.source_item_id AS "sourceItemId", r.revision_no AS "revisionNo",
-            er.status, er.covered_chars AS "coveredChars", er.total_chars AS "totalChars", er.relevant, er.error,
-            er.fingerprint, er.fingerprint_json->>'model' AS model, er.fingerprint_json->>'promptVersion' AS "promptVersion",
-            er.requested_by AS "requestedBy", er.created_at AS "createdAt", er.finished_at AS "finishedAt",
-            cs.id AS "candidateSetId", cs.status AS "candidateSetStatus",
-            (SELECT count(*)::int FROM extraction_chunks c WHERE c.run_id = er.id) AS "chunks",
-            (SELECT count(*)::int FROM extraction_chunks c WHERE c.run_id = er.id AND c.status = 'ok') AS "chunksOk"
-     FROM extraction_runs er
-     JOIN document_revisions r ON r.id = er.revision_id
-     LEFT JOIN candidate_sets cs ON cs.run_id = er.id
-     WHERE ($1::bigint IS NULL OR r.source_item_id = $1)
-     ORDER BY er.id DESC LIMIT $2`,
-    [parsed.data.sourceItemId ?? null, parsed.data.limit],
-  );
-  res.json({ runs });
+  const page = await listRuns(parsed.data);
+  // runs — прежнее имя поля (этап 03B); worker — кто выполнит поставленное.
+  res.json({ ...page, runs: page.items, worker: { pipelineEnabled: env.PIPELINE_ENABLED, autoPublish: env.REPROCESS_AUTO_PUBLISH } });
+});
+
+reprocessRouter.get('/reprocess/runs/:id', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный запуск' });
+    return;
+  }
+  try {
+    res.json(await getRunDetail(id));
+  } catch (err) {
+    if (err instanceof RunNotFoundError) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+});
+
+const ENQUEUE_STATUS: Record<string, number> = { queued: 201, already_live: 200, already_retried: 200, refused_policy: 422, not_found: 404, not_retryable: 409 };
+
+reprocessRouter.post('/reprocess/revisions/:id/runs', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректная редакция' });
+    return;
+  }
+  // Постановка не вызывает модель: выполнит worker (PIPELINE_ENABLED) или `pipeline:once`.
+  const result = await enqueueRevision(id, lmStudioProvider(), 'operator');
+  res.status(ENQUEUE_STATUS[result.outcome] ?? 200).json({ ...result, pipelineEnabled: env.PIPELINE_ENABLED });
+});
+
+reprocessRouter.post('/reprocess/runs/:id/retry', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный запуск' });
+    return;
+  }
+  const result = await retryRunOnce(id, lmStudioProvider(), 'operator');
+  res.status(ENQUEUE_STATUS[result.outcome] ?? 200).json({ ...result, pipelineEnabled: env.PIPELINE_ENABLED });
+});
+
+reprocessRouter.post('/reprocess/runs/:id/cancel', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный запуск' });
+    return;
+  }
+  const result = await cancelRun(id, 'operator');
+  if (result.outcome === 'not_found') {
+    res.status(404).json({ error: `Запуск #${id} не найден` });
+  } else if (result.outcome === 'not_cancellable') {
+    res.status(409).json({ ...result, error: `Запуск в статусе ${result.status} уже завершён`, code: 'not_cancellable' });
+  } else {
+    res.json({
+      ...result,
+      note: result.inFlight
+        ? 'Запрос к модели мог уже уйти: отменить его нельзя, но ответ не будет записан и следующий чанк не отправится.'
+        : 'Дальнейших вызовов модели по этому запуску не будет.',
+    });
+  }
 });
 
 reprocessRouter.get('/reprocess/sets/:id/preview', async (req, res) => {
@@ -67,6 +134,8 @@ reprocessRouter.get('/reprocess/sets/:id/preview', async (req, res) => {
 
 const publishSchema = z.object({
   expectedVersion: z.number().int().min(0),
+  // Этап 15B: публикуется ровно то, что оператор видел в предпросмотре.
+  expectedPreviewToken: z.string().regex(/^[0-9a-f]{64}$/),
   allowStale: z.boolean().default(false),
 });
 
@@ -74,7 +143,7 @@ reprocessRouter.post('/reprocess/sets/:id/publish', async (req, res) => {
   const id = idOf(req.params.id);
   const parsed = publishSchema.safeParse(req.body);
   if (id === null || !parsed.success) {
-    res.status(400).json({ error: 'Укажите ожидаемую версию публикации' });
+    res.status(400).json({ error: 'Укажите ожидаемую версию публикации и токен предпросмотра' });
     return;
   }
   try {
@@ -83,11 +152,15 @@ reprocessRouter.post('/reprocess/sets/:id/publish', async (req, res) => {
     res.json(result);
   } catch (err) {
     if (err instanceof PublicationConflictError) {
-      res.status(409).json({ error: err.message, code: 'version_conflict', currentVersion: err.currentVersion });
+      res.status(409).json({ error: err.message, code: 'version_conflict', currentVersion: err.currentVersion, nextStep: 'Обновите предпросмотр.' });
+      return;
+    }
+    if (err instanceof PublishPreviewStaleError) {
+      res.status(409).json({ error: err.message, code: 'preview_stale', nextStep: err.nextStep });
       return;
     }
     if (err instanceof NotPublishableError) {
-      res.status(422).json({ error: err.message, code: 'not_publishable' });
+      res.status(422).json({ error: err.message, code: 'not_publishable', nextStep: err.nextStep });
       return;
     }
     throw err;

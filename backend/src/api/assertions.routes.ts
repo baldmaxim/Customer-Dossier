@@ -182,7 +182,8 @@ assertionsRouter.get('/assertions/:id', async (req, res) => {
             e.quote, e.context_before AS "contextBefore", e.context_after AS "contextAfter",
             e.span_start AS "spanStart", e.span_end AS "spanEnd", e.origin, e.created_at AS "createdAt",
             r.id AS "revisionId", r.revision_no AS "revisionNo", r.completeness, r.legacy_document_id AS "legacyDocumentId",
-            i.id AS "sourceItemId", s.title AS "sourceTitle", i.original_url AS "url", r.published_at AS "publishedAt"
+            i.id AS "sourceItemId", s.title AS "sourceTitle", i.original_url AS "url", r.published_at AS "publishedAt",
+            (SELECT c.run_id FROM extraction_chunks c WHERE c.id = e.extraction_chunk_id) AS "runId"
      FROM evidence e
      JOIN document_revisions r ON r.id = e.revision_id
      JOIN source_items i ON i.id = r.source_item_id

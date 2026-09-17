@@ -1,4 +1,5 @@
 import { FC, Fragment, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
@@ -122,6 +123,15 @@ export const AdminPage: FC = () => {
           исчезает при повторном разборе; если доказательства изменились, утверждение попадает в «Нужен пересмотр».
         </p>
         <AssertionReviewPanel />
+      </section>
+
+      <section className={styles.section}>
+        <h2>Запуски разбора</h2>
+        <p className={styles.hint}>
+          Почему текст не попал в досье: чанки, отказы модели и проверки, кандидаты с цитатами, предпросмотр и публикация
+          набора. Действия — по одному запуску, массового переразбора здесь нет.
+        </p>
+        <Link to="/runs">Открыть запуски</Link>
       </section>
 
       <section className={styles.section}>

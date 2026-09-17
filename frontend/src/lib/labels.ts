@@ -450,3 +450,37 @@ export const AMBIGUITY_STATUS_LABELS: Record<string, string> = {
   resolved: 'решено',
   dismissed: 'отклонено',
 };
+
+/** Этап 15B: статусы запусков, чанков, ответов и кандидатов. */
+export const RUN_STATUS_LABELS: Record<string, string> = {
+  queued: 'в очереди',
+  running: 'выполняется',
+  completed: 'разобран полностью',
+  partial: 'разобран частично',
+  failed: 'не разобран',
+  cancelled: 'отменён',
+};
+
+export const CHUNK_OUTCOME_LABELS: Record<string, string> = {
+  ok: 'ответ принят',
+  invalid_json: 'невалидный JSON',
+  schema_error: 'ответ не по схеме',
+  llm_error: 'ошибка модели или соединения',
+  timeout: 'тайм-аут',
+  truncated_input: 'ответ обрезан',
+};
+
+export const CANDIDATE_VERDICT_LABELS: Record<string, string> = {
+  publishable: 'пройдёт в публикацию',
+  review: 'найден в тексте, но отправлен на проверку',
+  ungrounded: 'цитата не найдена — не публикуется',
+};
+
+export const CANDIDATE_SET_STATUS_LABELS: Record<string, string> = {
+  built: 'собран, не опубликован',
+  published: 'опубликован',
+  superseded: 'замещён новым набором',
+  rejected_policy: 'отклонён: нет допуска',
+  rejected_stale: 'отклонён: устарел',
+  discarded: 'отброшен',
+};

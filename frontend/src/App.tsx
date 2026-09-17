@@ -14,6 +14,8 @@ import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProjectPage } from './pages/ProjectPage';
+import { RunPage } from './pages/RunPage';
+import { RunsPage } from './pages/RunsPage';
 import { SnapshotPage } from './pages/SnapshotPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
 import { SearchPage } from './pages/SearchPage';
@@ -47,6 +49,8 @@ const AuthGate: FC = () => {
         <Route path="/contractors" element={<ContractorsPage />} />
         <Route path="/documents/:id" element={<DocumentPage />} />
         <Route path="/admin" element={<AdminPage />} />
+          <Route path="/runs" element={<RunsPage />} />
+          <Route path="/runs/:id" element={<RunPage />} />
         {/* Рабочее досье (этап 08A). Откат — VITE_DOSSIER_UI=false: маршруты скрыты, обращения в базе сохраняются. */}
         {DOSSIER_UI_ENABLED && <Route path="/cases" element={<CasesPage />} />}
         {DOSSIER_UI_ENABLED && <Route path="/cases/:id" element={<CasePage />} />}
