@@ -37,8 +37,8 @@
 //   --recheck --dry            предпросмотр снятия городов и адресов (без --dry — [Б])
 //
 // Выбор модели (пишут только в extractions, нужен допуск источника к ИИ-обработке)
-//   --shadow N [--source key]  прогнать текущую модель, не трогая карточки
-//   --compare                  сравнить модели на одних документах
+//   --shadow N [--source key] --legacy  LEGACY extract@2: теневой прогон, не трогая карточки (не оценка extract@3)
+//   --compare --legacy                   LEGACY extract@2: сравнение моделей; оценка текущей схемы — npm run benchmark:model
 
 import { closeDb } from '../db/pool.js';
 import { checkLlmConnection } from '../llm/client.js';
@@ -127,6 +127,13 @@ const main = async (): Promise<void> => {
     });
   }
   if (has('--recheck')) return runRecheckCommand(has('--dry'));
+  // Этап 14A: --shadow/--compare проверяют legacy extract@2, а не текущий конвейер. Без явного --legacy — отказ,
+  // чтобы «проверка модели» молча не тестировала другую схему.
+  if ((has('--compare') || argValue('--shadow')) && !has('--legacy')) {
+    console.error('[pipeline] --shadow/--compare — LEGACY extract@2 и не оценивают текущую схему extract@3. Оценка текущей конфигурации: npm run benchmark:model. Для legacy-прогона добавьте --legacy.');
+    process.exitCode = 1;
+    return;
+  }
   if (has('--compare')) return runCompareCommand();
 
   const shadowLimit = argValue('--shadow');

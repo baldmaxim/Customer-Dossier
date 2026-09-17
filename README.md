@@ -191,8 +191,8 @@ npm run pipeline:once -- --queue              # очередь проверки:
 npm run pipeline:once -- --audit              # дубли, роли, объекты-компании, выборка
 npm run pipeline:once -- --renormalize --dry  # что изменил бы пересчёт ключей
 npm run pipeline:once -- --recheck --dry      # какие города и адреса не подтверждены
-npm run pipeline:once -- --shadow 30          # LEGACY extract@2: теневой прогон, не трогая карточки (не оценка extract@3)
-npm run pipeline:once -- --compare            # LEGACY extract@2: сравнение моделей; для текущей схемы — этап 14A
+npm run pipeline:once -- --shadow 30 --legacy # LEGACY extract@2: теневой прогон, не трогая карточки (не оценка extract@3)
+npm run pipeline:once -- --compare --legacy   # LEGACY extract@2: сравнение моделей; текущая схема — npm run benchmark:model
 npm run pipeline:once -- --merges             # очередь на ручное слияние
 npm run pipeline:once -- --merge <id>         # предпросмотр: реквизиты, конфликты, что переносится
 npm run pipeline:once -- --merge <id> --yes   # применить (MERGE_APPLY_ENABLED=true)

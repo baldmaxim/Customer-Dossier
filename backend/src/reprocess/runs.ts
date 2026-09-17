@@ -28,6 +28,7 @@ import type { IExtraction } from '../llm/schema.js';
 import type { ISemanticExtraction } from '../llm/semantic/schema.js';
 import { buildCandidates, type IAssertionCandidate, type IEntityCandidate } from './candidates.js';
 import { computeCoverage, planCodePointChunks } from './chunking.js';
+import { classifyExtractError, classifyExtractResult, type ChunkOutcome } from './extractOutcome.js';
 import { buildFingerprint, defaultChunkerParams, type IChunkerParams, type IModelProvider } from './provider.js';
 
 /** Новая попытка вызова модели запрещена текущим ИИ-допуском источника. */
@@ -228,7 +229,7 @@ const lockOwnedRun = async (client: PoolClient, claim: IRunClaim, leaseMs: numbe
   );
 };
 
-export type ChunkOutcome = 'ok' | 'invalid_json' | 'schema_error' | 'llm_error' | 'timeout' | 'truncated_input';
+export type { ChunkOutcome } from './extractOutcome.js';
 
 interface IChunkRow {
   id: number;
@@ -241,8 +242,6 @@ interface IChunkRow {
 
 const sha256 = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex');
 
-const isTimeout = (err: unknown): boolean =>
-  err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /timeout|timed out/i.test(err.message));
 
 export interface IRunResult {
   runId: number;
@@ -371,18 +370,8 @@ export const processRun = async (
         beforeAttempt: () => assertCanCallModel(pool, claim, leaseMs),
       });
       usage = result.usage;
-      if (result.ok && result.truncatedInput) {
-        outcome = 'truncated_input';
-        raw = result.rawResponse;
-        error = 'ответ получен на укороченном тексте и описывает не весь чанк';
-      } else if (result.ok) {
-        outcome = 'ok';
-        payload = result.data;
-      } else {
-        outcome = /timeout|timed out|aborted/i.test(result.message) ? 'timeout' : result.failure;
-        raw = result.rawResponse;
-        error = result.message;
-      }
+      // Общая классификация с оценкой качества (extractOutcome.ts): обрезанный/невалидный ответ не ok нигде.
+      ({ outcome, payload, raw, error } = classifyExtractResult(result));
     } catch (err) {
       if (err instanceof StaleLeaseError) throw err;
       if (err instanceof PolicyRevokedError) {
@@ -390,8 +379,7 @@ export const processRun = async (
         revoked = err.reason;
         break;
       }
-      outcome = isTimeout(err) ? 'timeout' : 'llm_error';
-      error = err instanceof Error ? err.message : String(err);
+      ({ outcome, payload, raw, error } = classifyExtractError(err));
       usage = { tokensIn: null, tokensOut: null, latencyMs: Date.now() - startedAt };
     } finally {
       clearInterval(watcher);

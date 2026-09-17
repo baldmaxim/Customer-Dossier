@@ -8,6 +8,7 @@
 |---|---|---|---|
 | 10 | IMPLEMENTED (основа — закрытие 09; +timeout выборки bench, выравнивание CLAUDE/README) | T10-04/05/07/08 PASS в прогоне 09; остальное NOT_RUN | `stages/10_REPORT.md` |
 | 11 | IMPLEMENTED: execution-identity@1, сверка конфигурации до вызова, допуск и аренда перед каждым вызовом; миграция 021 | NOT_RUN (`evidence/11/USER_RUN.md`) | `stages/11_REPORT.md` |
+| 14A | IMPLEMENTED: current-eval@1 (путь конвейера, общий классификатор ответа, план проверок до модели, replay/compare/import-legacy, разбиение по происхождению); legacy --shadow/--compare только с --legacy | REAL_MODEL NOT_RUN (`evidence/14A/USER_RUN.md`); reference-fact scoring — 14B | `stages/14A_REPORT.md` |
 | 13 | IMPLEMENTED: snapshot-request@1 (409 на чужой ключ, конкурентный повтор), чтение сигналов в транзакции снимка, редакция основания в сигналах, coverage@1 фактов и схемы, dossier-snapshot@2; миграция 022 | NOT_RUN (`evidence/13/USER_RUN.md`) | `stages/13_REPORT.md` |
 | 12 | IMPLEMENTED: scope-match@1, dossier-template@2 (роль/цепочка/противоречия по объекту, корпусу, работам, роли, дате; контекст и scope_unknown), схема связей тем же правилом | NOT_RUN (`evidence/12/USER_RUN.md`) | `stages/12_REPORT.md` |
 

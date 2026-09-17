@@ -49,7 +49,7 @@ npm run pipeline:once -- --errors         # последние отказы с �
 npm run pipeline:once -- --skipped        # тексты, признанные нерелевантными
 npm run pipeline:once -- --doc <id>       # документ целиком: текст, разбор, канон
 npm run pipeline:once -- --queue          # очередь проверки: идентичность, конфликт ролей, исправление, спор
-npm run benchmark:model                   # замер локальной модели на синтетическом корпусе этапа 06
+npm run benchmark:model [-- --case ID,ID] [-- --out f] | --replay f | --compare a b | --import-legacy f  # current-eval@1: extract@3 путём конвейера, план проверок до модели (этап 14A)
 npm run release:check [-- --out f.json | --compare f.json]  # контрольные числа (local-inventory@2), связность; exit 1 при проблемах
 npm run release:manifest [-- --out f.json | --compare f.json]  # content-manifest@1: содержимое строк, схема, последовательности, hash снимков (только чтение)
 npm run release:bench [-- --runs 5] [-- --pipeline-synthetic]  # замеры: только TEST_DATABASE_URL, общий preflight; невалидный шаг — exit 1

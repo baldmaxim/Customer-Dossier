@@ -1,112 +1,160 @@
-// Замер настроенной локальной модели на синтетическом корпусе этапа 06.
+// Оценка текущей конфигурации извлечения на синтетическом корпусе (current-eval@1, этап 14A).
 //
-//   npm run benchmark:model                  — все случаи корпуса
-//   npm run benchmark:model -- --case SYN-05 — один случай
-//   npm run benchmark:model -- --out report.json
+//   npm run benchmark:model [-- --case SYN-05,SYN-07] [-- --out report.json]   — вызвать настроенную модель (LM Studio)
+//   npm run benchmark:model -- --replay report.json [-- --out new.json]        — пересчитать по сохранённым ответам, без сети
+//   npm run benchmark:model -- --compare before.json after.json                 — парное сравнение двух отчётов
+//   npm run benchmark:model -- --import-legacy benchmark-06.json                — разбор отчёта прежнего формата
 //
-// Отправляет в LM Studio только вымышленные тексты корпуса; базу не открывает, источники не трогает.
-// Это не precision/recall: 17 синтетических текстов и машинные критерии. Нарушения safety — ошибки
-// смысла, которые верификатор не поймал; recall — чего модель не нашла. Пороги по итогам не меняются.
+// Путь тот же, что у конвейера extract@3 (evaluation.ts). В модель уходят только вымышленные тексты корпуса; база не
+// открывается. Это не precision/recall на реальных данных и не валидация модели. Пороги задаются до прогона.
+// Exit 1: неизвестный/пустой выбор кейсов, вердикт FAIL/INCOMPLETE, несовместимое сравнение, недоступная модель.
 
 import fs from 'node:fs';
 
 import { env } from '../../config/env.js';
-import { checkLlmConnection, extractSemantic } from '../../llm/client.js';
-import { SEMANTIC_PROMPT_VERSION } from '../../llm/semantic/prompt.js';
+import { checkLlmConnection } from '../../llm/client.js';
 import { SEMANTIC_SCHEMA_VERSION } from '../../llm/semantic/schema.js';
-import { buildCandidates } from '../candidates.js';
+import { planCodePointChunks } from '../chunking.js';
+import { buildFingerprint, buildModelIdentity, defaultChunkerParams, lmStudioProvider, type IChunkerParams } from '../provider.js';
 import { CORPUS } from './__fixtures__/corpus.js';
+import {
+  DEFAULT_GATES,
+  EVALUATION_CONTRACT_VERSION,
+  SCORING_VERSION,
+  compareReports,
+  corpusHash,
+  describeLegacyReport,
+  evaluateCase,
+  selectCases,
+  summarize,
+  type IEvaluationReport,
+  type IRecordedChunk,
+} from './evaluation.js';
 
-interface ICaseResult {
-  id: string;
-  outcome: 'ok' | 'model_error';
-  error: string | null;
-  latencyMs: number;
-  checks: Array<{ label: string; kind: string; pass: boolean }>;
-  publishable: number;
-  review: number;
-  rejected: number;
-  /** Для разбора полноты: что ответила модель и что отбросила проверка (только синтетические тексты). */
-  answer: unknown;
-  reasons: string[];
-}
-
+const argv = process.argv.slice(2);
 const argValue = (flag: string): string | null => {
-  const i = process.argv.indexOf(flag);
-  return i === -1 ? null : (process.argv[i + 1] ?? null);
+  const i = argv.indexOf(flag);
+  return i === -1 ? null : (argv[i + 1] ?? null);
 };
 
-const main = async (): Promise<void> => {
+const printSummary = (report: IEvaluationReport): void => {
+  const s = report.summary;
+  console.log(`[eval] ${report.identity.contract} · ${report.identity.schemaVersion} · корпус ${report.identity.corpusHash.slice(0, 12)}… · исполнение ${report.identity.executionFingerprint.slice(0, 12)}… · режим ${report.meta.mode}`);
+  console.log(`[eval] кейсов ${s.cases.planned}: извлечено ${s.cases.extracted}, не публикуемо ${s.cases.notPublishable}, отказ инфраструктуры ${s.cases.infrastructureError}; невалидная схема в ${s.schemaInvalidCases}`);
+  console.log(`[eval] safety: пройдено ${s.safety.passed}, нарушено ${s.safety.failed}, не оценено ${s.safety.notEvaluated} из ${s.safety.planned} запланированных`);
+  console.log(`[eval] recall: найдено ${s.recall.passed} из ${s.recall.planned} запланированных (не найдено ${s.recall.failed})`);
+  console.log(`[eval] вердикт ${s.verdict}${s.verdictReasons.length ? `: ${s.verdictReasons.join('; ')}` : ''}`);
+  for (const c of report.cases) {
+    const failed = c.checks.filter(x => x.status !== 'passed');
+    console.log(`  ${c.id} ${c.status}${c.reason ? ` (${c.reason})` : ''}${failed.length ? ` — ${failed.map(x => `[${x.kind}:${x.status}] ${x.label}`).join('; ')}` : ''}`);
+  }
+};
+
+const writeOut = (report: unknown): void => {
+  const out = argValue('--out');
+  if (out) {
+    fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    console.log(`[eval] отчёт: ${out}`);
+  }
+};
+
+const selector = (): string[] | null => {
+  const raw = argValue('--case');
+  if (argv.includes('--case') && (raw === null || raw.startsWith('--'))) return [];
+  return raw === null ? null : raw.split(',').map(s => s.trim()).filter(Boolean);
+};
+
+const finish = (report: IEvaluationReport): void => {
+  printSummary(report);
+  writeOut(report);
+  if (report.summary.verdict === 'FAIL' || report.summary.verdict === 'INCOMPLETE') process.exitCode = 1;
+};
+
+const runModel = async (): Promise<void> => {
+  const cases = selectCases(CORPUS, selector());
   const connection = await checkLlmConnection();
   if (!connection.ok) {
-    console.error(`[benchmark] LM Studio недоступен: ${connection.error}. Замер NOT_RUN.`);
+    console.error(`[eval] LM Studio недоступен: ${connection.error}. Оценка NOT_RUN.`);
     process.exitCode = 1;
     return;
   }
-  const only = argValue('--case');
-  const cases = CORPUS.filter(c => !only || c.id === only);
-  const results: ICaseResult[] = [];
-
+  const provider = lmStudioProvider();
+  const chunker: IChunkerParams = defaultChunkerParams();
+  const recorded: Record<string, IRecordedChunk[]> = {};
   for (const c of cases) {
-    const started = Date.now();
-    const answer = await extractSemantic({ body: c.text, publishedAt: null });
-    const latencyMs = Date.now() - started;
-    if (!answer.ok) {
-      results.push({ id: c.id, outcome: 'model_error', error: `${answer.failure}: ${answer.message}`, latencyMs, checks: [], publishable: 0, review: 0, rejected: 0, answer: null, reasons: [] });
-      console.log(`${c.id}  ошибка модели: ${answer.failure}`);
-      continue;
+    recorded[c.id] = [];
+    for (const p of planCodePointChunks(c.text, chunker.chunkSize, chunker.maxChunks, chunker.overlap)) {
+      try {
+        recorded[c.id]!.push({ index: p.index, start: p.start, end: p.end, result: await provider.extract(p.text, null) });
+      } catch (err) {
+        recorded[c.id]!.push({ index: p.index, start: p.start, end: p.end, result: { thrown: err instanceof Error ? err.message : String(err) } });
+      }
     }
-    const build = buildCandidates([{ chunkId: 0, index: 0, start: 0, text: c.text, extraction: answer.data }], null);
-    const checks = c.checks.map(check => ({ label: check.label, kind: check.kind, pass: check.pass(build) }));
-    const result: ICaseResult = {
-      id: c.id,
-      outcome: 'ok',
-      error: answer.truncatedInput ? 'ответ на укороченном тексте' : null,
-      latencyMs,
-      checks,
-      publishable: build.assertions.filter(a => a.grounded && !a.rejectedReason).length,
-      review: build.assertions.filter(a => a.rejectedReason?.startsWith('на проверку')).length,
-      rejected: build.rejected.length,
-      answer: answer.data,
-      reasons: [
-        ...build.rejected.map(r => `отброшено ${r.kind} «${r.name}»: ${r.reason}`),
-        ...build.assertions.filter(a => a.rejectedReason).map(a => `${a.content.predicate}/${a.content.role ?? a.content.eventType}: ${a.rejectedReason}`),
-      ],
-    };
-    results.push(result);
-    const failed = checks.filter(x => !x.pass);
-    console.log(
-      `${c.id}  ${(latencyMs / 1000).toFixed(1)} с  публикуемых ${result.publishable}, на проверку ${result.review}, отброшено ${result.rejected}` +
-        (failed.length ? `\n    не выполнено: ${failed.map(x => `[${x.kind}] ${x.label}`).join('; ')}` : '  все критерии'),
-    );
   }
+  const evaluated = cases.map(c => evaluateCase(c, chunker, recorded[c.id]!));
+  finish({
+    identity: {
+      contract: EVALUATION_CONTRACT_VERSION,
+      scoring: SCORING_VERSION,
+      corpusHash: corpusHash(CORPUS),
+      executionFingerprint: buildFingerprint(provider, chunker).fingerprint,
+      schemaVersion: provider.schemaVersion ?? 'extract@2',
+      gates: DEFAULT_GATES,
+    },
+    meta: { takenAt: new Date().toISOString(), mode: 'model', modelReported: { ...(buildModelIdentity(provider).serverReported as Record<string, string>), model: env.LMSTUDIO_MODEL, loadedModels: connection.models.join(',') }, code: null },
+    cases: evaluated,
+    recorded,
+    summary: summarize(cases, evaluated, DEFAULT_GATES),
+  });
+  if (provider.schemaVersion !== SEMANTIC_SCHEMA_VERSION) console.log('[eval] ВНИМАНИЕ: EXTRACT_SCHEMA_VERSION не extract@3 — оценивается не текущая схема по умолчанию');
+};
 
-  const all = results.flatMap(r => r.checks);
-  const summary = {
-    model: env.LMSTUDIO_MODEL,
-    schema: SEMANTIC_SCHEMA_VERSION,
-    prompt: SEMANTIC_PROMPT_VERSION,
-    cases: results.length,
-    modelErrors: results.filter(r => r.outcome === 'model_error').length,
-    safety: { passed: all.filter(x => x.kind === 'safety' && x.pass).length, total: all.filter(x => x.kind === 'safety').length },
-    recall: { passed: all.filter(x => x.kind === 'recall' && x.pass).length, total: all.filter(x => x.kind === 'recall').length },
-    medianLatencyMs: [...results.map(r => r.latencyMs)].sort((a, b) => a - b)[Math.floor(results.length / 2)] ?? null,
-    note: 'синтетический корпус, не оценка precision/recall на реальных данных',
-  };
-  console.log(
-    `\n[benchmark] ${summary.model} ${summary.schema}/${summary.prompt}: safety ${summary.safety.passed}/${summary.safety.total}, ` +
-      `recall ${summary.recall.passed}/${summary.recall.total}, ошибок модели ${summary.modelErrors}, медиана ${summary.medianLatencyMs} мс`,
-  );
-  const out = argValue('--out');
-  if (out) {
-    fs.writeFileSync(out, JSON.stringify({ summary, results }, null, 2), 'utf8');
-    console.log(`[benchmark] отчёт: ${out}`);
+const replay = (file: string): void => {
+  const prior = JSON.parse(fs.readFileSync(file, 'utf8')) as IEvaluationReport;
+  const cases = selectCases(CORPUS, prior.cases.map(c => c.id));
+  const chunker: IChunkerParams = defaultChunkerParams();
+  const evaluated = cases.map(c => evaluateCase(c, chunker, prior.recorded[c.id] ?? []));
+  finish({
+    identity: { ...prior.identity, contract: EVALUATION_CONTRACT_VERSION, scoring: SCORING_VERSION, corpusHash: corpusHash(CORPUS), gates: DEFAULT_GATES },
+    meta: { ...prior.meta, takenAt: new Date().toISOString(), mode: 'replay' },
+    cases: evaluated,
+    recorded: prior.recorded,
+    summary: summarize(cases, evaluated, DEFAULT_GATES),
+  });
+};
+
+const main = async (): Promise<void> => {
+  const compareIdx = argv.indexOf('--compare');
+  if (compareIdx >= 0) {
+    const [a, b] = [argv[compareIdx + 1], argv[compareIdx + 2]];
+    if (!a || !b) throw new Error('--compare ожидает два файла');
+    const cmp = compareReports(JSON.parse(fs.readFileSync(a, 'utf8')) as IEvaluationReport, JSON.parse(fs.readFileSync(b, 'utf8')) as IEvaluationReport);
+    if (!cmp.compatible) {
+      console.log(`[eval] НЕСОВМЕСТИМО: ${cmp.incompatibleReasons.join('; ')}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`[eval] recall: ${cmp.recallDelta >= 0 ? '+' : ''}${cmp.recallDelta}; потери safety: ${cmp.safetyRegressions.length}`);
+    for (const r of cmp.safetyRegressions) console.log(`  SAFETY ↓ ${r}`);
+    for (const p of cmp.perCase) console.log(`  ${p.id} [${p.kind}] ${p.label}: ${p.before} → ${p.after}`);
+    writeOut(cmp);
+    return;
   }
+  const legacy = argValue('--import-legacy');
+  if (legacy) {
+    const described = describeLegacyReport(JSON.parse(fs.readFileSync(legacy, 'utf8')));
+    console.log(JSON.stringify(described, null, 2));
+    writeOut(described);
+    return;
+  }
+  const replayFile = argValue('--replay');
+  if (replayFile) return replay(replayFile);
+  return runModel();
 };
 
 main()
   .then(() => process.exit(process.exitCode ?? 0))
   .catch(err => {
-    console.error('[benchmark] прервано:', err instanceof Error ? err.message : String(err));
+    console.error('[eval] прервано:', err instanceof Error ? err.message : String(err));
     process.exit(1);
   });
