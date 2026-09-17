@@ -6,6 +6,7 @@ import { ApiError, api } from '../api/client';
 import type { ICaseDossier, ICaseInput, ICaseRow } from '../api/types';
 import { CaseForm } from '../components/CaseForm';
 import { GraphPanel } from '../components/GraphPanel';
+import { NegotiationBrief } from '../components/NegotiationBrief';
 import { SnapshotsPanel } from '../components/SnapshotsPanel';
 import { StatementList } from '../components/StatementList';
 import { CASE_CHAIN_STATUS_LABELS, CASE_ROLE_STATUS_LABELS, formatDateTime } from '../lib/labels';
@@ -122,6 +123,7 @@ export const CasePage: FC = () => {
 
       {dossier && !dossierQuery.isError && (
         <>
+          {dossier.brief && <NegotiationBrief brief={dossier.brief} />}
           <section className={styles.section} aria-labelledby="obs">
             <h2 id="obs" className={styles.sectionTitle}>Главное по источникам</h2>
             <StatementList items={dossier.observations} showQuotes />

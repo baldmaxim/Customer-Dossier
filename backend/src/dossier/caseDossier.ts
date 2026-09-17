@@ -10,9 +10,10 @@ import type { ICaseRow } from './cases.js';
 import type { ICoverage, IFact } from './facts.js';
 import { matchScope, scopeNote, type ICaseScope, type IScopeMatch } from './scope.js';
 import { dateText, eventText, factStatement, outcomeText, plainStatement, proceduralText, roleText, stageText, type IStatement } from './statements.js';
+import { buildNegotiationBrief, type INegotiationBrief } from './brief.js';
 
 // @2 (этап 12): применимость по scope-match@1, контекстные списки role.context/chain.context, статусы scope_unknown.
-export const DOSSIER_TEMPLATE_VERSION = 'dossier-template@2';
+export const DOSSIER_TEMPLATE_VERSION = 'dossier-template@3';
 
 export interface ICaseDossierInput {
   caseRow: ICaseRow;
@@ -49,6 +50,8 @@ export interface ICaseDossier {
   questions: Array<{ code: string; text: string; basedOn: string }>;
   /** Покрытие выборок, из которых построено досье (coverage@1); в досье до этапа 13 поля нет. */
   coverage?: ICoverage[];
+  /** Этап 17 (negotiation-brief@1): краткое досье для переговоров; в снимках до @3 отсутствует. */
+  brief?: INegotiationBrief;
   disclaimer: string;
 }
 
@@ -249,7 +252,7 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
       return factStatement(
         'company_event',
         f,
-        `${eventText(f.eventType)}${f.caseNumber ? ` № ${f.caseNumber}` : ''}${roleWord ? `, компания — ${roleWord}` : ''}${other ? `, другая сторона — ${other}` : ''}; ${dateText(f.validFrom, f.periodPrecision)}${f.eventStage ? `; стадия по источнику: ${stageText(f.eventStage)}` : '; стадия не указана'}${f.eventOutcome ? `; результат по источнику: ${outcomeText(f.eventOutcome)}` : ''}${f.eventType === 'court_case' ? '. Наличие дела не означает нарушения' : ''}`,
+        `${eventText(f.eventType)}${f.caseNumber ? ` № ${f.caseNumber}` : ''}${roleWord ? `, компания — ${roleWord}` : ''}${other ? `, другая сторона — ${other}` : ''}; ${dateText(f.validFrom, f.periodPrecision)}${f.eventStage ? `; стадия по источнику: ${stageText(f.eventStage)}` : '; стадия не указана'}${f.eventOutcome ? `; результат по источнику: ${outcomeText(f.eventOutcome)}` : ''}${f.valueNumeric ? `; сумма требований по публикации: ${f.valueNumeric} ${f.valueCurrency ?? '(валюта не указана)'} — не установленная задолженность` : ''}${f.eventType === 'court_case' ? '. Наличие дела не означает нарушения' : ''}`,
       );
     });
 
@@ -341,7 +344,7 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
 
   const allEvidence = [...input.companyFacts, ...input.projectFacts].flatMap(f => f.evidence.map(e => e.publishedAt)).filter((d): d is string => Boolean(d)).sort();
 
-  return {
+  const dossier: ICaseDossier = {
     templateVersion: DOSSIER_TEMPLATE_VERSION,
     caseId: c.id,
     caseVersion: c.version,
@@ -364,4 +367,5 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
     ...(input.coverage ? { coverage: input.coverage } : {}),
     disclaimer: 'Досье собрано из открытых публикаций и записей оператора. Это не проверка контрагента, не оценка надёжности и не решение о сотрудничестве.',
   };
+  return { ...dossier, brief: buildNegotiationBrief(dossier) };
 };

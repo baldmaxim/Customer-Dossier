@@ -167,11 +167,29 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
             </span>
           </div>
 
+          <ul className={styles.notes} aria-label="Легенда схемы">
+            {ALL_TYPES.map(t => (
+              <li key={t}>
+                <svg width="28" height="10" aria-hidden="true">
+                  <line x1="0" y1="5" x2="28" y2="5" className={`${styles.edge} ${styles[`edge_${t}`]}`} />
+                </svg>{' '}
+                {GRAPH_EDGE_LABELS[t]}
+              </li>
+            ))}
+            <li>Стрелка — от первой стороны утверждения ко второй: заказчик → исполнитель, компания → объект, часть → комплекс.</li>
+            <li>Ребро — только утверждение со своей цитатой; промежуточные звенья не достраиваются. Договор сообщён источником, подписанный документ не проверялся.</li>
+          </ul>
+
           {graph.nodes.length <= 1 && graph.edges.length === 0 ? (
             <p className={styles.meta}>Связей по выбранным фильтрам не найдено. Это не означает, что связей нет.</p>
           ) : view === 'schema' ? (
             <div className={styles.canvas}>
               <svg width={width} height={height} role="img" aria-label="Схема связей; подробности — в режиме «Таблица»">
+                <defs>
+                  <marker id="graph-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" className={styles.arrow} />
+                  </marker>
+                </defs>
                 {graph.edges.map(e => {
                   const a = positions.get(e.from);
                   const b = positions.get(e.to);
@@ -187,7 +205,7 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
                     : `M ${x1} ${y1} L ${x2 > x1 ? x2 : b.x + NODE_W} ${y2}`;
                   return (
                     <g key={e.key}>
-                      <path d={d} className={`${styles.edge} ${styles[`edge_${e.type}`]} ${selected === e.key ? styles.edgeSelected : ''}`} fill="none" />
+                      <path d={d} className={`${styles.edge} ${styles[`edge_${e.type}`]} ${selected === e.key ? styles.edgeSelected : ''}`} fill="none" markerEnd="url(#graph-arrow)" />
                       <path
                         d={d}
                         className={styles.edgeHit}

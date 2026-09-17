@@ -21,6 +21,10 @@ export interface IStatement {
    * атрибуцию; поле есть только когда такие решения найдены (фразы без слияния и прежние снимки не меняются).
    */
   priorDecisions?: IPriorDecision[];
+  /** Этап 17: публикации-основания (supports): сколько публикаций и сколько разных текстов (семей перепечаток). */
+  sources?: { publications: number; textFamilies: number };
+  /** Этап 17: основание изменилось — у публикации есть более новая редакция. */
+  pendingRevision?: boolean;
   /** Применимость утверждения к предмету обращения (scope-match@1, этап 12); только у фраз досье обращения. */
   scope?: IScopeMatch;
 }
@@ -164,6 +168,11 @@ export const factStatement = (code: string, fact: IFact, body: string, attributi
     assertionIds: [fact.assertionId],
     evidenceIds: evidence.map(e => e.id),
     quotes: evidence.slice(0, 3).map(e => ({ evidenceId: e.id, quote: e.quote, sourceTitle: e.sourceTitle, publishedAt: e.publishedAt, stance: e.stance })),
+    sources: {
+      publications: new Set(evidence.filter(e => e.stance === 'supports').map(e => e.sourceItemId)).size,
+      textFamilies: new Set(evidence.filter(e => e.stance === 'supports').map(e => e.dedupHash)).size,
+    },
+    ...(evidence.some(e => e.pendingRevision === true) ? { pendingRevision: true } : {}),
     ...(fact.priorDecisions?.length ? { priorDecisions: fact.priorDecisions.map(d => ({ ...d })) } : {}),
   };
 };

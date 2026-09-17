@@ -432,7 +432,7 @@ export const CLAIMED_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
 /** Типы рёбер схемы связей (этап 08B). Различаются подписью и штрихом линии, не цветом надёжности. */
 export const GRAPH_EDGE_LABELS: Record<string, string> = {
   participation: 'участие в объекте',
-  contract: 'договор',
+  contract: 'договор (сообщён источником)',
   corporate: 'корпоративная связь',
   hierarchy: 'входит в объект',
   co_mentioned: 'совместное упоминание',

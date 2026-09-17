@@ -6,6 +6,7 @@
 
 import type { IStatement } from '../dossier/statements.js';
 import type { ISnapshotPayload } from './build.js';
+import type { IBriefItem, IBriefSection, INegotiationBrief } from '../dossier/brief.js';
 
 export interface ISnapshotMeta {
   id: number;
@@ -27,7 +28,7 @@ const ATTRIBUTION: Record<string, string> = {
 
 const EDGE: Record<string, string> = {
   participation: 'участие в объекте',
-  contract: 'договор',
+  contract: 'договор (сообщён источником)',
   corporate: 'корпоративная связь',
   hierarchy: 'входит в объект',
   co_mentioned: 'совместное упоминание',
@@ -68,9 +69,41 @@ const htmlStatements = (items: IStatement[], empty: string): string =>
         )
         .join('')}</ul>`;
 
+/** Этап 17: пункт краткого досье — статус словами, текст, область, свежесть, происхождение и ссылки. Одинаковый набор полей во всех форматах. */
+export const briefItemLine = (i: IBriefItem): { status: string; text: string; details: string } => ({
+  status: i.statusLabel,
+  text: i.text,
+  details: [
+    i.scope ? `область: ${i.scope}` : null,
+    i.asOf ? `свежесть: ${i.asOf}` : null,
+    i.sources.publications > 0 ? `источники: ${i.sources.label}` : null,
+    i.pendingRevision ? 'есть более новая редакция — нужен пересмотр' : null,
+    i.assertionIds.length ? `утв. ${i.assertionIds.map(id => `#${id}`).join(', ')}` : null,
+    i.evidenceIds.length ? `док. ${i.evidenceIds.map(id => `#${id}`).join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join('; '),
+});
+
+const htmlBrief = (b: INegotiationBrief | undefined): string => {
+  if (!b) return '<p class="muted">Краткое досье в снимке отсутствует (снимок до dossier-template@3).</p>';
+  const section = (x: IBriefSection): string =>
+    `<h3>${escapeHtml(x.title)}</h3>${
+      x.items.length === 0
+        ? `<p class="muted">${escapeHtml(x.empty)}</p>`
+        : `<ul class="statements">${x.items
+            .map(i => {
+              const l = briefItemLine(i);
+              return `<li><span class="attr">${escapeHtml(l.status)}</span> ${escapeHtml(l.text)}${l.details ? ` <span class="ids">[${escapeHtml(l.details)}]</span>` : ''}</li>`;
+            })
+            .join('')}</ul>`
+    }`;
+  return `${b.sections.map(section).join('')}${section(b.background)}<h3>Ограничения данных</h3><ul>${b.dataLimits.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`;
+};
+
 const HTML_STYLE = `
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111;background:#fff;margin:24px;line-height:1.45;font-size:14px}
-h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:22px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:22px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}h3{font-size:14px;margin:14px 0 6px}
 .muted,.ids{color:#555;font-size:12px}.attr{font-weight:600;font-size:11px;text-transform:uppercase;color:#444}
 ul.statements{padding-left:18px}ul.statements li{margin:0 0 8px}
 blockquote{margin:4px 0 0;padding:4px 8px;border-left:3px solid #999;background:#f4f4f4;overflow-wrap:anywhere}
@@ -104,6 +137,9 @@ export const snapshotToHtml = (meta: ISnapshotMeta, p: ISnapshotPayload): string
 <h1>${escapeHtml(p.case.title)}</h1>
 <p class="muted">Снимок №${meta.id} обращения №${meta.caseId} · создан ${escapeHtml(p.generatedAt)} · знания на ${escapeHtml(p.knowledgeCutoff)} · ${escapeHtml(p.effective.note)} · версии: ${escapeHtml(`${p.versions.template}, ${p.versions.signalsRules}, ${p.versions.graph}`)}</p>
 <p class="muted">Целостность: ${escapeHtml(meta.hashAlgorithm)} ${escapeHtml(meta.payloadHash)} — показывает, что содержание не менялось; не подпись и не подтверждение истинности.</p>
+<h2>Кратко для переговоров</h2>
+${htmlBrief(d.brief)}
+<p class="muted">Ниже — приложения-основания: полное досье, связи, решения и источники. Печать — браузерная («Версия для печати»), не PDF-генератор.</p>
 <h2>Компания и предмет обращения</h2>
 <p>${companyLine}</p>
 <p>Объект: ${p.project ? escapeHtml(`${p.project.name}${p.project.city ? `, ${p.project.city}` : ''}`) : escapeHtml(p.case.projectNameClaimed ?? 'не выбран')}${p.case.scopeBuilding ? `, ${escapeHtml(p.case.scopeBuilding)}` : ''} · дата обращения ${escapeHtml(p.case.requestDate)}</p>
@@ -158,6 +194,22 @@ const mdStatements = (items: IStatement[], empty: string): string =>
         )
         .join('');
 
+const mdBrief = (b: INegotiationBrief | undefined): string[] => {
+  if (!b) return ['_Краткое досье в снимке отсутствует (снимок до dossier-template@3)._', ''];
+  const section = (x: IBriefSection): string[] => [
+    `### ${escapeMarkdown(x.title)}`,
+    '',
+    ...(x.items.length === 0
+      ? [`_${escapeMarkdown(x.empty)}_`]
+      : x.items.map(i => {
+          const l = briefItemLine(i);
+          return `- **${escapeMarkdown(l.status)}:** ${escapeMarkdown(l.text)}${l.details ? ` \[${escapeMarkdown(l.details)}\]` : ''}`;
+        })),
+    '',
+  ];
+  return [...b.sections.flatMap(section), ...section(b.background), '### Ограничения данных', '', ...b.dataLimits.map(l => `- ${escapeMarkdown(l)}`), ''];
+};
+
 export const snapshotToMarkdown = (meta: ISnapshotMeta, p: ISnapshotPayload): string => {
   const d = p.dossier;
   const lines: string[] = [];
@@ -168,6 +220,8 @@ export const snapshotToMarkdown = (meta: ISnapshotMeta, p: ISnapshotPayload): st
     `Целостность: ${escapeMarkdown(meta.hashAlgorithm)} \`${meta.payloadHash}\` — не подпись и не подтверждение истинности.`,
     '',
   );
+  lines.push('## Кратко для переговоров', '', ...mdBrief(d.brief));
+  lines.push('_Ниже — приложения-основания: полное досье, связи, решения и источники._', '');
   lines.push('## Компания и предмет обращения', '');
   lines.push(
     p.company

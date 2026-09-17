@@ -12,6 +12,8 @@ export interface IFactEvidence {
   sourceTitle: string;
   publishedAt: string | null;
   dedupHash: string;
+  /** Этап 17: у публикации есть более новая редакция, чем та, на которой основано доказательство. */
+  pendingRevision?: boolean;
 }
 
 /**
@@ -159,7 +161,8 @@ const withEvidence = async (exec: DbExecutor, rows: Array<Omit<IFact, 'evidence'
       `SELECT e.assertion_id AS "assertionId", e.id, e.stance::text AS stance, e.quote, e.revision_id AS "revisionId",
               r.source_item_id AS "sourceItemId", s.title AS "sourceTitle",
               to_char(r.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "publishedAt",
-              encode(r.dedup_hash, 'hex') AS "dedupHash"
+              encode(r.dedup_hash, 'hex') AS "dedupHash",
+              coalesce(si.latest_revision_id IS DISTINCT FROM r.id AND si.latest_revision_id IS NOT NULL, false) AS "pendingRevision"
        FROM evidence e
        JOIN document_revisions r ON r.id = e.revision_id
        JOIN source_items si ON si.id = r.source_item_id

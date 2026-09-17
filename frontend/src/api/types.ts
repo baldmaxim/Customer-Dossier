@@ -626,7 +626,38 @@ export interface ICaseInput {
   status: 'open' | 'closed';
 }
 
+/** Этап 17 (negotiation-brief@1): краткое досье для переговоров. */
+export interface IBriefItem {
+  code: string;
+  status: string;
+  statusLabel: string;
+  text: string;
+  scope: string | null;
+  asOf: string | null;
+  sources: { publications: number; textFamilies: number; independence: string; label: string };
+  pendingRevision: boolean;
+  assertionIds: number[];
+  evidenceIds: number[];
+}
+
+export interface IBriefSection {
+  key: string;
+  title: string;
+  items: IBriefItem[];
+  empty: string;
+}
+
+export interface INegotiationBrief {
+  version: string;
+  sections: IBriefSection[];
+  background: IBriefSection;
+  questions: Array<{ code: string; text: string; basedOn: string }>;
+  dataLimits: string[];
+}
+
 export interface ICaseDossier {
+  /** Снимки до dossier-template@3 — без поля. */
+  brief?: INegotiationBrief;
   templateVersion: string;
   caseId: number;
   caseVersion: number;

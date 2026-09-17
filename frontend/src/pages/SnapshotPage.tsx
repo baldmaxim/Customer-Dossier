@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { IStatement, ISnapshotView } from '../api/types';
 import { GraphPanel } from '../components/GraphPanel';
+import { NegotiationBrief } from '../components/NegotiationBrief';
 import { StatementList } from '../components/StatementList';
 import { CASE_CHAIN_STATUS_LABELS, CASE_ROLE_STATUS_LABELS, STANCE_LABELS, formatDate, formatDateTime } from '../lib/labels';
 import styles from './Dossier.module.css';
@@ -94,6 +95,12 @@ export const SnapshotPage: FC = () => {
           </a>
         </div>
       </header>
+
+      {d.brief ? (
+        <NegotiationBrief brief={d.brief} frozen />
+      ) : (
+        <p className={styles.meta}>Краткое досье в снимке отсутствует: снимок создан до dossier-template@3.</p>
+      )}
 
       {block('Существенные наблюдения', d.observations, 'Наблюдений нет.')}
       {block('Предмет обращения', d.subject, '')}
