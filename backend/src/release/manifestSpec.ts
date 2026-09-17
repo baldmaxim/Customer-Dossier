@@ -57,6 +57,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'events', class: 'domain', why: 'legacy-события' },
   { table: 'mentions', class: 'domain', why: 'упоминания' },
   { table: 'resolution_ambiguities', class: 'domain', why: 'неоднозначности резолвера' },
+  { table: 'ambiguity_decisions', class: 'history', why: 'неизменяемые решения по неоднозначным упоминаниям (этап 15A)' },
   { table: 'merge_queue', class: 'domain', why: 'очередь слияний и решения по ней' },
   { table: 'entity_merges', class: 'history', why: 'журнал слияний и отмен' },
   { table: 'entity_merge_moves', class: 'history', why: 'перенос строк слиянием (mapping)' },

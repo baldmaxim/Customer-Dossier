@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { IReviewQueueItem } from '../api/types';
+import { AmbiguityDetail } from '../components/AmbiguityDetail';
+import { AmbiguityList } from '../components/AmbiguityList';
 import { AssertionDetail } from '../components/AssertionDetail';
 import { REVIEW_QUEUE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './Dossier.module.css';
@@ -26,6 +28,8 @@ export const ReviewQueuePage: FC = () => {
   const query = useQuery({
     queryKey: ['review-queue', kind],
     queryFn: () => api.get<{ items: IReviewQueueItem[] }>(`/api/review-queue?limit=100${kind === 'all' ? '' : `&kind=${kind}`}`),
+    // Идентичность разбирается постраничным списком неоднозначностей (этап 15A): первые 100 — не весь backlog.
+    enabled: kind !== 'identity',
   });
   const items = query.data?.items ?? [];
 
@@ -46,6 +50,9 @@ export const ReviewQueuePage: FC = () => {
         </label>
       </header>
 
+      {kind === 'identity' ? (
+        <AmbiguityList />
+      ) : (
       <section className={styles.section}>
         {query.isLoading && <p className={styles.meta}>Загрузка…</p>}
         {query.isError && (
@@ -67,7 +74,9 @@ export const ReviewQueuePage: FC = () => {
                   </strong>
                   <span className={styles.meta}>с {formatDateTime(item.since)}</span>
                   {item.kind === 'identity' ? (
-                    <Link to="/admin">разобрать в очереди слияний и неоднозначностей</Link>
+                    <button type="button" className={styles.linkButton} aria-expanded={open} onClick={() => setSelected(open ? null : key)}>
+                      {open ? 'свернуть' : 'разобрать упоминание'}
+                    </button>
                   ) : (
                     <button type="button" className={styles.linkButton} aria-expanded={open} onClick={() => setSelected(open ? null : key)}>
                       {open ? 'свернуть' : other ? 'сравнить версии' : 'открыть'}
@@ -77,6 +86,12 @@ export const ReviewQueuePage: FC = () => {
                 {item.kind === 'identity' && (
                   <p className={styles.meta}>
                     «{String(item.detail.surface ?? '')}» — кандидатов: {Array.isArray(item.detail.candidates) ? item.detail.candidates.length : '—'}
+                  </p>
+                )}
+                {item.kind === 'identity' && open && <AmbiguityDetail ambiguityId={item.refId} />}
+                {item.kind === 'identity' && (
+                  <p className={styles.meta}>
+                    Глобальное слияние одноимённых сущностей — только в <Link to="/admin">очереди слияний</Link> после предпросмотра.
                   </p>
                 )}
                 {item.kind === 'correction' && open && (
@@ -103,6 +118,7 @@ export const ReviewQueuePage: FC = () => {
           })}
         </ul>
       </section>
+      )}
     </div>
   );
 };

@@ -43,6 +43,7 @@ export const COUNTED_TABLES = [
   'entity_merges',
   'entity_merge_moves',
   'resolution_ambiguities',
+  'ambiguity_decisions',
   'merge_queue',
   'signal_refreshes',
   'company_signal_snapshots',

@@ -437,3 +437,16 @@ export const GRAPH_EDGE_LABELS: Record<string, string> = {
   hierarchy: 'входит в объект',
   co_mentioned: 'совместное упоминание',
 };
+
+/** Этап 15A: решение по одному неоднозначному упоминанию — не слияние и не проверка утверждения. */
+export const AMBIGUITY_DECISION_LABELS: Record<string, string> = {
+  resolved_to: 'в этом тексте — выбранный кандидат',
+  kept_unknown: 'оставлено неустановленным',
+  dismissed: 'не упоминание компании/объекта',
+};
+
+export const AMBIGUITY_STATUS_LABELS: Record<string, string> = {
+  open: 'не разобрано',
+  resolved: 'решено',
+  dismissed: 'отклонено',
+};

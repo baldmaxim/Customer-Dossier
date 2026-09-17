@@ -51,6 +51,9 @@ const PreviewBlock: FC<{
   const previewQuery = useQuery({
     queryKey: ['merge-preview', pair.id],
     queryFn: () => api.get<IMergePreview>(`/api/admin/merges/${pair.id}/preview`),
+    // Оценка не подменяется молча фоновым обновлением: оператор применяет ровно то, что видел.
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
   });
 
   const apply = useMutation({
@@ -59,6 +62,7 @@ const PreviewBlock: FC<{
         expectedSourceVersion: preview.source.version,
         expectedTargetVersion: preview.target.version,
         idempotencyKey: key,
+        expectedPreviewToken: preview.previewToken,
       }),
     onSuccess: result => {
       void queryClient.invalidateQueries({ queryKey: ['merges'] });
@@ -66,8 +70,12 @@ const PreviewBlock: FC<{
       onDone(result.replayed ? 'Слияние уже было применено.' : `Слияние #${result.mergeId} применено. Его можно отменить в журнале.`);
     },
     onError: (err: Error) => {
-      if (err instanceof ApiError && err.code === 'version_conflict') {
-        setError('Сущности изменились после предпросмотра — данные обновлены, проверьте ещё раз.');
+      if (err instanceof ApiError && (err.code === 'version_conflict' || err.code === 'merge_preview_stale')) {
+        setError(
+          err.code === 'merge_preview_stale'
+            ? 'Предпросмотр устарел: появились новые доказательства, решения или ссылки. Слияние не применено — проверьте обновлённый предпросмотр.'
+            : 'Сущности изменились после предпросмотра — данные обновлены, проверьте ещё раз.',
+        );
         void previewQuery.refetch();
       } else {
         setError(err.message);

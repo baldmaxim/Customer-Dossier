@@ -10,6 +10,7 @@
 //     со ссылкой на родителя, одноимённые очереди разных ЖК не склеиваются.
 
 import type { DbExecutor } from '../db/pool.js';
+import { analystMapping } from './ambiguities.js';
 import { recordAmbiguity } from './company.js';
 import { parseProjectPath, type ProjectLevel } from './hierarchy.js';
 import { NORMALIZER_VERSION, normalizeName, isJunkName, type INormalizedName } from './normalize.js';
@@ -52,7 +53,7 @@ export interface IResolveProjectInput {
 
 export interface IResolveProjectResult {
   projectId: number;
-  method: 'alias' | 'key' | 'auto_merge' | 'created' | 'created_queued';
+  method: 'alias' | 'key' | 'auto_merge' | 'created' | 'created_queued' | 'analyst_mapping';
   confidence: number;
   queued: boolean;
 }
@@ -301,6 +302,8 @@ const resolveComplex = async (
         : { projectId: decision.id, method: 'key', confidence: 0.95, queued: false };
     }
     if (decision.kind === 'ambiguous') {
+      const mapped = await analystMapping(exec, 'project', normalized.key, input.revisionId ?? null, decision.candidateIds);
+      if (mapped !== null) return { projectId: mapped, method: 'analyst_mapping', confidence: 0.95, queued: false };
       await recordAmbiguity(exec, {
         kind: 'project',
         surface: input.surface,

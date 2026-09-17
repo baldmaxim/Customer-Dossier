@@ -64,6 +64,14 @@ export class MergeIdempotencyMismatchError extends Error {
   }
 }
 
+/** Между предпросмотром и применением изменились зависимости: новая редакция, доказательство, решение. */
+export class MergePreviewStaleError extends Error {
+  constructor(readonly currentToken: string) {
+    super('Предпросмотр устарел: после него изменились доказательства, решения или ссылки. Обновите предпросмотр.');
+    this.name = 'MergePreviewStaleError';
+  }
+}
+
 export class MergeNotFoundError extends Error {
   constructor(what: string) {
     super(`${what} не найдено`);
@@ -181,6 +189,8 @@ export const dependencyState = async (
   put('assertions', await rows(`SELECT a.id || ':' || a.version AS k FROM assertions a WHERE ${refs}`));
   put('evidence', await rows(`SELECT e.id || ':' || e.status AS k FROM evidence e JOIN assertions a ON a.id = e.assertion_id WHERE ${refs}`));
   put('reviews', await rows(`SELECT r.id::text AS k FROM review_decisions r JOIN assertions a ON a.id = r.assertion_id WHERE ${refs}`));
+  // Этап 15A: решение по неоднозначному упоминанию, указывающее на сущность, тоже меняет смысл слияния.
+  put('ambiguityDecisions', await rows(`SELECT d.id::text AS k FROM ambiguity_decisions d JOIN resolution_ambiguities m ON m.id = d.ambiguity_id WHERE m.entity_kind = '${kind}' AND d.entity_id = ANY($1::bigint[])`));
   return state;
 };
 
@@ -222,7 +232,23 @@ export interface IMergePreview {
   counts: Record<string, number>;
   reviewedAssertions: Array<{ assertionId: number; status: string; decisions: number }>;
   canApply: boolean;
+  /**
+   * merge-preview@1: sha256 состояния зависимостей обеих сущностей на момент предпросмотра. Применение с другим
+   * токеном отвергается — оценку, сделанную до нового доказательства или решения, молча не применяем.
+   */
+  previewToken: string;
 }
+
+export const MERGE_PREVIEW_VERSION = 'merge-preview@1';
+
+/** Чистая функция: одинаковое состояние (в любом порядке ключей) — одинаковый токен. */
+export const previewTokenOf = (kind: MergeEntityKind, sourceId: number, targetId: number, state: Record<string, string[]>): string => {
+  const keys = Object.keys(state).sort();
+  const canonical = keys.map(k => [k, [...(state[k] ?? [])].sort()]);
+  return createHash('sha256')
+    .update(JSON.stringify([MERGE_PREVIEW_VERSION, kind, sourceId, targetId, canonical]), 'utf8')
+    .digest('hex');
+};
 
 const summarize = async (client: PoolClient, kind: MergeEntityKind, row: IEntityRow): Promise<IEntitySummary> => {
   const identifiers = kind === 'company' ? await loadIdentifiers(client, row.id) : [];
@@ -447,6 +473,7 @@ const buildPreview = async (
     counts,
     reviewedAssertions,
     canApply: conflicts.length === 0,
+    previewToken: previewTokenOf(kind, s, t, await dependencyState(client, kind, [s, t])),
   };
 };
 
@@ -473,6 +500,8 @@ export interface IMergeApplyInput {
   actor: string;
   reason?: string | null;
   queueId?: number | null;
+  /** Токен предпросмотра (merge-preview@1). API требует его всегда; без него проверяются только версии. */
+  expectedPreviewToken?: string | null;
   /** Точка сбоя для интеграционных тестов: внутри транзакции после всех записей. */
   beforeCommit?: () => Promise<void>;
 }
@@ -862,6 +891,9 @@ export const applyEntityMerge = async (input: IMergeApplyInput): Promise<IMergeA
     }
 
     const preview = await buildPreview(client, input.kind, source, target);
+    if (input.expectedPreviewToken != null && input.expectedPreviewToken !== preview.previewToken) {
+      throw new MergePreviewStaleError(preview.previewToken);
+    }
     if (preview.conflicts.length > 0) throw new MergeBlockedError(preview.conflicts);
 
     const s = source.id;

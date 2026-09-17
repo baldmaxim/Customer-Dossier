@@ -5,6 +5,7 @@ import {
   MergeBlockedError,
   MergeIdempotencyMismatchError,
   MergeNotFoundError,
+  MergePreviewStaleError,
   UnsafeUndoError,
   type IMergePreview,
 } from '../resolve/entityMerge.js';
@@ -40,6 +41,8 @@ export const mergeCommand = async (queueId: number, yes: boolean): Promise<void>
     actor: 'cli',
     expectedSourceVersion: preview.source.version,
     expectedTargetVersion: preview.target.version,
+    // Между выводом предпросмотра и применением ничего не должно измениться (merge-preview@1).
+    expectedPreviewToken: preview.previewToken,
     idempotencyKey: `cli-merge-q${queueId}-s${preview.source.version}-t${preview.target.version}`,
   });
   console.log(
@@ -76,7 +79,7 @@ export const sendMergeCliError = (err: unknown): boolean => {
   if (err instanceof MergeBlockedError) {
     console.error('[merge] заблокировано:');
     for (const c of err.conflicts) console.error(`  [${c.code}] ${c.message}`);
-  } else if (err instanceof EntityVersionConflictError || err instanceof MergeIdempotencyMismatchError || err instanceof MergeNotFoundError) {
+  } else if (err instanceof EntityVersionConflictError || err instanceof MergeIdempotencyMismatchError || err instanceof MergeNotFoundError || err instanceof MergePreviewStaleError) {
     console.error(`[merge] ${err.message}`);
   } else if (err instanceof UnsafeUndoError) {
     console.error(`[merge] ${err.message}`);

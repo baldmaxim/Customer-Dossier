@@ -363,6 +363,8 @@ export interface IMergePreview {
   counts: Record<string, number>;
   reviewedAssertions: Array<{ assertionId: number; status: string; decisions: number }>;
   canApply: boolean;
+  /** merge-preview@1: применяется только с этим токеном. */
+  previewToken: string;
   queueStatus?: string;
 }
 
@@ -813,4 +815,62 @@ export interface ISnapshotView {
     graph: IGraph;
     limitations: string[];
   };
+}
+
+// Этап 15A: неоднозначные упоминания
+export type AmbiguityStatus = 'open' | 'resolved' | 'dismissed';
+export type AmbiguityDecisionKind = 'resolved_to' | 'kept_unknown' | 'dismissed';
+
+export interface IAmbiguityListItem {
+  id: number;
+  entityKind: 'company' | 'project';
+  surface: string;
+  candidateIds: number[];
+  revisionId: number | null;
+  occurrences: number;
+  status: AmbiguityStatus;
+  version: number;
+  updatedAt: string;
+}
+
+export interface IAmbiguityPage {
+  items: IAmbiguityListItem[];
+  total: number;
+  nextCursor: string | null;
+}
+
+export interface IAmbiguityChoiceCheck {
+  conflicts: Array<{ code: string; message: string }>;
+  textIdentifiers: Array<{ type: string; value: string }>;
+  textLegalForm: string | null;
+  notes: string[];
+}
+
+export interface IAmbiguityCandidate {
+  id: number;
+  name: string;
+  mergedIntoId: number | null;
+  legalForm: string | null;
+  entityType: string | null;
+  city: string | null;
+  identifiers: Array<{ type: string; value: string }>;
+  choice: IAmbiguityChoiceCheck;
+}
+
+export interface IAmbiguityDecision {
+  id: number;
+  decision: AmbiguityDecisionKind;
+  entityId: number | null;
+  reason: string;
+  actor: string;
+  ambiguityVersion: number;
+  decidedAt: string;
+}
+
+export interface IAmbiguityDetail extends IAmbiguityListItem {
+  revision: { id: number; excerpt: string | null; publishedAt: string | null } | null;
+  whyAmbiguous: string;
+  candidates: IAmbiguityCandidate[];
+  decisions: IAmbiguityDecision[];
+  scopeNote: string;
 }

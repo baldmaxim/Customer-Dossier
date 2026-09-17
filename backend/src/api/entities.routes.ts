@@ -8,10 +8,22 @@ import { z } from 'zod';
 import { query, withTransaction } from '../db/pool.js';
 import { CanonWriteBlockedError, assertMergeAllowed } from '../pipeline/guard.js';
 import {
+  AMBIGUITY_PAGE_LIMIT,
+  AmbiguityChoiceBlockedError,
+  AmbiguityIdempotencyError,
+  AmbiguityNotFoundError,
+  AmbiguityVersionConflictError,
+  decideAmbiguity,
+  decodeCursor,
+  getAmbiguity,
+  listAmbiguities,
+} from '../resolve/ambiguities.js';
+import {
   EntityVersionConflictError,
   MergeBlockedError,
   MergeIdempotencyMismatchError,
   MergeNotFoundError,
+  MergePreviewStaleError,
   UnsafeUndoError,
   applyEntityMerge,
   previewMerge,
@@ -35,6 +47,8 @@ export const sendMergeError = (res: Response, err: unknown): boolean => {
     res.status(422).json({ error: err.message, code: 'merge_blocked', conflicts: err.conflicts });
   } else if (err instanceof EntityVersionConflictError) {
     res.status(409).json({ error: err.message, code: 'version_conflict', current: err.current });
+  } else if (err instanceof MergePreviewStaleError) {
+    res.status(409).json({ error: err.message, code: 'merge_preview_stale' });
   } else if (err instanceof MergeIdempotencyMismatchError) {
     res.status(422).json({ error: err.message, code: 'idempotency_mismatch' });
   } else if (err instanceof UnsafeUndoError) {
@@ -69,6 +83,8 @@ const versionsSchema = z.object({
   expectedTargetVersion: z.number().int().positive(),
   idempotencyKey: z.string().min(8).max(200),
   reason: z.string().trim().max(2000).nullish(),
+  // Этап 15A: применение только той оценки, которую оператор видел (merge-preview@1).
+  expectedPreviewToken: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
 entitiesRouter.post('/entities/merge', async (req, res) => {
@@ -108,7 +124,7 @@ entitiesRouter.post('/admin/merges/:id/merge', async (req, res) => {
     assertMergeAllowed();
     const parsed = versionsSchema.safeParse(req.body);
     if (id === null || !parsed.success) {
-      res.status(400).json({ error: 'Нужны версии из предпросмотра и ключ идемпотентности' });
+      res.status(400).json({ error: 'Нужны версии и токен из предпросмотра и ключ идемпотентности' });
       return;
     }
     const result = await applyQueuedMerge({ queueId: id, actor: 'operator', ...parsed.data, reason: parsed.data.reason ?? null });
@@ -225,11 +241,76 @@ entitiesRouter.post('/entities/relations', async (req, res) => {
   res.status(201).json({ id: rows[0]?.id });
 });
 
-entitiesRouter.get('/entities/ambiguities', async (_req, res) => {
-  const items = await query(
-    `SELECT id, entity_kind AS "entityKind", surface, candidate_ids AS "candidateIds", revision_id AS "revisionId",
-            occurrences, created_at AS "createdAt"
-     FROM resolution_ambiguities WHERE status = 'open' ORDER BY updated_at DESC LIMIT 100`,
-  );
-  res.json({ items });
+// ---------------------------------------------------------------------------
+// Неоднозначные упоминания (этап 15A): решение по одному упоминанию, не слияние
+
+/** Доменные ошибки решений по неоднозначностям → HTTP. true — ответ отправлен. */
+export const sendAmbiguityError = (res: Response, err: unknown): boolean => {
+  if (err instanceof AmbiguityNotFoundError) {
+    res.status(404).json({ error: err.message });
+  } else if (err instanceof AmbiguityVersionConflictError) {
+    res.status(409).json({ error: err.message, code: 'version_conflict', currentVersion: err.currentVersion });
+  } else if (err instanceof AmbiguityIdempotencyError) {
+    res.status(422).json({ error: err.message, code: 'idempotency_mismatch' });
+  } else if (err instanceof AmbiguityChoiceBlockedError) {
+    res.status(422).json({ error: err.message, code: 'choice_blocked', conflicts: err.conflicts });
+  } else {
+    return false;
+  }
+  return true;
+};
+
+entitiesRouter.get('/entities/ambiguities', async (req, res) => {
+  const parsed = z
+    .object({
+      kind: kindSchema.optional(),
+      status: z.enum(['open', 'resolved', 'dismissed']).default('open'),
+      limit: z.coerce.number().int().min(1).max(AMBIGUITY_PAGE_LIMIT).default(50),
+      cursor: z.string().max(200).optional(),
+    })
+    .safeParse(req.query);
+  const cursor = parsed.success ? decodeCursor(parsed.data.cursor) : null;
+  if (!parsed.success || (parsed.data.cursor !== undefined && cursor === null)) {
+    res.status(400).json({ error: 'Некорректный фильтр или курсор' });
+    return;
+  }
+  res.json(await listAmbiguities({ kind: parsed.data.kind, status: parsed.data.status, limit: parsed.data.limit, cursor }));
+});
+
+entitiesRouter.get('/entities/ambiguities/:id', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  try {
+    res.json(await getAmbiguity(id));
+  } catch (err) {
+    if (!sendAmbiguityError(res, err)) throw err;
+  }
+});
+
+export const ambiguityDecisionSchema = z
+  .object({
+    decision: z.enum(['resolved_to', 'kept_unknown', 'dismissed']),
+    entityId: z.number().int().positive().nullish(),
+    reason: z.string().trim().min(3).max(2000),
+    expectedVersion: z.number().int().positive(),
+    idempotencyKey: z.string().min(8).max(200),
+  })
+  .refine(d => (d.decision === 'resolved_to') === (d.entityId != null), { message: 'entityId нужен только для resolved_to' });
+
+entitiesRouter.post('/entities/ambiguities/:id/decisions', async (req, res) => {
+  const id = idOf(req.params.id);
+  const parsed = ambiguityDecisionSchema.safeParse(req.body);
+  if (id === null || !parsed.success) {
+    res.status(400).json({ error: 'Нужны решение, причина, версия и ключ идемпотентности; сущность — только для выбора кандидата' });
+    return;
+  }
+  try {
+    const result = await decideAmbiguity({ ...parsed.data, entityId: parsed.data.entityId ?? null, ambiguityId: id, actor: 'operator' });
+    res.status(result.replayed ? 200 : 201).json(result);
+  } catch (err) {
+    if (!sendAmbiguityError(res, err)) throw err;
+  }
 });

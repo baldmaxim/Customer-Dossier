@@ -11,11 +11,13 @@ import { storeDocument } from '../ingest/store.js';
 import type { IAssertionContent } from '../assertions/model.js';
 import { addEvidence, recordReviewDecision, upsertAssertion } from '../assertions/repository.js';
 import { locateQuote } from '../assertions/span.js';
+import { loadPriorDecisions } from '../dossier/facts.js';
 import { resolveCompany } from './company.js';
 import {
   EntityVersionConflictError,
   MergeBlockedError,
   MergeIdempotencyMismatchError,
+  MergePreviewStaleError,
   UnsafeUndoError,
   applyEntityMerge,
   previewMerge,
@@ -640,5 +642,157 @@ describe('backfill идентичности', () => {
     expect((await one<{ m: number | null }>('SELECT merged_into_id AS m FROM companies WHERE id = $1', [stale])).m).toBeNull();
     const repeat = await runRenormalizeBackfill(getPool(), { dryRun: false, batchSize: 50, fromStart: true });
     expect(repeat.companiesScanned).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Этап 15A: решение по одному упоминанию, устаревший предпросмотр слияния, линия решений через цепочку слияний
+
+describe('этап 15A: неоднозначные упоминания и история решений при слиянии', () => {
+  const INN_X = inn('500101500');
+  const INN_Y = inn('500101600');
+  let x = 0;
+  let y = 0;
+  let ambiguityId = 0;
+  let doc1 = { revisionId: 0, documentId: 0, body: '' };
+
+  beforeAll(async () => {
+    x = await plainCompany('Демо-Близнец', 'ООО', INN_X);
+    y = await plainCompany('Демо-Близнец', 'ООО', INN_Y);
+    doc1 = await store(`Синтетика: ООО «Демо-Близнец» (ИНН ${INN_Y}) получило заказ на фасад.`);
+    // Модель не извлекла реквизит — резолвер видит два равноправных ООО.
+    expect(await company('ООО «Демо-Близнец»', null, null, doc1.revisionId)).toBeNull();
+    ambiguityId = (
+      await one<{ id: number }>(`SELECT id FROM resolution_ambiguities WHERE entity_kind = 'company' AND revision_id = $1`, [doc1.revisionId])
+    ).id;
+  });
+
+  const decide = (body: Record<string, unknown>) => api.call('POST', `/api/entities/ambiguities/${ambiguityId}/decisions`, body);
+  const decisions = () => n('SELECT count(*)::int AS n FROM ambiguity_decisions WHERE ambiguity_id = $1', [ambiguityId]);
+
+  it('T15A-01: список постраничный, всего — по фильтру; карточка показывает цитату, кандидатов и запрет по ИНН', async () => {
+    const page = await api.call('GET', '/api/entities/ambiguities?status=open&kind=company&limit=1');
+    expect(page.status).toBe(200);
+    const open = await n(`SELECT count(*)::int AS n FROM resolution_ambiguities WHERE status = 'open' AND entity_kind = 'company'`);
+    expect(page.body.total).toBe(open);
+    expect((page.body.items as unknown[]).length).toBe(1);
+    if (open > 1) {
+      const next = await api.call('GET', `/api/entities/ambiguities?status=open&kind=company&limit=1&cursor=${String(page.body.nextCursor)}`);
+      expect((next.body.items as Array<{ id: number }>)[0]!.id).not.toBe((page.body.items as Array<{ id: number }>)[0]!.id);
+    }
+    expect((await api.call('GET', '/api/entities/ambiguities?cursor=подделка')).status).toBe(400);
+
+    const detail = await api.call('GET', `/api/entities/ambiguities/${ambiguityId}`);
+    expect(detail.status).toBe(200);
+    expect(String((detail.body.revision as { excerpt: string | null }).excerpt)).toContain(INN_Y);
+    const byId = new Map((detail.body.candidates as Array<{ id: number; choice: { conflicts: Array<{ code: string }> } }>).map(c => [c.id, c]));
+    expect(byId.get(x)!.choice.conflicts.map(c => c.code)).toContain('identifier_other_candidate');
+    expect(byId.get(y)!.choice.conflicts).toEqual([]);
+    expect(String(detail.body.scopeNote)).toMatch(/не подтверждение участия/);
+  });
+
+  it('T15A-03: выбор против реквизита в тексте отклоняется сервером, решение не пишется', async () => {
+    const res = await decide({ decision: 'resolved_to', entityId: x, reason: 'по названию', expectedVersion: 1, idempotencyKey: 'amb-15a-wrong-01' });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('choice_blocked');
+    expect(await decisions()).toBe(0);
+  });
+
+  it('T15A-02: неверная версия — 409; решение, повтор и чужой запрос с тем же ключом', async () => {
+    const stale = await decide({ decision: 'resolved_to', entityId: y, reason: 'ИНН в тексте', expectedVersion: 7, idempotencyKey: 'amb-15a-stale-01' });
+    expect(stale.status).toBe(409);
+    const body = { decision: 'resolved_to', entityId: y, reason: 'ИНН в тексте', expectedVersion: 1, idempotencyKey: 'amb-15a-ok-0001' };
+    const first = await decide(body);
+    expect(first.status).toBe(201);
+    const replay = await decide(body);
+    expect(replay.status).toBe(200);
+    expect(replay.body.replayed).toBe(true);
+    expect(await decisions()).toBe(1);
+    expect((await decide({ ...body, reason: 'другая причина' })).status).toBe(422);
+    // Второе решение по прежней версии — конфликт, не молчаливая перезапись.
+    expect((await decide({ ...body, decision: 'kept_unknown', entityId: null, idempotencyKey: 'amb-15a-late-01' })).status).toBe(409);
+    const row = await one<{ status: string; version: number; actor: string }>(
+      `SELECT m.status, m.version, d.actor FROM resolution_ambiguities m JOIN ambiguity_decisions d ON d.ambiguity_id = m.id WHERE m.id = $1`,
+      [ambiguityId],
+    );
+    expect(row).toEqual({ status: 'resolved', version: 2, actor: 'operator' });
+    await expect(pool().query('UPDATE ambiguity_decisions SET reason = $1', ['правка'])).rejects.toThrow();
+  });
+
+  it('T15A-01: решение действует на это упоминание в этой редакции, а не на все одноимённые тексты', async () => {
+    const aliasesBefore = await n(`SELECT count(*)::int AS n FROM entity_aliases WHERE entity_kind = 'company' AND entity_id = ANY($1::bigint[])`, [[x, y]]);
+    const same = await company('ООО «Демо-Близнец»', null, null, doc1.revisionId);
+    expect(same).toMatchObject({ companyId: y, method: 'analyst_mapping' });
+    const doc2 = await store('Синтетика: ООО «Демо-Близнец» проиграло тендер.');
+    expect(await company('ООО «Демо-Близнец»', null, null, doc2.revisionId)).toBeNull();
+    expect(await n(`SELECT count(*)::int AS n FROM entity_aliases WHERE entity_kind = 'company' AND entity_id = ANY($1::bigint[])`, [[x, y]])).toBe(aliasesBefore);
+    // Разные ИНН: одно решение не сливает и не ставит пару на слияние.
+    expect((await previewMerge('company', x, y)).conflicts.map(c => c.code)).toContain('identifier_conflict');
+    expect(await n('SELECT count(*)::int AS n FROM entity_merges WHERE source_id = ANY($1::bigint[]) OR target_id = ANY($1::bigint[])', [[x, y]])).toBe(0);
+  });
+
+  it('T15A-04: новое доказательство после предпросмотра делает применение устаревшим; новый предпросмотр — применяется', async () => {
+    const a = await plainCompany('Демо-Устаревший', 'ООО');
+    const b = await plainCompany('Демо-Устаревший Групп', 'ООО');
+    const d = await store('Синтетика: «Демо-Устаревший» строит склад. «Демо-Устаревший» нанял субподрядчика.');
+    const first = await assertWithEvidence(content({ subjectCompanyId: a }), d, '«Демо-Устаревший» строит склад');
+    const preview = await previewMerge('company', a, b);
+    expect(preview.canApply).toBe(true);
+    // Второе основание того же утверждения: набор доказательств изменился после предпросмотра.
+    await assertWithEvidence(content({ subjectCompanyId: a }), d, '«Демо-Устаревший» нанял субподрядчика');
+    const before = await totals();
+    const input = {
+      kind: 'company' as const,
+      sourceId: a,
+      targetId: b,
+      expectedSourceVersion: preview.source.version,
+      expectedTargetVersion: preview.target.version,
+      idempotencyKey: 'amb-15a-merge-stale-01',
+      actor: 'test',
+    };
+    await expect(applyEntityMerge({ ...input, expectedPreviewToken: preview.previewToken })).rejects.toBeInstanceOf(MergePreviewStaleError);
+    expect(await totals()).toEqual(before);
+    const fresh = await previewMerge('company', a, b);
+    expect(fresh.previewToken).not.toBe(preview.previewToken);
+    const applied = await applyEntityMerge({ ...input, idempotencyKey: 'amb-15a-merge-fresh-01', expectedPreviewToken: fresh.previewToken });
+    expect(applied.replayed).toBe(false);
+    expect(first.assertionId).toBeGreaterThan(0);
+  });
+
+  it('T15A-05/06: решение на исходном утверждении видно через цепочку слияний один раз, без подмены автора и без подтверждения', async () => {
+    const a = await plainCompany('Демо-Цепь', 'ООО');
+    const b = await plainCompany('Демо-Цепь Два', 'ООО');
+    const c = await plainCompany('Демо-Цепь Три', 'ООО');
+    const d = await store('Синтетика: «Демо-Цепь» упомянута в отчёте застройщика.');
+    const origin = await assertWithEvidence(content({ subjectCompanyId: a }), d, '«Демо-Цепь» упомянута');
+    const reviewed = await withTransaction(async client =>
+      recordReviewDecision(client, {
+        assertionId: origin.assertionId,
+        decision: 'reviewed_supported',
+        scope: 'reflects_source',
+        reason: 'сверено с публикацией',
+        reviewer: 'analyst-15a',
+        expectedVersion: (await client.query<{ version: number }>('SELECT version FROM assertions WHERE id = $1', [origin.assertionId])).rows[0]!.version,
+        idempotencyKey: 'amb-15a-review-01',
+      }),
+    );
+    const merge = async (s: number, t: number, key: string) => {
+      const p = await previewMerge('company', s, t);
+      return applyEntityMerge({ kind: 'company', sourceId: s, targetId: t, expectedSourceVersion: p.source.version, expectedTargetVersion: p.target.version, idempotencyKey: key, actor: 'test', expectedPreviewToken: p.previewToken });
+    };
+    await merge(a, b, 'amb-15a-chain-ab-01');
+    await merge(b, c, 'amb-15a-chain-bc-01');
+    const live = await one<{ id: number; status: string }>(
+      `SELECT a.id, a.status::text AS status FROM assertions a JOIN evidence e ON e.assertion_id = a.id
+       WHERE a.subject_company_id = $1 AND a.predicate = 'company_mentioned' AND e.status = 'active' LIMIT 1`,
+      [c],
+    );
+    expect(live.status).not.toMatch(/^reviewed/);
+    const prior = await loadPriorDecisions(pool(), [live.id]);
+    expect(prior).toHaveLength(1);
+    expect(prior[0]).toMatchObject({ assertionId: origin.assertionId, reviewer: 'analyst-15a', decision: 'reviewed_supported' });
+    expect(prior[0]!.decisionId).toBe(reviewed.decisionId ?? prior[0]!.decisionId);
+    const originNow = await one<{ n: number }>('SELECT count(*)::int AS n FROM review_decisions WHERE assertion_id = $1', [origin.assertionId]);
+    expect(originNow.n).toBe(1);
   });
 });

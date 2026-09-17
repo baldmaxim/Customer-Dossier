@@ -146,6 +146,7 @@ describe('защита API (TC-004, TC-005)', () => {
       ['POST', '/api/admin/sources/website', { url: 'example.ru' }],
       ['DELETE', '/api/admin/sources/1', undefined],
       ['POST', '/api/admin/merges/1/merge', {}],
+      ['POST', '/api/entities/ambiguities/1/decisions', { decision: 'kept_unknown', reason: 'тест', expectedVersion: 1, idempotencyKey: 'ambiguity-auth-01' }],
       ['POST', '/api/admin/merges/1/reject', {}],
       ['POST', '/api/admin/metrics/refresh', {}],
       ['POST', '/api/manual', { body: 'текст' }],
@@ -173,6 +174,16 @@ describe('защита API (TC-004, TC-005)', () => {
     const res = await request('PATCH', '/api/admin/sources/1', {
       headers: { cookie, origin: ORIGIN },
       body: { status: 'active' },
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('csrf');
+  });
+
+  it('решение по неоднозначности без CSRF-токена не записывается (этап 15A)', async () => {
+    const { cookie } = await login();
+    const res = await request('POST', '/api/entities/ambiguities/1/decisions', {
+      headers: { cookie, origin: ORIGIN },
+      body: { decision: 'kept_unknown', reason: 'без токена', expectedVersion: 1, idempotencyKey: 'ambiguity-csrf-01' },
     });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('csrf');

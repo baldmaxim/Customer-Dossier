@@ -200,12 +200,14 @@ export const loadPriorDecisions = async (exec: DbExecutor, assertionIds: readonl
              JOIN entity_merges m ON m.id = e.merge_id AND m.undone_at IS NULL
              WHERE l.depth < 10
            )
-           SELECT DISTINCT l.for_id AS "forAssertionId", l.assertion_id AS "assertionId", l.merge_id AS "mergeId",
+           -- Этап 15A: одно решение, достижимое несколькими путями (цепочка слияний), показывается один раз —
+           -- по ближайшему слиянию; вес не удваивается. Разные решения остаются отдельными строками.
+           SELECT DISTINCT ON (l.for_id, d.id) l.for_id AS "forAssertionId", l.assertion_id AS "assertionId", l.merge_id AS "mergeId",
                   d.id AS "decisionId", d.decision, d.reviewer,
                   to_char(d.decided_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "decidedAt"
            FROM lineage l JOIN review_decisions d ON d.assertion_id = l.assertion_id
            WHERE l.assertion_id <> l.for_id
-           ORDER BY "forAssertionId", "decisionId"`,
+           ORDER BY l.for_id, d.id, l.depth, l.merge_id`,
           [[...assertionIds]],
         )
       ).rows;

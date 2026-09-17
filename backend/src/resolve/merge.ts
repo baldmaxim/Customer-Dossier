@@ -46,6 +46,7 @@ export interface IQueuedMergeRequest {
   expectedTargetVersion: number;
   idempotencyKey: string;
   reason?: string | null;
+  expectedPreviewToken?: string | null;
 }
 
 /** Применить пару из очереди: явное действие оператора с версиями из предпросмотра. */
@@ -65,6 +66,7 @@ export const applyQueuedMerge = async (request: IQueuedMergeRequest): Promise<IM
     actor: request.actor,
     reason: request.reason ?? null,
     queueId: request.queueId,
+    expectedPreviewToken: request.expectedPreviewToken ?? null,
   });
 };
 

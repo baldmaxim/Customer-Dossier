@@ -17,6 +17,7 @@
 //    в resolution_ambiguities с якорем-редакцией.
 
 import type { DbExecutor } from '../db/pool.js';
+import { analystMapping } from './ambiguities.js';
 import { addIdentifier, classifyTaxId, findCompanyByIdentifier } from './identifiers.js';
 import {
   NORMALIZER_VERSION,
@@ -56,7 +57,9 @@ export type ResolveMethod =
   | 'provisional'
   | 'auto_merge'
   | 'created'
-  | 'created_queued';
+  | 'created_queued'
+  /** Этап 15A: решение аналитика по неоднозначному упоминанию в этой редакции. */
+  | 'analyst_mapping';
 
 export interface IResolveResult {
   companyId: number;
@@ -347,6 +350,9 @@ export const recordAmbiguity = async (
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (entity_kind, name_key, coalesce(revision_id, 0))
      DO UPDATE SET occurrences = resolution_ambiguities.occurrences + 1, candidate_ids = EXCLUDED.candidate_ids,
+                   -- Сменился набор кандидатов — прежнее решение и открытая форма устарели (этап 15A).
+                   version = resolution_ambiguities.version
+                     + CASE WHEN resolution_ambiguities.candidate_ids IS DISTINCT FROM EXCLUDED.candidate_ids THEN 1 ELSE 0 END,
                    updated_at = now()`,
     [input.kind, input.surface, input.nameKey, input.candidateIds, input.revisionId],
   );
@@ -425,6 +431,9 @@ export const resolveCompany = async (
       };
     }
     if (decision.kind === 'ambiguous') {
+      // Решение аналитика относится только к этой редакции; алиас не добавляется, чтобы выбор не расползся на другие тексты.
+      const mapped = await analystMapping(exec, 'company', normalized.key, input.revisionId ?? null, decision.candidateIds);
+      if (mapped !== null) return { companyId: mapped, method: 'analyst_mapping', confidence: 0.95, queued: false };
       await recordAmbiguity(exec, {
         kind: 'company',
         surface: input.surface,
