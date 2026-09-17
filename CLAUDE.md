@@ -53,7 +53,8 @@ npm run pipeline:once -- --queue          # очередь проверки: и�
 npm run benchmark:model [-- --case ID,ID] [-- --out f] | --replay f | --compare a b | --import-legacy f  # current-eval@1: extract@3 путём конвейера, план проверок до модели (этап 14A)
 npm run release:check [-- --out f.json | --compare f.json]  # контрольные числа (local-inventory@2), связность; exit 1 при проблемах
 npm run release:manifest [-- --out f.json | --compare f.json]  # content-manifest@1: содержимое строк, схема, последовательности, hash снимков (только чтение)
-npm run release:bench [-- --runs 5] [-- --pipeline-synthetic]  # замеры: только TEST_DATABASE_URL, общий preflight; невалидный шаг — exit 1
+npm run release:bench [-- --runs 5] [-- --pipeline-synthetic] [-- --profile-queries] [-- --case-id N]  # замеры: только TEST_DATABASE_URL, общий preflight; невалидный шаг — exit 1; профиль SQL без значений, p95 только при 20+ выборках
+npm run seed:test-large -- --facts 1200 --edges 2100  # этап 18: большой синтетический набор (≤ 5000), только тестовая цель
 npm run release:probe -- --snapshot <id> [--case <id>] [--out f | --compare f]  # GET-проба запущенного API (перезапуск процесса, restore)
 npm run release:fingerprint [-- --out f.json]  # HEAD + sha256 рабочего дерева для привязки логов
 # frontend: npm run build && npm run check:build   # sw не кэширует /api, секретов-маркеров в бандле нет
@@ -346,6 +347,8 @@ cd frontend
 npm install
 npm run dev              # :5173, /api проксируется на :4100
 npm run build            # tsc -b && vite build
+npm test                 # компонентные тесты (vitest + jsdom, синтетический API), без сервера
+npm run e2e              # Playwright — только пользователь, тестовый стенд, E2E_TEST_TARGET_CONFIRMED=tg_info_test
 npm run icons:generate   # PNG из public/favicon.svg, руками не правим
 ```
 

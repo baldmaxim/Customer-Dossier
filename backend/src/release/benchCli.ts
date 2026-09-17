@@ -1,6 +1,6 @@
 // Замеры локальной установки: только выделенная тестовая цель TEST_DATABASE_URL.
 //
-//   npm run release:bench [-- --runs 5] [-- --out bench.json] [-- --pipeline-synthetic]
+//   npm run release:bench [-- --runs 5] [-- --out bench.json] [-- --pipeline-synthetic] [-- --profile-queries] [-- --case-id <id>]
 //
 // Порядок: общий preflight адреса (до импорта env и пула) → подключение и проверка базы, роли и маркера →
 // только затем вход оператора в приложение и запись снимков. Никакого запасного DATABASE_URL.
@@ -27,7 +27,11 @@ const main = async (): Promise<void> => {
     const { runBench } = await import('./bench.js');
     const runsArg = Number.parseInt(flag('--runs') ?? '', 10);
     const runs = Number.isSafeInteger(runsArg) && runsArg > 0 ? runsArg : 5;
-    const report = await runBench(getPool(), { runs });
+    const caseArg = Number.parseInt(flag('--case-id') ?? '', 10);
+    const { installQueryProfiler } = await import('./queryProfile.js');
+    const profile = argv.includes('--profile-queries') ? installQueryProfiler(getPool()) : undefined;
+    const report = await runBench(getPool(), { runs, profile, ...(Number.isSafeInteger(caseArg) && caseArg > 0 ? { caseId: caseArg } : {}) });
+    profile?.uninstall();
     if (argv.includes('--pipeline-synthetic')) {
       const { runPipelineSyntheticBench } = await import('./benchPipeline.js');
       report.steps.push(await runPipelineSyntheticBench(runs));
@@ -38,9 +42,14 @@ const main = async (): Promise<void> => {
     console.log(`[bench] харнесс: ${report.harness}`);
     console.log(`[bench] объём до: ${Object.entries(report.volumeBefore).map(([t, n]) => `${t}=${n}`).join(', ')}`);
     for (const s of report.steps) {
-      const time = s.median === null ? 'времени нет' : `медиана ${s.median} мс (мин ${s.min}, макс ${s.max})`;
+      const time = s.median === null ? 'времени нет' : `медиана ${s.median} мс (мин ${s.min}, макс ${s.max}${s.p95 !== null ? `, p95 ${s.p95}` : ''})`;
       console.log(`[bench] ${s.status.toUpperCase()} ${s.code} — ${s.title}: ${time}; успешно ${s.successes}/${s.requested}, прогрев ${s.warmup.ok ? 'ok' : `ошибка (${s.warmup.detail})`}`);
       for (const e of s.errors) console.log(`[bench]   ошибка: HTTP ${e.status} ${e.detail}`);
+      if (s.queries) {
+        console.log(`[bench]   SQL: ${s.queries.queriesPerSample} запросов и ${s.queries.msPerSample} мс на выборку`);
+        for (const q of s.queries.top) console.log(`[bench]     ${q.totalMs} мс / ${q.calls} выз.: ${q.sql}`);
+        for (const q of s.queries.suspectedNPlusOne) console.log(`[bench]     N+1? ${q.callsPerSample} на выборку: ${q.sql}`);
+      }
     }
     console.log(`[bench] объём после: ${Object.entries(report.volumeAfter).map(([t, n]) => `${t}=${n}`).join(', ')}`);
     for (const n of report.notes) console.log(`[bench] ${n}`);

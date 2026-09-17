@@ -33,7 +33,8 @@
     "release:probe": "tsx src/release/probe.ts",
     "release:fingerprint": "tsx src/release/treeFingerprint.ts",
     "seed:test-release": "tsx src/__tests__/integration/seedReleaseDemo.ts",
-    "seed:test-brief": "tsx src/__tests__/integration/seedBriefDemo.ts"
+    "seed:test-brief": "tsx src/__tests__/integration/seedBriefDemo.ts",
+    "seed:test-large": "tsx src/__tests__/integration/seedLargeDemo.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

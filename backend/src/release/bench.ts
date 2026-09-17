@@ -16,6 +16,7 @@ import os from 'node:os';
 
 import type { DbExecutor } from '../db/pool.js';
 import { startTestApi, type ITestApi, type ITestResponse } from '../__tests__/integration/http.js';
+import type { IQueryProfiler, IStepQueryProfile } from './queryProfile.js';
 
 export const BENCH_VERSION = 'local-bench@2';
 
@@ -39,8 +40,12 @@ export interface IBenchStep {
   min: number | null;
   median: number | null;
   max: number | null;
+  /** 95-й перцентиль — только при 20 и более успешных выборках (иначе null: малая выборка его не определяет). */
+  p95: number | null;
   status: 'ok' | 'failed' | 'partial';
   detail: string;
+  /** Этап 18: профиль SQL по выборкам шага (без прогрева), только с --profile-queries. */
+  queries?: IStepQueryProfile;
 }
 
 export interface IBenchReport {
@@ -63,6 +68,15 @@ export const median = (values: readonly number[]): number | null => {
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 };
 
+export const P95_MIN_SAMPLES = 20;
+
+/** Перцентиль по ближайшему рангу; null при выборке меньше minSamples. */
+export const percentile = (values: readonly number[], q: number, minSamples: number): number | null => {
+  if (values.length < minSamples || values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)]!;
+};
+
 /** Сводка шага из прогрева и замеров. Время неуспешной выборки в статистику не попадает. */
 export const summarizeStep = (
   meta: { code: string; title: string; required: boolean },
@@ -82,6 +96,7 @@ export const summarizeStep = (
     min: round(good.length ? Math.min(...good) : null),
     median: round(median(good)),
     max: round(good.length ? Math.max(...good) : null),
+    p95: round(percentile(good, 0.95, P95_MIN_SAMPLES)),
     status,
     detail: samples.find(s => s.sample.ok)?.sample.detail ?? errors[0]?.detail ?? warmup.detail,
   };
@@ -159,11 +174,13 @@ export const timedSample = async (fn: () => Promise<ISample>, timeoutMs: number 
   }
 };
 
-const measure = async (meta: { code: string; title: string; required: boolean }, runs: number, fn: () => Promise<ISample>): Promise<IBenchStep> => {
+const measure = async (meta: { code: string; title: string; required: boolean }, runs: number, fn: () => Promise<ISample>, profile?: IQueryProfiler): Promise<IBenchStep> => {
   const warmup = (await timedSample(fn)).sample;
   const samples: Array<{ sample: ISample; ms: number }> = [];
+  profile?.begin();
   for (let i = 0; i < runs; i += 1) samples.push(await timedSample(fn));
-  return summarizeStep(meta, warmup, samples);
+  const queries = profile?.end(runs);
+  return { ...summarizeStep(meta, warmup, samples), ...(queries ? { queries } : {}) };
 };
 
 const VOLUME_TABLES = ['sources', 'source_items', 'document_revisions', 'assertions', 'evidence', 'review_decisions', 'companies', 'projects', 'events', 'dossier_cases', 'dossier_snapshots'];
@@ -176,12 +193,19 @@ const volume = async (exec: DbExecutor): Promise<Record<string, number>> => {
   return out;
 };
 
-export const runBench = async (exec: DbExecutor, options: { runs?: number; api?: ITestApi } = {}): Promise<IBenchReport> => {
+export const runBench = async (exec: DbExecutor, options: { runs?: number; api?: ITestApi; profile?: IQueryProfiler; caseId?: number } = {}): Promise<IBenchReport> => {
   const runs = options.runs ?? 5;
   const volumeBefore = await volume(exec);
+  const m = (meta: { code: string; title: string; required: boolean }, fn: () => Promise<ISample>): Promise<IBenchStep> => measure(meta, runs, fn, options.profile);
 
   // Компания с утверждениями и обращением, а не первая попавшаяся: пустая карточка ничего не измеряет.
-  const caseRow = (await exec.query<{ id: number; company_id: number | null; project_id: number | null }>('SELECT id, company_id, project_id FROM dossier_cases ORDER BY id LIMIT 1')).rows[0];
+  // --case-id выбирает обращение большого набора (этап 18), иначе — первое.
+  const caseRow = (
+    await exec.query<{ id: number; company_id: number | null; project_id: number | null }>(
+      'SELECT id, company_id, project_id FROM dossier_cases WHERE ($1::bigint IS NULL OR id = $1) ORDER BY id LIMIT 1',
+      [options.caseId ?? null],
+    )
+  ).rows[0];
   const company = (
     await exec.query<{ id: number; name: string }>(
       `SELECT id, name FROM companies WHERE merged_into_id IS NULL AND ($1::bigint IS NULL OR id = $1) ORDER BY id LIMIT 1`,
@@ -199,12 +223,12 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
   try {
     if (company) {
       steps.push(
-        await measure({ code: 'search', title: 'поиск компании по названию', required: true }, runs, async () =>
+        await m({ code: 'search', title: 'поиск компании по названию', required: true }, async () =>
           validators.search(await api.call('GET', `/api/companies?q=${encodeURIComponent(company.name)}`, undefined, api.auth), company.id),
         ),
       );
       steps.push(
-        await measure({ code: 'company_card', title: 'карточка компании (сведения и сигналы)', required: true }, runs, async () =>
+        await m({ code: 'company_card', title: 'карточка компании (сведения и сигналы)', required: true }, async () =>
           validators.companyCard(
             await api.call('GET', `/api/companies/${company.id}`, undefined, api.auth),
             await api.call('GET', `/api/companies/${company.id}/signals`, undefined, api.auth),
@@ -213,32 +237,32 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
         ),
       );
       steps.push(
-        await measure({ code: 'company_summary', title: 'резюме компании для досье', required: false }, runs, async () =>
+        await m({ code: 'company_summary', title: 'резюме компании для досье', required: false }, async () =>
           validators.summary(await api.call('GET', `/api/companies/${company.id}/dossier-summary`, undefined, api.auth)),
         ),
       );
       steps.push(
-        await measure({ code: 'graph', title: 'схема связей, глубина 2', required: false }, runs, async () =>
+        await m({ code: 'graph', title: 'схема связей, глубина 2', required: false }, async () =>
           validators.graph(await api.call('GET', `/api/graph?companyId=${company.id}&depth=2`, undefined, api.auth)),
         ),
       );
     }
     if (project) {
       steps.push(
-        await measure({ code: 'project_dossier', title: 'досье объекта', required: false }, runs, async () =>
+        await m({ code: 'project_dossier', title: 'досье объекта', required: false }, async () =>
           validators.projectDossier(await api.call('GET', `/api/projects/${project.id}/dossier`, undefined, api.auth), project.id),
         ),
       );
     }
     if (caseRow) {
       steps.push(
-        await measure({ code: 'case_dossier', title: 'досье обращения', required: true }, runs, async () =>
+        await m({ code: 'case_dossier', title: 'досье обращения', required: true }, async () =>
           validators.caseDossier(await api.call('GET', `/api/cases/${caseRow.id}/dossier`, undefined, api.auth), caseRow.id),
         ),
       );
       let lastSnapshot = 0;
       steps.push(
-        await measure({ code: 'snapshot_create', title: 'создание снимка досье (пишет в базу)', required: true }, runs, async () => {
+        await m({ code: 'snapshot_create', title: 'создание снимка досье (пишет в базу)', required: true }, async () => {
           const res = await api.call('POST', `/api/cases/${caseRow.id}/snapshots`, {}, api.auth);
           const sample = validators.snapshotCreate(res);
           if (sample.ok) lastSnapshot = res.body.id as number;
@@ -247,12 +271,12 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
       );
       if (lastSnapshot > 0) {
         steps.push(
-          await measure({ code: 'snapshot_read', title: 'открытие снимка', required: true }, runs, async () =>
+          await m({ code: 'snapshot_read', title: 'открытие снимка', required: true }, async () =>
             validators.snapshotRead(await api.call('GET', `/api/snapshots/${lastSnapshot}`, undefined, api.auth), lastSnapshot),
           ),
         );
         steps.push(
-          await measure({ code: 'export_html', title: 'выгрузка HTML («Версия для печати»)', required: true }, runs, async () =>
+          await m({ code: 'export_html', title: 'выгрузка HTML («Версия для печати»)', required: true }, async () =>
             validators.exportHtml(await api.call('GET', `/api/snapshots/${lastSnapshot}/export.html`, undefined, api.auth)),
           ),
         );
@@ -287,6 +311,8 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
       'min/median/max — только по успешным выборкам (ожидаемый код и содержимое); ошибки перечислены в errors.',
       'Шаг создания снимка пишет строки: объём после замера больше исходного.',
       'Числа относятся к объёму и машине выше; это не SLA и не пропускная способность.',
+      `p95 считается только при ${P95_MIN_SAMPLES}+ успешных выборках шага (--runs ${P95_MIN_SAMPLES}); одна машина, последовательные запросы, без конкурентной нагрузки.`,
+      ...(options.profile ? ['Профиль SQL (query-profile@1): тексты без значений, время включает ожидание пула; для EXPLAIN берите запросы из top/suspectedNPlusOne.'] : []),
     ],
   };
 };
