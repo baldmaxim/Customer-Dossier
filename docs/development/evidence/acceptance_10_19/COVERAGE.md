@@ -8,9 +8,9 @@
 ## По AC
 | AC | Этап | Тест / шаг | Класс | Тип | Шаг | Результат |
 |---|---|---|---|---|---|---|
-| AC-01 | все | `git rev-parse`, `release:fingerprint`, lock blobs | C (HEAD), отпечаток W | O | A0 | NOT_RUN |
+| AC-01 | все | `git rev-parse`, `release:fingerprint`, lock blobs | **R** | O | A0 | **PASS** 2026-09-17: HEAD `8a0ed5e` (= `d33521b` + документы), diff только `docs/development/**` и `prompts/**`, lock blobs совпали, отпечаток `dirtyPaths 0`, 354 файла, exit 0 (`A0-git.txt`, `A0-tree.json`) |
 | AC-02 | все | эта карта; отчёты 10–19 | C | O | — | подготовлено |
-| AC-03 | все | backend `typecheck`, `build`, `test`; frontend `test`, `build`, `check:build` | Z | O | A1, A2 | NOT_RUN |
+| AC-03 | все | backend `typecheck`, `build`, `test`; frontend `test`, `build`, `check:build` | backend **R**, frontend W | O | A1, A2 | backend **PASS** 2026-09-17: typecheck exit 0, build exit 0, unit 46 файлов / 613 тестов, 0 skipped, exit 0 (`A1-*.log`); frontend — NOT_RUN |
 | AC-04 | 10,19 | `db/testTarget.test.ts`, `testTargetBootstrap` + отрицательные контроли closure B1; `release.int` «цель проверяется перед разрушительными действиями» | C, W | O,D | B0 | NOT_RUN |
 | AC-05 | все | `db/migrate.int.test.ts`, `release.int` TC-074 «с пустой схемы» (001–023) | W | D | B1 | NOT_RUN |
 | AC-06 | 11,13,15A | **автотеста апгрейда 020→023 с данными нет** (`release.int` апгрейдит только с 009); ручной сценарий B2 (сид на `8b1a944`, миграция `d33521b`) | W (ручной) | D | B2 | NOT_RUN |
@@ -50,7 +50,7 @@
 | AC-40 | 19 | `pilotManifest.test.ts` (7); `pilot:check` на тестовой цели с отрицательными контролями | Z, W | O,D | A1, E1 | NOT_RUN |
 | AC-41 | 19 | `pilot/PILOT_DECISION.md` — решения владельца нет | — | H | E2 | PILOT_NOT_RUN |
 | AC-42 | 19 | `evidence/19/USER_RUN.md` C–D | — | S,M,D,B,H | E3 | PILOT_NOT_RUN |
-| AC-43 | 18 | `SECURITY_TRIAGE.md`; `npm explain sharp`, `npm audit --json` | C (цепочка), NOT_VERIFIED (advisory) | O,H | A3 | NOT_RUN |
+| AC-43 | 18 | `SECURITY_TRIAGE.md`; `npm explain sharp`, `npm audit --json` | **R** (sharp), открыто (backend `qs`/`express`) | O,H | A3 | **VERIFIED** 2026-09-17: sharp 0.34.5 dev, прямая, high, два advisory об обработке изображений; в production-аудите 0. Решение владельца: `npm ci` во frontend допустим, `icons:generate` выключен. Новое: backend 2 moderate (`qs`, `express`) — ждёт деталей |
 | AC-44 | 15A,19 | `__tests__/sql-sanity.test.ts`: детектор **не менялся**, изменён запрос; отрицательные тесты «детекторы сами по себе» на месте; DB-путь — `identity.int` 15A | C, Z, W | O,D | A1, B1 | NOT_RUN |
 
 ## Исходные критерии этапов → AC / шаги
