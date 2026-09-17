@@ -15,7 +15,7 @@
 
 ## Закрытие приёмки 09 (2026-09-16): усиленные условия
 
-Статус: **PASS (core-gates)** по прогону пользователя `evidence/09/USER_RUN_CLOSURE.md` (сводка `RESULTS.md`, сырые логи на
+Статус: **PASS (core-gates)** по прогону пользователя `evidence/09/USER_RUN_CLOSURE.md` (сводка `RESULTS.md` и сырые логи — `evidence/09/user-closure/` на
 машине пользователя; агент принял по сводке). Матрица — `evidence/09/CLOSURE_MATRIX.md`.
 
 | Область | Агент | Пользователь |

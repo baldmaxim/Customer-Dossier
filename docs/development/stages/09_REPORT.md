@@ -214,7 +214,7 @@ Frontend: `scripts/check-build.mjs` (новый), `package.json` (`check:build`)
 
 ## Итог корректировки после пользовательского закрытия (2026-09-16)
 
-Прогон: `USER_RUN_CLOSURE.md` G01, A–G. Логи: `%USERPROFILE%\tg-info-09-closure` (без дампа и `.env`).
+Прогон: `USER_RUN_CLOSURE.md` G01, A–G. Логи: `docs/development/evidence/09/user-closure/` на машине пользователя (неотслеживаемая папка, в Git не входит) (без дампа и `.env`).
 Матрица TC-074…TC-078: [evidence/09/CLOSURE_MATRIX.md](../evidence/09/CLOSURE_MATRIX.md).
 
 | Шаг | Итог |

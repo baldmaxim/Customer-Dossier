@@ -1,12 +1,12 @@
 # Матрица закрытия приёмки 09
 
-Дата: 2026-09-16. Состояние: **пользовательский прогон G01/A–G выполнен; см. `%USERPROFILE%\tg-info-09-closure` и итог в `stages/09_REPORT.md`.**
+Дата: 2026-09-16. Состояние: **пользовательский прогон G01/A–G выполнен; логи — `user-closure/` рядом с этим файлом (на машине пользователя), итог в `stages/09_REPORT.md`.**
 Статусы: PASS — есть лог на текущем коде с exit 0; PARTIAL — существенная часть ок, есть оговорка; NOT_RUN — не
 запускалось; BLOCKED_ENV — среда; N/A — неприменимо. Исторические результаты 09 (`USER_RUN.md`, код `bc4aa36`+фиксы)
 относятся к своему коду и старому inventory и здесь не переименованы в новые.
 
-Логи агента: `closure/` рядом с этим файлом. Логи пользовательского закрытия: `%USERPROFILE%\tg-info-09-closure`
-(без дампа и `.env`). Отпечаток — `release:fingerprint`. Команды — `USER_RUN_CLOSURE.md` (разделы G01, A–G).
+Логи агента: `closure/` рядом с этим файлом. Логи пользовательского закрытия: `docs/development/evidence/09/user-closure/` на машине пользователя (неотслеживаемая папка, в Git не входит)
+(без дампа и `.env`). Команды формы пишут в `%USERPROFILE%\tg-info-09-closure` — логи перенесены пользователем. Отпечаток — `release:fingerprint`. Команды — `USER_RUN_CLOSURE.md` (разделы G01, A–G).
 
 Итоговый код агента (до прогона): HEAD `7c76c35` + 46 путей, `treeSha256 = 22dbe00f…` (`closure/tree-final.json`).
 Прогон пользователя: HEAD `10d83d9` + правка `inventory.ts` mid-run (см. ниже); worktree fingerprint **не совпал** с
@@ -31,7 +31,7 @@
 | **TC-074** установка с нуля, повтор, dry-run без записи | `release/release.int.test.ts` → «миграции применяются с пустой схемы, повтор ничего не делает, dry-run не пишет»; `db/migrate.int.test.ts` → «dry-run без schema_migrations не выполняет DDL и DML (TC-003)», «повторный запуск и dry-run — no-op» | B2 | PASS (в полном наборе 19/210) |
 | TC-074 synthetic-legacy upgrade | `release.int` → «база, накаченная только до 009, доганяется без потери legacy-данных». Формулировка результата: «миграции прошли на построенной базе до 009 с подготовленными legacy-строками», не миграция ваших данных | B2 | PASS (в полном наборе 19/210) |
 | TC-074 `--upto` валиден, применённые миграции не правятся | `db/migrate.test.ts` → «некорректный --upto — ошибка…», «неизвестный флаг…», «применённые миграции 001–020 на месте…»; CLI `--upto` требует общий preflight тестовой цели | — | PASS (unit, агент) |
-| TC-074 чистая установка из lock | `npm ci` | A | PASS (backend+frontend `npm ci`, логи в tg-info-09-closure) |
+| TC-074 чистая установка из lock | `npm ci` | A | PASS (backend+frontend `npm ci`, логи в `user-closure/`) |
 | **TC-075** dump/restore + содержательное сравнение + чтение | `release/manifest.test.ts` (26), `release/manifest.int.test.ts` (10), `release/inventory.test.ts` (9) | E1–E7 | PASS (MATCH restore; E7 MISMATCH evidence; E6 snapshot hash ок) |
 | **TC-076** полный путь, правка, evidence, review, merge, старый снимок | `release.int` → «публикация, разбор…», «отрицание даёт противоречие…», «обращение, досье и снимок…», «новая публикация, правка, переразбор и слияние…»; `snapshot/snapshot.int.test.ts` → «новая публикация, переименование, слияние… не меняют S1» | C2 | PASS* (интеграция + API C2; визуал браузера/PDF/390px NOT_RUN) |
 | TC-076 late chunk failure ПОСЛЕ успешного релевантного | `reprocess/reprocess.int.test.ts` → «TC-076: сбой позднего чанка ПОСЛЕ релевантного успешного — partial, канон и решения аналитика прежние, повтор публикует целиком» (новый); прежний «падение последнего чанка → partial…» | — | PASS (в полном наборе 19/210) |
@@ -73,7 +73,7 @@
 
 ## Пользовательский прогон закрытия (2026-09-16)
 
-Логи: `C:\Users\odintsov.a.a\tg-info-09-closure` (`RESULTS.md`, `UI_USER.md`). Дамп и `.env` не прилагались.
+Логи: `docs/development/evidence/09/user-closure/` на машине пользователя (неотслеживаемая папка, в Git не входит) (`RESULTS.md`, `UI_USER.md`). Дамп и `.env` не прилагались.
 
 Найдено и исправлено в прогоне: `assertion_company_merged` считал исторические утверждения на tombstone после
 слияния (ложная связность после merge→review). Правка: только утверждения с **активными** основаниями —

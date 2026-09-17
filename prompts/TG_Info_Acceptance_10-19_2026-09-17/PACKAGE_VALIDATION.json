@@ -1,0 +1,25 @@
+{
+  "package": "TG_Info_Acceptance_10-19_2026-09-17",
+  "created_date": "2026-09-17",
+  "scope": "Package structure/links only. No application tests, source-code audit of d33521b, DB, browser, model or source execution.",
+  "input_report_commit": "d33521b (reported by user; not independently read)",
+  "markdown_files": 10,
+  "prompt_files": 5,
+  "acceptance_index_rows": 44,
+  "unique_acceptance_ids": 44,
+  "internal_link_errors": [],
+  "checks_passed": true,
+  "file_sha256": {
+    "01_CLAUDE_PREPARE_ACCEPTANCE.md": "49f0bfc53f5da74b9ae8c900f6926b3daa688e1c843e4f13df8c9e1f846c28cd",
+    "02_CODEX_TARGETED_REVIEW.md": "88f63f16e25e1352841b369081e6cbcb87748d1713a1227946fb5c763af17d99",
+    "03_CLAUDE_GUIDE_USER_RUN.md": "bd5ef107010864b010873c89fb3b8c666ac34b06effdc242e302453befed8f1f",
+    "04_CLAUDE_FIX_CONFIRMED_DEFECT.md": "c298b2bcfb2c8be1c13644687bed7b51b6b43bd9ba6427dd25addca19148039d",
+    "05_CLAUDE_READ_EVIDENCE.md": "599d1cc172fb44c38572904101490530b5cab73929e479e22635c219442b0766",
+    "README_START_HERE.md": "79b4037206599c0f8dbe3f26ea7d16fadd6fc3f45b3df92281e19fd36ae0ec87",
+    "reference/ACCEPTANCE_MATRIX.md": "27344d002198ef294f7c398a009a42ba7da6a68728a17b64b75770b335a5fc0f",
+    "reference/SHARP_TRIAGE.md": "e423655ab1d2f2481c35e9f8eb35e93f3cecfa9c351af3ae118bdbe6f1857c3f",
+    "reference/SOURCES.md": "22d2d0ff1ad9d8bde09de5b974ba0e7182acdfc66694fb04c7fef6ee543614a2",
+    "templates/RESULTS_TEMPLATE.md": "c615c4dcce98937b4df3222fbd529e5fe4150fabe0efa8662bb236b545da6336"
+  },
+  "input_prompt_zip_sha256": "5c899b0992d5c0779a9b92858c200a31632a478986702231ee9686857c0e617f"
+}
