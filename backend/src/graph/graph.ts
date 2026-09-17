@@ -107,6 +107,8 @@ export const edgeScopeNote = (edge: IGraphEdge, filters: Pick<IGraphFilters, 'bu
 
 export interface IGraphLoader {
   nodes: (keys: readonly NodeKey[]) => Promise<IGraphNode[]>;
+  /** Причины усечения загрузки рёбер, накопленные за обход (предел запроса, а не лимит узлов). */
+  truncations?: Set<string>;
   /** Все рёбра, касающиеся узлов фронта (без фильтра — фильтр чистый). */
   edges: (keys: readonly NodeKey[], types: readonly GraphEdgeType[]) => Promise<IGraphEdge[]>;
 }
@@ -114,7 +116,10 @@ export interface IGraphLoader {
 export interface IGraph {
   nodes: IGraphNode[];
   edges: IGraphEdge[];
+  /** Лимит узлов достигнут (обход остановлен). */
   truncated: boolean;
+  /** Отдельная причина: загрузка исходных связей упёрлась в свой предел (assertions, co_mentioned). */
+  loaderTruncated?: string[];
   filters: IGraphFilters;
   notes: string[];
 }
@@ -178,8 +183,10 @@ export const buildGraph = async (seeds: readonly NodeKey[], rawFilters: Partial<
     nodes: resultNodes,
     edges: [...edges.values()].filter(e => present.has(e.from) && present.has(e.to)),
     truncated,
+    loaderTruncated: [...(loader.truncations ?? [])].sort(),
     filters,
     notes: [
+      ...(loader.truncations && loader.truncations.size > 0 ? [`Загрузка связей ограничена (${[...loader.truncations].sort().join(', ')}): схема неполная, это не лимит узлов.`] : []),
       'Рёбра — только утверждения со своим основанием; путь через третью компанию не означает прямого договора.',
       'Совместное участие и совместное упоминание — не договор и не корпоративная связь.',
       truncated ? `Показаны не все связи: достигнут лимит ${filters.limit} узлов. Раскройте нужный узел.` : '',

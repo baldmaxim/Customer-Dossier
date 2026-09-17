@@ -240,3 +240,97 @@ describe('TC-072 / TC-073: экспорт, отзыв допуска, выход
     expect(replay.status).toBe(200);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('этап 13: идентичность запроса снимка, согласованное чтение, редакция основания', () => {
+  it('R08 / T13-01: ключ снимка обращения A при запросе по обращению B — 409; повтор A — тот же снимок', async () => {
+    const other = await api.call('POST', '/api/cases', { title: 'Другое обращение', companyId: alfa, requestDate: '2026-09-15' }, api.auth);
+    const caseB = (other.body.case as { id: number }).id;
+    const key = 'stage13-key-case-a-0001';
+    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    expect(first.status).toBe(201);
+    const conflict = await api.call('POST', `/api/cases/${caseB}/snapshots`, { idempotencyKey: key }, api.auth);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.code).toBe('idempotency_key_conflict');
+    const periodConflict = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key, effectiveFrom: '2025-01-01' }, api.auth);
+    expect(periodConflict.status).toBe(409);
+    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    expect(replay.status).toBe(200);
+    expect(replay.body.id).toBe(first.body.id);
+  });
+
+  it('T13-02: настоящий повтор после изменения живого досье возвращает прежний снимок; новый ключ — новое состояние', async () => {
+    const key = 'stage13-key-replay-0002';
+    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    await pool().query(`UPDATE companies SET name = name || ' (повтор)' WHERE id = $1`, [alfa]);
+    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ id: first.body.id, payloadHash: first.body.payloadHash });
+    const fresh = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'stage13-key-replay-0003' }, api.auth);
+    expect(fresh.status).toBe(201);
+    expect(fresh.body.payloadHash).not.toBe(first.body.payloadHash);
+    await pool().query(`UPDATE companies SET name = replace(name, ' (повтор)', '') WHERE id = $1`, [alfa]);
+  });
+
+  it('T13-03: два одновременных запроса с одним ключом — один снимок, без 500', async () => {
+    const key = 'stage13-key-concurrent-0004';
+    const [a, b] = await Promise.all([
+      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth),
+      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    expect(a.body.id).toBe(b.body.id);
+    expect((await pool().query('SELECT count(*)::int AS n FROM dossier_snapshots WHERE idempotency_key = $1', [key])).rows[0]!.n).toBe(1);
+  });
+
+  it('T13-05: переименование, закоммиченное во время построения, не создаёт гибридный снимок', async () => {
+    const { createSnapshot, readSnapshot } = await import('./repository.js');
+    const before = (await pool().query<{ name: string }>('SELECT name FROM companies WHERE id = $1', [alfa])).rows[0]!.name;
+    const renamed = `${before} (гонка)`;
+    const result = await createSnapshot({
+      caseId,
+      effectiveFrom: null,
+      effectiveTo: null,
+      knowledgeCutoff: null,
+      idempotencyKey: null,
+      actor: 'test',
+      // Барьер: другое соединение коммитит переименование после того, как транзакция снимка зафиксировала точку чтения.
+      afterFirstRead: async () => {
+        await pool().query('UPDATE companies SET name = $2 WHERE id = $1', [alfa, renamed]);
+      },
+    });
+    const view = (await readSnapshot(result.id))!;
+    expect(view.payload.company!.name).toBe(before);
+    expect(JSON.stringify(view.payload.dossier)).not.toContain('(гонка)');
+    expect(JSON.stringify(view.payload.graph)).not.toContain('(гонка)');
+    await pool().query('UPDATE companies SET name = $2 WHERE id = $1', [alfa, before]);
+  });
+
+  it('T13-07: правка без разбора — основание остаётся на редакции 1, новая редакция отмечена отдельно', async () => {
+    const Q_REV = `ООО «Альфа-Демо» (ИНН ${INN_A}) выполняет отделку корпуса 3 ЖК «Берег-Демо».`;
+    await ingest(mainSource, `Полный текст. ${Q_REV}`, answer({
+      companies: [company('Альфа-Демо', Q_REV, { legal_form: 'ООО', tax_id: INN_A })],
+      projects: [project('Берег-Демо', Q_REV)],
+      relations: [relation({ type: 'participation', kind: 'contractor', subject: 'Альфа-Демо', project: 'Берег-Демо', building: 'корпус 3', quote: Q_REV })],
+    }));
+    const externalId = `synthetic_snapshot/${counter}`;
+    const edited = await storeDocument({ sourceId: mainSource, sourceRunId: null, externalId, url: `https://t.me/${externalId}`, title: null, body: 'Анонс исправлен без подробностей.', publishedAt: new Date(), forwardFrom: null });
+    expect(edited.outcome).toBe('new_revision');
+
+    const { loadCompanyInputs } = await import('../signals/load.js');
+    const [input] = await loadCompanyInputs(pool(), [alfa], new Date(Date.now() + 1000));
+    const pub = input!.publications.find(p => p.sourceItemId === edited.sourceItemId)!;
+    expect(pub).toMatchObject({ evidenceRevisionNo: 1, latestRevisionNo: 2, pendingRevision: true });
+  });
+
+  it('T13-08 / T13-10: новый снимок несёт покрытие выборок; прежние снимки открываются без него', async () => {
+    const res = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const view = await snapshotOf(res.body.id as number);
+    expect(view.payload.schemaVersion).toBe('dossier-snapshot@2');
+    expect(view.payload.coverage!.map(c => c.source)).toEqual(expect.arrayContaining(['company_facts', 'project_facts']));
+    expect(view.payload.coverage!.every(c => c.truncated === false)).toBe(true);
+    const s1Again = await snapshotOf(s1);
+    expect(s1Again.integrity.verified).toBe(true);
+  });
+});

@@ -10,6 +10,7 @@ import { buildGraph, GRAPH_EDGE_TYPES, type NodeKey } from '../graph/graph.js';
 import { graphLoader } from '../graph/load.js';
 import { HistoricalCutoffError } from '../snapshot/build.js';
 import { snapshotToHtml, snapshotToJson, snapshotToMarkdown } from '../snapshot/export.js';
+import { SnapshotKeyConflictError } from '../snapshot/requestIdentity.js';
 import { createSnapshot, listSnapshots, readSnapshot, redactSnapshotEvidence, SnapshotNotFoundError } from '../snapshot/repository.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 
@@ -115,6 +116,10 @@ snapshotRouter.post('/cases/:id/snapshots', async (req, res) => {
   } catch (err) {
     if (err instanceof HistoricalCutoffError) {
       res.status(422).json({ error: err.message, code: 'historical_cutoff_unsupported' });
+      return;
+    }
+    if (err instanceof SnapshotKeyConflictError) {
+      res.status(409).json({ error: err.message, code: 'idempotency_key_conflict' });
       return;
     }
     if (err instanceof SnapshotNotFoundError) {

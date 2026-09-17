@@ -90,18 +90,69 @@ const FROM = `
   LEFT JOIN companies cc ON cc.id = a.counterparty_company_id`;
 
 /** Утверждения по фильтру и их активные доказательства. Без активной поддержки утверждение в досье не попадает. */
-const loadFacts = async (exec: DbExecutor, where: string, params: unknown[]): Promise<IFact[]> => {
-  const rows = (
-    await exec.query<Omit<IFact, 'evidence'>>(
-      `SELECT ${COLUMNS} ${FROM}
-       WHERE (${where})
+/**
+ * Покрытие выборки (coverage@1, этап 13): сколько загружено, есть ли ещё и сколько всего, если известно.
+ * Ограниченная выборка не может утверждать «других сведений нет».
+ */
+export interface ICoverage {
+  source: string;
+  limit: number;
+  loaded: number;
+  /** Известное общее число; null — неизвестно (не подменяется числом загруженных). */
+  total: number | null;
+  truncated: boolean;
+}
+
+export const COVERAGE_VERSION = 'coverage@1';
+
+/** Предел выборки фактов досье. Не снимается: при превышении выборка помечается неполной. */
+export const FACTS_LIMIT = 1000;
+
+export const coverageOf = (source: string, limit: number, fetched: number, total: number | null): ICoverage => ({
+  source,
+  limit,
+  loaded: Math.min(fetched, limit),
+  total: fetched > limit ? total : Math.min(fetched, limit),
+  truncated: fetched > limit,
+});
+
+export interface IFactPage {
+  facts: IFact[];
+  coverage: ICoverage;
+}
+
+const loadFactsPage = async (
+  exec: DbExecutor,
+  source: string,
+  where: string,
+  params: unknown[],
+  options: { preferProjectId?: number | null; limit?: number } = {},
+): Promise<IFactPage> => {
+  const limit = options.limit ?? FACTS_LIMIT;
+  const scopeFilter = `(${where})
          AND a.predicate IN ('participates_in_project', 'contract', 'corporate_relation', 'event')
-         AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
-       ORDER BY a.id
-       LIMIT 1000`,
-      params,
+         AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')`;
+  const preferIndex = params.length + 1;
+  // Сначала сведения по объекту обращения, затем новые: при усечении теряется дальний фон, а не предмет обращения.
+  const rows = (
+    await exec.query<Omit<IFact, 'evidence' | 'priorDecisions'>>(
+      `SELECT ${COLUMNS} ${FROM}
+       WHERE ${scopeFilter}
+       ORDER BY ($${preferIndex}::bigint IS NOT NULL AND $${preferIndex}::bigint IN (a.object_project_id, a.subject_project_id, a.context_project_id)) DESC,
+                a.id DESC
+       LIMIT ${limit + 1}`,
+      [...params, options.preferProjectId ?? null],
     )
   ).rows;
+  const total =
+    rows.length > limit
+      ? (await exec.query<{ n: number }>(`SELECT count(*)::int AS n FROM assertions a WHERE ${scopeFilter}`, params)).rows[0]!.n
+      : null;
+  const facts = await withEvidence(exec, rows.slice(0, limit));
+  return { facts: facts.sort((a, b) => a.assertionId - b.assertionId), coverage: coverageOf(source, limit, rows.length, total) };
+};
+
+const withEvidence = async (exec: DbExecutor, rows: Array<Omit<IFact, 'evidence' | 'priorDecisions'>>): Promise<IFact[]> => {
   if (rows.length === 0) return [];
   const evidence = (
     await exec.query<IFactEvidence & { assertionId: number }>(
@@ -159,11 +210,16 @@ export const loadPriorDecisions = async (exec: DbExecutor, assertionIds: readonl
         )
       ).rows;
 
-export const loadCompanyFacts = (exec: DbExecutor, companyId: number): Promise<IFact[]> =>
-  loadFacts(exec, '$1 IN (a.subject_company_id, a.object_company_id, a.counterparty_company_id)', [companyId]);
+/** Утверждения компании и их активные доказательства. Без активной поддержки утверждение в досье не попадает. */
+export const loadCompanyFactsPage = (exec: DbExecutor, companyId: number, options: { preferProjectId?: number | null; limit?: number } = {}): Promise<IFactPage> =>
+  loadFactsPage(exec, 'company_facts', '$1 IN (a.subject_company_id, a.object_company_id, a.counterparty_company_id)', [companyId], options);
 
-export const loadProjectFacts = (exec: DbExecutor, projectId: number): Promise<IFact[]> =>
-  loadFacts(exec, '$1 IN (a.object_project_id, a.subject_project_id, a.context_project_id)', [projectId]);
+export const loadProjectFactsPage = (exec: DbExecutor, projectId: number, options: { limit?: number } = {}): Promise<IFactPage> =>
+  loadFactsPage(exec, 'project_facts', '$1 IN (a.object_project_id, a.subject_project_id, a.context_project_id)', [projectId], { ...options, preferProjectId: projectId });
+
+export const loadCompanyFacts = async (exec: DbExecutor, companyId: number): Promise<IFact[]> => (await loadCompanyFactsPage(exec, companyId)).facts;
+
+export const loadProjectFacts = async (exec: DbExecutor, projectId: number): Promise<IFact[]> => (await loadProjectFactsPage(exec, projectId)).facts;
 
 /** Одноимённые живые компании: ключ имени тот же, что у резолвера. Для выбора, а не для подстановки. */
 export const loadHomonyms = async (

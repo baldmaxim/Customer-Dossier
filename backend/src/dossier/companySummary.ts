@@ -31,7 +31,7 @@ const IDENTITY: Record<string, string> = {
 };
 
 export const loadCompanySummary = async (exec: DbExecutor, companyId: number, now: Date = new Date()): Promise<ICompanySummary> => {
-  const refresh = await refreshState();
+  const refresh = await refreshState(exec);
   const snapshot = refresh.active
     ? ((
         await exec.query<{ payload: ICompanySignals }>('SELECT payload FROM company_signal_snapshots WHERE refresh_id = $1 AND company_id = $2', [

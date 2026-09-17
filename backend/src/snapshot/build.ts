@@ -10,13 +10,14 @@ import { overlap } from '../signals/intervals.js';
 import { SIGNAL_RULES_VERSION } from '../signals/types.js';
 import { buildCaseDossier, DOSSIER_TEMPLATE_VERSION, type ICaseDossier } from '../dossier/caseDossier.js';
 import { getCase, type ICaseRow } from '../dossier/cases.js';
-import { loadCompanyFacts, loadHomonyms, loadOpenQueue, loadProjectFacts, type IFact } from '../dossier/facts.js';
+import { loadCompanyFactsPage, loadHomonyms, loadOpenQueue, loadProjectFactsPage, type ICoverage, type IFact } from '../dossier/facts.js';
 import { loadIdentityStatus, loadProjectState } from '../dossier/load.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { buildGraph, type IGraph, type NodeKey } from '../graph/graph.js';
 import { graphLoader } from '../graph/load.js';
 
-export const SNAPSHOT_SCHEMA_VERSION = 'dossier-snapshot@1';
+// @2 (этап 13): покрытие выборок (coverage), усечение загрузки схемы, чтение сигналов в транзакции снимка.
+export const SNAPSHOT_SCHEMA_VERSION = 'dossier-snapshot@2';
 export const GRAPH_VERSION = 'graph@1';
 
 export interface ISnapshotSource {
@@ -59,6 +60,8 @@ export interface ISnapshotPayload {
   graph: Pick<IGraph, 'nodes' | 'edges' | 'truncated' | 'notes'>;
   selection: { assertionIds: number[]; evidenceIds: number[]; reviewIds: number[] };
   limitations: string[];
+  /** Покрытие выборок и загрузки схемы (coverage@1). В снимках dossier-snapshot@1 поля нет — полнота неизвестна. */
+  coverage?: ICoverage[];
 }
 
 export class HistoricalCutoffError extends Error {
@@ -92,7 +95,8 @@ export const buildSnapshotPayload = async (
 ): Promise<ISnapshotPayload | null> => {
   const caseRow = await getCase(client, caseId);
   if (!caseRow) return null;
-  const refresh = await refreshState();
+  // Состояние сигналов читается той же транзакцией снимка (REPEATABLE READ): одна точка данных для всех разделов.
+  const refresh = await refreshState(client);
   const { effectiveFrom: from, effectiveTo: to, now } = options;
 
   let undatedIncluded = 0;
@@ -110,8 +114,11 @@ export const buildSnapshotPayload = async (
     caseRow.companyId !== null
       ? ((await client.query<{ name_key: string }>('SELECT name_key FROM companies WHERE id = $1', [caseRow.companyId])).rows[0]?.name_key ?? '')
       : normalizeName(caseRow.companyNameClaimed ?? '', 'company').key;
-  const companyFacts = applyEffective(caseRow.companyId !== null ? await loadCompanyFacts(client, caseRow.companyId) : []);
-  const projectFacts = applyEffective(caseRow.projectId !== null ? await loadProjectFacts(client, caseRow.projectId) : []);
+  const companyPage = caseRow.companyId !== null ? await loadCompanyFactsPage(client, caseRow.companyId, { preferProjectId: caseRow.projectId }) : null;
+  const projectPage = caseRow.projectId !== null ? await loadProjectFactsPage(client, caseRow.projectId) : null;
+  const coverage: ICoverage[] = [companyPage?.coverage, projectPage?.coverage].filter((cv): cv is ICoverage => cv !== undefined);
+  const companyFacts = applyEffective(companyPage?.facts ?? []);
+  const projectFacts = applyEffective(projectPage?.facts ?? []);
   const openQueue = await loadOpenQueue(client, companyFacts.map(f => f.assertionId));
   const dossier = buildCaseDossier({
     caseRow,
@@ -123,6 +130,7 @@ export const buildSnapshotPayload = async (
     projectFacts,
     projectState: caseRow.projectId !== null ? await loadProjectState(client, caseRow.projectId) : [],
     openQueue,
+    coverage,
   });
 
   const statements = [
@@ -214,7 +222,8 @@ export const buildSnapshotPayload = async (
     ...(caseRow.companyId !== null ? [`c:${caseRow.companyId}` as NodeKey] : []),
     ...(caseRow.projectId !== null ? [`p:${caseRow.projectId}` as NodeKey] : []),
   ];
-  const graph = seeds.length > 0 ? await buildGraph(seeds, { depth: 1, limit: 40, from, to }, graphLoader(client)) : { nodes: [], edges: [], truncated: false, notes: [] };
+  const graph = seeds.length > 0 ? await buildGraph(seeds, { depth: 1, limit: 40, from, to }, graphLoader(client)) : { nodes: [], edges: [], truncated: false, loaderTruncated: [] as string[], notes: [] };
+  for (const reason of graph.loaderTruncated ?? []) coverage.push({ source: `graph_${reason}`, limit: 0, loaded: 0, total: null, truncated: true });
 
   const limitations = [
     'Снимок фиксирует сведения, известные системе в момент создания; более поздние публикации, решения и слияния в него не попадают.',
@@ -222,6 +231,9 @@ export const buildSnapshotPayload = async (
     ...(from || to ? [`Фильтр дат событий и ролей: ${from ?? '…'} — ${to ?? '…'}. Это не документ, существовавший в прошлом.`] : []),
     ...(withheld.size > 0 ? [`Цитаты не включены из-за допуска источника: ${withheld.size}.`] : []),
     ...(refresh.stale ? [`Сигналы на момент снимка устарели: ${refresh.staleReasons.join('; ')}.`] : []),
+    ...coverage.filter(cv => cv.truncated).map(cv => cv.source.startsWith('graph_')
+      ? `Загрузка связей для схемы ограничена (${cv.source.slice(6)}): схема неполная, часть связей не просмотрена.`
+      : `Выборка ограничена: ${cv.source} — загружено ${cv.loaded} из ${cv.total ?? 'неизвестного числа'}; «других сведений нет» по этому снимку утверждать нельзя.`),
   ];
 
   return {
@@ -265,5 +277,6 @@ export const buildSnapshotPayload = async (
     graph: { nodes: graph.nodes, edges: graph.edges, truncated: graph.truncated, notes: graph.notes },
     selection: { assertionIds, evidenceIds: sources.map(s => s.evidenceId), reviewIds: reviews.map(r => r.id) },
     limitations,
+    coverage,
   };
 };

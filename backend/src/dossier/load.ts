@@ -5,7 +5,7 @@ import { normalizeName } from '../resolve/normalize.js';
 import { refreshState } from '../signals/refresh.js';
 import { getCase } from './cases.js';
 import { buildCaseDossier, type ICaseDossier } from './caseDossier.js';
-import { loadCompanyFacts, loadHomonyms, loadOpenQueue, loadProjectFacts } from './facts.js';
+import { loadCompanyFactsPage, loadHomonyms, loadOpenQueue, loadProjectFactsPage } from './facts.js';
 
 export const loadProjectState = async (exec: DbExecutor, projectId: number) =>
   (
@@ -29,7 +29,7 @@ export const loadIdentityStatus = async (exec: DbExecutor, companyId: number, re
 export const loadCaseDossier = async (exec: DbExecutor, caseId: number, now: Date = new Date()): Promise<ICaseDossier | null> => {
   const caseRow = await getCase(exec, caseId);
   if (!caseRow) return null;
-  const refresh = await refreshState();
+  const refresh = await refreshState(exec);
 
   const nameKey =
     caseRow.companyId !== null
@@ -37,8 +37,10 @@ export const loadCaseDossier = async (exec: DbExecutor, caseId: number, now: Dat
       : normalizeName(caseRow.companyNameClaimed ?? '', 'company').key;
   const homonyms = nameKey ? await loadHomonyms(exec, nameKey, caseRow.companyId) : [];
 
-  const companyFacts = caseRow.companyId !== null ? await loadCompanyFacts(exec, caseRow.companyId) : [];
-  const projectFacts = caseRow.projectId !== null ? await loadProjectFacts(exec, caseRow.projectId) : [];
+  const companyPage = caseRow.companyId !== null ? await loadCompanyFactsPage(exec, caseRow.companyId, { preferProjectId: caseRow.projectId }) : null;
+  const projectPage = caseRow.projectId !== null ? await loadProjectFactsPage(exec, caseRow.projectId) : null;
+  const companyFacts = companyPage?.facts ?? [];
+  const projectFacts = projectPage?.facts ?? [];
   const projectState = caseRow.projectId !== null ? await loadProjectState(exec, caseRow.projectId) : [];
   const openQueue = await loadOpenQueue(exec, companyFacts.map(f => f.assertionId));
   const identityStatus = caseRow.companyId !== null ? await loadIdentityStatus(exec, caseRow.companyId, refresh.active?.id ?? null) : null;
@@ -53,5 +55,6 @@ export const loadCaseDossier = async (exec: DbExecutor, caseId: number, now: Dat
     projectFacts,
     projectState,
     openQueue,
+    coverage: [companyPage?.coverage, projectPage?.coverage].filter((cv): cv is NonNullable<typeof cv> => cv !== undefined),
   });
 };

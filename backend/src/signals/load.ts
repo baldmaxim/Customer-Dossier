@@ -60,8 +60,9 @@ export const loadCompanyInputs = async (exec: DbExecutor, companyIds: readonly n
   ).rows;
 
   const evidence = (
-    await exec.query<{ assertion_id: number; id: number; stance: 'supports' | 'contradicts' | 'mentions'; source_item_id: number }>(
-      `SELECT e.assertion_id, e.id, e.stance::text AS stance, r.source_item_id
+    await exec.query<{ assertion_id: number; id: number; stance: 'supports' | 'contradicts' | 'mentions'; source_item_id: number; revision_no: number; completeness: string; dedup_hash: string }>(
+      `SELECT e.assertion_id, e.id, e.stance::text AS stance, r.source_item_id, r.revision_no,
+              r.completeness::text AS completeness, encode(r.dedup_hash, 'hex') AS dedup_hash
        FROM evidence e JOIN document_revisions r ON r.id = e.revision_id
        WHERE e.assertion_id = ANY($1::bigint[]) AND e.status = 'active' AND e.created_at <= $2
        ORDER BY e.id`,
@@ -70,9 +71,15 @@ export const loadCompanyInputs = async (exec: DbExecutor, companyIds: readonly n
   ).rows;
 
   const itemIds = [...new Set(evidence.map(e => e.source_item_id))];
+  // Редакция-основание публикации — последняя из редакций, на которые ссылаются доказательства (не последняя наблюдаемая).
+  const basis = new Map<number, { revisionNo: number; completeness: string; dedupHash: string }>();
+  for (const e of evidence) {
+    const cur = basis.get(e.source_item_id);
+    if (!cur || e.revision_no > cur.revisionNo) basis.set(e.source_item_id, { revisionNo: e.revision_no, completeness: e.completeness, dedupHash: e.dedup_hash });
+  }
   const publications = (
-    await exec.query<ISignalPublication>(
-      `SELECT si.id AS "sourceItemId", s.key AS "sourceKey",
+    await exec.query<ISignalPublication & { latestRevisionNo: number }>(
+      `SELECT si.id AS "sourceItemId", s.key AS "sourceKey", lr.revision_no AS "latestRevisionNo",
               to_char(coalesce(si.published_at, lr.published_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "publishedAt",
               lr.completeness::text AS completeness, encode(lr.dedup_hash, 'hex') AS "dedupHash",
               (SELECT o.forward_origin FROM source_observations o
@@ -82,7 +89,7 @@ export const loadCompanyInputs = async (exec: DbExecutor, companyIds: readonly n
        FROM source_items si
        JOIN sources s ON s.id = si.source_id
        JOIN LATERAL (
-         SELECT r.published_at, r.completeness, r.dedup_hash FROM document_revisions r
+         SELECT r.revision_no, r.published_at, r.completeness, r.dedup_hash FROM document_revisions r
          WHERE r.source_item_id = si.id AND r.first_observed_at <= $2
          ORDER BY r.revision_no DESC LIMIT 1
        ) lr ON true
@@ -91,7 +98,18 @@ export const loadCompanyInputs = async (exec: DbExecutor, companyIds: readonly n
       [itemIds, cutoff],
     )
   ).rows;
-  const pubById = new Map(publications.map(p => [p.sourceItemId, p]));
+  const pubById = new Map(
+    publications.map(p => {
+      const b = basis.get(p.sourceItemId);
+      // completeness и dedupHash — от редакции-основания; последняя наблюдаемая редакция отмечена отдельно.
+      return [
+        p.sourceItemId,
+        b
+          ? { ...p, completeness: b.completeness, dedupHash: b.dedupHash, evidenceRevisionNo: b.revisionNo, pendingRevision: p.latestRevisionNo > b.revisionNo }
+          : p,
+      ] as const;
+    }),
+  );
 
   const evidenceByAssertion = new Map<number, ISignalAssertion['evidence']>();
   for (const e of evidence) {

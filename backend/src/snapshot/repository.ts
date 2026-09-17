@@ -1,6 +1,7 @@
 // Снимки досье: создание, чтение с проверкой целостности и текущей доступности, вымарывание фрагмента.
 
-import { getPool, withTransaction } from '../db/pool.js';
+import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
+import { SnapshotKeyConflictError, sameSnapshotRequest, snapshotRequestHash } from './requestIdentity.js';
 import { applyAvailability, loadAvailability, redactEvidence, type IAvailability } from './availability.js';
 import { buildSnapshotPayload, HistoricalCutoffError, SNAPSHOT_SCHEMA_VERSION, type ISnapshotPayload } from './build.js';
 import { HASH_ALGORITHM, payloadHash } from './canonical.js';
@@ -43,20 +44,40 @@ export const createSnapshot = async (input: {
   idempotencyKey: string | null;
   actor: string;
   now?: Date;
+  /** Точка для интеграционного теста гонки: вызывается внутри транзакции после первого чтения. */
+  afterFirstRead?: () => Promise<void>;
 }): Promise<{ id: number; replayed: boolean; payloadHash: string }> => {
   const now = input.now ?? new Date();
   // Срез знаний на прошлую дату не создаётся: нет полной истории статусов, решений и доказательств.
   if (input.knowledgeCutoff !== null && new Date(input.knowledgeCutoff).getTime() < now.getTime() - 60_000) throw new HistoricalCutoffError();
+  const request = { caseId: input.caseId, effectiveFrom: input.effectiveFrom, effectiveTo: input.effectiveTo };
+  const requestHash = snapshotRequestHash(request);
 
-  return withTransaction(async client => {
+  // Повтор по ключу: тот же запрос — тот же снимок; другой запрос — конфликт, а не чужой снимок.
+  const replay = async (exec: DbExecutor): Promise<{ id: number; replayed: boolean; payloadHash: string } | null> => {
+    if (!input.idempotencyKey) return null;
+    const prior = (
+      await exec.query<{ id: number; payload_hash: string; request_hash: string | null; case_id: number; effective_from: string | null; effective_to: string | null }>(
+        'SELECT id, payload_hash, request_hash, case_id, effective_from::text, effective_to::text FROM dossier_snapshots WHERE idempotency_key = $1',
+        [input.idempotencyKey],
+      )
+    ).rows[0];
+    if (!prior) return null;
+    const stored = { requestHash: prior.request_hash, caseId: prior.case_id, effectiveFrom: prior.effective_from, effectiveTo: prior.effective_to };
+    if (!sameSnapshotRequest(stored, request)) throw new SnapshotKeyConflictError();
+    return { id: prior.id, replayed: true, payloadHash: prior.payload_hash };
+  };
+
+  try {
+    return await withTransaction(async client => {
     // Снимок строится на согласованном чтении одной транзакции (уровень задаётся первой командой).
+    // Все чтения построения (досье, сигналы, схема, источники) идут через этот client — см. build.ts.
     await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-    if (input.idempotencyKey) {
-      const prior = (
-        await client.query<{ id: number; payload_hash: string }>('SELECT id, payload_hash FROM dossier_snapshots WHERE idempotency_key = $1', [input.idempotencyKey])
-      ).rows[0];
-      if (prior) return { id: prior.id, replayed: true, payloadHash: prior.payload_hash };
-    }
+    // Первая команда фиксирует точку чтения: всё построение ниже видит одно состояние базы.
+    await client.query('SELECT 1');
+    const prior = await replay(client);
+    if (prior) return prior;
+    if (input.afterFirstRead) await input.afterFirstRead();
     const payload = await buildSnapshotPayload(client, input.caseId, { effectiveFrom: input.effectiveFrom, effectiveTo: input.effectiveTo, now });
     if (!payload) throw new SnapshotNotFoundError('Обращение');
     const hash = payloadHash(payload);
@@ -64,8 +85,8 @@ export const createSnapshot = async (input: {
       await client.query<{ id: number }>(
         `INSERT INTO dossier_snapshots
            (case_id, case_version, schema_version, rules_version, template_version, generated_at, knowledge_cutoff,
-            effective_from, effective_to, payload, payload_hash, hash_algorithm, created_by, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+            effective_from, effective_to, payload, payload_hash, hash_algorithm, created_by, idempotency_key, request_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
         [
           input.caseId,
           payload.case.version,
@@ -80,11 +101,21 @@ export const createSnapshot = async (input: {
           HASH_ALGORITHM,
           input.actor,
           input.idempotencyKey,
+          requestHash,
         ],
       )
     ).rows[0]!.id;
     return { id, replayed: false, payloadHash: hash };
-  });
+    });
+  } catch (err) {
+    // Конкурентный повтор того же ключа: второй INSERT упирается в уникальность — читаем победителя вне прерванной
+    // транзакции и сверяем намерение (тот же запрос — тот же снимок, другой — конфликт).
+    if ((err as { code?: string }).code === '23505' && input.idempotencyKey) {
+      const winner = await replay(getPool());
+      if (winner) return winner;
+    }
+    throw err;
+  }
 };
 
 export const listSnapshots = async (caseId: number): Promise<ISnapshotListItem[]> =>

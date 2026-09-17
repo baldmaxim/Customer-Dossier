@@ -29,7 +29,14 @@ interface IAssertionEdgeRow {
   contradicts: number;
 }
 
-export const graphLoader = (exec: DbExecutor): IGraphLoader => ({
+/** Пределы загрузки рёбер за один шаг обхода. Превышение не скрывается: причина попадает в loader.truncations. */
+export const ASSERTION_EDGE_LIMIT = 2000;
+export const CO_MENTION_LIMIT = 500;
+
+export const graphLoader = (exec: DbExecutor): IGraphLoader => {
+  const truncations = new Set<string>();
+  return {
+  truncations,
   nodes: async keys => {
     const { companies, projects } = split(keys);
     const companyRows = (
@@ -98,10 +105,14 @@ export const graphLoader = (exec: DbExecutor): IGraphLoader => ({
                   OR a.object_project_id = ANY($2::bigint[]) OR a.context_project_id = ANY($2::bigint[]))
              AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
            ORDER BY a.id
-           LIMIT 2000`,
+           LIMIT ${ASSERTION_EDGE_LIMIT + 1}`,
           [companies, projects, predicates],
         )
       ).rows;
+      if (rows.length > ASSERTION_EDGE_LIMIT) {
+        truncations.add('assertions');
+        rows.length = ASSERTION_EDGE_LIMIT;
+      }
       for (const r of rows) {
         const type: GraphEdgeType = r.predicate === 'participates_in_project' ? 'participation' : r.predicate === 'contract' ? 'contract' : 'corporate';
         const to: NodeKey | null = type === 'participation' ? (r.objectProjectId ? `p:${r.objectProjectId}` : null) : r.objectCompanyId ? `c:${r.objectCompanyId}` : null;
@@ -173,10 +184,15 @@ export const graphLoader = (exec: DbExecutor): IGraphLoader => ({
            JOIN assertions y ON y.id = ey.assertion_id AND y.predicate = 'company_mentioned' AND y.subject_company_id <> x.subject_company_id
            WHERE x.predicate = 'company_mentioned' AND x.subject_company_id = ANY($1::bigint[])
            GROUP BY 1, 2
-           LIMIT 500`,
+           ORDER BY 1, 2
+           LIMIT ${CO_MENTION_LIMIT + 1}`,
           [companies],
         )
       ).rows;
+      if (rows.length > CO_MENTION_LIMIT) {
+        truncations.add('co_mentioned');
+        rows.length = CO_MENTION_LIMIT;
+      }
       for (const r of rows) {
         edges.push({
           key: `m:${r.a}:${r.b}`,
@@ -202,4 +218,5 @@ export const graphLoader = (exec: DbExecutor): IGraphLoader => ({
     }
     return edges;
   },
-});
+};
+};

@@ -6,7 +6,7 @@
 //    и показывает, что он устарел;
 //  - два пересчёта одновременно не идут (advisory lock), зависший running старше часа считается проваленным.
 
-import { getPool, withTransaction } from '../db/pool.js';
+import { getPool, type DbExecutor, withTransaction } from '../db/pool.js';
 import { loadCompanyInputs } from './load.js';
 import { computeCompanySignals } from './rules.js';
 import { SIGNAL_RULES_VERSION, type ICompanySignals } from './types.js';
@@ -117,8 +117,12 @@ export interface IRefreshState {
 }
 
 /** Какой снимок читается и почему он может быть устаревшим. */
-export const refreshState = async (): Promise<IRefreshState> => {
-  const pool = getPool();
+/**
+ * Состояние сигналов. `exec` — исполнитель, через который читаются все запросы: снимок досье передаёт клиент своей
+ * транзакции REPEATABLE READ, чтобы состояние сигналов относилось к той же точке данных, что и досье (этап 13).
+ */
+export const refreshState = async (exec: DbExecutor = getPool()): Promise<IRefreshState> => {
+  const pool = exec;
   const active = (
     await pool.query<{ id: number; rules_version: string; cutoff_at: Date; finished_at: Date }>('SELECT id, rules_version, cutoff_at, finished_at FROM signal_active_refresh_v')
   ).rows[0];

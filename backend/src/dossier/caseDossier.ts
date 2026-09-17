@@ -7,7 +7,7 @@
 import { overlap } from '../signals/intervals.js';
 import type { IRefreshState } from '../signals/refresh.js';
 import type { ICaseRow } from './cases.js';
-import type { IFact } from './facts.js';
+import type { ICoverage, IFact } from './facts.js';
 import { matchScope, scopeNote, type ICaseScope, type IScopeMatch } from './scope.js';
 import { dateText, eventText, factStatement, outcomeText, plainStatement, proceduralText, roleText, stageText, type IStatement } from './statements.js';
 
@@ -24,6 +24,8 @@ export interface ICaseDossierInput {
   projectFacts: IFact[];
   projectState: Array<{ building: string | null; state: string; validFrom: string; periodPrecision: string }>;
   openQueue: Array<{ kind: string; assertionId: number; priority: number }>;
+  /** Покрытие выборок (этап 13). Не передано — неизвестно, не «полно». */
+  coverage?: ICoverage[];
 }
 
 export type RoleStatus = 'reviewed' | 'reported' | 'contradicted' | 'scope_unknown' | 'not_established' | 'no_project' | 'no_company';
@@ -45,6 +47,8 @@ export interface ICaseDossier {
   companyEvents: IStatement[];
   uncertainties: IStatement[];
   questions: Array<{ code: string; text: string; basedOn: string }>;
+  /** Покрытие выборок, из которых построено досье (coverage@1); в досье до этапа 13 поля нет. */
+  coverage?: ICoverage[];
   disclaimer: string;
 }
 
@@ -258,8 +262,13 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
     ...projectEvents.filter(s => s.text.includes('пересекается с участием')),
     ...otherBuildings,
   ].slice(0, 5);
+  const truncated = (input.coverage ?? []).filter(cv => cv.truncated);
   if (observations.length === 0 && companyId !== null) {
-    observations.push(plainStatement('nothing_found', 'not_established', 'В собранной выборке сведений об участии компании в этом объекте, её договорах и событиях не найдено. Это не означает, что их нет.'));
+    observations.push(
+      truncated.length > 0
+        ? plainStatement('nothing_found_in_loaded', 'not_established', 'В загруженной части выборки сведений об участии компании в этом объекте не найдено; выборка ограничена — остальные сведения не просмотрены.')
+        : plainStatement('nothing_found', 'not_established', 'В собранной выборке сведений об участии компании в этом объекте, её договорах и событиях не найдено. Это не означает, что их нет.'),
+    );
   }
 
   // --- неопределённости и вопросы — только по реальным пробелам
@@ -324,6 +333,9 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
   if (input.openQueue.length > 0) {
     gap('review_pending', `Непроверенные противоречия и изменения оснований по сведениям о компании: ${input.openQueue.length}.`, null);
   }
+  for (const cv of truncated) {
+    gap(`selection_truncated_${cv.source}`, `Выборка ограничена: загружено ${cv.loaded} из ${cv.total ?? 'неизвестного числа'} (${cv.source}). Выводы относятся к загруженной части; сведения по объекту обращения загружаются в первую очередь.`, null);
+  }
   if (!input.refresh.active) gap('signals_not_computed', 'Сигналы компании ещё не рассчитывались.', null);
   else if (input.refresh.stale) gap('signals_stale', `Сигналы устарели: ${input.refresh.staleReasons.join('; ')}.`, null);
 
@@ -349,6 +361,7 @@ export const buildCaseDossier = (input: ICaseDossierInput): ICaseDossier => {
     companyEvents,
     uncertainties,
     questions,
+    ...(input.coverage ? { coverage: input.coverage } : {}),
     disclaimer: 'Досье собрано из открытых публикаций и записей оператора. Это не проверка контрагента, не оценка надёжности и не решение о сотрудничестве.',
   };
 };
