@@ -76,6 +76,18 @@ describe('execution-identity@1', () => {
     expect(buildModelIdentity(providerA({ serverReported: { quantization: 'Q4_K_M' } })).serverReported).toMatchObject({ quantization: 'Q4_K_M', contextWindow: 'unknown' });
   });
 
+  it('нарезка, прочитанная из JSONB (другой порядок ключей и поле version), даёт тот же отпечаток — A/A не уходит в blocked', () => {
+    // PostgreSQL хранит ключи jsonb упорядоченными: сначала короче, при равной длине — по байтам.
+    const jsonbOrder = (o: Record<string, unknown>): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)));
+    const stored = buildFingerprint(providerA(), chunker);
+    const fromDb = jsonbOrder(stored.json.chunker as Record<string, unknown>) as unknown as IChunkerParams;
+    expect(Object.keys(fromDb)).not.toEqual(Object.keys(stored.json.chunker as object));
+    expect(buildFingerprint(providerA(), fromDb).fingerprint).toBe(stored.fingerprint);
+    expect(executionMismatch(providerA(), { ...claimFor(providerA()), chunker: fromDb })).toBeNull();
+    expect(Object.keys(stored.json.chunker as object)).toEqual(['version', 'chunkSize', 'maxChunks', 'overlap']);
+  });
+
   it('запуск до этапа 11 — historical: идентичность неполная, не реконструируется', () => {
     expect(isHistoricalIdentity({ promptVersion: 'p1', model: 'qwen3-8b' })).toBe(true);
     expect(isHistoricalIdentity(buildFingerprint(providerA(), chunker).json)).toBe(false);

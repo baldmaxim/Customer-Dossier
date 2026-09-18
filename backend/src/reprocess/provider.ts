@@ -128,7 +128,13 @@ export const buildModelIdentity = (provider: IModelProvider): Record<string, unk
 export const buildFingerprint = (provider: IModelProvider, chunker: IChunkerParams): IFingerprint => {
   const model = buildModelIdentity(provider);
   const modelIdentityHash = sha256(JSON.stringify(model));
-  const json = { ...model, modelIdentityHash, chunker: { version: CHUNKER_VERSION, ...chunker } };
+  // Нарезка — явными полями в фиксированном порядке: при чтении из JSONB (claim.chunker) PostgreSQL меняет порядок ключей,
+  // и отпечаток, пересчитанный от прочитанного объекта, не совпал бы с записанным (запуск ушёл бы в blocked).
+  const json = {
+    ...model,
+    modelIdentityHash,
+    chunker: { version: CHUNKER_VERSION, chunkSize: chunker.chunkSize, maxChunks: chunker.maxChunks, overlap: chunker.overlap },
+  };
   return { fingerprint: sha256(JSON.stringify(json)), modelIdentityHash, json };
 };
 
