@@ -61,12 +61,15 @@ export const useSession = (): IUseSession => {
     [loginMutation],
   );
 
+  // Сессию переключаем через тот же запрос, на который подписан экран: queryClient.clear()
+  // удалял его вместе с данными, подписчик об этом не узнавал, и досье оставалось на экране.
   const logout = useCallback(async (): Promise<void> => {
     await api.post('/api/auth/logout').catch(() => undefined);
     setCsrfToken(null);
-    queryClient.clear();
-    await purgeSensitiveCaches();
     queryClient.setQueryData(SESSION_KEY, { authenticated: false });
+    queryClient.removeQueries({ predicate: q => q.queryKey[0] !== 'auth' });
+    queryClient.getMutationCache().clear();
+    await purgeSensitiveCaches();
   }, [queryClient]);
 
   return {

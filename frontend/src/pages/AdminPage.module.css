@@ -25,7 +25,8 @@
   border: 1px solid var(--border);
   padding: 1px 6px;
   border-radius: var(--radius-xs);
-  white-space: nowrap;
+  /* Длинная команда не распирает страницу на 360–412 px: перенос по пробелам, в крайнем случае внутри слова. */
+  overflow-wrap: anywhere;
 }
 
 .empty {

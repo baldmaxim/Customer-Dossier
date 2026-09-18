@@ -1,6 +1,6 @@
 // Этап 18: краткое досье (статусы словами, недоверенные строки не исполняются), состояние источника, схема из снимка
 // (обрезка, легенда, стрелка), выход из сессии очищает клиентский кэш.
-import { act, render, renderHook, screen } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -105,11 +105,14 @@ describe('useSession — выход', () => {
     client.setQueryData(['case-dossier', 1], { secret: 'досье прошлой сессии' });
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
     const { result } = renderHook(() => useSession(), { wrapper });
+    // Сначала сессия действительно открыта: иначе «не вошёл» после выхода ничего не доказывает (C1, T18-02).
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
     await act(async () => {
       await result.current.logout();
     });
     expect(client.getQueryData(['case-dossier', 1])).toBeUndefined();
     expect(purgeSensitiveCaches).toHaveBeenCalled();
-    expect(result.current.authenticated).toBe(false);
+    // Экран подписан на запрос сессии: он обязан переключиться на вход (раньше clear() оставлял досье на экране).
+    await waitFor(() => expect(result.current.authenticated).toBe(false));
   });
 });

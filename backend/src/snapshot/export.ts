@@ -102,7 +102,7 @@ const htmlBrief = (b: INegotiationBrief | undefined): string => {
 };
 
 const HTML_STYLE = `
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111;background:#fff;margin:24px;line-height:1.45;font-size:14px}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111;background:#fff;margin:24px;line-height:1.45;font-size:14px;overflow-wrap:anywhere}
 h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:22px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}h3{font-size:14px;margin:14px 0 6px}
 .muted,.ids{color:#555;font-size:12px}.attr{font-weight:600;font-size:11px;text-transform:uppercase;color:#444}
 ul.statements{padding-left:18px}ul.statements li{margin:0 0 8px}

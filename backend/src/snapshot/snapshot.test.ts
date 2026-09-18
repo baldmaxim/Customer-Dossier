@@ -124,6 +124,11 @@ describe('TC-072: экспорт без исполнения опасного т
     expect(escapeHtml('"\'<>&')).toBe('&quot;&#39;&lt;&gt;&amp;');
   });
 
+  it('HTML: длинные строки без пробелов (hash, адрес) переносятся — печать и 390 px без выхода за ширину (C1, T18-04)', () => {
+    const html = snapshotToHtml(meta, payload());
+    expect(html).toMatch(/body\{[^}]*overflow-wrap:anywhere/);
+  });
+
   it('Markdown: ссылки и картинки из текста источника не становятся активными, сырой HTML экранирован', () => {
     const md = snapshotToMarkdown(meta, payload());
     expect(md).not.toMatch(/\]\(javascript:/);
