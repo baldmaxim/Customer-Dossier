@@ -37,6 +37,20 @@ export const defaultAllowedOrigins = (): string[] => {
   return [...new Set([...fromEnv, ...self])];
 };
 
+/**
+ * Параметры строки запроса API — только плоские значения: ключ без скобок и без повторов. Вложенный объект (`a[b]=1`)
+ * или массив из повторённого ключа (`q=1&q=2`) — 400 до авторизации и маршрутов, а не молчаливое игнорирование.
+ */
+export const rejectStructuredQuery = (req: Request, res: Response, next: NextFunction): void => {
+  for (const [key, value] of Object.entries(req.query)) {
+    if (/[[\]]/.test(key) || typeof value !== 'string') {
+      res.status(400).json({ error: 'Параметры запроса — только плоские значения без повторов', code: 'invalid_query' });
+      return;
+    }
+  }
+  next();
+};
+
 export const createApp = (options: ICreateAppOptions): express.Express => {
   const app = express();
   const allowedOrigins = options.allowedOrigins ?? defaultAllowedOrigins();
@@ -48,9 +62,12 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
     });
 
   app.disable('x-powered-by');
+  // Строка запроса разбирается node:querystring, а не qs (ACC-04: GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g в qs@6.15.3,
+  // зависимость express@4.22.2). Все параметры API плоские; вложенные ключи и повторы отвергает rejectStructuredQuery.
+  app.set('query parser', 'simple');
   app.use(helmet());
   // Host и Origin проверяются до всего остального, включая разбор тела.
-  app.use('/api', requireLoopbackHost, createOriginGuard(allowedOrigins));
+  app.use('/api', requireLoopbackHost, createOriginGuard(allowedOrigins), rejectStructuredQuery);
   // CORS только сообщает браузеру, чей ответ можно читать. Авторизацией он
   // не является; credentials не разрешаем — UI ходит с того же origin через прокси.
   app.use(cors({ origin: [...allowedOrigins] }));

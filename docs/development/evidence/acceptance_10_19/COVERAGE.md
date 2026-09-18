@@ -50,7 +50,7 @@
 | AC-40 | 19 | `pilotManifest.test.ts` (7); `pilot:check` на тестовой цели с отрицательными контролями | Z, W | O,D | A1, E1 | NOT_RUN |
 | AC-41 | 19 | `pilot/PILOT_DECISION.md` — решения владельца нет | — | H | E2 | PILOT_NOT_RUN |
 | AC-42 | 19 | `evidence/19/USER_RUN.md` C–D | — | S,M,D,B,H | E3 | PILOT_NOT_RUN |
-| AC-43 | 18 | `SECURITY_TRIAGE.md`; `npm explain sharp`, `npm audit --json` | **R** (sharp), открыто (backend `qs`/`express`) | O,H | A3 | **VERIFIED** 2026-09-17: sharp 0.34.5 dev, прямая, high, два advisory об обработке изображений; в production-аудите 0. Решение владельца: `npm ci` во frontend допустим, `icons:generate` выключен. Backend: 2 moderate — `qs@6.15.3` (транзитивно через `express@4.22.2`, диапазон `~6.15.1`), GHSA-x5fp-wj9c-mxmx и GHSA-4mjr-xmp4-gh2g; путь достижим (разбор `req.query`) — кандидат ACC-04 |
+| AC-43 | 18 | `SECURITY_TRIAGE.md`; `npm explain sharp`, `npm audit --json` | **R** (sharp), открыто (backend `qs`/`express`) | O,H | A3 | **VERIFIED** 2026-09-17: sharp 0.34.5 dev, прямая, high, два advisory об обработке изображений; в production-аудите 0. Решение владельца: `npm ci` во frontend допустим, `icons:generate` выключен. Backend: 2 moderate — `qs@6.15.3` (транзитивно через `express@4.22.2`, диапазон `~6.15.1`), GHSA-x5fp-wj9c-mxmx и GHSA-4mjr-xmp4-gh2g; путь достижим (разбор `req.query`) — ACC-04, **исправлен кодом 2026-09-18** (`queryParser.test.ts`); повтор A0/A1 на новом коде — NOT_RUN |
 | AC-44 | 15A,19 | `__tests__/sql-sanity.test.ts`: детектор **не менялся**, изменён запрос; отрицательные тесты «детекторы сами по себе» на месте; DB-путь — `identity.int` 15A | C, Z, W | O,D | A1, B1 | NOT_RUN |
 
 ## Исходные критерии этапов → AC / шаги
