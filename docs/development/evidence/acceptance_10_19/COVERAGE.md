@@ -12,13 +12,13 @@
 | AC-02 | все | эта карта; отчёты 10–19 | C | O | — | подготовлено |
 | AC-03 | все | backend `typecheck`, `build`, `test`; frontend `test`, `build`, `check:build` | **R** | O | A1, A2 | **PASS** 2026-09-17. Backend: typecheck exit 0, build exit 0, unit 46 файлов / 613 тестов, 0 skipped (`A1-*.log`, код `d33521b`). **A1r 2026-09-18 на `cd4b7e8`:** typecheck 0, build 0, unit 47 файлов / 617 тестов, 0 skipped, exit 0 (`A1r-*.log`). Frontend: `npm ci` exit 0 (lock не изменился), `npm test` 3 файла / 14 тестов, 0 skipped, build exit 0, `check:build` ok — 1 заданный маркер, совпадений 0, `/api` не кэшируется (`A2-*.log`) |
 | AC-04 | 10,19 | `db/testTarget.test.ts`, `testTargetBootstrap` + отрицательные контроли closure B1; `release.int` «цель проверяется перед разрушительными действиями» | C, W | O,D | B0 | NOT_RUN |
-| AC-05 | все | `db/migrate.int.test.ts`, `release.int` TC-074 «с пустой схемы» (001–023) | W | D | B1 | B1 на `cd4b7e8` (2026-09-18): **FAIL** — 8/19 файлов, 49 failed, 43 skipped (ACC-05); повтор после исправления — NOT_RUN |
+| AC-05 | все | `db/migrate.int.test.ts`, `release.int` TC-074 «с пустой схемы» (001–023) | W | D | B1 | B1 на `cd4b7e8` (2026-09-18): **FAIL** — 8/19 файлов, 49 failed, 43 skipped (ACC-05). **B1r на `e789900`:** 18/19 файлов, 238/239 тестов, 0 skipped, exit 1 — единственное падение T15A-01 из-за дефекта теста (ACC-06, исправлен); повтор — NOT_RUN |
 | AC-06 | 11,13,15A | **автотеста апгрейда 020→023 с данными нет** (`release.int` апгрейдит только с 009); ручной сценарий B2 (сид на `8b1a944`, миграция `d33521b`) | W (ручной) | D | B2 | NOT_RUN |
 | AC-07 | 10,15A | `release/manifest.test.ts`, `manifestSpec.ts` содержит `ambiguity_decisions`; UNCLASSIFIED_TABLE на реальной схеме | C, W | O,D | A1, B2, B3 | NOT_RUN |
 | AC-08 | 10 | `release/manifest.int.test.ts` (мутации текста/цитаты/решения/payload/policy/sequence → MISMATCH) | W | D | B1 | NOT_RUN |
 | AC-09 | 10,19 | restore в новую цель + `release:manifest --compare` MATCH + негативный контроль | W | D | B3 | NOT_RUN |
 | AC-10 | 10,19 | API на копии + `release:probe --compare`, контролируемая запись после сравнения | W | D,B | B4 | NOT_RUN |
-| AC-11 | 11 | `reprocess/executionIdentity.test.ts` (+ регрессия jsonb); `reprocess.int` «этап 11» T11-01/02, стейл-конфиг | C, W | O,D | A1, B1 | **дефект ACC-05** найден B1, исправлен в коде; повтор B1 — NOT_RUN |
+| AC-11 | 11 | `reprocess/executionIdentity.test.ts` (+ регрессия jsonb); `reprocess.int` «этап 11» T11-01/02, стейл-конфиг | C, W | O,D | A1, B1 | **дефект ACC-05** найден B1, исправлен; B1r: «этап 11» T11-01…T11-08 и стейл-конфиг — passed |
 | AC-12 | 11,16 | `reprocess.int` T11-03/04/05, `telegram.int` «отзыв допуска во время прохода», 15B «допуск отозван между предпросмотром…» | W | D | B1 | NOT_RUN |
 | AC-13 | 11,15B | `reprocess.int` T11-08, TC-076 late chunk, 15B «отмена выполняемого», T15B-07 | W | D | B1 | NOT_RUN |
 | AC-14 | 12,04 | `identity.int` TC-034, 15A «два ООО с разными ИНН», `resolve/ambiguities.test.ts` | W, unit Z | D | A1, B1 | NOT_RUN |

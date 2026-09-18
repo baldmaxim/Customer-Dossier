@@ -38,7 +38,13 @@
 ## Подтверждённые дефекты
 | ID | Этап | Суть | Доказательство | Исправление |
 |---|---|---|---|---|
+| ACC-06 | 15A (тест) | Тест T15A-01 передавал курсор кириллицей без URL-кодирования; Node `http.request` отвергает путь (`ERR_UNESCAPED_CHARACTERS`) до сервера — проверка отказа 400 не выполнялась | B1r пользователя на `e789900`: 1 failed / 239 | `identity.int.test.ts`: `encodeURIComponent` для курсора; код продукта не менялся |
 | ACC-05 | 11 | Отпечаток исполнения пересчитывался от `claim.chunker`, прочитанного из JSONB; PostgreSQL хранит ключи jsonb в своём порядке (`overlap,version,chunkSize,maxChunks`), `JSON.stringify` давал другой hash → `executionMismatch` → каждый запуск `blocked`. Каскад: нет набора кандидатов (`набор #null не найден`), падение `beforeAll` и пропуски в файлах, строящих данные конвейером | B1 пользователя 2026-09-18 на `cd4b7e8`: 8 файлов failed, 49 тестов failed, 43 skipped, повторяется `expected 'blocked' to be 'completed'`; воспроизведено агентом без БД эмуляцией порядка ключей jsonb | `reprocess/provider.ts::buildFingerprint` — нарезка явными полями в фиксированном порядке (для новой нарезки отпечаток прежний); регрессия в `executionIdentity.test.ts`. Unit этапа 11 JSONB не проходили — поэтому дефект не был виден до B1 |
+
+## Наблюдения (не дефекты, решение отдельно)
+| ID | Суть | Где | Влияние |
+|---|---|---|---|
+| OBS-01 | `DeprecationWarning: Calling client.query() when the client is already executing a query` в B1r (`identity.int`, `resolve.int`) | параллельные запросы на одном `PoolClient` в транзакции резолвера (`Promise.all(ids.map(id => followTombstone(exec, id)))` в `resolve/company.ts`, `resolve/project.ts`) | сейчас работает; в `pg@9` станет ошибкой — последовательный обход при обновлении `pg` |
 
 ## Что не утверждается
 Отсутствие новых дефектов; выполнение любых проверок на `d33521b`; качество модели; полнота источников; готовность к пилоту.

@@ -680,7 +680,8 @@ describe('этап 15A: неоднозначные упоминания и ис�
       const next = await api.call('GET', `/api/entities/ambiguities?status=open&kind=company&limit=1&cursor=${String(page.body.nextCursor)}`);
       expect((next.body.items as Array<{ id: number }>)[0]!.id).not.toBe((page.body.items as Array<{ id: number }>)[0]!.id);
     }
-    expect((await api.call('GET', '/api/entities/ambiguities?cursor=подделка')).status).toBe(400);
+    // Путь HTTP-запроса — только ASCII: курсор кодируется, как его закодировал бы браузер.
+    expect((await api.call('GET', `/api/entities/ambiguities?cursor=${encodeURIComponent('подделка')}`)).status).toBe(400);
 
     const detail = await api.call('GET', `/api/entities/ambiguities/${ambiguityId}`);
     expect(detail.status).toBe(200);
