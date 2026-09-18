@@ -16,6 +16,8 @@
   если `.env` сам указывает на тестовую базу — остановиться (closure 09, строки 48–50): `.env` не редактировать, guard не обходить.
 - Команды, читающие `DATABASE_URL` без preflight (`migrate` без `--upto`, `release:check`, `release:manifest`, `pilot:check`, `npm run dev`),
   запускать только с `$env:DATABASE_URL` окна, явно указывающим на **выделенную** цель шага, и снимать переменную после шага.
+  Вместе с ним — `$env:DATABASE_SSL='false'`: без preflight по умолчанию `DATABASE_SSL=true`, локальный PostgreSQL SSL не поддерживает
+  (в worktree старой версии нет `backend/.env`; в основной папке значение из `.env` может быть любым). Preflight сидов и интеграции ставит его сам.
 - Роли целей: `tg_info_test` — интеграция, сиды, браузер, замеры (последовательно); `tg_info_test_upgrade` — апгрейд (B2);
   `tg_info_test_restore_1019` — restore (B3). Имя `tg_info_test_restore` из closure 09 уже занято — не переиспользовать без вашей проверки.
 - Фон выключен: `INGEST_ENABLED`, `PIPELINE_ENABLED`, `BOT_ENABLED`, `METRICS_AUTO_REFRESH`, `REPROCESS_AUTO_PUBLISH`, `MERGE_APPLY_ENABLED` = false (так по умолчанию).
@@ -53,7 +55,7 @@ closure 09 **B2**, команда `npm run test:integration` → `$L\B1-integrat
 2. **Старая редакция рядом** (меняет только `.git/worktrees` и новую папку вне репозитория): `git worktree add ..\tg-info-020 8b1a944`;
    `New-Item -ItemType Junction -Path ..\tg-info-020\backend\node_modules -Target (Resolve-Path backend\node_modules)` (lock backend не менялся;
    иначе `npm ci` в `..\tg-info-020\backend` — сеть).
-3. **Схема 020 и данные** (cwd `..\tg-info-020\backend`): `$env:DATABASE_URL='postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test_upgrade'; npx tsx src/db/migrate.ts --allow-destructive; "exit=$LASTEXITCODE"; Remove-Item Env:DATABASE_URL`
+3. **Схема 020 и данные** (cwd `..\tg-info-020\backend`, в окне `$env:DATABASE_SSL='false'`): `$env:DATABASE_URL='postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test_upgrade'; npx tsx src/db/migrate.ts --allow-destructive; "exit=$LASTEXITCODE"; Remove-Item Env:DATABASE_URL`
    → `$L\B2-migrate-020.log` (ожидается последняя `020_dossier_snapshots.sql`). Затем `$env:TEST_DATABASE_URL='postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test_upgrade'; npm run seed:test-release`
    → `$L\B2-seed-020.log`; `Remove-Item Env:TEST_DATABASE_URL`.
 4. **Обращение и снимок старой версии** (по желанию, для AC-19; меняет upgrade-цель). Окно 1, cwd `..\tg-info-020\backend`:
