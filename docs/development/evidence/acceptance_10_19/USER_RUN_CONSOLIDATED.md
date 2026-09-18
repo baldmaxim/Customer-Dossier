@@ -60,11 +60,11 @@ closure 09 **B2**, команда `npm run test:integration` → `$L\B1-integrat
    → `$L\B2-seed-020.log`; `Remove-Item Env:TEST_DATABASE_URL`.
 4. **Обращение и снимок старой версии** (по желанию, для AC-19; меняет upgrade-цель). Окно 1, cwd `..\tg-info-020\backend`:
    `$env:DATABASE_URL=<upgrade-адрес>; $env:OPERATOR_TOKEN=<токен тестового стенда из вашего хранилища, не печатать>; npm run dev`.
-   Окно 2 (та же `$env:OPERATOR_TOKEN`; запросы с разрешённым Origin dev-фронтенда; токен и CSRF не выводятся; ответ создания обращения у этой версии — `{ case, replayed }`):
+   Окно 2 (та же `$env:OPERATOR_TOKEN`; Origin — собственный адрес API `http://127.0.0.1:4100` (разрешён всегда; адрес фронтенда — только если он есть в `CORS_ORIGINS` вашего `.env`); токен и CSRF не выводятся; ответ создания обращения у этой версии — `{ case, replayed }`):
    ```powershell
-   $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession; $o = @{ Origin = 'http://127.0.0.1:5173' }
+   $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession; $o = @{ Origin = 'http://127.0.0.1:4100' }
    $login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:4100/api/auth/login -WebSession $s -Headers $o -ContentType 'application/json' -Body (@{ token = $env:OPERATOR_TOKEN } | ConvertTo-Json)
-   $h = @{ Origin = 'http://127.0.0.1:5173'; 'X-CSRF-Token' = $login.csrfToken }
+   $h = @{ Origin = 'http://127.0.0.1:4100'; 'X-CSRF-Token' = $login.csrfToken }
    $case = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:4100/api/cases -WebSession $s -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes((@{ title = 'Апгрейд 020'; companyId = <id «Альфа-Релиз» из B2-seed-020.log>; projectId = <id «Причал-Релиз»>; scopeBuilding = 'корпус 2'; claimedRole = 'contractor'; requestDate = '2026-09-17' } | ConvertTo-Json)))
    $snap = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4100/api/cases/$($case.case.id)/snapshots" -WebSession $s -Headers $h -ContentType 'application/json' -Body '{}'
    "case=$($case.case.id) snapshot=$($snap.id)"
@@ -90,13 +90,25 @@ closure 09 **B2**, команда `npm run test:integration` → `$L\B1-integrat
 Замер (C2) и E2E (C1) пишут снимки: **не выполнять между baseline E2 и дампом E3**.
 
 ### B4. Приложение на копии (AC-10)
-closure 09 **E6** на `tg_info_test_restore_1019` + D1-проба (`release:probe --out`/`--compare`) по снимку из сида/E2E; затем одна
-контролируемая запись (создать обращение в UI) — проверяет последовательности; после неё compare больше не делать.
+Цель — `tg_info_test_restore_1019`. Порядок: вернуть цитату E7 → MATCH → API на копии → проба против `B3-probe-before.json` →
+одна контролируемая запись (последовательности). После записи compare больше не делать.
+
+1. **Откат E7** (меняет только копию, та же цитата обратно, в обход триггера неизменяемости):
+   `docker exec tg-info-test-db psql -U tg_test -d tg_info_test_restore_1019 -v ON_ERROR_STOP=1 -c "BEGIN; SET LOCAL session_replication_role = replica; UPDATE evidence SET quote = left(quote, -1) WHERE id = (SELECT min(id) FROM evidence) AND right(quote, 1) = ' '; COMMIT;"`
+   → ожидается `UPDATE 1`. Затем (cwd `backend`, `$env:DATABASE_SSL='false'`, `$env:DATABASE_URL` на копию)
+   `npm run release:manifest -- --compare "$L\B3-before-manifest.json"` → **MATCH**, exit 0 (`$L\B4-manifest-compare.log`). Иначе — стоп.
+2. **API на копии** (окно 1, фоновые флаги false как в B3, `$env:DATABASE_URL` на копию): `npm run dev`.
+3. **Проба** (окно 2, cwd `backend`): `npm run release:probe -- --snapshot 1 --case 3 --compare "$L\B3-probe-before.json"` → «совпадает», exit 0
+   (`$L\B4-probe-compare.log`). Расходится только `case_dossier` — прислать вывод.
+4. **Контролируемая запись** (окно 2; Origin — `http://127.0.0.1:4100`, как в B3.2): вход, `POST /api/cases`
+   (`companyStatus: 'not_established'`, `idempotencyKey: 'acc-1019-b4-case'`), затем `POST /api/cases/<id>/snapshots`.
+   Ожидается: HTTP 201, новое обращение **4**, новый снимок **4**, без `duplicate key` (последовательности восстановлены).
+5. Остановить API. `Remove-Item Env:DATABASE_URL`. Копию не удалять до итогового решения.
 
 ## C. Работа оператора и замеры
 | Шаг | Основа | Отличия / задачи | Меняет | Ожидается |
 |---|---|---|---|---|
-| C1 | `evidence/18/USER_RUN.md` B1–B4; сценарии `evidence/12` (T12-12), `15A` шаг 4, `15B` шаг 4, `17` шаг 4 | на `tg_info_test` после B3; E2E создаёт снимки | снимки, решения | 6 тестов × 2 размера passed; ручные задачи — PASS/FAIL с затруднениями; PDF и 390 px — решение человека |
+| C1 | `evidence/18/USER_RUN.md` B1–B4; сценарии `evidence/12` (T12-12), `15A` шаг 4, `15B` шаг 4, `17` шаг 4 | на `tg_info_test` после B3; E2E создаёт снимки; фронтенд открывать и E2E запускать по адресу из `CORS_ORIGINS` (у вас `http://localhost:5173` → `$env:E2E_BASE_URL='http://localhost:5173'`), иначе вход — `bad_origin` | снимки, решения | 6 тестов × 2 размера passed; ручные задачи — PASS/FAIL с затруднениями; PDF и 390 px — решение человека |
 | C2 | `evidence/18/USER_RUN.md` C1–C4 | после B3; C1 (`bench-before`) и C3 (`bench-large`) не сравнивать между собой | снимки, ~3300 утверждений | отчёты действительны; топ SQL; планы EXPLAIN |
 | C3 | closure 09 **D1–D2** (перезапуск процесса, остановка БД) | на `tg_info_test` | нет | досье/снимок прежние; отказ БД — контролируемая ошибка (AC-39) |
 
