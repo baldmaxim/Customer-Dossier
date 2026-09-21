@@ -1,4 +1,4 @@
-// Первое досье: ручная вставка сохраняет публикацию, разбор ставится отдельным действием по редакции.
+// Ручная вставка сохраняет публикацию и ничего не запускает: разбор портал выполняет сам.
 // Ответы API синтетические; модель и сеть не участвуют.
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +22,7 @@ const Harness = (): ReactElement => {
   );
 };
 
-/** Панель зовёт только /api/manual и постановку разбора — соседей глушить нечего. */
+/** Панель зовёт только /api/manual — соседей глушить нечего. */
 const QUIET: IFakeRoute[] = [];
 
 const TEXT = 'Заказчик объявил конкурс на строительство корпуса 3 жилого комплекса «Пример».';
@@ -88,32 +88,27 @@ describe('Ручная вставка текста', () => {
     });
   });
 
-  it('после сохранения запуск ставится вручную; выключенный исполнитель назван', async () => {
-    const api = fakeApi([
-      ...QUIET,
-      manual(201, saved),
-      { match: 'POST /api/reprocess/revisions/7/runs', respond: () => ({ status: 201, body: { outcome: 'queued', runId: 12, pipelineEnabled: false } }) },
-    ]);
+  it('после сохранения разбор не ставится руками: кнопки нет, сказано, что портал разберёт сам', async () => {
+    const api = fakeApi([...QUIET, manual(201, saved)]);
     renderWithProviders(<Harness />);
     fillText();
     save();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Поставить на разбор' }));
-    await waitFor(() => expect(api.calls.some(c => c.url.endsWith('/api/reprocess/revisions/7/runs'))).toBe(true));
-    const text = await statusText();
-    expect(text).toMatch(/запуск поставлен/);
-    expect(text).toMatch(/pipeline:once/);
-    expect(screen.getByRole('link', { name: 'запуск #12' })).toBeTruthy();
+    expect(await statusText()).toMatch(/текст сохранён как новая публикация/);
+    expect(screen.getByText(/Портал разберёт эту редакцию сам/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /разбор/i })).toBeNull();
+    // Ни одна кнопка панели не обращается к конвейеру.
+    expect(api.calls.some(c => c.url.includes('/api/reprocess'))).toBe(false);
   });
 
-  it('короткий текст не сохранён — ставить на разбор нечего', async () => {
+  it('короткий текст не сохранён — разбирать нечего', async () => {
     fakeApi([...QUIET, manual(200, { outcome: 'too_short', documentId: null, sourceItemId: null, revisionId: null, revisionNo: null })]);
     renderWithProviders(<Harness />);
     fillText();
     save();
 
     expect(await statusText()).toMatch(/слишком короткий/);
-    expect(screen.queryByRole('button', { name: 'Поставить на разбор' })).toBeNull();
+    expect(screen.getByText(/Сохранённой редакции нет — разбирать нечего/)).toBeTruthy();
   });
 
   it('без допуска источника — причина и куда идти за решением, а не «Ошибка 403»', async () => {

@@ -326,6 +326,38 @@ time,
 
 /* Широкое содержимое (таблицы, длинные названия) скроллится внутри своего
    контейнера — страница по горизонтали не едет никогда. */
+/* Строка таблицы целиком открывает карточку.
+
+   Ссылка остаётся настоящей ссылкой (средний клик, Ctrl+клик, фокус с клавиатуры),
+   а накрывает строку растянутый псевдоэлемент — без onClick на <tr>. Соседние
+   ссылки и подсказки внутри строки поднимаются над накладкой классом
+   `row-link-above`, иначе они перестали бы быть отдельными целями. */
+.row-link {
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.row-link:hover {
+  background: var(--surface-2);
+}
+
+.row-link:focus-within {
+  background: var(--surface-2);
+}
+
+.row-link-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.row-link-above {
+  position: relative;
+  z-index: 1;
+}
+
 .scroll-x {
   overflow-x: auto;
   /* Только по горизонтали. `overscroll-behavior: contain` без оси делает блок

@@ -61,15 +61,21 @@ export const RecentFeed: FC = () => {
           </thead>
           <tbody>
             {items.map(item => (
-              <tr key={item.id}>
+              // Строка ведёт к публикации целиком; без документа вести некуда (index.css).
+              <tr key={item.id} className={item.documentId !== null ? 'row-link' : undefined}>
                 <td>
                   {item.documentId !== null ? (
-                    <Link to={`/documents/${item.documentId}`}>{item.title ?? 'без заголовка'}</Link>
+                    <Link className="row-link-target" to={`/documents/${item.documentId}`}>
+                      {item.title ?? 'без заголовка'}
+                    </Link>
                   ) : (
                     (item.title ?? 'без заголовка')
                   )}
                   {item.revisionCount > 1 && (
-                    <Badge hint="публикацию правили: у неё несколько редакций, цитаты привязаны к конкретной">
+                    <Badge
+                      className="row-link-above"
+                      hint="публикацию правили: у неё несколько редакций, цитаты привязаны к конкретной"
+                    >
                       редакций {item.revisionCount}
                     </Badge>
                   )}
@@ -87,6 +93,7 @@ export const RecentFeed: FC = () => {
                 <td>
                   {item.completeness !== null && (
                     <Badge
+                      className="row-link-above"
                       tone={item.completeness === 'full' ? 'positive' : 'warn'}
                       hint="полнота определяется происхождением текста, а не его длиной"
                     >

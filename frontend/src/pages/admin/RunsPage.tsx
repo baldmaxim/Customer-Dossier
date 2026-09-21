@@ -25,8 +25,8 @@ interface IFilters {
 const EMPTY: IFilters = { status: '', sourceId: '', revisionId: '', schemaVersion: '', fingerprint: '' };
 
 /**
- * Запуски нового конвейера (этап 15B): фильтры, курсорная пагинация, покрытие чанков, допуск. Ничего не запускает сам;
- * действия — в карточке запуска, по одному.
+ * Запуски разбора: фильтры, курсорная пагинация, покрытие чанков, допуск. Только чтение —
+ * обработка идёт сама, ставить и отменять её из портала нечем.
  */
 export const RunsPage: FC = () => {
   const [draft, setDraft] = useState<IFilters>(EMPTY);
@@ -60,15 +60,21 @@ export const RunsPage: FC = () => {
       <header className={styles.header}>
         <h1 className={styles.title}>Запуски разбора</h1>
         <p className={styles.meta}>
-          Почему текст не попал в досье: покрытие чанков, отказы модели и проверки, допуск источника. Канон меняется только
-          публикацией набора после предпросмотра.
+          Обработка идёт сама: портал ставит запуск по новым редакциям допущенных источников и переносит
+          разобранное в карточки. Здесь видно, почему текст туда не попал: покрытие чанков, отказы модели
+          и проверки, допуск источника.
         </p>
         {data && (
           <p className={data.worker.pipelineEnabled ? styles.meta : styles.warn}>
             {data.worker.pipelineEnabled
-              ? 'Фоновый исполнитель включён (PIPELINE_ENABLED).'
-              : 'Фоновый исполнитель выключен (PIPELINE_ENABLED=false): поставленные запуски выполнит только `npm run pipeline:once`.'}{' '}
-            Автопубликация: {data.worker.autoPublish ? 'включена' : 'выключена'}.
+              ? 'Разбор работает в фоне (PIPELINE_ENABLED).'
+              : 'Разбор в фоне выключен (PIPELINE_ENABLED=false): поставленные запуски выполнит только `npm run pipeline:once`.'}
+          </p>
+        )}
+        {data && !data.worker.autoPublish && (
+          <p className={styles.warn}>
+            Перенос разобранного в карточки выключен (REPROCESS_AUTO_PUBLISH=false): наборы собираются, но
+            карточки не меняются. Включается в `.env`, из портала — нельзя.
           </p>
         )}
       </header>

@@ -181,9 +181,12 @@ export const SearchPage: FC = () => {
             </thead>
             <tbody>
               {rows.map(row => (
-                <tr key={row.companyId}>
+                // Строка кликается целиком: ссылка с именем накрывает её собой (index.css).
+                <tr key={row.companyId} className="row-link">
                   <td>
-                    <Link to={`/company/${row.companyId}`}>{row.name}</Link>
+                    <Link className="row-link-target" to={`/company/${row.companyId}`}>
+                      {row.name}
+                    </Link>
                     <Badge className={styles.rowBadge}>
                       {IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}
                     </Badge>
@@ -198,7 +201,9 @@ export const SearchPage: FC = () => {
                   <td>{row.publications ?? '—'}</td>
                   <td>{row.eventsDated12m}</td>
                   <td>
-                    <Link to={`/links?company=${row.companyId}`}>схема</Link>
+                    <Link className="row-link-above" to={`/links?company=${row.companyId}`}>
+                      схема
+                    </Link>
                   </td>
                 </tr>
               ))}

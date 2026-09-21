@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IDiffResponse, IRevision, IRevisionMeta } from '../api/types';
-import { EnqueueRunButton } from './EnqueueRunButton';
 import { CHRONOLOGY_LABELS, COMPLETENESS_LABELS, formatDateTime } from '../lib/labels';
 import styles from './RevisionHistory.module.css';
 
@@ -14,6 +13,7 @@ interface IRevisionHistoryProps {
 
 /**
  * Список редакций публикации, текст выбранной и построчное сравнение двух.
+ * Только чтение: разбор идёт сам, ставить его руками отсюда нечем.
  * Текст выводится как текст: React экранирует всё, HTML источника не исполняется.
  */
 export const RevisionHistory: FC<IRevisionHistoryProps> = ({ itemId, latestRevisionId }) => {
@@ -88,8 +88,6 @@ export const RevisionHistory: FC<IRevisionHistoryProps> = ({ itemId, latestRevis
                     >
                       Сравнить с показанной
                     </button>
-                    {/* Первый запуск по известной редакции ставится отсюда: существующий запуск для этого не нужен. */}
-                    <EnqueueRunButton revisionId={r.id} className={styles.button} label="Поставить на разбор" />
                   </div>
                 </td>
               </tr>

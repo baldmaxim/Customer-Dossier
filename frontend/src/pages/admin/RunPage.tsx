@@ -1,10 +1,10 @@
-import { FC, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FC } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../../api/client';
-import type { IEnqueueResult, IRunDetail, IRunPage } from '../../api/types';
-import { PublishPreviewPanel } from '../../components/PublishPreviewPanel';
+import type { IRunDetail } from '../../api/types';
+import { CandidateSetPanel } from '../../components/CandidateSetPanel';
 import { describeLoadError } from '../../lib/loadError';
 import {
   AMBIGUITY_STATUS_LABELS,
@@ -13,7 +13,6 @@ import {
   CANDIDATE_VERDICT_LABELS,
   CHUNK_OUTCOME_LABELS,
   CHUNK_STATUS_LABELS,
-  ENQUEUE_OUTCOME_LABELS,
   PREDICATE_HINTS,
   PREDICATE_LABELS,
   RUN_STATUS_LABELS,
@@ -22,39 +21,19 @@ import {
 import { Term } from '../../components/ui/Hint';
 import styles from '../Dossier.module.css';
 
-/** Карточка запуска (этап 15B): редакция и публикация, цепочка повторов, чанки и ответы, кандидаты с цитатами. */
+/**
+ * Карточка запуска — только чтение: редакция и что в карточках, цепочка повторов,
+ * чанки и ответы, кандидаты с цитатами. Обработка идёт сама, запускать и отменять
+ * её отсюда нечем; восстановление после сбоя — командами CLI.
+ */
 export const RunPage: FC = () => {
   const { id } = useParams();
   const runId = Number(id);
-  const queryClient = useQueryClient();
-  const [notice, setNotice] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
-
-  // Флаги исполнителя берём у списка запусков: тот же источник правды, что и в конвейере.
-  const worker = useQuery({
-    queryKey: ['runs', 'worker'],
-    queryFn: () => api.get<IRunPage>('/api/reprocess/runs?limit=1'),
-  });
 
   const run = useQuery({
     queryKey: ['run', runId],
     queryFn: () => api.get<IRunDetail>(`/api/reprocess/runs/${runId}`),
     enabled: Number.isSafeInteger(runId) && runId > 0,
-  });
-
-  const action = useMutation({
-    mutationFn: (path: string) => api.post<IEnqueueResult>(path, {}),
-    onSuccess: r => {
-      // Подписи исходов — общие с постановкой из админки и истории редакций (lib/labels.ts).
-      const label = ENQUEUE_OUTCOME_LABELS[r.outcome] ?? r.outcome;
-      const text =
-        r.outcome === 'cancelled' ? (r.note ?? `${label}.`) : r.runId === undefined ? `${label}.` : `${label}: #${r.runId}.`;
-      const worker = r.pipelineEnabled === false && (r.outcome === 'queued' || r.outcome === 'already_retried') ? ' Исполнитель выключен: выполните `npm run pipeline:once`.' : '';
-      setNotice(text + worker);
-      void queryClient.invalidateQueries({ queryKey: ['run'] });
-      void queryClient.invalidateQueries({ queryKey: ['runs'] });
-    },
-    onError: (err: Error) => setNotice(describeLoadError(err)),
   });
 
   if (run.isLoading) return <p className={styles.meta}>Загрузка запуска…</p>;
@@ -70,7 +49,6 @@ export const RunPage: FC = () => {
   }
   const r = run.data;
   const pendingLatest = r.latestRevision !== null && r.latestRevision.no > r.revision.no;
-  const retryable = ['failed', 'partial', 'cancelled'].includes(r.status);
 
   return (
     <div className={styles.page}>
@@ -95,15 +73,15 @@ export const RunPage: FC = () => {
         {!r.policy.allowed && <p className={styles.error}>ИИ-допуск источника не действует: {r.policy.reason}</p>}
         {r.inFlight && (
           <p className={styles.warn}>
-            Выполняется: запрос к модели мог уже уйти (аренда {r.lease.owner} до {formatDateTime(r.lease.expiresAt)}). Отмена остановит следующие шаги, но не отзовёт уже отправленный текст.
+            Выполняется: запрос к модели ушёл (аренда {r.lease.owner} до {formatDateTime(r.lease.expiresAt)}).
           </p>
         )}
       </header>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Редакция и публикация</h2>
+        <h2 className={styles.sectionTitle}>Редакция и карточки</h2>
         <p className={styles.meta}>
-          Опубликовано сейчас:{' '}
+          Сейчас в карточках:{' '}
           {r.publication.activeSetId === null
             ? 'ничего'
             : `набор #${r.publication.activeSetId} (запуск #${r.publication.activeRunId}, редакция №${r.publication.activeRevisionNo}), версия ${r.publication.version}`}
@@ -111,10 +89,8 @@ export const RunPage: FC = () => {
         </p>
         {pendingLatest && (
           <p className={styles.warn}>
-            Есть более новая редакция №{r.latestRevision!.no}: этот запуск разбирал №{r.revision.no}. Основание текущих фактов и новая редакция — разные тексты.{' '}
-            <button type="button" className={styles.linkButton} disabled={action.isPending} onClick={() => action.mutate(`/api/reprocess/revisions/${r.latestRevision!.id}/runs`)}>
-              Поставить запуск по №{r.latestRevision!.no}
-            </button>
+            Есть более новая редакция №{r.latestRevision!.no}: этот запуск разбирал №{r.revision.no}. Основание
+            текущих сведений и новая редакция — разные тексты; портал разберёт новую сам.
           </p>
         )}
         <p className={styles.meta}>
@@ -131,23 +107,6 @@ export const RunPage: FC = () => {
             </>
           )}
         </p>
-        <div className={styles.row}>
-          {(r.status === 'queued' || r.status === 'running') && (
-            <button type="button" className={styles.button} disabled={action.isPending} onClick={() => action.mutate(`/api/reprocess/runs/${r.id}/cancel`)}>
-              Отменить запуск
-            </button>
-          )}
-          {retryable && (
-            <button type="button" className={styles.button} disabled={action.isPending || !r.policy.allowed} onClick={() => action.mutate(`/api/reprocess/runs/${r.id}/retry`)}>
-              Повторить новым запуском
-            </button>
-          )}
-        </div>
-        {notice && (
-          <p className={styles.meta} role="status">
-            {notice}
-          </p>
-        )}
       </section>
 
       <section className={styles.section}>
@@ -208,14 +167,7 @@ export const RunPage: FC = () => {
             упоминанию не публикует набор и не сливает компании.
           </p>
         )}
-        {r.candidateSet && (
-          <>
-            <button type="button" className={styles.button} onClick={() => setShowPreview(!showPreview)} aria-expanded={showPreview}>
-              {showPreview ? 'Скрыть предпросмотр' : 'Предпросмотр публикации'}
-            </button>
-            {showPreview && <PublishPreviewPanel setId={r.candidateSet.id} autoPublish={worker.data?.worker.autoPublish ?? false} />}
-          </>
-        )}
+        {r.candidateSet && <CandidateSetPanel setId={r.candidateSet.id} />}
       </section>
     </div>
   );

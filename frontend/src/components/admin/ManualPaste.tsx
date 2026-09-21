@@ -1,5 +1,8 @@
 // Ручная вставка текста: для закрытых каналов и статей, до которых парсер не добирается.
 // Вырезано из AdminPage дословно — на текстах, подписях полей и плейсхолдере держатся тесты.
+//
+// Оператор только сохраняет текст. Разбор портал ставит сам по новым редакциям
+// допущенных источников: кнопки «поставить на разбор» здесь нет и не должно быть.
 
 import { FC, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -7,7 +10,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, api } from '../../api/client';
 import type { IManualPasteResult } from '../../api/types';
-import { EnqueueRunButton } from '../EnqueueRunButton';
 import { Button } from '../ui/Button';
 import { MANUAL_OUTCOME_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -52,7 +54,7 @@ export const ManualPaste: FC<IManualPasteProps> = ({ onNotice }) => {
   const [pasteAt, setPasteAt] = useState('');
   const [pasteResult, setPasteResult] = useState<IManualPasteResult | null>(null);
 
-  // Сохранение текста и постановка разбора — разные действия: /api/manual только сохраняет публикацию.
+  // /api/manual только сохраняет публикацию: модель в этот момент не вызывается.
   const paste = useMutation({
     mutationFn: (input: IManualInput) => api.post<IManualPasteResult>('/api/manual', input),
     onSuccess: result => {
@@ -83,8 +85,8 @@ export const ManualPaste: FC<IManualPasteProps> = ({ onNotice }) => {
     <>
       <p className={styles.hint}>
         Для закрытых каналов и статей, до которых парсер не добирается. Текст идёт тем же путём, что и всё
-        остальное: сначала сохраняется публикация, разбор ставится отдельным действием. Вставка вручную не
-        обходит ограничения Telegram или первоисточника — источнику нужен тот же допуск.
+        остальное: сохраняется публикация, а разбор портал выполняет сам. Вставка вручную не обходит
+        ограничения Telegram или первоисточника — источнику нужен тот же допуск.
       </p>
       <textarea
         className={styles.textarea}
@@ -138,7 +140,7 @@ export const ManualPaste: FC<IManualPasteProps> = ({ onNotice }) => {
       <Button
         variant="primary"
         disabled={paste.isPending || pasteText.trim().length < 40}
-        hint="сохранить публикацию; разбор моделью ставится отдельным действием"
+        hint="сохранить публикацию; разбор портал выполнит сам, если у источника есть ИИ-допуск"
         onClick={() =>
           paste.mutate({
             body: pasteText.trim(),
@@ -162,15 +164,12 @@ export const ManualPaste: FC<IManualPasteProps> = ({ onNotice }) => {
             </p>
           )}
           {pasteResult.revisionId === null ? (
-            <p className={styles.hint}>Сохранённой редакции нет — ставить на разбор нечего.</p>
+            <p className={styles.hint}>Сохранённой редакции нет — разбирать нечего.</p>
           ) : (
-            <>
-              <p className={styles.hint}>
-                Сохранение — не разбор. Запуск по этой редакции вызовет модель отдельно; карточки не изменятся,
-                пока набор кандидатов не опубликован.
-              </p>
-              <EnqueueRunButton revisionId={pasteResult.revisionId} className={styles.secondary} />
-            </>
+            <p className={styles.hint}>
+              Сохранение — ещё не разбор. Портал разберёт эту редакцию сам, если у источника есть
+              ИИ-допуск; в карточках сведения появятся после полного разбора.
+            </p>
           )}
         </div>
       )}

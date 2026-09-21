@@ -471,14 +471,14 @@ export const CHUNK_OUTCOME_LABELS: Record<string, string> = {
 };
 
 export const CANDIDATE_VERDICT_LABELS: Record<string, string> = {
-  publishable: 'пройдёт в публикацию',
+  publishable: 'пройдёт в карточки',
   review: 'найден в тексте, но отправлен на проверку',
-  ungrounded: 'цитата не найдена — не публикуется',
+  ungrounded: 'цитата не найдена — в карточки не попадёт',
 };
 
 export const CANDIDATE_SET_STATUS_LABELS: Record<string, string> = {
-  built: 'собран, не опубликован',
-  published: 'опубликован',
+  built: 'собран, в карточки не попал',
+  published: 'в карточках',
   superseded: 'замещён новым набором',
   rejected_policy: 'отклонён: нет допуска',
   rejected_stale: 'отклонён: устарел',
@@ -504,17 +504,6 @@ export const MANUAL_OUTCOME_LABELS: Record<string, string> = {
   stale: 'в базе есть более поздняя редакция этой публикации',
   too_short: 'текст слишком короткий — не сохранён',
   edited_skipped: 'публикация известна с другим текстом, а запись редакций выключена — правка не сохранена',
-};
-
-/** Исход постановки, повтора и отмены запуска. Постановка — не обработка. */
-export const ENQUEUE_OUTCOME_LABELS: Record<string, string> = {
-  queued: 'запуск поставлен',
-  already_live: 'такой запуск уже в работе',
-  already_retried: 'повтор уже поставлен',
-  cancelled: 'запуск отменён',
-  refused_policy: 'нет допуска на ИИ-обработку источника',
-  not_found: 'редакция или запуск не найдены',
-  not_retryable: 'этот запуск не повторяется',
 };
 
 /**

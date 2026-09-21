@@ -79,9 +79,9 @@ export const PipelinePage: FC = () => {
           />
           <FlagBadge
             on={worker.autoPublish}
-            label="Автопубликация"
+            label="Результат в карточки"
             envKey="REPROCESS_AUTO_PUBLISH"
-            hintOff="наборы кандидатов ждут публикации оператором (REPROCESS_AUTO_PUBLISH=false)"
+            hintOff="разобранное остаётся набором кандидатов и в карточки не идёт (REPROCESS_AUTO_PUBLISH=false)"
           />
           <FlagBadge
             on={worker.metricsAutoRefresh}

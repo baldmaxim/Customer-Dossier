@@ -58,6 +58,18 @@ test('T18-01 запуски: список отличает пустой резу
   await noHorizontalOverflow(page);
 });
 
+test('каталог: строка открывается целиком, а не только имя', async ({ page }) => {
+  await open(page, '/');
+  // Клик по ячейке «Город» — она не ссылка: переход даёт накладка строки (index.css).
+  const row = page.locator('tr.row-link').first();
+  if ((await row.count()) === 0) return;
+  const href = await row.locator('a[href^="/company/"]').first().getAttribute('href');
+  await row.locator('td').nth(1).click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
 test('связи: схема строится вокруг одного центра и честно называет границы', async ({ page }) => {
   await open(page, '/');
   // Центр берём из каталога: первая ссылка «схема» ведёт на /links?company=N.

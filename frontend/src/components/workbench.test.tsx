@@ -1,12 +1,12 @@
-// Этап 18: неоднозначности (15A) и предпросмотр публикации (15B) — постраничность, запрет выбора, конфликт версии,
-// устаревший предпросмотр. Ответы API синтетические.
+// Неоднозначности (15A) и набор кандидатов — постраничность, запрет выбора, конфликт версии
+// и панель набора только для чтения. Ответы API синтетические.
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { fakeApi, renderWithProviders } from '../test/render';
 import { AmbiguityDetail } from './AmbiguityDetail';
 import { AmbiguityList } from './AmbiguityList';
-import { PublishPreviewPanel } from './PublishPreviewPanel';
+import { CandidateSetPanel } from './CandidateSetPanel';
 
 const listItem = (id: number) => ({ id, entityKind: 'company', surface: `Демо-${id}`, candidateIds: [1, 2], revisionId: 5, occurrences: 1, status: 'open', version: 1, updatedAt: '2026-09-17T10:00:00Z' });
 
@@ -88,25 +88,20 @@ const preview = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('PublishPreviewPanel — публикация только по актуальному предпросмотру', () => {
-  it('409 preview_stale — отказ со следующим шагом, без «Опубликовано»; токен ушёл в запрос', async () => {
-    const api = fakeApi([
-      { match: 'GET /api/reprocess/sets/9/preview', respond: () => ({ status: 200, body: preview() }) },
-      { match: 'POST /api/reprocess/sets/9/publish', respond: () => ({ status: 409, body: { error: 'Предпросмотр публикации устарел', code: 'preview_stale', nextStep: 'Откройте предпросмотр заново.' } }) },
-    ]);
-    renderWithProviders(<PublishPreviewPanel setId={9} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Опубликовать этот набор' }));
-    expect((await screen.findByRole('alert')).textContent).toMatch(/устарел.*Откройте предпросмотр заново/);
-    expect(screen.queryByText(/^Опубликовано/)).toBeNull();
-    expect(api.calls.find(c => c.method === 'POST')?.body).toMatchObject({ expectedPreviewToken: 'a'.repeat(64), expectedVersion: 0 });
+describe('CandidateSetPanel — что набор дал карточкам, только чтение', () => {
+  it('показывает взятое и ничего не публикует: изменяющих запросов нет', async () => {
+    const api = fakeApi([{ match: 'GET /api/reprocess/sets/9/preview', respond: () => ({ status: 200, body: preview() }) }]);
+    renderWithProviders(<CandidateSetPanel setId={9} />);
+    expect(await screen.findByText(/Взято в карточки: 1/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Опубликовать/ })).toBeNull();
+    await waitFor(() => expect(api.calls.some(c => c.method === 'GET')).toBe(true));
+    expect(api.calls.some(c => c.method !== 'GET')).toBe(false);
   });
 
-  it('неполный запуск и отозванный допуск — кнопка недоступна, причина текстом', async () => {
+  it('неполный запуск и отозванный допуск названы причиной, а не молчанием', async () => {
     fakeApi([{ match: 'GET /api/reprocess/sets/9/preview', respond: () => ({ status: 200, body: preview({ run: { id: 3, status: 'partial', coveredChars: 5, totalChars: 10, complete: false }, policy: { allowed: false, reason: 'ИИ-допуск отозван' } }) }) }]);
-    renderWithProviders(<PublishPreviewPanel setId={9} />);
-    const button = (await screen.findByRole('button', { name: 'Опубликовать этот набор' })) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(screen.getByText(/не завершён полностью .* повторить запуск/)).toBeTruthy();
+    renderWithProviders(<CandidateSetPanel setId={9} />);
+    expect(await screen.findByText(/не завершён полностью .* не идёт ни при каком флаге/)).toBeTruthy();
     expect(screen.getByText(/Нет ИИ-допуска источника: ИИ-допуск отозван/)).toBeTruthy();
   });
 });
