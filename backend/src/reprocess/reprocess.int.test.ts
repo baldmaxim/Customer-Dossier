@@ -212,6 +212,55 @@ describe('полный путь: запуск → чанк → набор → п
 
 // ---------------------------------------------------------------------------
 
+describe('страница документа: что портал взял из текста', () => {
+  it('после публикации — состояние in_cards, утверждения с цитатами и ссылки на карточки', async () => {
+    const item = await store(sourceMain, `Стройка. ${Q_ROLE}. Затем ${Q_COURT_1}.`);
+    const provider = fakeProvider(() => ok(fullAnswer), 'fake-model-outcome');
+    const run = await execute(await enqueue(item.revisionId, provider), provider);
+    const published = await publishCandidateSet({ setId: run.candidateSetId!, expectedVersion: 0, actor: 'test' });
+    expect(published.outcome).toBe('published');
+
+    const res = await api.call('GET', `/api/items/${item.sourceItemId}/extraction`, undefined);
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('in_cards');
+    expect(res.body.activeSetId).toBe(run.candidateSetId);
+    expect(res.body.run).toMatchObject({ status: 'completed', relevant: true });
+    expect((res.body.policy as { allowed: boolean }).allowed).toBe(true);
+
+    const names = (res.body.companies as Array<{ name: string }>).map(c => c.name);
+    expect(names).toContain('Демо-Альфа');
+    expect((res.body.projects as Array<{ name: string }>).map(p => p.name)).toContain('Берег-Демо');
+
+    // У каждого утверждения — своя цитата, и она дословно есть в тексте редакции.
+    const assertions = res.body.assertions as Array<{ predicate: string; quotes: Array<{ quote: string; spanStart: number; spanEnd: number }> }>;
+    expect(assertions.length).toBeGreaterThan(0);
+    expect(assertions.every(a => a.quotes.length > 0)).toBe(true);
+    const body = (await pool().query<{ body: string }>('SELECT body FROM document_revisions WHERE id = $1', [item.revisionId])).rows[0]!.body;
+    for (const a of assertions) {
+      for (const q of a.quotes) expect(body).toContain(q.quote);
+    }
+    expect(assertions.some(a => a.predicate === 'participates_in_project')).toBe(true);
+  });
+
+  it('публикация без запуска: «ещё не разбирался», а не «ничего нет»', async () => {
+    const item = await store(sourceMain, `Другой текст про стройку. ${Q_ROLE}.`);
+    const res = await api.call('GET', `/api/items/${item.sourceItemId}/extraction`, undefined);
+
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('no_run');
+    expect(res.body.run).toBeNull();
+    expect(res.body.assertions).toEqual([]);
+    expect(res.body.activeSetId).toBeNull();
+  });
+
+  it('неизвестная публикация — 404, а не пустой ответ', async () => {
+    const res = await api.call('GET', '/api/items/99999999/extraction', undefined);
+    expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('неполные запуски не становятся completed', () => {
   const longBody = (tag: string): string =>
     Array.from({ length: 8 }, (_, i) => `Абзац ${i} ${tag}: ${'строительные новости '.repeat(4)}`).join('\n') +

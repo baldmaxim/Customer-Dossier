@@ -99,6 +99,29 @@ describe('тема публикации (headline@1)', () => {
     expect(calls).toHaveLength(before);
   });
 
+  it('модель не отвечает — проход останавливается на первой ошибке, а не перебирает всю пачку', async () => {
+    const sourceId = await insertSyntheticSource({ kind: 'telegram', key: 'headline_down', access: 'approved', ai: 'approved' });
+    for (const n of [1, 2, 3]) await store(sourceId, `down${n}`, `${TEXT} Текст номер ${n}.`);
+    calls.length = 0;
+
+    const failing: HeadlineCaller = async input => {
+      calls.push(input.body.slice(0, 20));
+      return {
+        ok: false,
+        failure: 'llm_error',
+        message: 'соединение отклонено',
+        usage: { tokensIn: null, tokensOut: null, latencyMs: 1 },
+        rawResponse: null,
+      } satisfies ILlmResult<IHeadline>;
+    };
+
+    const pass = await runHeadlinePass(50, failing);
+
+    expect(calls).toHaveLength(1);
+    expect(pass.filter(r => r.outcome === 'model_error')).toHaveLength(1);
+    expect(pass.at(-1)?.outcome).toBe('model_error');
+  });
+
   it('тема остаётся неизменной: правка и удаление строки запрещены', async () => {
     const sourceId = await insertSyntheticSource({ kind: 'telegram', key: 'headline_immutable', access: 'approved', ai: 'approved' });
     const revisionId = await store(sourceId, 'h4', TEXT);

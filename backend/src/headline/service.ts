@@ -130,7 +130,12 @@ export const revisionsWithoutHeadline = async (limit: number): Promise<number[]>
   return rows.map(r => r.id);
 };
 
-/** Один проход: сколько тем удалось составить. Ошибка одной редакции не останавливает проход. */
+/**
+ * Один проход. Отказ модели останавливает проход целиком: если LM Studio не отвечает, она
+ * не ответит и на девять следующих текстов, а каждая попытка — это три захода с паузами
+ * 2 и 8 секунд. Следующий тик попробует заново. Отказ допуска проход не останавливает:
+ * он относится к одному источнику, а не к модели.
+ */
 export const runHeadlinePass = async (
   limit = env.HEADLINE_BATCH_SIZE,
   caller: HeadlineCaller = defaultCaller,
@@ -138,11 +143,14 @@ export const runHeadlinePass = async (
   if (!env.HEADLINE_ENABLED) return [];
   const results: HeadlineOutcome[] = [];
   for (const revisionId of await revisionsWithoutHeadline(limit)) {
+    let result: HeadlineOutcome;
     try {
-      results.push(await ensureHeadline(revisionId, caller));
+      result = await ensureHeadline(revisionId, caller);
     } catch (err) {
-      results.push({ outcome: 'model_error', reason: err instanceof Error ? err.message : String(err), revisionId });
+      result = { outcome: 'model_error', reason: err instanceof Error ? err.message : String(err), revisionId };
     }
+    results.push(result);
+    if (result.outcome === 'model_error') break;
   }
   return results;
 };
