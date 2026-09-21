@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { listMigrationFiles, parseMigrateArgs } from './migrate.js';
+import { DESTRUCTIVE_MIGRATIONS, listMigrationFiles, parseMigrateArgs } from './migrate.js';
 
 describe('parseMigrateArgs', () => {
   it('без аргументов — обычное применение без destructive', () => {
@@ -30,6 +30,11 @@ describe('parseMigrateArgs', () => {
 
   it('неизвестный флаг (например опечатка --dry-run) — ошибка, а не применение миграций', () => {
     expect(() => parseMigrateArgs(['--dry-run'])).toThrow(/неизвестный аргумент/);
+  });
+
+  it('удаление сид-сайтов помечено destructive: молча из базы строки не исчезают', () => {
+    expect(DESTRUCTIVE_MIGRATIONS['024_drop_unused_seed_sites.sql']).toMatch(/заготов/);
+    expect(listMigrationFiles()).toContain('024_drop_unused_seed_sites.sql');
   });
 
   it('применённые миграции 001–020 на месте и нумерация без пропусков', () => {

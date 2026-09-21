@@ -78,4 +78,28 @@ describe('runMigrations на пустой базе', () => {
       getPool().query(`UPDATE sources SET access_status = 'approved' WHERE kind = 'manual' AND key = 'form'`),
     ).rejects.toThrow(/sources_policy_basis_required/);
   });
+
+  it('024: нетронутые сайты-заготовки удалены, ручные источники остались', async () => {
+    const sites = await getPool().query<{ key: string }>(`SELECT key FROM sources WHERE kind = 'website' ORDER BY key`);
+    expect(sites.rows).toEqual([]);
+    const manual = await getPool().query<{ key: string }>(`SELECT key FROM sources WHERE kind = 'manual' ORDER BY key`);
+    expect(manual.rows.map(r => r.key)).toEqual(['bot', 'form']);
+  });
+});
+
+// Заготовка, по которой уже читали, — не заготовка: удалить источник с документами
+// значит разорвать цепочку «утверждение → доказательство → источник».
+describe('024 на базе, где сид-сайт использовали', () => {
+  it('источник с документом переживает миграцию', async () => {
+    await resetSchema();
+    await runMigrations({ allowDestructive: true, upto: 23, log: () => undefined });
+    await getPool().query(
+      `INSERT INTO raw_documents (source_id, external_id, body, content_hash, lead_hash, body_len, status)
+       SELECT id, 'stroygaz/1', 'Синтетический документ заготовки', decode(md5('seed-site'), 'hex'), decode(md5('seed-lead'), 'hex'), 32, 'new'
+       FROM sources WHERE kind = 'website' AND key = 'stroygaz.ru'`,
+    );
+    await runMigrations({ allowDestructive: true, log: () => undefined });
+    const left = await getPool().query<{ key: string }>(`SELECT key FROM sources WHERE kind = 'website' ORDER BY key`);
+    expect(left.rows.map(r => r.key)).toEqual(['stroygaz.ru']);
+  });
 });

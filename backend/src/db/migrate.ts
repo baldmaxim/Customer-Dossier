@@ -39,6 +39,8 @@ const ENSURE_TABLE_SQL = `
 export const DESTRUCTIVE_MIGRATIONS: Readonly<Record<string, string>> = {
   '009_switch_to_russia.sql':
     'обнуляет все events.amount_rub, переименовывает companies.bin и ставит сайты РК на паузу',
+  '024_drop_unused_seed_sites.sql':
+    'удаляет девять сайтов-заготовок из 008/009, если по ним нет ни документов, ни обращений и допуск не выдавался',
 };
 
 export const listMigrationFiles = (dir: string = MIGRATIONS_DIR): string[] => {
