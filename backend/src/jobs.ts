@@ -7,6 +7,7 @@ export interface IJobFlags {
   INGEST_ENABLED: boolean;
   PIPELINE_ENABLED: boolean;
   REPROCESS_AUTO_PUBLISH: boolean;
+  HEADLINE_ENABLED: boolean;
   METRICS_AUTO_REFRESH: boolean;
   BOT_ENABLED: boolean;
   TG_BOT_TOKEN: string;
@@ -44,11 +45,18 @@ export const startBackgroundJobs = (
     decision.started.push('pipeline');
     decision.notes.push(
       flags.REPROCESS_AUTO_PUBLISH
-        ? 'наборы кандидатов публикуются автоматически (REPROCESS_AUTO_PUBLISH=true, без проверки человеком)'
-        : 'наборы кандидатов ждут публикации оператором (REPROCESS_AUTO_PUBLISH=false)',
+        ? 'разобранное уходит в карточки автоматически (REPROCESS_AUTO_PUBLISH=true, без проверки человеком)'
+        : 'наборы кандидатов остаются вне карточек (REPROCESS_AUTO_PUBLISH=false)',
+    );
+    // Тема публикации идёт тем же заданием, а не своим: два параллельных запроса к
+    // локальной модели делят VRAM и выталкивают её в RAM — ровно то, что давало таймауты.
+    decision.notes.push(
+      flags.HEADLINE_ENABLED
+        ? 'тема публикации составляется моделью после разбора (HEADLINE_ENABLED=true)'
+        : 'тема публикации не составляется (HEADLINE_ENABLED=false)',
     );
   } else {
-    decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false)');
+    decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false): темы публикаций тоже не составляются');
   }
 
   if (flags.METRICS_AUTO_REFRESH) {

@@ -134,8 +134,61 @@ export interface ISourceItem {
   historyBeforeImport: 'complete' | 'unknown';
   origin: 'ingest' | 'legacy_import';
   revisionCount: number;
+  /** Заголовок источника последней редакции; у telegram-постов его нет. */
+  title: string | null;
   latestCompleteness: TextCompleteness | null;
   latestCompletenessReason: string | null;
+  /** Тема, составленная локальной моделью (headline@1). Не заголовок источника. */
+  topic: string | null;
+  topicModel: string | null;
+  topicVersion: string | null;
+}
+
+/** Состояние текста для страницы документа: почему из него взято именно столько. */
+export type ItemState =
+  | 'in_cards'
+  | 'nothing_found'
+  | 'not_relevant'
+  | 'built_not_in_cards'
+  | 'running'
+  | 'queued'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+  | 'no_policy'
+  | 'no_run';
+
+export interface IItemAssertion {
+  id: number;
+  predicate: string;
+  role: string | null;
+  eventType: string | null;
+  polarity: string;
+  modality: string;
+  status: string;
+  validFrom: string | null;
+  periodPrecision: string;
+  parties: Array<{ kind: 'company' | 'project'; id: number; name: string; side: string }>;
+  quotes: Array<{ quote: string; spanStart: number; spanEnd: number; stance: string }>;
+}
+
+export interface IItemOutcome {
+  state: ItemState;
+  policy: { allowed: boolean; reason: string | null };
+  run: {
+    id: number;
+    status: string;
+    error: string | null;
+    finishedAt: string | null;
+    coveredChars: number | null;
+    totalChars: number | null;
+    relevant: boolean | null;
+    revisionNo: number;
+  } | null;
+  activeSetId: number | null;
+  assertions: IItemAssertion[];
+  companies: Array<{ id: number; name: string }>;
+  projects: Array<{ id: number; name: string }>;
 }
 
 export interface IRevisionMeta {

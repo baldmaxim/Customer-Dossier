@@ -1,0 +1,72 @@
+/* «Что портал взял из текста»: сущности ссылками, утверждения с цитатами. */
+
+.state {
+  margin: 0 0 var(--sp-2);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.warn {
+  color: var(--risk-yellow);
+  font-size: var(--fs-sm);
+  margin: var(--sp-1) 0 0;
+}
+
+.entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+
+.entity {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.parties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+}
+
+.quote {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-3);
+  border-left: 3px solid var(--border-strong);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}

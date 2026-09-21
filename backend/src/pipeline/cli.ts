@@ -16,6 +16,7 @@
 //   --publish <набор> [--allow-stale]  опубликовать набор (одна транзакция)
 //   --stats                    состояние legacy-очереди и доля ошибок
 //   --queue [--kind k] [--limit N]  очередь проверки: идентичность, конфликт ролей, исправление, спор (этап 06)
+//   --headlines [--limit N]    назвать темой публикации редакции без темы (headline@1, отдельный короткий вызов модели)
 //
 // Осмотр и починка
 //   --errors                   последние отказы с текстом ошибки
@@ -71,6 +72,7 @@ import {
   showRuns,
 } from '../reprocess/cli-commands.js';
 import { NotPublishableError, PublicationConflictError } from '../reprocess/publish.js';
+import { headlinesCommand } from '../headline/cli.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -109,6 +111,7 @@ const main = async (): Promise<void> => {
   if (has('--retry')) return retryRunsCommand(Number(argValue('--limit') ?? 20));
   if (has('--runs')) return showRuns(Number(argValue('--limit') ?? 20));
   if (has('--queue')) return showReviewQueue(argValue('--kind'), Number(argValue('--limit') ?? 30));
+  if (has('--headlines')) return headlinesCommand(Number(argValue('--limit') ?? env.HEADLINE_BATCH_SIZE));
   const previewId = argValue('--preview');
   if (previewId) return previewCommand(Number(previewId));
   const publishId = argValue('--publish');

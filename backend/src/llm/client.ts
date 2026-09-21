@@ -11,6 +11,8 @@ import { EXTRACT_JSON_SCHEMA, extractionSchema, type IExtraction } from './schem
 import { buildSystemMessage, buildUserMessage } from './prompt.js';
 import { SEMANTIC_JSON_SCHEMA, semanticExtractionSchema, type ISemanticExtraction } from './semantic/schema.js';
 import { buildSemanticSystemMessage, buildSemanticUserMessage } from './semantic/prompt.js';
+import { HEADLINE_JSON_SCHEMA, headlineSchema, type IHeadline } from './headline/schema.js';
+import { buildHeadlineSystemMessage, buildHeadlineUserMessage } from './headline/prompt.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
 
@@ -69,6 +71,18 @@ export const SEMANTIC_SPEC: IExtractSpec<ISemanticExtraction> = {
   validator: semanticExtractionSchema,
   system: buildSemanticSystemMessage,
   user: buildSemanticUserMessage,
+};
+
+/**
+ * headline@1 — тема публикации одной строкой. Отдельная спецификация, а не поле в extract@3:
+ * иначе смена схемы извлечения меняла бы идентичность всех запусков разбора.
+ */
+export const HEADLINE_SPEC: IExtractSpec<IHeadline> = {
+  schemaName: 'tg_info_headline',
+  jsonSchema: HEADLINE_JSON_SCHEMA,
+  validator: headlineSchema,
+  system: buildHeadlineSystemMessage,
+  user: buildHeadlineUserMessage,
 };
 
 export interface IExtractOptions {
@@ -225,6 +239,10 @@ export const extractFromText = (options: IExtractOptions): Promise<ILlmResult> =
 /** extract@3 — типизированные связи и события (этап 06). */
 export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<ISemanticExtraction>> =>
   extractWith(options, options.promptVariant ? { ...SEMANTIC_SPEC, system: () => buildSemanticSystemMessage(options.promptVariant ?? null) } : SEMANTIC_SPEC);
+
+/** headline@1 — тема публикации. Канон не трогает: результат живёт в revision_headlines. */
+export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>
+  extractWith(options, HEADLINE_SPEC);
 
 /** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */
 export const checkLlmConnection = async (): Promise<{ ok: boolean; models: string[]; error?: string }> => {

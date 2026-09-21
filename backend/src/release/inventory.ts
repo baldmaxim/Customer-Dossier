@@ -25,6 +25,7 @@ export const COUNTED_TABLES = [
   'extraction_chunks',
   'extraction_chunk_responses',
   'candidate_sets',
+  'revision_headlines',
   'candidate_assertions',
   'candidate_set_evidence',
   'item_publications',

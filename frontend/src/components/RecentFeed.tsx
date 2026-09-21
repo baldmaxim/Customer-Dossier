@@ -25,6 +25,9 @@ interface IFeedItem {
   canonicalUrl: string | null;
   state: string;
   title: string | null;
+  /** Тема, составленная локальной моделью (headline@1): показывается, когда заголовка нет. */
+  topic: string | null;
+  topicModel: string | null;
   completeness: string | null;
   revisionNo: number | null;
   documentId: number | null;
@@ -66,10 +69,18 @@ export const RecentFeed: FC = () => {
                 <td>
                   {item.documentId !== null ? (
                     <Link className="row-link-target" to={`/documents/${item.documentId}`}>
-                      {item.title ?? 'без заголовка'}
+                      {item.title ?? item.topic ?? 'без заголовка'}
                     </Link>
                   ) : (
-                    (item.title ?? 'без заголовка')
+                    (item.title ?? item.topic ?? 'без заголовка')
+                  )}
+                  {item.title === null && item.topic !== null && (
+                    <Badge
+                      className="row-link-above"
+                      hint="у публикации нет заголовка: тему составила локальная модель по началу текста. Это подпись строки, а не заголовок источника и не доказательство"
+                    >
+                      тема от модели
+                    </Badge>
                   )}
                   {item.revisionCount > 1 && (
                     <Badge

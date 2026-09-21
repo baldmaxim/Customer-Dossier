@@ -4,14 +4,18 @@ import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { ISourceItem } from '../api/types';
+import { ItemExtraction } from '../components/ItemExtraction';
 import { RevisionHistory } from '../components/RevisionHistory';
+import { Badge } from '../components/ui/Badge';
 import { COMPLETENESS_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './DocumentPage.module.css';
 
 /**
- * Публикации, связанные с документом из карточки: где текст появлялся, какие
- * редакции видели, насколько он полный. Один текст в разных каналах — разные
- * публикации со своей историей.
+ * Публикация целиком: о чём текст, что портал из него взял и какие были редакции.
+ *
+ * Порядок отвечает на вопрос оператора «что тут важного»: сперва тема и состояние
+ * разбора, потом извлечённое со ссылками на карточки, и только потом сам текст с
+ * историей версий. Действий здесь нет — обработка идёт сама.
  */
 export const DocumentPage: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,14 +34,37 @@ export const DocumentPage: FC = () => {
 
   const items = itemsQuery.data?.items ?? [];
   const current = items.find(i => i.id === selected) ?? items[0] ?? null;
+  // Заголовок источника важнее машинной темы: у telegram-постов его просто нет.
+  const title = current?.title ?? current?.topic ?? `Документ #${documentId}`;
+  const fromModel = current !== null && current.title === null && current.topic !== null;
 
   return (
     <>
-      <h1 className={styles.title}>Документ #{documentId}: публикации и версии</h1>
-      <p className={styles.hint}>
-        Цитаты в карточках привязаны к первой сохранённой редакции. Более поздние правки публикации
-        видны здесь и в карточки автоматически не попадают.
-      </p>
+      <header className={styles.head}>
+        <h1 className={styles.title}>{title}</h1>
+        {fromModel && (
+          <Badge hint="тему составила локальная модель по началу текста; это подпись для списка, а не заголовок источника и не доказательство">
+            тема составлена моделью
+          </Badge>
+        )}
+        {current && (
+          <p className={styles.meta}>
+            {current.sourceTitle} · {SOURCE_KIND_LABELS[current.sourceKind] ?? current.sourceKind}
+            {current.publishedAt !== null
+              ? ` · опубликовано ${formatDateTime(current.publishedAt)}`
+              : ` · дата публикации неизвестна, впервые увидели ${formatDateTime(current.firstObservedAt)}`}
+            {current.latestCompleteness && ` · ${COMPLETENESS_LABELS[current.latestCompleteness]}`}
+            {current.originalUrl && (
+              <>
+                {' · '}
+                <a href={current.originalUrl} target="_blank" rel="noreferrer noopener">
+                  оригинал
+                </a>
+              </>
+            )}
+          </p>
+        )}
+      </header>
 
       {items.length === 0 ? (
         <p className={styles.empty}>
@@ -45,48 +72,62 @@ export const DocumentPage: FC = () => {
           (backfill) не выполнялся.
         </p>
       ) : (
-        <div className={styles.items} role="list">
-          {items.map(item => (
-            <button
-              key={item.id}
-              type="button"
-              role="listitem"
-              aria-pressed={current?.id === item.id}
-              className={`${styles.item} ${current?.id === item.id ? styles.itemActive : ''}`}
-              onClick={() => setSelected(item.id)}
-            >
-              <span className={styles.itemSource}>
-                {item.sourceTitle} · {SOURCE_KIND_LABELS[item.sourceKind] ?? item.sourceKind}
-              </span>
-              <span className={styles.itemKey}>{item.externalId ?? item.canonicalUrl ?? item.itemKey}</span>
-              <span className={styles.itemMeta}>
-                редакций: {item.revisionCount} ·{' '}
-                {item.latestCompleteness ? COMPLETENESS_LABELS[item.latestCompleteness] : 'полнота неизвестна'} ·
-                последнее наблюдение {formatDateTime(item.lastObservedAt)}
-              </span>
-              {item.state === 'deleted_observed' && (
-                <span className={styles.warn}>удаление наблюдалось {formatDateTime(item.deletedObservedAt)}</span>
-              )}
-              {item.historyBeforeImport === 'unknown' && (
-                <span className={styles.warn}>история до начала учёта версий неизвестна</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+        <>
+          {current && <ItemExtraction itemId={current.id} />}
 
-      {current && (
-        <section className={styles.section}>
-          <div className={styles.sectionHead}>
-            <h2>Редакции</h2>
-            {current.originalUrl && (
-              <a href={current.originalUrl} target="_blank" rel="noreferrer noopener">
-                оригинал
-              </a>
-            )}
-          </div>
-          <RevisionHistory itemId={current.id} latestRevisionId={current.latestRevisionId} />
-        </section>
+          {items.length > 1 && (
+            <section className={styles.section}>
+              <h2>Один текст в нескольких источниках</h2>
+              <p className={styles.hint}>
+                Одна и та же новость в трёх каналах — три публикации со своей историей, а не три подтверждения.
+              </p>
+              <div className={styles.items} role="list">
+                {items.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="listitem"
+                    aria-pressed={current?.id === item.id}
+                    className={`${styles.item} ${current?.id === item.id ? styles.itemActive : ''}`}
+                    onClick={() => setSelected(item.id)}
+                  >
+                    <span className={styles.itemSource}>
+                      {item.sourceTitle} · {SOURCE_KIND_LABELS[item.sourceKind] ?? item.sourceKind}
+                    </span>
+                    <span className={styles.itemKey}>{item.externalId ?? item.canonicalUrl ?? item.itemKey}</span>
+                    <span className={styles.itemMeta}>
+                      редакций: {item.revisionCount} ·{' '}
+                      {item.latestCompleteness ? COMPLETENESS_LABELS[item.latestCompleteness] : 'полнота неизвестна'} ·
+                      последнее наблюдение {formatDateTime(item.lastObservedAt)}
+                    </span>
+                    {item.state === 'deleted_observed' && (
+                      <span className={styles.warn}>удаление наблюдалось {formatDateTime(item.deletedObservedAt)}</span>
+                    )}
+                    {item.historyBeforeImport === 'unknown' && (
+                      <span className={styles.warn}>история до начала учёта версий неизвестна</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {current && (
+            <section className={styles.section}>
+              <div className={styles.sectionHead}>
+                <h2>Текст и версии</h2>
+                {current.state === 'deleted_observed' && (
+                  <span className={styles.warn}>удаление наблюдалось {formatDateTime(current.deletedObservedAt)}</span>
+                )}
+              </div>
+              <p className={styles.hint}>
+                Цитаты выше привязаны к сохранённой редакции. Более поздние правки публикации видны здесь и в
+                карточки автоматически не попадают — портал разберёт их отдельно.
+              </p>
+              <RevisionHistory itemId={current.id} latestRevisionId={current.latestRevisionId} />
+            </section>
+          )}
+        </>
       )}
 
       <p className={styles.back}>

@@ -39,6 +39,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'extraction_chunks', class: 'pipeline', why: 'диапазоны чанков и статусы' },
   { table: 'extraction_chunk_responses', class: 'pipeline', why: 'append-only ответы по чанкам' },
   { table: 'candidate_sets', class: 'pipeline', why: 'наборы кандидатов и их статус публикации' },
+  { table: 'revision_headlines', class: 'pipeline', why: 'тема публикации, составленная моделью (headline@1); не доказательство' },
   { table: 'candidate_assertions', class: 'pipeline', why: 'кандидаты утверждений' },
   { table: 'candidate_set_evidence', class: 'pipeline', why: 'вклад набора в доказательства (составной ключ)' },
   { table: 'item_publications', class: 'domain', why: 'активный набор публикации и версия' },

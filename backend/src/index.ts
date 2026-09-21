@@ -10,6 +10,7 @@ import { startBackgroundJobs } from './jobs.js';
 import { startMetricsScheduler } from './metrics/refresh.js';
 import { lmStudioProvider } from './reprocess/provider.js';
 import { runReprocessPass } from './reprocess/worker.js';
+import { runHeadlinePass } from './headline/service.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -60,8 +61,13 @@ const startPipelineWorker = (signal: AbortSignal): void => {
       if (results.length > 0) {
         const completed = results.filter(r => r.run?.status === 'completed').length;
         const published = results.filter(r => r.publish?.outcome === 'published').length;
-        console.log(`[pipeline] запусков ${results.length}: завершено ${completed}, опубликовано ${published}`);
+        console.log(`[pipeline] запусков ${results.length}: завершено ${completed}, в карточки ${published}`);
       }
+      // Темы — после разбора и последовательно с ним: параллельный запрос к локальной
+      // модели делит VRAM и возвращает таймауты (TG_Info/CLAUDE.md, раздел LM Studio).
+      const headlines = await runHeadlinePass();
+      const saved = headlines.filter(h => h.outcome === 'saved').length;
+      if (saved > 0) console.log(`[headline] тем составлено: ${saved}`);
     } catch (err) {
       console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

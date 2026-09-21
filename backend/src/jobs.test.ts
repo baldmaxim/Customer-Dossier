@@ -19,6 +19,7 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   INGEST_ENABLED: false,
   PIPELINE_ENABLED: false,
   REPROCESS_AUTO_PUBLISH: false,
+  HEADLINE_ENABLED: false,
   METRICS_AUTO_REFRESH: false,
   BOT_ENABLED: false,
   TG_BOT_TOKEN: '',
@@ -51,6 +52,20 @@ describe('startBackgroundJobs', () => {
     const decision = startBackgroundJobs(flags({ PIPELINE_ENABLED: true }), s, new AbortController().signal);
     expect(s.calls).toEqual(['pipeline']);
     expect(decision.notes.join(' ')).toContain('REPROCESS_AUTO_PUBLISH=false');
+  });
+
+  it('тема публикации идёт с разбором: без PIPELINE_ENABLED её никто не составляет', () => {
+    const s = starters();
+    const off = startBackgroundJobs(flags({ HEADLINE_ENABLED: true }), s, new AbortController().signal);
+    expect(s.calls).toEqual([]);
+    expect(off.notes.join(' ')).toContain('темы публикаций тоже не составляются');
+
+    const on = startBackgroundJobs(
+      flags({ PIPELINE_ENABLED: true, HEADLINE_ENABLED: true }),
+      starters(),
+      new AbortController().signal,
+    );
+    expect(on.notes.join(' ')).toContain('HEADLINE_ENABLED=true');
   });
 
   it('явные флаги включают ровно свои задания', () => {

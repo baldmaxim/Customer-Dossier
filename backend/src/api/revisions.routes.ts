@@ -4,6 +4,7 @@
 import { z } from 'zod';
 
 import { query, queryOne } from '../db/pool.js';
+import { loadItemOutcome } from '../reprocess/itemOutcome.js';
 import { diffLines } from '../revisions/diff.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 
@@ -14,6 +15,20 @@ const idOf = (raw: string | undefined): number | null => {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 };
 
+/**
+ * Тема публикации (headline@1): последняя по времени для показываемой редакции.
+ * Это машинная подпись строки, а не заголовок источника — интерфейс говорит это прямо.
+ */
+const HEADLINE_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT h.topic, h.model, h.headline_version AS version, h.created_at
+    FROM revision_headlines h
+    WHERE h.revision_id = lr.id
+    ORDER BY h.created_at DESC, h.id DESC
+    LIMIT 1
+  ) hl ON true
+`;
+
 const ITEM_COLUMNS = `
   i.id, i.source_id AS "sourceId", s.title AS "sourceTitle", s.kind AS "sourceKind", s.key AS "sourceKey",
   i.item_key AS "itemKey", i.item_key_kind AS "itemKeyKind", i.external_id AS "externalId",
@@ -23,13 +38,15 @@ const ITEM_COLUMNS = `
   i.latest_revision_id AS "latestRevisionId", i.latest_state_observed_at AS "latestStateObservedAt",
   i.history_before_import AS "historyBeforeImport", i.origin,
   (SELECT count(*)::int FROM document_revisions r WHERE r.source_item_id = i.id) AS "revisionCount",
-  lr.completeness AS "latestCompleteness", lr.completeness_reason AS "latestCompletenessReason"
+  lr.title, lr.completeness AS "latestCompleteness", lr.completeness_reason AS "latestCompletenessReason",
+  hl.topic, hl.model AS "topicModel", hl.version AS "topicVersion"
 `;
 
 const ITEM_FROM = `
   FROM source_items i
   JOIN sources s ON s.id = i.source_id
   LEFT JOIN document_revisions lr ON lr.id = i.latest_revision_id
+  ${HEADLINE_LATERAL}
 `;
 
 /**
@@ -46,10 +63,12 @@ revisionsRouter.get('/feed', async (req, res) => {
             lr.title, lr.completeness, lr.revision_no AS "revisionNo",
             lr.legacy_document_id AS "documentId",
             length(lr.body) AS "bodyChars",
+            hl.topic, hl.model AS "topicModel",
             (SELECT count(*)::int FROM document_revisions r WHERE r.source_item_id = i.id) AS "revisionCount"
      FROM source_items i
      JOIN sources s ON s.id = i.source_id
      LEFT JOIN document_revisions lr ON lr.id = i.latest_revision_id
+     ${HEADLINE_LATERAL}
      ORDER BY coalesce(i.published_at, i.first_observed_at) DESC, i.id DESC
      LIMIT $1`,
     [limit],
@@ -92,6 +111,24 @@ revisionsRouter.get('/items/:id', async (req, res) => {
     [id],
   );
   res.json({ item, observations });
+});
+
+/**
+ * Что портал взял из публикации: состояние обработки словами и опубликованные
+ * утверждения с цитатами. Пусто — с причиной, а не молча.
+ */
+revisionsRouter.get('/items/:id/extraction', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  const outcome = await loadItemOutcome(id);
+  if (!outcome) {
+    res.status(404).json({ error: 'Публикация не найдена' });
+    return;
+  }
+  res.json(outcome);
 });
 
 /** Список редакций без текстов: номер, даты, полнота, хэш. */
