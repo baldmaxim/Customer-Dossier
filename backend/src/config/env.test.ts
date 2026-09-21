@@ -73,11 +73,6 @@ describe('parseEnv — фоновые задания и сеть (TC-001, TC-010
   it('DATABASE_SSL=0 теперь действительно выключает SSL', () => {
     expect(parseEnv({ ...base, DATABASE_SSL: '0' }).DATABASE_SSL).toBe(false);
   });
-
-  it('короткий OPERATOR_TOKEN отклоняется', () => {
-    expect(() => parseEnv({ ...base, OPERATOR_TOKEN: 'short' })).toThrow(EnvValueError);
-    expect(parseEnv({ ...base, OPERATOR_TOKEN: 'x'.repeat(32) }).OPERATOR_TOKEN).toHaveLength(32);
-  });
 });
 
 describe('адрес локальной модели (TC-007)', () => {

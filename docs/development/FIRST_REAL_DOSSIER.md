@@ -25,7 +25,7 @@
 
 - LM Studio: модель из `LMSTUDIO_MODEL` загружена, сервер на `LMSTUDIO_BASE_URL`. Проверка —
   `npm run pipeline:once -- --check`.
-- Вход: токен из `backend/.local/operator-token`.
+- Вход не требуется: портал открывается сразу.
 - Портал сам ничего не собирает и не разбирает: `INGEST_ENABLED`, `PIPELINE_ENABLED`, `BOT_ENABLED`,
   `METRICS_AUTO_REFRESH` по умолчанию выключены.
 

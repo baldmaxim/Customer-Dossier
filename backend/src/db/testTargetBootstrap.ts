@@ -37,7 +37,6 @@ export const TEST_PROCESS_ENV: Readonly<Record<string, string>> = {
   PROMPT_VERSION: 'test',
   TG_BOT_TOKEN: '',
   TG_BOT_ALLOWED_USER_IDS: '',
-  OPERATOR_TOKEN: '',
   INGEST_ENABLED: 'false',
   PIPELINE_ENABLED: 'false',
   METRICS_AUTO_REFRESH: 'false',

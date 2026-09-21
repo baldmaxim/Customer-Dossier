@@ -46,8 +46,8 @@ Exit 0 — только `MATCH` (при `--compare`) или manifest без пр
 | роли кластера, пароли, конфигурация сервера | вне дампа одной базы |
 | секреты окружения (`.env`, токен оператора) | не публикуются и не хешируются |
 
-Таблиц сессий, паролей и токенов в базе нет: сессии оператора — в памяти процесса (`api/auth.ts`), токен —
-`backend/.local/operator-token` или `OPERATOR_TOKEN`. Их сохранность вне дампа и проверяется отдельно (п. «Окружение»).
+Таблиц сессий, паролей и токенов в базе нет и не было: вход по токену снят с портала (дополнение к ADR-001
+от 2026-09-21), сессии и CSRF удалены из кода. Восстанавливать по этой части нечего.
 
 ## Чтение
 
@@ -87,7 +87,7 @@ Exit 0 — только `MATCH` (при `--compare`) или manifest без пр
 `CONFIG_KEYS` (фоновые флаги, `REVISION_WRITE_ENABLED`, `GRAPH_EXPORT_ENABLED`, `MERGE_APPLY_ENABLED`,
 `REPROCESS_AUTO_PUBLISH`, `EXTRACT_SCHEMA_VERSION`, `PROMPT_VERSION`, `LMSTUDIO_MODEL`, `EXTRACT_CHUNK_*`,
 `EXTRACT_CONCURRENCY`, `HOST`, `PORT`, `SESSION_*`). `CONFIG_DENYLIST` (`DATABASE_URL`, `TEST_DATABASE_URL`,
-`OPERATOR_TOKEN`, `TG_BOT_TOKEN`, `TG_BOT_ALLOWED_USER_IDS`, `LMSTUDIO_BASE_URL`, `DATABASE_SSL_CA_PATH`) не пишется
+`OPERATOR_TOKEN` (ключ больше не читается, но остаётся в запрете), `TG_BOT_TOKEN`, `TG_BOT_ALLOWED_USER_IDS`, `LMSTUDIO_BASE_URL`, `DATABASE_SSL_CA_PATH`) не пишется
 ни значением, ни хешем. Наличие токена оператора и `.env` на машине восстановления проверяет пользователь
 вручную (вход в приложение), без выгрузки значений.
 

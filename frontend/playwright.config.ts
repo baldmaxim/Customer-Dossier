@@ -1,7 +1,7 @@
 // Браузерная регрессия (этап 18). Запускает только пользователь: API и фронтенд подняты на ТЕСТОВОЙ базе
 // (tg_info_test после seed), фоновые задания выключены. Агент этот файл не исполняет.
 //
-//   $env:E2E_TEST_TARGET_CONFIRMED='tg_info_test'; $env:E2E_OPERATOR_TOKEN='<токен тестового стенда>'; npm run e2e
+//   $env:E2E_TEST_TARGET_CONFIRMED='tg_info_test'; npm run e2e
 //
 // Токен читается из окружения и в отчёты не пишется. Браузер: `npx playwright install chromium` (один раз, сеть).
 import { defineConfig, devices } from '@playwright/test';

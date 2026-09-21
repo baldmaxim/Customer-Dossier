@@ -1,9 +1,7 @@
-// Этап 18: краткое досье (статусы словами, недоверенные строки не исполняются), состояние источника, схема из снимка
-// (обрезка, легенда, стрелка), выход из сессии очищает клиентский кэш.
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+// Этап 18: краткое досье (статусы словами, недоверенные строки не исполняются), состояние источника,
+// схема из снимка (обрезка, легенда, стрелка).
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
 import type { IGraph, INegotiationBrief, ISourceRow } from '../api/types';
 import { fakeApi, renderWithProviders } from '../test/render';
@@ -88,31 +86,5 @@ describe('GraphPanel из снимка', () => {
     expect(screen.getByText(/промежуточные звенья не достраиваются/)).toBeTruthy();
     expect(container.querySelector('marker#graph-arrow')).not.toBeNull();
     expect(container.querySelector('path[marker-end="url(#graph-arrow)"]')).not.toBeNull();
-  });
-});
-
-vi.mock('../lib/cachePurge', () => ({ purgeSensitiveCaches: vi.fn(async () => undefined) }));
-
-describe('useSession — выход', () => {
-  it('logout очищает кэш запросов и чувствительные кэши браузера', async () => {
-    const { useSession } = await import('../hooks/useSession');
-    const { purgeSensitiveCaches } = await import('../lib/cachePurge');
-    fakeApi([
-      { match: 'GET /api/auth/session', respond: () => ({ status: 200, body: { authenticated: true, csrfToken: 'csrf-canary' } }) },
-      { match: 'POST /api/auth/logout', respond: () => ({ status: 200, body: { ok: true } }) },
-    ]);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    client.setQueryData(['case-dossier', 1], { secret: 'досье прошлой сессии' });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-    const { result } = renderHook(() => useSession(), { wrapper });
-    // Сначала сессия действительно открыта: иначе «не вошёл» после выхода ничего не доказывает (C1, T18-02).
-    await waitFor(() => expect(result.current.authenticated).toBe(true));
-    await act(async () => {
-      await result.current.logout();
-    });
-    expect(client.getQueryData(['case-dossier', 1])).toBeUndefined();
-    expect(purgeSensitiveCaches).toHaveBeenCalled();
-    // Экран подписан на запрос сессии: он обязан переключиться на вход (раньше clear() оставлял досье на экране).
-    await waitFor(() => expect(result.current.authenticated).toBe(false));
   });
 });

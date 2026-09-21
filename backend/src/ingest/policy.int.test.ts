@@ -29,7 +29,6 @@ import { ingestTelegramSource, runIngestPass } from './scheduler.js';
 import { getSourceByKey, updateSourcePolicy } from './sources.js';
 import { storeDocument } from './store.js';
 
-const TOKEN = 'integration-operator-token-0123456789abcdef';
 const ORIGIN = 'http://127.0.0.1:5173';
 
 const countRuns = async (): Promise<number> =>
@@ -145,14 +144,11 @@ describe('ручная вставка через API', () => {
       req.end();
     });
 
-  const session = async (): Promise<Record<string, string>> => {
-    const res = await call('POST', '/api/auth/login', {}, { token: TOKEN });
-    const cookie = (res.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
-    return { cookie, 'x-csrf-token': String(res.body.csrfToken) };
-  };
+  // Вход снят: заголовки Host и Origin подставляет сам call.
+  const headers: Record<string, string> = {};
 
   beforeAll(async () => {
-    server = http.createServer(createApp({ operatorToken: TOKEN, allowedOrigins: [ORIGIN] }));
+    server = http.createServer(createApp({ allowedOrigins: [ORIGIN] }));
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     port = (server.address() as AddressInfo).port;
   });
@@ -164,9 +160,8 @@ describe('ручная вставка через API', () => {
   const TEXT = 'Синтетический текст для проверки допуска ручной вставки, достаточно длинный для записи.';
 
   it('без допуска manual:form текст не сохраняется', async () => {
-    const auth = await session();
     const before = (await getPool().query<{ n: number }>('SELECT count(*)::int AS n FROM raw_documents')).rows[0]?.n;
-    const res = await call('POST', '/api/manual', auth, { body: TEXT });
+    const res = await call('POST', '/api/manual', headers, { body: TEXT });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('source_policy');
     const after = (await getPool().query<{ n: number }>('SELECT count(*)::int AS n FROM raw_documents')).rows[0]?.n;
@@ -187,16 +182,15 @@ describe('ручная вставка через API', () => {
   });
 
   it('разрешение без основания отклоняется, с основанием — пишется в журнал', async () => {
-    const auth = await session();
     const form = await getSourceByKey('manual', 'form');
 
-    const bad = await call('PATCH', `/api/admin/sources/${form!.id}/policy`, auth, {
+    const bad = await call('PATCH', `/api/admin/sources/${form!.id}/policy`, headers, {
       accessStatus: 'approved',
       aiProcessingStatus: 'unknown',
     });
     expect(bad.status).toBe(400);
 
-    const ok = await call('PATCH', `/api/admin/sources/${form!.id}/policy`, auth, {
+    const ok = await call('PATCH', `/api/admin/sources/${form!.id}/policy`, headers, {
       accessStatus: 'approved',
       aiProcessingStatus: 'unknown',
       basis: 'синтетическое основание для теста',
@@ -209,7 +203,7 @@ describe('ручная вставка через API', () => {
     );
     expect(log.rows[0]?.n).toBe(1);
 
-    const stored = await call('POST', '/api/manual', auth, { body: TEXT });
+    const stored = await call('POST', '/api/manual', headers, { body: TEXT });
     expect(stored.status).toBe(201);
   });
 
@@ -220,8 +214,7 @@ describe('ручная вставка через API', () => {
       { accessStatus: 'revoked', aiProcessingStatus: 'unknown', scope: null, basis: null, reference: null, owner: null, expiresAt: null },
       'test',
     );
-    const auth = await session();
-    const res = await call('POST', '/api/manual', auth, { body: `${TEXT} Второй вариант.` });
+    const res = await call('POST', '/api/manual', headers, { body: `${TEXT} Второй вариант.` });
     expect(res.status).toBe(403);
   });
 });

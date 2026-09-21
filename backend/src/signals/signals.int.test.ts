@@ -51,7 +51,7 @@ const ingest = async (sourceId: number, body: string, respond: ISemanticExtracti
 const idOf = async (table: 'companies' | 'projects', name: string): Promise<number> =>
   (await pool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1 AND merged_into_id IS NULL ORDER BY id LIMIT 1`, [name])).rows[0]!.id;
 
-const signalsOf = async (companyId: number) => api.call('GET', `/api/companies/${companyId}/signals`, undefined, api.auth);
+const signalsOf = async (companyId: number) => api.call('GET', `/api/companies/${companyId}/signals`, undefined);
 
 let cutoff = new Date();
 let alfa = 0;
@@ -118,9 +118,9 @@ describe('снимок сигналов на срез', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: 'ok', refresh: { active: { id: firstRefresh, rulesVersion: 'signals@1', cutoffAt: cutoff.toISOString() }, stale: false } });
 
-    const card = await api.call('GET', `/api/companies/${alfa}`, undefined, api.auth);
+    const card = await api.call('GET', `/api/companies/${alfa}`, undefined);
     expect(card.body).not.toHaveProperty('risk');
-    const legacy = await api.call('GET', `/api/companies/${alfa}/legacy-risk`, undefined, api.auth);
+    const legacy = await api.call('GET', `/api/companies/${alfa}/legacy-risk`, undefined);
     expect(legacy.headers.deprecation).toBe('true');
     expect(legacy.body.deprecated).toBe(true);
   });
@@ -166,21 +166,21 @@ describe('снимок сигналов на срез', () => {
 
   it('TC-061: контекст объекта — задержка 2024 года на другом корпусе не пересекается с участием', async () => {
     const projectId = await idOf('projects', 'Берег-Демо');
-    const res = await api.call('GET', `/api/companies/${alfa}/context?projectId=${projectId}`, undefined, api.auth);
+    const res = await api.call('GET', `/api/companies/${alfa}/context?projectId=${projectId}`, undefined);
     expect(res.status).toBe(200);
     const delay = (res.body.projectEvents as Array<Record<string, unknown>>).find(e => e.type === 'delay');
     expect(delay).toMatchObject({ overlap: 'no_overlap', sameBuilding: false, namesCompany: false });
   });
 
   it('список подрядчиков читает снимок: без индекса риска и сортировки по нему', async () => {
-    const res = await api.call('GET', '/api/contractors?role=contractor', undefined, api.auth);
+    const res = await api.call('GET', '/api/contractors?role=contractor', undefined);
     expect(res.status).toBe(200);
     const items = res.body.items as Array<Record<string, unknown>>;
     expect(items.map(i => i.companyId)).toEqual([alfa]);
     expect(items[0]).not.toHaveProperty('riskScore');
     expect(items[0]).toMatchObject({ projects: 1, publications: expect.any(Number) });
-    expect((await api.call('GET', '/api/contractors?sort=risk', undefined, api.auth)).status).toBe(400);
-    const all = await api.call('GET', '/api/contractors?includeInsufficient=true&sort=name', undefined, api.auth);
+    expect((await api.call('GET', '/api/contractors?sort=risk', undefined)).status).toBe(400);
+    const all = await api.call('GET', '/api/contractors?includeInsufficient=true&sort=name', undefined);
     expect((all.body.items as Array<{ companyId: number }>).map(i => i.companyId)).toContain(empty);
   });
 });

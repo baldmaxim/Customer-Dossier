@@ -1,5 +1,6 @@
-// HTTP-клиент интеграционных тестов: поднимает приложение на случайном порту
-// и выполняет вход оператора. Токен синтетический.
+// HTTP-клиент интеграционных тестов: поднимает приложение на случайном порту.
+// Вход по токену снят — запросы идут напрямую, Host и Origin подставляются
+// локальные, иначе сработают гарды.
 
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -16,13 +17,11 @@ export interface ITestResponse {
 
 export interface ITestApi {
   call: (method: string, path: string, body?: unknown, headers?: Record<string, string>) => Promise<ITestResponse>;
-  /** Заголовки вошедшего оператора: cookie и CSRF. */
-  auth: Record<string, string>;
   close: () => Promise<void>;
 }
 
-export const startTestApi = async (token = 'integration-operator-token-http-0123456789'): Promise<ITestApi> => {
-  const server = http.createServer(createApp({ operatorToken: token, allowedOrigins: [TEST_ORIGIN] }));
+export const startTestApi = async (): Promise<ITestApi> => {
+  const server = http.createServer(createApp({ allowedOrigins: [TEST_ORIGIN] }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;
 
@@ -61,15 +60,8 @@ export const startTestApi = async (token = 'integration-operator-token-http-0123
       req.end();
     });
 
-  const login = await call('POST', '/api/auth/login', { token });
-  const auth = {
-    cookie: (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '',
-    'x-csrf-token': String(login.body.csrfToken),
-  };
-
   return {
-    call: (method, path, body, headers = {}) => call(method, path, body, { ...auth, ...headers }),
-    auth,
+    call,
     close: () => new Promise<void>(resolve => server.close(() => resolve())),
   };
 };

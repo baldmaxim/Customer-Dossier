@@ -3,19 +3,13 @@
 //   npm run release:probe -- --snapshot 1 [--case 1] [--base http://127.0.0.1:4100] [--out probe-before.json]
 //   npm run release:probe -- --snapshot 1 --compare probe-before.json
 //
-// Только loopback и только чтение: вход оператора (сессия в памяти процесса, база не пишется) и GET снимка,
-// его выгрузок и досье обращения. Печатаются коды ответов и sha256, не содержимое. Токен берётся из
-// OPERATOR_TOKEN окружения, backend/.env или backend/.local/operator-token и нигде не выводится; новый файл
-// токена проба не создаёт. База данных напрямую не открывается.
+// Только loopback и только чтение: GET снимка, его выгрузок и досье обращения. Печатаются коды ответов
+// и sha256, не содержимое. Вход не выполняется — он снят из портала. База данных напрямую не открывается.
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 
-import dotenv from 'dotenv';
-
-import { TOKEN_FILE } from '../api/operatorToken.js';
 import { isLoopbackHost } from '../config/parse.js';
-import { BACKEND_DOTENV_PATH } from '../db/testTargetBootstrap.js';
 import { payloadHash } from '../snapshot/canonical.js';
 
 const argv = process.argv.slice(2);
@@ -35,20 +29,6 @@ export interface IProbeReport {
   checks: Record<string, { status: number; sha256: string | null; note: string }>;
 }
 
-const readToken = (): string => {
-  const fromEnv = process.env.OPERATOR_TOKEN?.trim();
-  if (fromEnv) return fromEnv;
-  if (fs.existsSync(BACKEND_DOTENV_PATH)) {
-    const fromFile = dotenv.parse(fs.readFileSync(BACKEND_DOTENV_PATH)).OPERATOR_TOKEN?.trim();
-    if (fromFile) return fromFile;
-  }
-  if (fs.existsSync(TOKEN_FILE)) {
-    const token = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
-    if (token.length >= 32) return token;
-  }
-  throw new Error('токен оператора не найден (OPERATOR_TOKEN или backend/.local/operator-token); проба его не создаёт');
-};
-
 const main = async (): Promise<void> => {
   const base = new URL(flag('--base') ?? 'http://127.0.0.1:4100');
   if (!isLoopbackHost(base.hostname.replace(/^\[|\]$/g, ''))) throw new Error('проба работает только с loopback-адресом');
@@ -58,15 +38,7 @@ const main = async (): Promise<void> => {
   const caseId = caseArg === null ? null : Number.parseInt(caseArg, 10);
   const origin = base.origin;
 
-  const login = await fetch(new URL('/api/auth/login', base), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin },
-    body: JSON.stringify({ token: readToken() }),
-  });
-  if (login.status !== 200) throw new Error(`вход не выполнен: HTTP ${login.status}`);
-  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-  const csrf = String(((await login.json()) as { csrfToken?: string }).csrfToken ?? '');
-  const headers = { cookie, origin };
+  const headers = { origin };
 
   const checks: IProbeReport['checks'] = {};
   const get = async (key: string, path: string, digest: (text: string) => { sha256: string | null; note: string }) => {
@@ -96,8 +68,6 @@ const main = async (): Promise<void> => {
       return { sha256: payloadHash(rest), note: 'без generatedAt' };
     });
   }
-  await fetch(new URL('/api/auth/logout', base), { method: 'POST', headers: { ...headers, 'x-csrf-token': csrf, 'content-type': 'application/json' }, body: '{}' }).catch(() => undefined);
-
   const report: IProbeReport = { version: 'release-probe@1', takenAt: new Date().toISOString(), base: origin, snapshotId, caseId, checks };
   for (const [key, c] of Object.entries(checks)) console.log(`[probe] ${key}: HTTP ${c.status}${c.sha256 ? ` sha256 ${c.sha256}` : ''} — ${c.note}`);
   const failed = Object.values(checks).some(c => c.status !== 200);

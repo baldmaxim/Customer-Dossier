@@ -1,29 +1,13 @@
-// Ежедневный маршрут аналитика на тестовом стенде (этап 18): вход/выход, CSRF и Origin, очередь проверки, запуски,
+// Ежедневный маршрут аналитика на тестовом стенде (этап 18): Origin-гард, очередь проверки, запуски,
 // обращение → краткое досье → снимок → HTML → печать, отсутствие переполнения по ширине, кэш service worker без /api.
+// Вход по токену снят — портал открывается сразу.
 // Данные — синтетические (seed:test-release, seed:test-brief). Печать в PDF оценивает человек: здесь только файл-артефакт.
 import { expect, test, type Page } from '@playwright/test';
 
-const token = (): string => {
-  const value = process.env.E2E_OPERATOR_TOKEN;
-  if (!value) throw new Error('E2E_OPERATOR_TOKEN не задан');
-  return value;
-};
-
-const login = async (page: Page): Promise<void> => {
-  await page.goto('/');
-  const field = page.locator('#operator-token');
-  if (await field.isVisible()) {
-    await field.fill(token());
-    await page.getByRole('button', { name: 'Войти' }).click();
-  }
+/** Открыть экран и дождаться, что оболочка портала отрисована. */
+const open = async (page: Page, path: string): Promise<void> => {
+  await page.goto(path);
   await expect(page.getByRole('navigation', { name: 'Основная навигация' }).or(page.getByRole('navigation', { name: 'Навигация' })).first()).toBeVisible();
-};
-
-const csrf = async (page: Page): Promise<string> => {
-  const res = await page.request.get('/api/auth/session');
-  const body = (await res.json()) as { csrfToken?: string };
-  if (!body.csrfToken) throw new Error('сессия без CSRF-токена');
-  return body.csrfToken;
 };
 
 const noHorizontalOverflow = async (page: Page): Promise<void> => {
@@ -40,18 +24,11 @@ const firstCaseId = async (page: Page): Promise<number> => {
   return brief.id;
 };
 
-test('T18-02 вход, досье, выход: после выхода прошлое досье не показывается и не лежит в кэше', async ({ page }) => {
-  await login(page);
-  const id = await firstCaseId(page);
-  await page.goto(`/cases/${id}`);
-  await expect(page.getByRole('heading', { name: 'Кратко для переговоров' })).toBeVisible();
+// Щит ACC-07: ответы /api не должны попадать в Cache Storage ни при какой навигации.
+test('T18-02 кэш service worker: ответы /api не сохраняются', async ({ page }) => {
+  await open(page, '/');
+  await open(page, '/runs');
   await noHorizontalOverflow(page);
-
-  await page.getByRole('button', { name: 'Выйти' }).first().click();
-  await expect(page.locator('#operator-token')).toBeVisible();
-  await page.goto(`/cases/${id}`);
-  await expect(page.locator('#operator-token')).toBeVisible();
-  await expect(page.getByText('Кратко для переговоров')).toHaveCount(0);
 
   const cachedApi = await page.evaluate(async () => {
     if (!('caches' in window)) return [];
@@ -64,28 +41,23 @@ test('T18-02 вход, досье, выход: после выхода прош�
   expect(cachedApi).toEqual([]);
 });
 
-test('T18-03 CSRF и Origin: изменение без токена и с чужим Origin отклоняется', async ({ page }) => {
-  await login(page);
-  const status = await page.evaluate(async () => {
-    const res = await fetch('/api/entities/ambiguities/1/decisions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'same-origin' });
-    return res.status;
-  });
-  expect(status).toBe(403);
-  const foreign = await page.request.post('/api/reprocess/runs/1/cancel', { headers: { Origin: 'http://evil.example', 'X-CSRF-Token': await csrf(page) }, data: {} });
+test('T18-03 Origin и Host: запрос с чужой страницы и на чужое имя отклоняется', async ({ page }) => {
+  await open(page, '/');
+  const foreign = await page.request.post('/api/reprocess/runs/1/cancel', { headers: { Origin: 'http://evil.example' }, data: {} });
   expect(foreign.status()).toBe(403);
+  const rebind = await page.request.get('/api/admin/sources', { headers: { Host: 'evil.example' } });
+  expect(rebind.status()).toBe(403);
 });
 
 test('T18-01 очередь проверки: неоднозначности постранично, «всего» по фильтру', async ({ page }) => {
-  await login(page);
-  await page.goto('/review');
+  await open(page, '/review');
   await page.getByLabel('Вид').selectOption('identity');
   await expect(page.getByText(/Всего: \d+; страница 1/)).toBeVisible();
   await noHorizontalOverflow(page);
 });
 
 test('T18-01 запуски: список отличает пустой результат от ошибки; карточка открывается', async ({ page }) => {
-  await login(page);
-  await page.goto('/runs');
+  await open(page, '/runs');
   await expect(page.getByText(/Всего по фильтру: \d+/)).toBeVisible();
   const link = page.locator('table a[href^="/runs/"]').first();
   if ((await link.count()) > 0) {
@@ -97,9 +69,9 @@ test('T18-01 запуски: список отличает пустой резу
 });
 
 test('T18-04 снимок: краткое досье, HTML-выгрузка без скриптов, печатная раскладка', async ({ page }, info) => {
-  await login(page);
+  await open(page, '/');
   const id = await firstCaseId(page);
-  const created = await page.request.post(`/api/cases/${id}/snapshots`, { headers: { 'X-CSRF-Token': await csrf(page) }, data: { idempotencyKey: `e2e-${info.project.name}-${Date.now()}` } });
+  const created = await page.request.post(`/api/cases/${id}/snapshots`, { data: { idempotencyKey: `e2e-${info.project.name}-${Date.now()}` } });
   expect([200, 201]).toContain(created.status());
   const snapshotId = ((await created.json()) as { id: number }).id;
 
@@ -125,7 +97,6 @@ test('T18-04 снимок: краткое досье, HTML-выгрузка бе
 });
 
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
-  await login(page);
   for (const path of ['/', '/cases', '/review', '/runs', '/admin', '/contractors']) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');

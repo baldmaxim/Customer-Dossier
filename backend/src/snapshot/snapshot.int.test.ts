@@ -48,7 +48,7 @@ let caseId = 0;
 let s1 = 0;
 let s1View: ISnapshotView;
 
-const snapshotOf = async (id: number): Promise<ISnapshotView> => (await api.call('GET', `/api/snapshots/${id}`, undefined, api.auth)).body as unknown as ISnapshotView;
+const snapshotOf = async (id: number): Promise<ISnapshotView> => (await api.call('GET', `/api/snapshots/${id}`, undefined)).body as unknown as ISnapshotView;
 
 beforeAll(async () => {
   await resetAndMigrate();
@@ -81,7 +81,7 @@ beforeAll(async () => {
 
   alfa = (await pool().query<{ company_id: number }>(`SELECT company_id FROM entity_identifiers WHERE value = $1 AND status = 'active'`, [INN_A])).rows[0]!.company_id;
   projectId = (await pool().query<{ id: number }>(`SELECT id FROM projects WHERE name = 'Берег-Демо'`)).rows[0]!.id;
-  const created = await api.call('POST', '/api/cases', { title: 'ВК корпуса 2', companyId: alfa, projectId, scopeBuilding: 'корпус 2', claimedRole: 'contractor', requestDate: '2026-09-15' }, api.auth);
+  const created = await api.call('POST', '/api/cases', { title: 'ВК корпуса 2', companyId: alfa, projectId, scopeBuilding: 'корпус 2', claimedRole: 'contractor', requestDate: '2026-09-15' });
   caseId = (created.body.case as { id: number }).id;
 });
 
@@ -94,7 +94,7 @@ afterAll(async () => {
 
 describe('TC-069: схема связей', () => {
   it('цепочка договоров без транзитивного ребра; ребро участия с корпусом и работами открывает своё основание', async () => {
-    const res = await api.call('GET', `/api/graph?companyId=${alfa}&depth=2`, undefined, api.auth);
+    const res = await api.call('GET', `/api/graph?companyId=${alfa}&depth=2`, undefined);
     expect(res.status).toBe(200);
     const g = res.body as unknown as IGraph;
     const port = g.nodes.find(n => n.label === 'Порт-Демо');
@@ -106,7 +106,7 @@ describe('TC-069: схема связей', () => {
 
     const participation = g.edges.find(e => e.type === 'participation' && e.from === `c:${alfa}`)!;
     expect(participation).toMatchObject({ building: 'корпус 2', workPackage: 'ВК', to: `p:${projectId}` });
-    const detail = await api.call('GET', `/api/assertions/${participation.assertionId}`, undefined, api.auth);
+    const detail = await api.call('GET', `/api/assertions/${participation.assertionId}`, undefined);
     const evidence = detail.body.evidence as Array<{ quote: string; revisionId: number }>;
     expect(evidence.map(e => e.quote)).toContain(Q_PART);
     expect(evidence.every(e => e.revisionId > 0)).toBe(true);
@@ -115,7 +115,7 @@ describe('TC-069: схема связей', () => {
 
 describe('TC-070 / TC-071: снимок неизменен, срез знаний только текущий', () => {
   it('S1 создан: целостность подтверждена, цитаты с точной редакцией, решения и схема внутри', async () => {
-    const res = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'snapshot-s1-000001' }, api.auth);
+    const res = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'snapshot-s1-000001' });
     expect(res.status).toBe(201);
     s1 = res.body.id as number;
     s1View = await snapshotOf(s1);
@@ -125,7 +125,7 @@ describe('TC-070 / TC-071: снимок неизменен, срез знани�
     expect(s1View.payload.sources.find(s => s.quote === Q_PART)).toMatchObject({ revisionNo: 1, sourceKey: 'synthetic_snapshot' });
     expect(s1View.payload.graph.edges.length).toBeGreaterThan(0);
     expect(s1View.payload.dossier.role.status).toBe('reported');
-    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'snapshot-s1-000001' }, api.auth);
+    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'snapshot-s1-000001' });
     expect(replay.status).toBe(200);
     expect(replay.body.id).toBe(s1);
   });
@@ -141,8 +141,8 @@ describe('TC-070 / TC-071: снимок неизменен, срез знани�
     const versions = (await pool().query<{ id: number; version: number }>('SELECT id, version FROM companies WHERE id = ANY($1::bigint[])', [[dup, alfa]])).rows;
     await applyEntityMerge({ kind: 'company', sourceId: dup, targetId: alfa, expectedSourceVersion: versions.find(v => v.id === dup)!.version, expectedTargetVersion: versions.find(v => v.id === alfa)!.version, idempotencyKey: 'snapshot-merge-0001', actor: 'test' });
     const participationId = s1View.payload.dossier.role.established[0]!.assertionIds[0]!;
-    const version = ((await api.call('GET', `/api/assertions/${participationId}`, undefined, api.auth)).body.assertion as { version: number }).version;
-    const review = await api.call('POST', `/api/assertions/${participationId}/reviews`, { decision: 'disputed', reason: 'опровергнуто заказчиком', expectedVersion: version, idempotencyKey: 'snapshot-review-0001' }, api.auth);
+    const version = ((await api.call('GET', `/api/assertions/${participationId}`, undefined)).body.assertion as { version: number }).version;
+    const review = await api.call('POST', `/api/assertions/${participationId}/reviews`, { decision: 'disputed', reason: 'опровергнуто заказчиком', expectedVersion: version, idempotencyKey: 'snapshot-review-0001' });
     expect(review.status).toBe(201);
     expect((await refreshSignals({ requestedBy: 'test' })).outcome).toBe('succeeded');
 
@@ -151,7 +151,7 @@ describe('TC-070 / TC-071: снимок неизменен, срез знани�
     expect(again.payload).toEqual(s1View.payload);
     expect(again.payload.company!.name).toBe('Альфа-Демо');
 
-    const s2 = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const s2 = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     expect(s2.status).toBe(201);
     const s2View = await snapshotOf(s2.body.id as number);
     expect(s2View.integrity.storedHash).not.toBe(s1View.integrity.storedHash);
@@ -167,11 +167,11 @@ describe('TC-070 / TC-071: снимок неизменен, срез знани�
   });
 
   it('срез знаний на прошлую дату не создаётся; фильтр дат исключает события вне периода и помечает это', async () => {
-    const past = await api.call('POST', `/api/cases/${caseId}/snapshots`, { knowledgeCutoff: '2020-01-01T00:00:00Z' }, api.auth);
+    const past = await api.call('POST', `/api/cases/${caseId}/snapshots`, { knowledgeCutoff: '2020-01-01T00:00:00Z' });
     expect(past.status).toBe(422);
     expect(past.body.code).toBe('historical_cutoff_unsupported');
 
-    const filtered = await api.call('POST', `/api/cases/${caseId}/snapshots`, { effectiveFrom: '2026-01-01', effectiveTo: '2026-12-31' }, api.auth);
+    const filtered = await api.call('POST', `/api/cases/${caseId}/snapshots`, { effectiveFrom: '2026-01-01', effectiveTo: '2026-12-31' });
     expect(filtered.status).toBe(201);
     const view = await snapshotOf(filtered.body.id as number);
     expect(view.meta).toMatchObject({ effectiveFrom: '2026-01-01', effectiveTo: '2026-12-31' });
@@ -187,16 +187,16 @@ describe('TC-072 / TC-073: экспорт, отзыв допуска, выход
     vi.stubGlobal('fetch', () => {
       throw new Error('сеть недоступна');
     });
-    const html = await api.call('GET', `/api/snapshots/${s1}/export.html`, undefined, api.auth);
+    const html = await api.call('GET', `/api/snapshots/${s1}/export.html`, undefined);
     expect(html.status).toBe(200);
     expect(html.headers['content-type']).toContain('text/html');
     expect(String(html.headers['content-security-policy'])).toContain("default-src 'none'");
     const htmlBody = String(html.body.raw);
     expect(htmlBody).not.toMatch(/<script/i);
     expect(htmlBody).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-    const md = await api.call('GET', `/api/snapshots/${s1}/export.md`, undefined, api.auth);
+    const md = await api.call('GET', `/api/snapshots/${s1}/export.md`, undefined);
     expect(String(md.headers['content-disposition'])).toContain('attachment');
-    const json = await api.call('GET', `/api/snapshots/${s1}/export.json`, undefined, api.auth);
+    const json = await api.call('GET', `/api/snapshots/${s1}/export.json`, undefined);
     expect(json.body.exportSchema).toBe('dossier-snapshot-export@1');
     for (const text of ['ВК корпуса 2', 'Альфа-Демо', s1View.integrity.storedHash]) {
       expect(htmlBody).toContain(text);
@@ -217,7 +217,7 @@ describe('TC-072 / TC-073: экспорт, отзыв допуска, выход
     const revoked = view.payload.sources.filter(s => s.sourceKey === 'synthetic_snapshot_revocable');
     expect(revoked.length).toBeGreaterThan(0);
     expect(revoked.every(s => s.quote === null && (s.withheldReason ?? '').startsWith('Скрыто при выдаче'))).toBe(true);
-    const html = await api.call('GET', `/api/snapshots/${s1}/export.html`, undefined, api.auth);
+    const html = await api.call('GET', `/api/snapshots/${s1}/export.html`, undefined);
     expect(String(html.body.raw)).not.toContain('alert(1)');
   });
 
@@ -229,14 +229,14 @@ describe('TC-072 / TC-073: экспорт, отзыв допуска, выход
 
   it('вымарывание фрагмента: tombstone, новый hash в журнале, повтор идемпотентен', async () => {
     const target = s1View.payload.sources.find(s => s.quote === Q_PART)!;
-    const res = await api.call('POST', `/api/snapshots/${s1}/redactions`, { evidenceId: target.evidenceId, reason: 'требование правообладателя' }, api.auth);
+    const res = await api.call('POST', `/api/snapshots/${s1}/redactions`, { evidenceId: target.evidenceId, reason: 'требование правообладателя' });
     expect(res.status).toBe(201);
     expect(res.body.hashBefore).toBe(s1View.integrity.storedHash);
     const view = await snapshotOf(s1);
     expect(view.integrity).toMatchObject({ verified: true, storedHash: res.body.hashAfter });
     expect(view.payload.sources.find(s => s.evidenceId === target.evidenceId)!.quote).toBe('[фрагмент вымаран по решению оператора]');
     expect(view.redactions).toEqual([expect.objectContaining({ evidenceId: target.evidenceId, reason: 'требование правообладателя' })]);
-    const replay = await api.call('POST', `/api/snapshots/${s1}/redactions`, { evidenceId: target.evidenceId, reason: 'требование правообладателя' }, api.auth);
+    const replay = await api.call('POST', `/api/snapshots/${s1}/redactions`, { evidenceId: target.evidenceId, reason: 'требование правообладателя' });
     expect(replay.status).toBe(200);
   });
 });
@@ -245,29 +245,29 @@ describe('TC-072 / TC-073: экспорт, отзыв допуска, выход
 
 describe('этап 13: идентичность запроса снимка, согласованное чтение, редакция основания', () => {
   it('R08 / T13-01: ключ снимка обращения A при запросе по обращению B — 409; повтор A — тот же снимок', async () => {
-    const other = await api.call('POST', '/api/cases', { title: 'Другое обращение', companyId: alfa, requestDate: '2026-09-15' }, api.auth);
+    const other = await api.call('POST', '/api/cases', { title: 'Другое обращение', companyId: alfa, requestDate: '2026-09-15' });
     const caseB = (other.body.case as { id: number }).id;
     const key = 'stage13-key-case-a-0001';
-    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key });
     expect(first.status).toBe(201);
-    const conflict = await api.call('POST', `/api/cases/${caseB}/snapshots`, { idempotencyKey: key }, api.auth);
+    const conflict = await api.call('POST', `/api/cases/${caseB}/snapshots`, { idempotencyKey: key });
     expect(conflict.status).toBe(409);
     expect(conflict.body.code).toBe('idempotency_key_conflict');
-    const periodConflict = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key, effectiveFrom: '2025-01-01' }, api.auth);
+    const periodConflict = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key, effectiveFrom: '2025-01-01' });
     expect(periodConflict.status).toBe(409);
-    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key });
     expect(replay.status).toBe(200);
     expect(replay.body.id).toBe(first.body.id);
   });
 
   it('T13-02: настоящий повтор после изменения живого досье возвращает прежний снимок; новый ключ — новое состояние', async () => {
     const key = 'stage13-key-replay-0002';
-    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    const first = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key });
     await pool().query(`UPDATE companies SET name = name || ' (повтор)' WHERE id = $1`, [alfa]);
-    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth);
+    const replay = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key });
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject({ id: first.body.id, payloadHash: first.body.payloadHash });
-    const fresh = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'stage13-key-replay-0003' }, api.auth);
+    const fresh = await api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: 'stage13-key-replay-0003' });
     expect(fresh.status).toBe(201);
     expect(fresh.body.payloadHash).not.toBe(first.body.payloadHash);
     await pool().query(`UPDATE companies SET name = replace(name, ' (повтор)', '') WHERE id = $1`, [alfa]);
@@ -276,8 +276,8 @@ describe('этап 13: идентичность запроса снимка, с�
   it('T13-03: два одновременных запроса с одним ключом — один снимок, без 500', async () => {
     const key = 'stage13-key-concurrent-0004';
     const [a, b] = await Promise.all([
-      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth),
-      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }, api.auth),
+      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }),
+      api.call('POST', `/api/cases/${caseId}/snapshots`, { idempotencyKey: key }),
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 201]);
     expect(a.body.id).toBe(b.body.id);
@@ -325,7 +325,7 @@ describe('этап 13: идентичность запроса снимка, с�
   });
 
   it('T13-08 / T13-10: новый снимок несёт покрытие выборок; прежние снимки открываются без него', async () => {
-    const res = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const res = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     const view = await snapshotOf(res.body.id as number);
     expect(view.payload.schemaVersion).toBe('dossier-snapshot@2');
     expect(view.payload.coverage!.map(c => c.source)).toEqual(expect.arrayContaining(['company_facts', 'project_facts']));

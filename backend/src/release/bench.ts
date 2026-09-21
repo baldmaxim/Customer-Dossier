@@ -224,46 +224,46 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
     if (company) {
       steps.push(
         await m({ code: 'search', title: 'поиск компании по названию', required: true }, async () =>
-          validators.search(await api.call('GET', `/api/companies?q=${encodeURIComponent(company.name)}`, undefined, api.auth), company.id),
+          validators.search(await api.call('GET', `/api/companies?q=${encodeURIComponent(company.name)}`, undefined), company.id),
         ),
       );
       steps.push(
         await m({ code: 'company_card', title: 'карточка компании (сведения и сигналы)', required: true }, async () =>
           validators.companyCard(
-            await api.call('GET', `/api/companies/${company.id}`, undefined, api.auth),
-            await api.call('GET', `/api/companies/${company.id}/signals`, undefined, api.auth),
+            await api.call('GET', `/api/companies/${company.id}`, undefined),
+            await api.call('GET', `/api/companies/${company.id}/signals`, undefined),
             company.id,
           ),
         ),
       );
       steps.push(
         await m({ code: 'company_summary', title: 'резюме компании для досье', required: false }, async () =>
-          validators.summary(await api.call('GET', `/api/companies/${company.id}/dossier-summary`, undefined, api.auth)),
+          validators.summary(await api.call('GET', `/api/companies/${company.id}/dossier-summary`, undefined)),
         ),
       );
       steps.push(
         await m({ code: 'graph', title: 'схема связей, глубина 2', required: false }, async () =>
-          validators.graph(await api.call('GET', `/api/graph?companyId=${company.id}&depth=2`, undefined, api.auth)),
+          validators.graph(await api.call('GET', `/api/graph?companyId=${company.id}&depth=2`, undefined)),
         ),
       );
     }
     if (project) {
       steps.push(
         await m({ code: 'project_dossier', title: 'досье объекта', required: false }, async () =>
-          validators.projectDossier(await api.call('GET', `/api/projects/${project.id}/dossier`, undefined, api.auth), project.id),
+          validators.projectDossier(await api.call('GET', `/api/projects/${project.id}/dossier`, undefined), project.id),
         ),
       );
     }
     if (caseRow) {
       steps.push(
         await m({ code: 'case_dossier', title: 'досье обращения', required: true }, async () =>
-          validators.caseDossier(await api.call('GET', `/api/cases/${caseRow.id}/dossier`, undefined, api.auth), caseRow.id),
+          validators.caseDossier(await api.call('GET', `/api/cases/${caseRow.id}/dossier`, undefined), caseRow.id),
         ),
       );
       let lastSnapshot = 0;
       steps.push(
         await m({ code: 'snapshot_create', title: 'создание снимка досье (пишет в базу)', required: true }, async () => {
-          const res = await api.call('POST', `/api/cases/${caseRow.id}/snapshots`, {}, api.auth);
+          const res = await api.call('POST', `/api/cases/${caseRow.id}/snapshots`, {});
           const sample = validators.snapshotCreate(res);
           if (sample.ok) lastSnapshot = res.body.id as number;
           return sample;
@@ -272,12 +272,12 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
       if (lastSnapshot > 0) {
         steps.push(
           await m({ code: 'snapshot_read', title: 'открытие снимка', required: true }, async () =>
-            validators.snapshotRead(await api.call('GET', `/api/snapshots/${lastSnapshot}`, undefined, api.auth), lastSnapshot),
+            validators.snapshotRead(await api.call('GET', `/api/snapshots/${lastSnapshot}`, undefined), lastSnapshot),
           ),
         );
         steps.push(
           await m({ code: 'export_html', title: 'выгрузка HTML («Версия для печати»)', required: true }, async () =>
-            validators.exportHtml(await api.call('GET', `/api/snapshots/${lastSnapshot}/export.html`, undefined, api.auth)),
+            validators.exportHtml(await api.call('GET', `/api/snapshots/${lastSnapshot}/export.html`, undefined)),
           ),
         );
       }

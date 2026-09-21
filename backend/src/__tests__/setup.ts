@@ -19,7 +19,6 @@ process.env.LMSTUDIO_MODEL = 'test-model';
 process.env.PROMPT_VERSION = 'test';
 process.env.TG_BOT_TOKEN = '';
 process.env.TG_BOT_ALLOWED_USER_IDS = '';
-process.env.OPERATOR_TOKEN = '';
 process.env.INGEST_ENABLED = 'false';
 process.env.PIPELINE_ENABLED = 'false';
 process.env.METRICS_AUTO_REFRESH = 'false';

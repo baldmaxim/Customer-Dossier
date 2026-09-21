@@ -135,7 +135,7 @@ describe('TC-052: отрицание опровергает роль, решен
     );
     expect(card.rows).toEqual([{ role: 'general_contractor' }]);
 
-    const queue = await api.call('GET', '/api/review-queue', undefined, api.auth);
+    const queue = await api.call('GET', '/api/review-queue', undefined);
     expect(queue.status).toBe(200);
     const kinds = (queue.body.items as Array<{ kind: string; assertionId: number | null }>)
       .filter(i => i.assertionId === positive.id)
@@ -253,7 +253,7 @@ describe('TC-055 / TC-056: разные дела и стадии одного д
     }));
 
     const omega = await companyId('Демо-Омега');
-    const res = await api.call('GET', `/api/companies/${omega}/legal-cases`, undefined, api.auth);
+    const res = await api.call('GET', `/api/companies/${omega}/legal-cases`, undefined);
     expect(res.status).toBe(200);
     const cases = res.body.cases as Array<{ caseKey: string; stages: Array<Record<string, unknown>> }>;
     expect(cases.filter(c => c.caseKey.startsWith('assertion:'))).toHaveLength(2);
@@ -286,7 +286,7 @@ describe('TC-057: состояние объекта в действительн�
     }));
 
     const id = await projectId('Заря-Демо');
-    const res = await api.call('GET', `/api/projects/${id}/state-history`, undefined, api.auth);
+    const res = await api.call('GET', `/api/projects/${id}/state-history`, undefined);
     expect(res.status).toBe(200);
     const history = res.body.history as Array<{ state: string; validFrom: string; periodPrecision: string }>;
     expect(history.map(h => [h.state, h.validFrom, h.periodPrecision])).toEqual([

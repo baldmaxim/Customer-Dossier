@@ -9,13 +9,7 @@ import { adminRouter } from './api/admin.routes.js';
 import { assertionsRouter } from './api/assertions.routes.js';
 import { dossierRouter } from './api/dossier.routes.js';
 import { snapshotRouter } from './api/snapshot.routes.js';
-import {
-  SessionStore,
-  createAuthRouter,
-  createOriginGuard,
-  createRequireOperator,
-  requireLoopbackHost,
-} from './api/auth.js';
+import { createOriginGuard, requireLoopbackHost } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { contractorsRouter } from './api/contractors.routes.js';
@@ -24,9 +18,6 @@ import { reprocessRouter } from './api/reprocess.routes.js';
 import { revisionsRouter } from './api/revisions.routes.js';
 
 export interface ICreateAppOptions {
-  operatorToken: string;
-  /** Для тестов: хранилище с подменённым временем. */
-  store?: SessionStore;
   allowedOrigins?: readonly string[];
 }
 
@@ -51,15 +42,9 @@ export const rejectStructuredQuery = (req: Request, res: Response, next: NextFun
   next();
 };
 
-export const createApp = (options: ICreateAppOptions): express.Express => {
+export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   const app = express();
   const allowedOrigins = options.allowedOrigins ?? defaultAllowedOrigins();
-  const store =
-    options.store ??
-    new SessionStore({
-      idleMs: env.SESSION_IDLE_MINUTES * 60_000,
-      maxMs: env.SESSION_MAX_HOURS * 3_600_000,
-    });
 
   app.disable('x-powered-by');
   // Строка запроса разбирается node:querystring, а не qs (ACC-04: GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g в qs@6.15.3,
@@ -89,33 +74,23 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
     res.status(db ? 200 : 503).json({ ok: db, db });
   });
 
-  app.use(
-    '/api/auth',
-    createAuthRouter({
-      operatorToken: options.operatorToken,
-      store,
-      allowedOrigins,
-      maxAgeSec: env.SESSION_MAX_HOURS * 3600,
-    }),
-  );
-
-  // Всё остальное — досье и управление — только для вошедшего оператора.
-  const requireOperator = createRequireOperator(store);
+  // Вход по токену снят на время разработки: портал открывается сразу.
+  // Защита остаётся на уровне сети — loopback-адрес, проверка Host и Origin.
   app.use('/api', (_req, res, next) => {
-    // Ответы с досье не кэшируются ни браузером, ни service worker'ом.
+    // Ответы с данными не кэшируются ни браузером, ни service worker'ом.
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  app.use('/api/manual', requireOperator, manualRouter);
-  app.use('/api/companies', requireOperator, companiesRouter);
-  app.use('/api/contractors', requireOperator, contractorsRouter);
-  app.use('/api', requireOperator, entitiesRouter);
-  app.use('/api/admin', requireOperator, adminRouter);
-  app.use('/api', requireOperator, revisionsRouter);
-  app.use('/api', requireOperator, assertionsRouter);
-  app.use('/api', requireOperator, reprocessRouter);
-  app.use('/api', requireOperator, dossierRouter);
-  app.use('/api', requireOperator, snapshotRouter);
+  app.use('/api/manual', manualRouter);
+  app.use('/api/companies', companiesRouter);
+  app.use('/api/contractors', contractorsRouter);
+  app.use('/api', entitiesRouter);
+  app.use('/api/admin', adminRouter);
+  app.use('/api', revisionsRouter);
+  app.use('/api', assertionsRouter);
+  app.use('/api', reprocessRouter);
+  app.use('/api', dossierRouter);
+  app.use('/api', snapshotRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });
@@ -125,8 +100,7 @@ export const createApp = (options: ICreateAppOptions): express.Express => {
   // обычным middleware и ошибки проходят мимо.
   app.use((err: Error & { type?: string; status?: number }, _req: Request, res: Response, _next: NextFunction) => {
     if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') {
-      // Текст ошибки разбора содержит фрагмент тела — в том числе токен при
-      // входе. В лог и ответ он не попадает.
+      // Текст ошибки разбора содержит фрагмент тела. В лог и ответ он не попадает.
       res.status(err.status ?? 400).json({ error: 'Некорректное тело запроса' });
       return;
     }

@@ -14,11 +14,10 @@ import { ExtractionPayloadMismatchError, recordExtraction } from '../pipeline/wo
 import { resolveCompany } from '../resolve/company.js';
 import { normalizeName } from '../resolve/normalize.js';
 
-const TOKEN = 'integration-operator-token-api-0123456789abc';
 const ORIGIN = 'http://127.0.0.1:5173';
 let server: http.Server;
 let port = 0;
-let auth: Record<string, string> = {};
+const headers: Record<string, string> = {};
 
 const call = (
   method: string,
@@ -56,14 +55,9 @@ const call = (
 
 beforeAll(async () => {
   await resetAndMigrate();
-  server = http.createServer(createApp({ operatorToken: TOKEN, allowedOrigins: [ORIGIN] }));
+  server = http.createServer(createApp({ allowedOrigins: [ORIGIN] }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
-  const login = await call('POST', '/api/auth/login', {}, { token: TOKEN });
-  auth = {
-    cookie: (login.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '',
-    'x-csrf-token': String(login.body.csrfToken),
-  };
 });
 
 afterAll(async () => {
@@ -92,14 +86,14 @@ describe('поиск компаний (R18)', () => {
   });
 
   it('находит компанию по альтернативному написанию', async () => {
-    const res = await call('GET', `/api/companies?q=${encodeURIComponent('Нордтех')}`, auth);
+    const res = await call('GET', `/api/companies?q=${encodeURIComponent('Нордтех')}`, headers);
     expect(res.status).toBe(200);
     const names = (res.body.items as Array<{ name: string }>).map(i => i.name);
     expect(names.some(n => n.includes('Синтетикстрой'))).toBe(true);
   });
 
   it('находит компанию по ИНН', async () => {
-    const res = await call('GET', '/api/companies?q=7707083893', auth);
+    const res = await call('GET', '/api/companies?q=7707083893', headers);
     const items = res.body.items as Array<{ name: string; score: number }>;
     expect(items[0]?.name).toContain('Синтетикстрой');
     expect(items[0]?.score).toBe(1);
@@ -113,7 +107,7 @@ describe('заблокированные изменяющие операции',
        VALUES ('company', 900001, 900002, 0.8, '{}'::jsonb, 'pending') RETURNING id`,
     );
     const id = pair.rows[0]!.id;
-    const res = await call('POST', `/api/admin/merges/${id}/merge`, auth, {});
+    const res = await call('POST', `/api/admin/merges/${id}/merge`, headers, {});
     expect(res.status).toBe(423);
     const status = await getPool().query<{ status: string }>('SELECT status FROM merge_queue WHERE id = $1', [id]);
     expect(status.rows[0]?.status).toBe('pending');
@@ -131,7 +125,7 @@ describe('заблокированные изменяющие операции',
       publishedAt: null,
       forwardFrom: null,
     });
-    const res = await call('DELETE', `/api/admin/sources/${sourceId}?withDocuments=true`, auth);
+    const res = await call('DELETE', `/api/admin/sources/${sourceId}?withDocuments=true`, headers);
     expect(res.status).toBe(423);
     const docs = await getPool().query<{ n: number }>(
       'SELECT count(*)::int AS n FROM raw_documents WHERE source_id = $1',
@@ -141,7 +135,7 @@ describe('заблокированные изменяющие операции',
   });
 
   it('добавление сайта не делает сетевых запросов и не включает источник', async () => {
-    const res = await call('POST', '/api/admin/sources/website', auth, { url: 'https://synthetic-new-site.test' });
+    const res = await call('POST', '/api/admin/sources/website', headers, { url: 'https://synthetic-new-site.test' });
     expect(res.status).toBe(201);
     const source = res.body.source as { status: string; accessStatus: string };
     expect(source.status).toBe('paused');
@@ -149,7 +143,7 @@ describe('заблокированные изменяющие операции',
   });
 
   it('список источников показывает причины блокировки', async () => {
-    const res = await call('GET', '/api/admin/sources', auth);
+    const res = await call('GET', '/api/admin/sources', headers);
     const item = (res.body.items as Array<{ key: string; collectBlockedReason: string | null }>).find(
       i => i.key === 'synthetic-new-site.test',
     );

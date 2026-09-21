@@ -10,12 +10,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
 
-const TOKEN = 'operator-token-for-db-down-tests-0123456789';
 const ORIGIN = 'http://127.0.0.1:5173';
 
 let server: http.Server;
 let port = 0;
-let auth: Record<string, string> = {};
+const headers: Record<string, string> = {};
 
 const call = (method: string, path: string, headers: Record<string, string> = {}, body?: unknown) =>
   new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
@@ -43,24 +42,9 @@ const call = (method: string, path: string, headers: Record<string, string> = {}
   });
 
 beforeAll(async () => {
-  server = http.createServer(createApp({ operatorToken: TOKEN, allowedOrigins: [ORIGIN] }));
+  server = http.createServer(createApp({ allowedOrigins: [ORIGIN] }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
-  const login = await new Promise<{ cookie: string; csrf: string }>((resolve, reject) => {
-    const payload = JSON.stringify({ token: TOKEN });
-    const req = http.request(
-      { host: '127.0.0.1', port, method: 'POST', path: '/api/auth/login', headers: { host: `127.0.0.1:${port}`, origin: ORIGIN, 'content-type': 'application/json' } },
-      res => {
-        let data = '';
-        res.on('data', c => (data += c));
-        res.on('end', () => resolve({ cookie: (res.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '', csrf: String((JSON.parse(data) as { csrfToken: string }).csrfToken) }));
-      },
-    );
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-  auth = { cookie: login.cookie, 'x-csrf-token': login.csrf };
 });
 
 afterAll(async () => {
@@ -82,7 +66,7 @@ describe('база недоступна (TC-077)', () => {
     ['GET', '/api/snapshots/1'],
     ['GET', '/api/review-queue'],
   ])('%s %s — 5xx с сообщением об ошибке, не пустые данные и не зависание', async (method, path) => {
-    const res = await call(method, path, auth);
+    const res = await call(method, path, headers);
     expect(res.status).toBeGreaterThanOrEqual(500);
     expect(typeof res.body.error).toBe('string');
     expect(res.body).not.toHaveProperty('items');
@@ -90,7 +74,7 @@ describe('база недоступна (TC-077)', () => {
   }, 20_000);
 
   it('запись при недоступной базе — 5xx, процесс продолжает отвечать', async () => {
-    const res = await call('POST', '/api/cases', auth, { title: 'при недоступной базе', companyStatus: 'not_established', companyNameClaimed: 'Синтетика', requestDate: '2026-09-16' });
+    const res = await call('POST', '/api/cases', headers, { title: 'при недоступной базе', companyStatus: 'not_established', companyNameClaimed: 'Синтетика', requestDate: '2026-09-16' });
     expect(res.status).toBeGreaterThanOrEqual(500);
     expect((await call('GET', '/api/health')).status).toBe(503);
   }, 20_000);

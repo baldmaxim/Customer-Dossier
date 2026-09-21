@@ -78,13 +78,3 @@ export const parseLlmBaseUrl = (raw: string | undefined): string => {
   }
   return value.replace(/\/+$/, '');
 };
-
-/** Токен оператора: пусто — будет создан локальный файл; иначе не короче 32 символов. */
-export const parseOperatorToken = (raw: string | undefined): string | null => {
-  if (raw === undefined || raw.trim() === '') return null;
-  const token = raw.trim();
-  if (token.length < 32) {
-    throw new EnvValueError('OPERATOR_TOKEN должен быть не короче 32 символов');
-  }
-  return token;
-};

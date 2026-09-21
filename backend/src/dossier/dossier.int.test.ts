@@ -72,19 +72,19 @@ afterAll(async () => {
   await closeDb();
 });
 
-const dossierOf = async (id: number): Promise<ICaseDossier> => (await api.call('GET', `/api/cases/${id}/dossier`, undefined, api.auth)).body as unknown as ICaseDossier;
+const dossierOf = async (id: number): Promise<ICaseDossier> => (await api.call('GET', `/api/cases/${id}/dossier`, undefined)).body as unknown as ICaseDossier;
 
 describe('TC-065: два одноимённых юрлица и осознанный выбор', () => {
   it('поиск отдаёт обоих кандидатов с реквизитами и признаком одноимённости, объект — с уровнем и городом', async () => {
     expect(alfaA).not.toBe(alfaB);
-    const res = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Демо')}`, undefined, api.auth);
+    const res = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Демо')}`, undefined);
     const items = res.body.items as Array<{ id: number; identifiers: string[]; homonyms: number; entityType: string }>;
     const found = items.filter(i => i.id === alfaA || i.id === alfaB);
     expect(found).toHaveLength(2);
     expect(found.every(i => i.homonyms >= 1 && i.identifiers.length === 1)).toBe(true);
     expect(new Set(found.map(i => i.identifiers[0]))).toEqual(new Set([`inn ${INN_A}`, `inn ${INN_B}`]));
 
-    const projects = await api.call('GET', `/api/projects/search?q=${encodeURIComponent('Берег-Демо')}`, undefined, api.auth);
+    const projects = await api.call('GET', `/api/projects/search?q=${encodeURIComponent('Берег-Демо')}`, undefined);
     expect((projects.body.items as Array<Record<string, unknown>>)[0]).toMatchObject({ id: projectId, level: 'complex' });
   });
 
@@ -101,7 +101,7 @@ describe('TC-065: два одноимённых юрлица и осознанн
       claimedTerms: 'аванс 30 % со слов',
       requestDate: '2026-09-15',
       idempotencyKey: 'dossier-case-00001',
-    }, api.auth);
+    });
     expect(res.status).toBe(201);
     const created = res.body.case as { id: number; version: number; provenance: string; workPackage: string; companyStatus: string };
     expect(created).toMatchObject({ provenance: 'operator_recorded_claim', workPackage: 'ВК', companyStatus: 'identified' });
@@ -110,7 +110,7 @@ describe('TC-065: два одноимённых юрлица и осознанн
     const after = (await pool().query<{ n: number }>('SELECT (SELECT count(*) FROM assertions) + (SELECT count(*) FROM evidence) AS n')).rows[0]!.n;
     expect(after).toBe(before);
 
-    const replay = await api.call('POST', '/api/cases', { title: 'другое', companyId: alfaA, requestDate: '2026-09-15', idempotencyKey: 'dossier-case-00001' }, api.auth);
+    const replay = await api.call('POST', '/api/cases', { title: 'другое', companyId: alfaA, requestDate: '2026-09-15', idempotencyKey: 'dossier-case-00001' });
     expect(replay.status).toBe(200);
     expect((replay.body.case as { id: number }).id).toBe(caseId);
   });
@@ -128,7 +128,7 @@ describe('TC-065: два одноимённых юрлица и осознанн
   });
 
   it('юрлицо не установлено: одноимённые предлагаются для выбора, сведения ни одного не подставлены', async () => {
-    const res = await api.call('POST', '/api/cases', { title: 'Неизвестная Альфа', companyNameClaimed: 'Альфа-Демо', requestDate: '2026-09-15' }, api.auth);
+    const res = await api.call('POST', '/api/cases', { title: 'Неизвестная Альфа', companyNameClaimed: 'Альфа-Демо', requestDate: '2026-09-15' });
     expect(res.status).toBe(201);
     const d = await dossierOf((res.body.case as { id: number }).id);
     expect(d.subject[0]).toMatchObject({ code: 'company_unidentified' });
@@ -151,40 +151,40 @@ describe('TC-066: противоречие, решение и повторное
 
     const positiveId = d.role.established[0]!.assertionIds[0]!;
     // Отрицание без корпуса противоречит роли на корпусе 2 — видно и в очереди проверки.
-    const queue = await api.call('GET', '/api/review-queue?kind=polarity_conflict', undefined, api.auth);
+    const queue = await api.call('GET', '/api/review-queue?kind=polarity_conflict', undefined);
     expect((queue.body.items as Array<{ assertionId: number }>).map(i => i.assertionId)).toContain(positiveId);
-    const detail = await api.call('GET', `/api/assertions/${positiveId}`, undefined, api.auth);
+    const detail = await api.call('GET', `/api/assertions/${positiveId}`, undefined);
     const version = (detail.body.assertion as { version: number }).version;
 
-    const noReason = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', expectedVersion: version, idempotencyKey: 'dossier-review-0001' }, api.auth);
+    const noReason = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', expectedVersion: version, idempotencyKey: 'dossier-review-0001' });
     expect(noReason.status).toBe(400);
     expect(noReason.body.code).toBe('reason_required');
 
-    const disputed = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', reason: 'есть опровержение заказчика', expectedVersion: version, idempotencyKey: 'dossier-review-0002' }, api.auth);
+    const disputed = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', reason: 'есть опровержение заказчика', expectedVersion: version, idempotencyKey: 'dossier-review-0002' });
     expect(disputed.status).toBe(201);
 
     const reopened = await dossierOf(caseId);
     expect(reopened.role.established[0]).toMatchObject({ attribution: 'analyst_disputed', assertionIds: [positiveId] });
-    const history = await api.call('GET', `/api/assertions/${positiveId}`, undefined, api.auth);
+    const history = await api.call('GET', `/api/assertions/${positiveId}`, undefined);
     expect(history.body.reviews).toEqual([expect.objectContaining({ decision: 'disputed', reason: 'есть опровержение заказчика' })]);
   });
 
   it('обращение: вторая вкладка со старой версией — 409; история версий сохраняется', async () => {
     const body = { title: 'ВК корпуса 2 (уточнено)', companyId: alfaA, projectId, scopeBuilding: 'корпус 2', claimedRole: 'subcontractor', requestDate: '2026-09-15' };
-    const first = await api.call('PUT', `/api/cases/${caseId}`, { ...body, expectedVersion: caseVersion }, api.auth);
+    const first = await api.call('PUT', `/api/cases/${caseId}`, { ...body, expectedVersion: caseVersion });
     expect(first.status).toBe(200);
-    const stale = await api.call('PUT', `/api/cases/${caseId}`, { ...body, title: 'затереть', expectedVersion: caseVersion }, api.auth);
+    const stale = await api.call('PUT', `/api/cases/${caseId}`, { ...body, title: 'затереть', expectedVersion: caseVersion });
     expect(stale.status).toBe(409);
-    const read = await api.call('GET', `/api/cases/${caseId}`, undefined, api.auth);
+    const read = await api.call('GET', `/api/cases/${caseId}`, undefined);
     expect(read.body.case).toMatchObject({ title: 'ВК корпуса 2 (уточнено)', version: caseVersion + 1, claimedRole: 'subcontractor' });
     expect((read.body.history as unknown[]).length).toBe(2);
   });
 
   it('список обращений с пагинацией', async () => {
-    const page = await api.call('GET', '/api/cases?limit=1', undefined, api.auth);
+    const page = await api.call('GET', '/api/cases?limit=1', undefined);
     expect((page.body.items as unknown[]).length).toBe(1);
     expect(page.body.nextBefore).not.toBeNull();
-    const next = await api.call('GET', `/api/cases?limit=1&before=${page.body.nextBefore}`, undefined, api.auth);
+    const next = await api.call('GET', `/api/cases?limit=1&before=${page.body.nextBefore}`, undefined);
     expect((next.body.items as Array<{ id: number }>)[0]!.id).toBeLessThan(page.body.nextBefore as number);
   });
 });
@@ -194,13 +194,13 @@ describe('TC-067 / TC-068: без модели и сети; без сессии'
     vi.stubGlobal('fetch', () => {
       throw new Error('сеть недоступна');
     });
-    const d = await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, api.auth);
+    const d = await api.call('GET', `/api/cases/${caseId}/dossier`, undefined);
     expect(d.status).toBe(200);
-    const p = await api.call('GET', `/api/projects/${projectId}/dossier?from=2026-01-01&to=2026-12-31`, undefined, api.auth);
+    const p = await api.call('GET', `/api/projects/${projectId}/dossier?from=2026-01-01&to=2026-12-31`, undefined);
     expect(p.status).toBe(200);
     expect((p.body.participants as Array<{ companyId: number }>).map(x => x.companyId)).toContain(alfaA);
     expect(p.body.coParticipationNote).toContain('не означает договора');
-    const s = await api.call('GET', `/api/companies/${alfaA}/dossier-summary`, undefined, api.auth);
+    const s = await api.call('GET', `/api/companies/${alfaA}/dossier-summary`, undefined);
     expect(s.status).toBe(200);
     expect(s.body.limits).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'no_snapshot' })]));
   });
@@ -219,7 +219,7 @@ describe('слияние переносит ссылку обращения', ()
     const dup = (
       await pool().query<{ id: number }>(`INSERT INTO companies (name, name_norm, name_latin) VALUES ('Альфа Демо Дубль', 'альфа демо дубль', 'alfa demo dubl') RETURNING id`)
     ).rows[0]!.id;
-    const created = await api.call('POST', '/api/cases', { title: 'по дублю', companyId: dup, requestDate: '2026-09-15' }, api.auth);
+    const created = await api.call('POST', '/api/cases', { title: 'по дублю', companyId: dup, requestDate: '2026-09-15' });
     const dupCase = (created.body.case as { id: number }).id;
     const versions = (await pool().query<{ id: number; version: number }>('SELECT id, version FROM companies WHERE id = ANY($1::bigint[])', [[dup, alfaA]])).rows;
     await applyEntityMerge({

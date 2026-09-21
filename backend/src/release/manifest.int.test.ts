@@ -65,9 +65,9 @@ beforeAll(async () => {
 
   api = await startTestApi();
   const companyId = (await pool().query<{ company_id: number }>(`SELECT company_id FROM entity_identifiers WHERE value = $1`, [INN_A])).rows[0]!.company_id;
-  const created = await api.call('POST', '/api/cases', { title: 'Манифест', companyId, requestDate: '2026-09-16' }, api.auth);
+  const created = await api.call('POST', '/api/cases', { title: 'Манифест', companyId, requestDate: '2026-09-16' });
   expect(created.status).toBe(201);
-  expect((await api.call('POST', `/api/cases/${(created.body.case as { id: number }).id}/snapshots`, {}, api.auth)).status).toBe(201);
+  expect((await api.call('POST', `/api/cases/${(created.body.case as { id: number }).id}/snapshots`, {})).status).toBe(201);
 
   baseline = await collect();
 });

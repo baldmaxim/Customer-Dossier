@@ -145,14 +145,14 @@ describe('TC-076: путь источник → досье → снимок и �
     alfa = byInn.find(r => r.value === INN_A)!.company_id;
     projectId = (await pool().query<{ id: number }>(`SELECT id FROM projects WHERE name = 'Причал-Приёмка'`)).rows[0]!.id;
 
-    const search = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Приёмка')}`, undefined, api.auth);
+    const search = await api.call('GET', `/api/companies?q=${encodeURIComponent('Альфа-Приёмка')}`, undefined);
     expect(search.status).toBe(200);
     // Поиск нечёткий и может вернуть похожие названия; одноимённых юрлиц с этим именем — ровно два.
     expect((search.body.items as Array<{ name: string }>).filter(i => i.name === 'Альфа-Приёмка').length).toBe(2);
 
     const assertions = (await pool().query<{ id: number; predicate: string }>('SELECT id, predicate FROM assertions ORDER BY id')).rows;
     participationId = assertions.find(a => a.predicate === 'participates_in_project')!.id;
-    const detail = await api.call('GET', `/api/assertions/${participationId}`, undefined, api.auth);
+    const detail = await api.call('GET', `/api/assertions/${participationId}`, undefined);
     expect((detail.body.evidence as Array<{ quote: string }>).map(e => e.quote)).toContain(Q_PART);
   });
 
@@ -162,52 +162,52 @@ describe('TC-076: путь источник → досье → снимок и �
       projects: [project('Причал-Приёмка', Q_DENY)],
       relations: [relation({ type: 'participation', kind: 'contractor', subject: 'Альфа-Приёмка', project: 'Причал-Приёмка', building: 'корпус 2', polarity: 'negative', quote: Q_DENY })],
     }));
-    const queue = await api.call('GET', '/api/review-queue', undefined, api.auth);
+    const queue = await api.call('GET', '/api/review-queue', undefined);
     expect(queue.status).toBe(200);
     expect((queue.body.items as Array<{ kind: string }>).some(i => i.kind === 'polarity_conflict')).toBe(true);
 
-    const version = ((await api.call('GET', `/api/assertions/${participationId}`, undefined, api.auth)).body.assertion as { version: number }).version;
-    const review = await api.call('POST', `/api/assertions/${participationId}/reviews`, { decision: 'reviewed_supported', reason: 'подтверждено договором субподряда', expectedVersion: version, idempotencyKey: 'release-review-0001' }, api.auth);
+    const version = ((await api.call('GET', `/api/assertions/${participationId}`, undefined)).body.assertion as { version: number }).version;
+    const review = await api.call('POST', `/api/assertions/${participationId}/reviews`, { decision: 'reviewed_supported', reason: 'подтверждено договором субподряда', expectedVersion: version, idempotencyKey: 'release-review-0001' });
     expect(review.status).toBe(201);
     expect((await refreshSignals({ requestedBy: 'release-test' })).outcome).toBe('succeeded');
   });
 
   it('обращение, досье и снимок с выгрузкой', async () => {
-    const created = await api.call('POST', '/api/cases', { title: 'ВК корпуса 2 (приёмка)', companyId: alfa, projectId, scopeBuilding: 'корпус 2', claimedRole: 'contractor', requestDate: '2026-09-16' }, api.auth);
+    const created = await api.call('POST', '/api/cases', { title: 'ВК корпуса 2 (приёмка)', companyId: alfa, projectId, scopeBuilding: 'корпус 2', claimedRole: 'contractor', requestDate: '2026-09-16' });
     expect(created.status).toBe(201);
     caseId = (created.body.case as { id: number }).id;
 
-    const dossier = await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, api.auth);
+    const dossier = await api.call('GET', `/api/cases/${caseId}/dossier`, undefined);
     expect(dossier.status).toBe(200);
     // Отрицание из другой публикации остаётся противоречием и после решения аналитика; само решение видно в атрибуции.
     const role = (dossier.body as { role: { status: string; established: Array<{ attribution: string }> } }).role;
     expect(role.status).toBe('contradicted');
     expect(role.established.some(s => s.attribution === 'analyst_reviewed')).toBe(true);
 
-    const snapshot = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const snapshot = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     expect(snapshot.status).toBe(201);
     snapshotOne = snapshot.body.id as number;
-    const html = await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined, api.auth);
+    const html = await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined);
     expect(html.status).toBe(200);
     expect(String(html.body.raw)).toContain('ВК корпуса 2 (приёмка)');
   });
 
   it('перезапуск приложения: снимок и выгрузка читаются прежними', async () => {
-    const before = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth);
-    const beforeHtml = String((await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined, api.auth)).body.raw);
+    const before = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined);
+    const beforeHtml = String((await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined)).body.raw);
 
     await api.close();
     api = await startTestApi();
 
-    const after = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth);
+    const after = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined);
     expect(after.status).toBe(200);
     expect(after.body.payload).toEqual(before.body.payload);
     expect((after.body.integrity as { verified: boolean; storedHash: string }).verified).toBe(true);
-    expect(String((await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined, api.auth)).body.raw)).toBe(beforeHtml);
+    expect(String((await api.call('GET', `/api/snapshots/${snapshotOne}/export.html`, undefined)).body.raw)).toBe(beforeHtml);
   });
 
   it('новая публикация, правка, переразбор и слияние: решение и старый снимок целы, новый снимок видит изменения', async () => {
-    const stored = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth);
+    const stored = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined);
     const frozen = stored.body.payload;
 
     // Правка новости: вторая редакция той же публикации.
@@ -236,12 +236,12 @@ describe('TC-076: путь источник → досье → снимок и �
     await pool().query(`UPDATE companies SET name = 'Альфа-Приёмка (переименована)' WHERE id = $1`, [alfa]);
     expect((await refreshSignals({ requestedBy: 'release-test' })).outcome).toBe('succeeded');
 
-    const old = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth);
+    const old = await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined);
     expect(old.body.payload).toEqual(frozen);
 
-    const next = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const next = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     expect(next.status).toBe(201);
-    const fresh = await api.call('GET', `/api/snapshots/${next.body.id as number}`, undefined, api.auth);
+    const fresh = await api.call('GET', `/api/snapshots/${next.body.id as number}`, undefined);
     expect((fresh.body.payload as { company: { name: string } }).company.name).toBe('Альфа-Приёмка (переименована)');
     expect((fresh.body.integrity as { storedHash: string }).storedHash).not.toBe((old.body.integrity as { storedHash: string }).storedHash);
     // Решение аналитика пережило переразбор и слияние.
@@ -259,12 +259,12 @@ describe('TC-076: путь источник → досье → снимок и �
     }));
     const omega = (await pool().query<{ id: number; version: number }>(`SELECT id, version FROM companies WHERE name = 'Омега-Приёмка'`)).rows[0]!;
     const oldAssertion = (await pool().query<{ id: number }>(`SELECT id FROM assertions WHERE subject_company_id = $1 AND predicate = 'participates_in_project'`, [omega.id])).rows[0]!.id;
-    const version = ((await api.call('GET', `/api/assertions/${oldAssertion}`, undefined, api.auth)).body.assertion as { version: number }).version;
-    expect((await api.call('POST', `/api/assertions/${oldAssertion}/reviews`, { decision: 'reviewed_supported', reason: 'подтверждено актом (синтетика)', expectedVersion: version, idempotencyKey: 'release-review-omega-0001' }, api.auth)).status).toBe(201);
+    const version = ((await api.call('GET', `/api/assertions/${oldAssertion}`, undefined)).body.assertion as { version: number }).version;
+    expect((await api.call('POST', `/api/assertions/${oldAssertion}/reviews`, { decision: 'reviewed_supported', reason: 'подтверждено актом (синтетика)', expectedVersion: version, idempotencyKey: 'release-review-omega-0001' })).status).toBe(201);
     const decisionBefore = (await pool().query<{ id: number; assertion_id: number; reviewer: string; decided_at: Date }>(`SELECT id, assertion_id, reviewer, decided_at FROM review_decisions WHERE assertion_id = $1`, [oldAssertion])).rows;
     expect(decisionBefore).toHaveLength(1);
 
-    const frozen = (await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth)).body;
+    const frozen = (await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined)).body;
     const target = (await pool().query<{ version: number }>('SELECT version FROM companies WHERE id = $1', [alfa])).rows[0]!.version;
     const mergeInput = { kind: 'company' as const, sourceId: omega.id, targetId: alfa, expectedSourceVersion: omega.version, expectedTargetVersion: target, idempotencyKey: 'release-merge-omega-0001', actor: 'release-test' };
     const merged = await applyEntityMerge(mergeInput);
@@ -278,7 +278,7 @@ describe('TC-076: путь источник → досье → снимок и �
 
     // Каноническое досье обращения по целевой компании видит решение через линию слияния — только у перенесённого утверждения.
     type Statement = { assertionIds: number[]; attribution: string; priorDecisions?: Array<{ decisionId: number; assertionId: number; mergeId: number; reviewer: string }> };
-    const dossier = (await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, api.auth)).body;
+    const dossier = (await api.call('GET', `/api/cases/${caseId}/dossier`, undefined)).body;
     // Все фразы досье, где бы они ни стояли (роль, наблюдения, цепочка).
     const withPrior: Statement[] = [];
     const walk = (node: unknown): void => {
@@ -303,12 +303,12 @@ describe('TC-076: путь источник → досье → снимок и �
     expect(await counts()).toEqual(before);
 
     // Старый снимок не изменился; новый несёт разрешённую атрибуцию решения до слияния.
-    const old = (await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined, api.auth)).body;
+    const old = (await api.call('GET', `/api/snapshots/${snapshotOne}`, undefined)).body;
     expect(old.payload).toEqual(frozen.payload);
     expect((old.integrity as { verified: boolean }).verified).toBe(true);
-    const fresh = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    const fresh = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     expect(fresh.status).toBe(201);
-    const freshPayload = JSON.stringify((await api.call('GET', `/api/snapshots/${fresh.body.id as number}`, undefined, api.auth)).body.payload);
+    const freshPayload = JSON.stringify((await api.call('GET', `/api/snapshots/${fresh.body.id as number}`, undefined)).body.payload);
     expect(freshPayload).toContain(`"decisionId":${decisionBefore[0]!.id}`);
   });
 });
@@ -372,10 +372,10 @@ describe('TC-077: отказы видны и не выглядят как «св
     await updateSourcePolicy(digest, { accessStatus: 'approved', aiProcessingStatus: 'approved', scope: null, basis: 'синтетический тест', reference: null, owner: 'release-test', expiresAt: null }, 'release-test');
   });
 
-  it('без входа, без CSRF и с чужим Origin запись и выдача отклоняются', async () => {
-    expect((await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, { cookie: '' })).status).toBe(401);
-    expect((await api.call('POST', '/api/cases', { title: 'без csrf', companyId: alfa, requestDate: '2026-09-16' }, { 'x-csrf-token': '' })).status).toBe(403);
-    expect((await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, { ...api.auth, origin: 'http://evil.example' })).status).toBe(403);
+  // Вход по токену снят, но защита от чужой страницы в браузере оператора осталась.
+  it('запрос с чужого Origin и с чужого Host отклоняется', async () => {
+    expect((await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, { origin: 'http://evil.example' })).status).toBe(403);
+    expect((await api.call('GET', `/api/cases/${caseId}/dossier`, undefined, { host: 'evil.example' })).status).toBe(403);
   });
 
   it('опасный фрагмент источника не исполняется в выгрузке и не ломает досье', async () => {
@@ -385,8 +385,8 @@ describe('TC-077: отказы видны и не выглядят как «св
       projects: [project('Причал-Приёмка', EVIL)],
       relations: [relation({ type: 'participation', kind: 'contractor', subject: 'Хотел-Приёмка', project: 'Причал-Приёмка', building: 'корпус 5', quote: EVIL })],
     }));
-    const snapshot = await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
-    const html = String((await api.call('GET', `/api/snapshots/${snapshot.body.id as number}/export.html`, undefined, api.auth)).body.raw);
+    const snapshot = await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
+    const html = String((await api.call('GET', `/api/snapshots/${snapshot.body.id as number}/export.html`, undefined)).body.raw);
     expect(html).not.toMatch(/<[a-z][^>]*\son\w+=/i);
     expect(html).not.toMatch(/<script/i);
     expect(html).not.toMatch(/token|password|Bearer/i);
@@ -441,7 +441,7 @@ describe('TC-075: контрольные числа до и после', () => {
     expect(before.snapshots.total).toBeGreaterThan(0);
     expect(diffInventory(before, before).equal).toBe(true);
 
-    await api.call('POST', `/api/cases/${caseId}/snapshots`, {}, api.auth);
+    await api.call('POST', `/api/cases/${caseId}/snapshots`, {});
     const after = await collectInventory(pool());
     const diff = diffInventory(before, after);
     expect(diff.equal).toBe(false);

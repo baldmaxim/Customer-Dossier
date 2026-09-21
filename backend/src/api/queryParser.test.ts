@@ -1,5 +1,5 @@
 // ACC-04: строка запроса API разбирается node:querystring ('simple'), а не qs; вложенные ключи и повторённые ключи — 400
-// до авторизации и маршрутов. База (мёртвый адрес) не нужна.
+// до маршрутов. База (мёртвый адрес) не нужна.
 
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -7,8 +7,6 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
-
-const TOKEN = 'operator-token-for-unit-tests-0123456789';
 
 let server: http.Server;
 let port = 0;
@@ -32,7 +30,7 @@ const get = (path: string): Promise<{ status: number; body: Record<string, unkno
     req.end();
   });
 
-const app = createApp({ operatorToken: TOKEN });
+const app = createApp();
 
 beforeAll(async () => {
   server = http.createServer(app);
@@ -49,7 +47,7 @@ describe('разбор строки запроса (ACC-04)', () => {
     expect(app.get('query parser')).toBe('simple');
   });
 
-  it('вложенный параметр — 400 invalid_query до авторизации', async () => {
+  it('вложенный параметр — 400 invalid_query до маршрутов', async () => {
     for (const path of ['/api/companies?q[x]=ab', '/api/companies?a[b]=1', '/api/reprocess/runs?status[]=failed', '/api/health?x]=1']) {
       const res = await get(path);
       expect(res.status, path).toBe(400);
@@ -57,7 +55,7 @@ describe('разбор строки запроса (ACC-04)', () => {
     }
   });
 
-  it('повторённый ключ — 400 invalid_query до авторизации', async () => {
+  it('повторённый ключ — 400 invalid_query до маршрутов', async () => {
     for (const path of ['/api/companies?q=ab&q=cd', '/api/entities/ambiguities?status=open&status=resolved']) {
       const res = await get(path);
       expect(res.status, path).toBe(400);
@@ -65,10 +63,13 @@ describe('разбор строки запроса (ACC-04)', () => {
     }
   });
 
-  it('плоские параметры проходят дальше: без сессии — 401, а не 400', async () => {
+  // Что ответит маршрут — здесь не проверяется: базы нет. Важно, что разбор
+  // строки запроса его не отверг.
+  it('плоские параметры проходят разбор и доходят до маршрута', async () => {
     for (const path of ['/api/companies?q=ab', '/api/reprocess/runs?status=failed&limit=10', '/api/companies?q=a%5Bb%5D']) {
       const res = await get(path);
-      expect(res.status, path).toBe(401);
+      expect(res.status, path).not.toBe(400);
+      expect(res.body.code, path).not.toBe('invalid_query');
     }
   });
 });

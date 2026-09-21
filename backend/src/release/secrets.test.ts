@@ -37,7 +37,7 @@ const expectNoMarkers = (text: string): void => {
   for (const marker of ALL) expect(text).not.toContain(marker);
 };
 
-describe('HTTP: вход, ошибки разбора и отказ базы не раскрывают секреты', () => {
+describe('HTTP: ошибки разбора и отказ базы не раскрывают секреты', () => {
   let server: http.Server;
   let port = 0;
   const request = (method: string, path: string, raw?: string, headers: Record<string, string> = {}) =>
@@ -53,7 +53,7 @@ describe('HTTP: вход, ошибки разбора и отказ базы н�
     });
 
   beforeAll(async () => {
-    server = http.createServer(createApp({ operatorToken: M.operator, allowedOrigins: [ORIGIN] }));
+    server = http.createServer(createApp({ allowedOrigins: [ORIGIN] }));
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     port = (server.address() as AddressInfo).port;
   });
@@ -62,19 +62,16 @@ describe('HTTP: вход, ошибки разбора и отказ базы н�
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
 
-  it('неверный и верный токен, битый JSON с токеном, запрос с отказом базы', async () => {
-    const wrong = await request('POST', '/api/auth/login', JSON.stringify({ token: M.wrongToken }));
-    expect(wrong.status).toBe(401);
-    const broken = await request('POST', '/api/auth/login', `{"token": "${M.operator}", `);
+  // Вход снят, но тело запроса по-прежнему может нести секрет: битый JSON не должен вернуться эхом.
+  it('битый JSON с секретом в теле и запрос с отказом базы', async () => {
+    const broken = await request('POST', '/api/manual', `{"body": "${M.operator}", `);
     expect(broken.status).toBe(400);
-    const ok = await request('POST', '/api/auth/login', JSON.stringify({ token: M.operator }));
-    expect(ok.status).toBe(200);
-    const cookie = (ok.headers['set-cookie']?.[0] ?? '').split(';')[0] ?? '';
-    const csrf = String((JSON.parse(ok.text) as { csrfToken: string }).csrfToken);
-    const failing = await request('GET', '/api/cases/1/dossier', undefined, { cookie, 'x-csrf-token': csrf });
+    const rejected = await request('GET', '/api/companies?q=ab', undefined, { origin: 'http://evil.example' });
+    expect(rejected.status).toBe(403);
+    const failing = await request('GET', '/api/cases/1/dossier');
     expect(failing.status).toBeGreaterThanOrEqual(500);
 
-    for (const r of [wrong, broken, ok, failing]) {
+    for (const r of [broken, rejected, failing]) {
       expectNoMarkers(r.text);
       expectNoMarkers(JSON.stringify(r.headers));
     }
@@ -85,7 +82,7 @@ describe('HTTP: вход, ошибки разбора и отказ базы н�
 describe('окружение, тестовая цель и manifest', () => {
   it('ошибки разбора окружения не содержат значений', () => {
     const attempts: Array<Record<string, string>> = [
-      { DATABASE_URL: `postgresql://u:${M.dbPassword}@127.0.0.1:5432/x`, OPERATOR_TOKEN: 'short' },
+      { DATABASE_URL: `postgresql://u:${M.dbPassword}@127.0.0.1:5432/x`, DATABASE_POOL_MAX: M.operator },
       { DATABASE_URL: `postgresql://u:${M.dbPassword}@127.0.0.1:5432/x`, INGEST_ENABLED: M.operator },
       { DATABASE_URL: `postgresql://u:${M.dbPassword}@127.0.0.1:5432/x`, LMSTUDIO_BASE_URL: `http://u:${M.dbPassword}@10.0.0.1:1234/v1` },
       { DATABASE_URL: `postgresql://u:${M.dbPassword}@127.0.0.1:5432/x`, TG_BOT_TOKEN: M.bot, PORT: M.bot },

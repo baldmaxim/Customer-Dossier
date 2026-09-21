@@ -101,14 +101,14 @@ export const CONFIG_KEYS = [
   'EXTRACT_CONCURRENCY',
   'HOST',
   'PORT',
-  'SESSION_IDLE_MINUTES',
-  'SESSION_MAX_HOURS',
 ] as const;
 
 /** Никогда не пишутся в manifest ни значением, ни хешем. */
 export const CONFIG_DENYLIST = [
   'DATABASE_URL',
   'TEST_DATABASE_URL',
+  // Вход по токену снят, но ключ может остаться в backend/.env пользователя:
+  // запрет держим, чтобы он не попал в манифест ни значением, ни хешем.
   'OPERATOR_TOKEN',
   'TG_BOT_TOKEN',
   'TG_BOT_ALLOWED_USER_IDS',

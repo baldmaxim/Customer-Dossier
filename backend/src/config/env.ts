@@ -6,7 +6,6 @@ import {
   EnvValueError,
   parseListenHost,
   parseLlmBaseUrl,
-  parseOperatorToken,
   parsePositiveInt,
   parseStrictBool,
 } from './parse.js';
@@ -101,10 +100,6 @@ export const parseEnv = (source: EnvSource) => {
     HOST: parseListenHost(source.HOST),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),
     CORS_ORIGINS: optional(source, 'CORS_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173'),
-
-    OPERATOR_TOKEN: parseOperatorToken(source.OPERATOR_TOKEN),
-    SESSION_IDLE_MINUTES: parsePositiveInt('SESSION_IDLE_MINUTES', source.SESSION_IDLE_MINUTES, 120),
-    SESSION_MAX_HOURS: parsePositiveInt('SESSION_MAX_HOURS', source.SESSION_MAX_HOURS, 12),
   } as const;
 };
 

@@ -195,11 +195,11 @@ describe('полный путь: запуск → чанк → набор → п
   it('API: предпросмотр и 409 на устаревшую версию', async () => {
     const provider = fakeProvider(() => ok(fullAnswer), 'fake-model-api');
     const run = await execute(await enqueue(item.revisionId, provider), provider);
-    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined, api.auth);
+    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined);
     expect(preview.status).toBe(200);
     expect(preview.body.expectedVersion).toBe(1);
     const token = String(preview.body.previewToken);
-    const stale = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: token }, api.auth);
+    const stale = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: token });
     expect(stale.status).toBe(409);
     // Тестовый клиент подставляет вход сам: отсутствие cookie и CSRF задаём явно.
     const anonymous = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 1, expectedPreviewToken: token }, { cookie: '' });
@@ -815,7 +815,7 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const before = await counts();
     const run = await execute(await enqueue(item.revisionId, provider, small), provider);
     expect(run.status).toBe('partial');
-    const detail = await api.call('GET', `/api/reprocess/runs/${run.runId}`, undefined, api.auth);
+    const detail = await api.call('GET', `/api/reprocess/runs/${run.runId}`, undefined);
     expect(detail.status).toBe(200);
     const chunks = detail.body.chunks as Array<{ status: string; lastError: string | null; responses: Array<{ outcome: string; error: string | null }> }>;
     const failed = chunks.filter(c => c.status === 'failed');
@@ -836,21 +836,21 @@ describe('этап 15B: запуски, отмена, повтор и публи
       return irrelevant();
     });
     const run = await execute(await enqueue(item.revisionId, provider, small), provider);
-    const first = await api.call('POST', `/api/reprocess/runs/${run.runId}/retry`, {}, api.auth);
+    const first = await api.call('POST', `/api/reprocess/runs/${run.runId}/retry`, {});
     expect(first.status).toBe(201);
-    const second = await api.call('POST', `/api/reprocess/runs/${run.runId}/retry`, {}, api.auth);
+    const second = await api.call('POST', `/api/reprocess/runs/${run.runId}/retry`, {});
     expect(second.status).toBe(200);
     expect(second.body).toMatchObject({ outcome: 'already_retried', runId: first.body.runId });
     expect((await pool().query('SELECT 1 FROM extraction_runs WHERE previous_run_id = $1', [run.runId])).rowCount).toBe(1);
     // Неизвестный расход не досчитывается.
-    const list = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&status=partial`, undefined, api.auth);
+    const list = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&status=partial`, undefined);
     expect((list.body.items as Array<{ usage: { tokensIn: number | null } }>)[0]!.usage.tokensIn).toBeNull();
 
-    const cancel = await api.call('POST', `/api/reprocess/runs/${String(first.body.runId)}/cancel`, {}, api.auth);
+    const cancel = await api.call('POST', `/api/reprocess/runs/${String(first.body.runId)}/cancel`, {});
     expect(cancel.status).toBe(200);
     expect(cancel.body).toMatchObject({ outcome: 'cancelled', previousStatus: 'queued', inFlight: false });
     expect(await claimNextRun('w-15b', { runId: Number(first.body.runId) })).toBeNull();
-    expect((await api.call('POST', `/api/reprocess/runs/${String(first.body.runId)}/cancel`, {}, api.auth)).status).toBe(409);
+    expect((await api.call('POST', `/api/reprocess/runs/${String(first.body.runId)}/cancel`, {})).status).toBe(409);
   });
 
   it('T15B-04: отмена выполняемого — in-flight показан, держатель ничего не пишет и не отправляет следующий чанк', async () => {
@@ -858,7 +858,7 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const provider = fakeProvider(irrelevant, 'fake-15b-cancel');
     const runId = await enqueue(item.revisionId, provider, small);
     const claim = await claimNextRun('w-15b-running', { runId });
-    const cancel = await api.call('POST', `/api/reprocess/runs/${runId}/cancel`, {}, api.auth);
+    const cancel = await api.call('POST', `/api/reprocess/runs/${runId}/cancel`, {});
     expect(cancel.body).toMatchObject({ outcome: 'cancelled', previousStatus: 'running', inFlight: true });
     expect(String(cancel.body.note)).toMatch(/мог уже уйти/);
     await expect(processRun(provider, claim!)).rejects.toBeInstanceOf(StaleLeaseError);
@@ -875,7 +875,7 @@ describe('этап 15B: запуски, отмена, повтор и публи
     expect((await api.call('POST', `/api/reprocess/runs/${runId}/cancel`, {}, { origin: 'http://evil.example' })).status).toBe(403);
     expect((await api.call('POST', `/api/reprocess/revisions/${item.revisionId}/runs`, {}, { cookie: '' })).status).toBe(401);
     expect(await statusOf(runId)).toBe('queued');
-    await api.call('POST', `/api/reprocess/runs/${runId}/cancel`, {}, api.auth);
+    await api.call('POST', `/api/reprocess/runs/${runId}/cancel`, {});
   });
 
   it('T15B-02: решение аналитика после предпросмотра — 409 preview_stale без записи; новый предпросмотр публикуется', async () => {
@@ -886,7 +886,7 @@ describe('этап 15B: запуски, отмена, повтор и публи
 
     const p2 = fakeProvider(() => ok(fullAnswer), 'fake-15b-second');
     const second = await execute(await enqueue(item.revisionId, p2), p2);
-    const preview = await api.call('GET', `/api/reprocess/sets/${second.candidateSetId}/preview`, undefined, api.auth);
+    const preview = await api.call('GET', `/api/reprocess/sets/${second.candidateSetId}/preview`, undefined);
     expect(preview.body.run).toMatchObject({ status: 'completed', complete: true });
 
     const assertionId = (
@@ -911,20 +911,18 @@ describe('этап 15B: запуски, отмена, повтор и публи
       'POST',
       `/api/reprocess/sets/${second.candidateSetId}/publish`,
       { expectedVersion: preview.body.expectedVersion, expectedPreviewToken: preview.body.previewToken },
-      api.auth,
     );
     expect(stale.status).toBe(409);
     expect(stale.body.code).toBe('preview_stale');
     expect(String(stale.body.nextStep)).toMatch(/предпросмотр/);
     expect(await counts()).toEqual(before);
 
-    const fresh = await api.call('GET', `/api/reprocess/sets/${second.candidateSetId}/preview`, undefined, api.auth);
+    const fresh = await api.call('GET', `/api/reprocess/sets/${second.candidateSetId}/preview`, undefined);
     expect(fresh.body.previewToken).not.toBe(preview.body.previewToken);
     const published = await api.call(
       'POST',
       `/api/reprocess/sets/${second.candidateSetId}/publish`,
       { expectedVersion: fresh.body.expectedVersion, expectedPreviewToken: fresh.body.previewToken },
-      api.auth,
     );
     expect(published.body.outcome).toBe('published');
     // Решение аналитика осталось, машинного подтверждения нет.
@@ -936,9 +934,9 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const revoked = await store(src, `Отзыв 15B. ${Q_ROLE}.`, 'synthetic_15b/revoke');
     const p = fakeProvider(() => ok(fullAnswer), 'fake-15b-policy');
     const run = await execute(await enqueue(revoked.revisionId, p), p);
-    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined, api.auth);
+    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined);
     await pool().query(`UPDATE sources SET ai_processing_status = 'revoked' WHERE id = $1`, [src]);
-    const refused = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: preview.body.previewToken }, api.auth);
+    const refused = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: preview.body.previewToken });
     expect(refused.body).toMatchObject({ outcome: 'rejected_policy' });
     expect(String(refused.body.nextStep)).toMatch(/Допуск/);
     expect((await publicationOf(revoked.sourceItemId)).active_set_id).toBeNull();
@@ -946,9 +944,9 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const edited = await store(sourceMain, `Редакция 15B. ${Q_ROLE}.`, 'synthetic_15b/edited');
     const q = fakeProvider(() => ok(fullAnswer), 'fake-15b-revision');
     const old = await execute(await enqueue(edited.revisionId, q), q);
-    const oldPreview = await api.call('GET', `/api/reprocess/sets/${old.candidateSetId}/preview`, undefined, api.auth);
+    const oldPreview = await api.call('GET', `/api/reprocess/sets/${old.candidateSetId}/preview`, undefined);
     await store(sourceMain, `Редакция 15B, исправлено. ${Q_ROLE}.`, 'synthetic_15b/edited');
-    const stale = await api.call('POST', `/api/reprocess/sets/${old.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: oldPreview.body.previewToken }, api.auth);
+    const stale = await api.call('POST', `/api/reprocess/sets/${old.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: oldPreview.body.previewToken });
     expect(stale.body).toMatchObject({ outcome: 'rejected_stale' });
     expect(String(stale.body.nextStep)).toMatch(/последней редакции/);
     expect((await publicationOf(edited.sourceItemId)).active_set_id).toBeNull();
@@ -959,9 +957,9 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const p = fakeProvider(() => ok(fullAnswer), 'fake-15b-coverage');
     const run = await execute(await enqueue(item.revisionId, p), p);
     await pool().query('UPDATE extraction_runs SET covered_chars = covered_chars - 1 WHERE id = $1', [run.runId]);
-    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined, api.auth);
+    const preview = await api.call('GET', `/api/reprocess/sets/${run.candidateSetId}/preview`, undefined);
     expect(preview.body.run).toMatchObject({ complete: false });
-    const res = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: preview.body.previewToken }, api.auth);
+    const res = await api.call('POST', `/api/reprocess/sets/${run.candidateSetId}/publish`, { expectedVersion: 0, expectedPreviewToken: preview.body.previewToken });
     expect(res.status).toBe(422);
     expect(res.body.code).toBe('not_publishable');
     expect((await publicationOf(item.sourceItemId)).active_set_id).toBeNull();
@@ -974,17 +972,17 @@ describe('этап 15B: запуски, отмена, повтор и публи
        SELECT $1, 'ab15' || lpad(g::text, 4, '0'), '{}'::jsonb, 'failed', 'test', now() FROM generate_series(1, 105) g`,
       [item.revisionId],
     );
-    const first = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&limit=100`, undefined, api.auth);
+    const first = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&limit=100`, undefined);
     expect(first.body.total).toBe(105);
     const ids1 = (first.body.items as Array<{ id: number }>).map(r => r.id);
     expect(ids1).toHaveLength(100);
-    const next = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&limit=100&beforeId=${String(first.body.nextBeforeId)}`, undefined, api.auth);
+    const next = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&limit=100&beforeId=${String(first.body.nextBeforeId)}`, undefined);
     const ids2 = (next.body.items as Array<{ id: number }>).map(r => r.id);
     expect(ids2).toHaveLength(5);
     expect(new Set([...ids1, ...ids2]).size).toBe(105);
     expect(next.body.nextBeforeId).toBeNull();
-    const filtered = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&fingerprint=ab150001`, undefined, api.auth);
+    const filtered = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&fingerprint=ab150001`, undefined);
     expect(filtered.body.total).toBe(1);
-    expect((await api.call('GET', '/api/reprocess/runs?status=bogus', undefined, api.auth)).status).toBe(400);
+    expect((await api.call('GET', '/api/reprocess/runs?status=bogus', undefined)).status).toBe(400);
   });
 });

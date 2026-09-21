@@ -2,7 +2,6 @@
 // пересчёт метрик, приём форвардов) запускаются только явными флагами.
 
 import { createApp } from './app.js';
-import { resolveOperatorToken } from './api/operatorToken.js';
 import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
@@ -81,12 +80,10 @@ const main = async (): Promise<void> => {
   }
 
   const controller = new AbortController();
-  const operator = resolveOperatorToken(env.OPERATOR_TOKEN);
-  const app = createApp({ operatorToken: operator.token });
+  const app = createApp();
   const server = app.listen(env.PORT, env.HOST, () => {
     console.log(`[api] слушает http://${env.HOST.includes(':') ? `[${env.HOST}]` : env.HOST}:${env.PORT}`);
-    // Сам токен не печатается никогда — только откуда его взять.
-    console.log(`[auth] токен оператора: ${operator.description}`);
+    console.log('[api] вход не требуется: портал открыт для локальных запросов');
   });
 
   const decision = startBackgroundJobs(

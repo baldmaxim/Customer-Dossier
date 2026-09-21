@@ -5,8 +5,8 @@
 // 1. Service worker не кэширует /api: нет runtime-маршрутов и стратегий кэширования, /api в denylist
 //    офлайн-оболочки, приложение удаляет старые кэши `api` при старте и выходе.
 // 2. В бандле нет значений секретов: вымышленные маркеры из TG_INFO_SECRET_MARKERS (через запятую,
-//    подставляются в окружение сборки), строки подключения с учётными данными и токены бота. Имена переменных
-//    (подсказка «задан как OPERATOR_TOKEN» на экране входа) секретом не являются и не запрещены.
+//    подставляются в окружение сборки), строки подключения с учётными данными и токены бота. Имена
+//    переменных секретом не являются и не запрещены.
 //
 // Это проверка артефакта сборки, а не браузера: поведение живого service worker проверяет пользователь.
 // Значения маркеров не печатаются.
@@ -47,9 +47,12 @@ if (!fs.existsSync(sw)) {
 }
 const purge = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'cachePurge.ts'), 'utf8');
 if (!/['"]api['"]/.test(purge)) fail('cachePurge.ts не удаляет старый кэш api');
-for (const [file, why] of [['src/main.tsx', 'при старте'], ['src/hooks/useSession.ts', 'при выходе']]) {
+// Вход снят, выхода больше нет — остаётся очистка при старте: старые кэши `api`
+// от прежних версий не должны переживать обновление.
+{
+  const file = 'src/main.tsx';
   const full = path.join(ROOT, file);
-  if (!fs.existsSync(full) || !fs.readFileSync(full, 'utf8').includes('purgeSensitiveCaches')) fail(`очистка кэшей ${why} не вызывается (${file})`);
+  if (!fs.existsSync(full) || !fs.readFileSync(full, 'utf8').includes('purgeSensitiveCaches')) fail(`очистка кэшей при старте не вызывается (${file})`);
 }
 
 // 2. Секреты в бандле
