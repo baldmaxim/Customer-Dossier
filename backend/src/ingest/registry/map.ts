@@ -65,6 +65,34 @@ export const readPath = (root: unknown, path: string): unknown => {
   return current;
 };
 
+/**
+ * Пути к скалярным значениям в ответе — подсказка оператору при настройке карты полей.
+ * Печатается только пробой: имена ключей публичного каталога секретом не являются,
+ * значения не выводятся. Без этого несовпадение карты полей выглядит как «пусто».
+ */
+export const availablePaths = (body: unknown, limit = 120, maxDepth = 4): string[] => {
+  const found: string[] = [];
+  const walk = (value: unknown, prefix: string, depth: number): void => {
+    if (found.length >= limit || depth > maxDepth) return;
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      // Массив описываем по первому элементу: остальные той же формы.
+      if (value.length > 0) walk(value[0], `${prefix}.0`, depth + 1);
+      return;
+    }
+    if (typeof value === 'object') {
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        walk(nested, prefix === '' ? key : `${prefix}.${key}`, depth + 1);
+        if (found.length >= limit) return;
+      }
+      return;
+    }
+    if (prefix !== '') found.push(prefix);
+  };
+  walk(body, '', 0);
+  return found;
+};
+
 const readScalar = (root: unknown, path: string | undefined): string | number | boolean | null => {
   if (!path) return null;
   const value = readPath(root, path);

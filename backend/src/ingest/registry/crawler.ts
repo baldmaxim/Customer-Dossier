@@ -19,7 +19,7 @@ import type { ISource } from '../sources.js';
 import { storeDocument, type IIncomingDocument } from '../store.js';
 import { fetchSitePage, loadConditional, saveConditional, type SiteFetchResult } from '../sites/fetcher.js';
 import { STORE_COUNT, fatalFromFetch, type ICrawlOptions, type ICrawlReport } from '../sites/crawler.js';
-import { mapRecord, readPath, type IRegistryRecord, type RegistryRecordType } from './map.js';
+import { availablePaths, mapRecord, readPath, type IRegistryRecord, type RegistryRecordType } from './map.js';
 import {
   REGISTRY_PARSER_VERSION,
   RegistryProfileError,
@@ -195,8 +195,11 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
     }
     report.pagesFetched += 1;
     const record = mapRecord(res.value, profile, type);
+    // Проба показывает, какие пути реально есть в ответе: иначе несовпадение карты
+    // полей неотличимо от пустого реестра, и оператору нечего править в профиле.
+    if (dryRun && !report.coverage.availablePaths) report.coverage.availablePaths = availablePaths(res.value);
     if (!record) {
-      degrade(`запись ${url}: в ответе нет идентификатора или названия`);
+      degrade(`запись ${url}: в ответе нет идентификатора или названия — сверьте identity с путями в покрытии`);
       return;
     }
     report.counts.found += 1;

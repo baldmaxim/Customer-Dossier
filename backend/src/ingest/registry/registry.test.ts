@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { sourceProfileMetaSchema } from '../profileMeta.js';
-import { formatValue, mapRecord, readPath, toIsoDate } from './map.js';
+import { availablePaths, formatValue, mapRecord, readPath, toIsoDate } from './map.js';
 import { RegistryProfileError, buildUrl, isRegistryConfig, parseRegistryProfile, policyForRegistryProfile } from './profile.js';
 import { REGISTRY_RENDER_VERSION, renderRecord } from './render.js';
 
@@ -114,6 +114,21 @@ describe('карта полей (T20A-02)', () => {
     expect(mapRecord(answer({ objId: null }), profile(), 'object')).toBeNull();
     expect(mapRecord(answer({ objCommercNm: '  ' }), profile(), 'object')).toBeNull();
     expect(mapRecord('не объект', profile(), 'object')).toBeNull();
+  });
+
+  it('пути ответа подсказывают карту полей: имена ключей, без значений', () => {
+    const paths = availablePaths(answer());
+    expect(paths).toContain('objId');
+    expect(paths).toContain('developer.devInn');
+    expect(paths).toContain('developer.orgForm.shortForm');
+    // Значения в подсказку не попадают — только пути.
+    expect(paths.join(' ')).not.toContain('7704412966');
+  });
+
+  it('массив описывается по первому элементу, глубина и число путей ограничены', () => {
+    expect(availablePaths({ list: [{ id: 1 }, { id: 2 }] })).toEqual(['list.0.id']);
+    expect(availablePaths({ a: { b: { c: { d: { e: 1 } } } } })).toEqual([]);
+    expect(availablePaths({ a: 1, b: 2, c: 3 }, 2)).toHaveLength(2);
   });
 
   it('карточка застройщика требует своей identity', () => {
