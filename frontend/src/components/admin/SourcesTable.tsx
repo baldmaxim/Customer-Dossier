@@ -10,7 +10,7 @@ import type { ISiteProbeReport, ISourceRow } from '../../api/types';
 import { SiteProbeResult, SourceHealthCell } from '../SourceHealth';
 import { SourcePolicyEditor } from '../SourcePolicyEditor';
 import { Button } from '../ui/Button';
-import { PERMISSION_LABELS, SOURCE_KIND_LABELS } from '../../lib/labels';
+import { PERMISSION_LABELS, SOURCE_KIND_LABELS, SOURCE_STATUS_LABELS } from '../../lib/labels';
 import styles from '../../pages/AdminPage.module.css';
 
 export interface ISourcesTableProps {
@@ -74,7 +74,7 @@ export const SourcesTable: FC<ISourcesTableProps> = ({ sources, onNotice }) => {
                 <td>{SOURCE_KIND_LABELS[s.kind] ?? s.kind}</td>
                 <td>
                   <span className={`${styles.status} ${styles[`status_${s.status}`] ?? ''}`}>
-                    {s.status === 'active' ? 'активен' : s.status === 'paused' ? 'пауза' : 'сломан'}
+                    {SOURCE_STATUS_LABELS[s.status] ?? s.status}
                   </span>
                 </td>
                 <td className={styles.policyCell}>

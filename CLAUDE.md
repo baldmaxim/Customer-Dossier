@@ -378,7 +378,8 @@ npm run icons:generate   # PNG из public/favicon.svg, руками не пра
 `src/components/ui/` (`Button`, `Segmented`, `Badge`, `Section`, `EmptyState`, `TableScroll`), свой
 `.button` в модуле страницы больше не пишем. Подсказка по наведению — `useHint`/`Hint`/`Term`: пузырь
 рендерится только открытым, иначе его текст ломает поиск по тексту в тестах. Машинное значение на экране —
-через `Term` со словарём из `labels.ts`, не `{row.status}` напрямую.
+через `Term` со словарём из `labels.ts`, не `{row.status}` напрямую; проверяет `npm run check:labels`
+(ложное срабатывание снимается пометкой `/* raw-ok */`, когда сервер прислал готовую фразу).
 
 - Цвета только через токены в `src/index.css`. Хардкод hex в компонентах запрещён.
 - Подписи машинных значений — только в `src/lib/labels.ts`, иначе одна роль

@@ -7,13 +7,19 @@ import type { IEnqueueResult, IRunDetail, IRunPage } from '../../api/types';
 import { PublishPreviewPanel } from '../../components/PublishPreviewPanel';
 import { describeLoadError } from '../../lib/loadError';
 import {
+  AMBIGUITY_STATUS_LABELS,
+  ASSERTION_ROLE_LABELS,
   CANDIDATE_SET_STATUS_LABELS,
   CANDIDATE_VERDICT_LABELS,
   CHUNK_OUTCOME_LABELS,
+  CHUNK_STATUS_LABELS,
   ENQUEUE_OUTCOME_LABELS,
+  PREDICATE_HINTS,
+  PREDICATE_LABELS,
   RUN_STATUS_LABELS,
   formatDateTime,
 } from '../../lib/labels';
+import { Term } from '../../components/ui/Hint';
 import styles from '../Dossier.module.css';
 
 /** Карточка запуска (этап 15B): редакция и публикация, цепочка повторов, чанки и ответы, кандидаты с цитатами. */
@@ -153,7 +159,7 @@ export const RunPage: FC = () => {
           {r.chunks.map(c => (
             <li key={c.index} className={styles.listItem}>
               <strong>
-                Чанк {c.index} [{c.rangeStart}–{c.rangeEnd}): {c.status === 'ok' ? 'принят' : c.status === 'failed' ? 'не разобран' : 'ожидает'}
+                Чанк {c.index} [{c.rangeStart}–{c.rangeEnd}): {CHUNK_STATUS_LABELS[c.status] ?? c.status}
               </strong>
               <span className={styles.meta}> · попыток {c.attempts}</span>
               {c.lastError && <p className={styles.warn}>{c.lastError}</p>}
@@ -177,8 +183,8 @@ export const RunPage: FC = () => {
           {r.candidates.map(c => (
             <li key={c.id} className={styles.listItem}>
               <strong>
-                {c.predicate}
-                {c.role ? ` · ${c.role}` : ''}
+                <Term value={c.predicate} labels={PREDICATE_LABELS} hints={PREDICATE_HINTS} />
+                {c.role ? ` · ${ASSERTION_ROLE_LABELS[c.role] ?? c.role}` : ''}
               </strong>
               <span className={c.verdict === 'publishable' ? styles.meta : styles.warn}> · {CANDIDATE_VERDICT_LABELS[c.verdict]}</span>
               {c.rejectedReason && <span className={styles.meta}> · причина: {c.rejectedReason}</span>}
@@ -198,7 +204,7 @@ export const RunPage: FC = () => {
         </ul>
         {r.ambiguities.length > 0 && (
           <p className={styles.meta}>
-            Неоднозначные упоминания этой редакции: {r.ambiguities.map(a => `«${a.surface}» (${a.status})`).join(', ')} — разбор в <Link to="/admin/review">очереди проверки</Link>. Решение по
+            Неоднозначные упоминания этой редакции: {r.ambiguities.map(a => `«${a.surface}» (${AMBIGUITY_STATUS_LABELS[a.status] ?? a.status})`).join(', ')} — разбор в <Link to="/admin/review">очереди проверки</Link>. Решение по
             упоминанию не публикует набор и не сливает компании.
           </p>
         )}

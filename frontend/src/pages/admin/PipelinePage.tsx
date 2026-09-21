@@ -12,7 +12,7 @@ import { api } from '../../api/client';
 import type { IPipelineOverview, IRunPage, ISourceRow, ISummaryResponse } from '../../api/types';
 import { Badge } from '../../components/ui/Badge';
 import { Section } from '../../components/ui/Section';
-import { RUN_STATUS_LABELS, SOURCE_HEALTH_STATE_LABELS, formatDateTime } from '../../lib/labels';
+import { DOCUMENT_STATUS_LABELS, RUN_STATUS_LABELS, SOURCE_HEALTH_STATE_LABELS, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import styles from './PipelinePage.module.css';
 
@@ -128,7 +128,7 @@ export const PipelinePage: FC = () => {
               <div className={styles.rows}>
                 {queued.length === 0 && <Row label="Документов в очереди">0</Row>}
                 {queued.map(q => (
-                  <Row key={q.status} label={`Документов: ${q.status}`}>
+                  <Row key={q.status} label={DOCUMENT_STATUS_LABELS[q.status] ?? q.status}>
                     {q.n}
                   </Row>
                 ))}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { ApiError, api } from '../api/client';
 import type { IPublishPreview, IPublishPreviewItem, IPublishResult } from '../api/types';
+import { RUN_STATUS_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import styles from '../pages/Dossier.module.css';
 
@@ -89,7 +90,7 @@ export const PublishPreviewPanel: FC<{ setId: number; autoPublish?: boolean }> =
       </p>
       {!p.run.complete && (
         <p className={styles.error}>
-          Запуск не завершён полностью ({p.run.status}, покрыто {p.run.coveredChars ?? '?'} из {p.run.totalChars ?? '?'}) — набор не публикуется. Следующий шаг: повторить запуск.
+          Запуск не завершён полностью ({RUN_STATUS_LABELS[p.run.status] ?? p.run.status}, покрыто {p.run.coveredChars ?? '?'} из {p.run.totalChars ?? '?'}) — набор не публикуется. Следующий шаг: повторить запуск.
         </p>
       )}
       {!p.policy.allowed && <p className={styles.error}>Нет ИИ-допуска источника: {p.policy.reason}. Допуск оформляет оператор с основанием.</p>}

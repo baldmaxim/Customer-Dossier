@@ -516,3 +516,51 @@ export const ENQUEUE_OUTCOME_LABELS: Record<string, string> = {
   not_found: 'редакция или запуск не найдены',
   not_retryable: 'этот запуск не повторяется',
 };
+
+/**
+ * Вид утверждения (extract@3). Без словаря на экран запуска уходили сырые
+ * `company_mentioned` и `project_mentioned` — оператор читал машинный ключ.
+ */
+export const PREDICATE_LABELS: Record<string, string> = {
+  participates_in_project: 'участие в объекте',
+  contract: 'прямой договор',
+  corporate_relation: 'корпоративная связь',
+  event: 'событие',
+  company_mentioned: 'упоминание компании',
+  project_mentioned: 'упоминание объекта',
+};
+
+/** Пояснения к видам утверждений: чем участие отличается от договора. */
+export const PREDICATE_HINTS: Record<string, string> = {
+  participates_in_project:
+    'источник называет компанию участником объекта в определённой роли; договор этим не подтверждается',
+  contract: 'источник прямо говорит о договоре между двумя сторонами; подписанный документ не проверялся',
+  corporate_relation: 'владение, дочерняя компания, группа — по тексту источника',
+  event: 'происшествие, суд, срыв срока или иное событие с датой из цитаты',
+  company_mentioned: 'в тексте названа компания; участие и договор этим не подтверждаются',
+  project_mentioned: 'в тексте назван объект; чьё это участие — отдельный вопрос',
+};
+
+/** Состояние чанка разбора. Раньше три значения печатались тернарником мимо словаря. */
+export const CHUNK_STATUS_LABELS: Record<string, string> = {
+  ok: 'принят',
+  failed: 'не разобран',
+  pending: 'ожидает',
+  running: 'разбирается',
+};
+
+/** Операционный статус источника: только расписание опроса, не допуск. */
+export const SOURCE_STATUS_LABELS: Record<string, string> = {
+  active: 'активен',
+  paused: 'пауза',
+  broken: 'сломан',
+};
+
+/** Состояние сырого документа в очереди разбора. */
+export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  queued: 'ждут разбора',
+  extracting: 'разбираются',
+  extracted: 'разобраны',
+  failed: 'разбор не удался',
+  skipped: 'признаны нерелевантными',
+};

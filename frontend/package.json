@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-icons.mjs",
     "check:build": "node scripts/check-build.mjs",
+    "check:labels": "node scripts/check-labels.mjs",
     "test": "vitest run",
     "e2e": "playwright test"
   },
