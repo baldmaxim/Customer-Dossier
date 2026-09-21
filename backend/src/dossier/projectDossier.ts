@@ -5,6 +5,7 @@ import type { DbExecutor } from '../db/pool.js';
 import { overlap, type Overlap } from '../signals/intervals.js';
 import { loadProjectFacts, type IFact } from './facts.js';
 import { loadProjectState } from './load.js';
+import { loadProjectRegistry, type IRegistryView } from '../registry/read.js';
 import { dateText, eventText, factStatement, roleText, type IStatement } from './statements.js';
 
 export interface IProjectDossier {
@@ -41,6 +42,8 @@ export interface IProjectDossier {
   coParticipationNote: string;
   events: IStatement[];
   cases: Array<{ id: number; title: string; status: string }>;
+  /** Снимок реестра на дату (этап 20B). null — объект в реестре не собран. */
+  registry: IRegistryView | null;
 }
 
 const FACT = new Set(['reported_fact', 'unknown']);
@@ -135,5 +138,6 @@ export const loadProjectDossier = async (
       .filter(f => f.predicate === 'event' && f.polarity === 'positive' && ['reported_fact', 'claim', 'unknown'].includes(f.modality))
       .map(f => factStatement('project_event', f, `${eventText(f.eventType)}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}; ${dateText(f.validFrom, f.periodPrecision)}${f.subjectCompanyName ? `; названа компания ${f.subjectCompanyName}` : ''}`)),
     cases,
+    registry: await loadProjectRegistry(exec, projectId),
   };
 };

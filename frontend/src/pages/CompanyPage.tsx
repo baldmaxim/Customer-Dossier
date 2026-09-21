@@ -4,6 +4,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } from '../api/types';
+import { RegistryPanel } from '../components/RegistryPanel';
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
 import { GraphPanel } from '../components/GraphPanel';
@@ -73,7 +74,7 @@ export const CompanyPage: FC = () => {
   if (data?.mergedInto) return <Navigate to={`/company/${data.mergedInto}`} replace />;
   if (!data?.company) return <p className={styles.empty}>Компания не найдена.</p>;
 
-  const { company, aliases, identifiers = [], relations = [] } = data;
+  const { company, aliases, identifiers = [], relations = [], registry } = data;
   const projects = projectsQuery.data?.items ?? [];
   const events = eventsQuery.data?.items ?? [];
   const similar = similarQuery.data?.items ?? [];
@@ -138,6 +139,8 @@ export const CompanyPage: FC = () => {
       {/* Показатели — во всю ширину: в узкой колонке плитки рвали подписи, а места
           для новых чисел не было. Ниже — две колонки с 1200px: слева то, что читают
           подряд, справа схема связей. До 1200px порядок прежний, одной колонкой. */}
+      <RegistryPanel registry={registry ?? null} title="Данные реестра о застройщике" />
+
       <section className={styles.metrics} aria-label="Показатели компании">
         <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
       </section>

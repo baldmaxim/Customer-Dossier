@@ -98,7 +98,7 @@ export const addIdentifier = async (
   exec: DbExecutor,
   input: ITypedIdentifier & {
     companyId: number;
-    origin: 'extraction' | 'legacy_import' | 'manual';
+    origin: 'extraction' | 'legacy_import' | 'manual' | 'registry';
     sourceRevisionId?: number | null;
     evidenceId?: number | null;
     createdBy?: string;

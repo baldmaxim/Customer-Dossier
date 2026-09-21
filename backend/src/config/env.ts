@@ -68,6 +68,15 @@ export const parseEnv = (source: EnvSource) => {
     EXTRACT_CHUNK_SIZE: parsePositiveInt('EXTRACT_CHUNK_SIZE', source.EXTRACT_CHUNK_SIZE, 3500),
     EXTRACT_MAX_CHUNKS: parsePositiveInt('EXTRACT_MAX_CHUNKS', source.EXTRACT_MAX_CHUNKS, 6),
 
+    // Тема публикации локальной моделью (headline@1). Отдельный короткий вызов после разбора:
+    // у telegram-постов заголовка нет, и лента показывала «без заголовка» подряд.
+    // false — тем не будет, уже сохранённые остаются; текст модели показывается как был.
+    HEADLINE_ENABLED: parseStrictBool('HEADLINE_ENABLED', source.HEADLINE_ENABLED, true),
+    HEADLINE_BATCH_SIZE: parsePositiveInt('HEADLINE_BATCH_SIZE', source.HEADLINE_BATCH_SIZE, 10),
+    // Тема — про начало текста: полный пересказ длинной статьи для строки не нужен,
+    // а короткий вход держит вызов дешёвым на 8 ГБ VRAM.
+    HEADLINE_INPUT_CHARS: parsePositiveInt('HEADLINE_INPUT_CHARS', source.HEADLINE_INPUT_CHARS, 1200),
+
     TG_FETCH_DELAY_MS: parsePositiveInt('TG_FETCH_DELAY_MS', source.TG_FETCH_DELAY_MS, 4000),
     INGEST_USER_AGENT: optional(
       source,
@@ -97,6 +106,10 @@ export const parseEnv = (source: EnvSource) => {
     // Применение и отмена слияния сущностей (этап 04). По умолчанию выключено: предпросмотр,
     // журнал и чтение слитых сущностей работают, запись — только после явного включения.
     MERGE_APPLY_ENABLED: parseStrictBool('MERGE_APPLY_ENABLED', source.MERGE_APPLY_ENABLED, false),
+    // Запись канона из реестра (этап 20B): объект, юрлицо застройщика с реквизитом,
+    // роль застройщика, связь с группой. Модель не участвует. false — реестр собирается
+    // снимками, но карточки из него не строятся; собранное остаётся в базе.
+    REGISTRY_PUBLISH_ENABLED: parseStrictBool('REGISTRY_PUBLISH_ENABLED', source.REGISTRY_PUBLISH_ENABLED, true),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

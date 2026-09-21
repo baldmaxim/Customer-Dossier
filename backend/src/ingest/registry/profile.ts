@@ -57,6 +57,8 @@ const objectIdentity = z
   .object({
     idPath: jsonPath,
     namePath: jsonPath,
+    /** Что за объекты в этом реестре. Не задано — резолвер поставит вид по умолчанию. */
+    projectKind: z.enum(['residential', 'office', 'industrial', 'infrastructure', 'social', 'other']).optional(),
     cityPath: jsonPath.optional(),
     addressPath: jsonPath.optional(),
     /** Дата сведений по самому реестру. Нет — строки о дате не будет; время сбора не подставляем. */

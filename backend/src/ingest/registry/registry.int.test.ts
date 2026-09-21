@@ -252,3 +252,106 @@ describe('проба реестра ничего не пишет (T20A-06)', () 
     expect((await pool().query('SELECT count(*)::int AS n FROM http_cache WHERE source_id = $1', [s.id])).rows[0]!.n).toBe(0);
   });
 });
+
+/** Утверждения, опирающиеся на редакции именно этого источника: база общая для файла. */
+const canonCount = async (sourceId: number, where = 'true') =>
+  (
+    await pool().query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM assertions a
+       WHERE ${where} AND EXISTS (
+         SELECT 1 FROM evidence e
+         JOIN document_revisions r ON r.id = e.revision_id
+         JOIN source_items i ON i.id = r.source_item_id
+         WHERE e.assertion_id = a.id AND i.source_id = $1)`,
+      [sourceId],
+    )
+  ).rows[0]!.n;
+
+describe('реестр: детерминированная запись в канон (T20B-02)', () => {
+  it('объект, юрлицо с ИНН, роль застройщика и группа — с цитатой из той же редакции', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-h-demo.test/api/object?id={id}' } }, 'registry-h-demo.test'), 'registry-h-demo.test');
+    const answer = objectAnswer({
+      objId: 80001,
+      objCommercNm: 'Демо-Канон 35',
+      groupName: 'Канон-Строй',
+      developer: { shortName: 'СЗ КАНОН-ПРАКТИКА', devInn: '7736050003', orgForm: { shortForm: 'ООО' } },
+    });
+    routes.set(s.url('/api/object?id=62087'), json(answer));
+    await run(s.id);
+
+    // Компания найдена по реквизиту, происхождение — реестр, а не разбор модели.
+    const ident = (
+      await pool().query<{ value: string; origin: string; identifier_type: string }>(
+        `SELECT value, origin, identifier_type FROM entity_identifiers WHERE value = '7736050003' AND status = 'active'`,
+      )
+    ).rows;
+    expect(ident).toHaveLength(1);
+    expect(ident[0]!).toMatchObject({ origin: 'registry', identifier_type: 'inn' });
+
+    // Утверждение о роли застройщика — с происхождением registry и ролью developer.
+    const participation = (
+      await pool().query<{ id: number; role: string; origin: string; modality: string; polarity: string; status: string }>(
+        `SELECT a.id, a.role, a.origin, a.modality::text AS modality, a.polarity, a.status::text AS status
+         FROM assertions a
+         WHERE a.predicate = 'participates_in_project' AND EXISTS (
+           SELECT 1 FROM evidence e JOIN document_revisions r ON r.id = e.revision_id
+           JOIN source_items i ON i.id = r.source_item_id
+           WHERE e.assertion_id = a.id AND i.source_id = $1)`,
+        [s.id],
+      )
+    ).rows;
+    expect(participation).toHaveLength(1);
+    expect(participation[0]!).toMatchObject({ role: 'developer', origin: 'registry', modality: 'reported_fact', polarity: 'positive' });
+    // Без решения аналитика статус — «так написано», не «проверено».
+    expect(participation[0]!.status).toBe('text_grounded');
+
+    // Цитата — целая строка редакции; совпадение с фрагментом проверяет сама база.
+    const evidence = (
+      await pool().query<{ quote: string; origin: string; stance: string }>(
+        `SELECT quote, origin, stance::text AS stance FROM evidence WHERE assertion_id = $1`,
+        [participation[0]!.id],
+      )
+    ).rows;
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]!.quote).toBe('Застройщик объекта «Демо-Канон 35» — ООО СЗ КАНОН-ПРАКТИКА, ИНН 7736050003.');
+    expect(evidence[0]!).toMatchObject({ origin: 'registry', stance: 'supports' });
+
+    // Группа компаний — отдельная корпоративная связь, а не поле объекта.
+    expect(await canonCount(s.id, `a.predicate = 'corporate_relation' AND a.role = 'member_of_group'`)).toBe(1);
+
+    // Снимок привязан к канону.
+    const linked = (
+      await pool().query<{ project_id: number | null; company_id: number | null }>(
+        'SELECT project_id, company_id FROM registry_records WHERE source_id = $1',
+        [s.id],
+      )
+    ).rows[0]!;
+    expect(linked.project_id).not.toBeNull();
+    expect(linked.company_id).not.toBeNull();
+
+    // Повтор без изменений новой редакции не даёт, значит и утверждений не прибавляет.
+    await run(s.id);
+    expect(await canonCount(s.id)).toBe(2);
+  });
+
+  it('в канон идёт только неизменчивое: срок сдачи остаётся снимком, а не утверждением', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-i-demo.test/api/object?id={id}' } }, 'registry-i-demo.test'), 'registry-i-demo.test');
+    const base = {
+      objId: 70001,
+      objCommercNm: 'Демо-Сроки',
+      groupName: null,
+      developer: { shortName: 'СЗ СРОКИ', devInn: '7810186540', orgForm: { shortForm: 'ООО' } },
+    };
+    routes.set(s.url('/api/object?id=62087'), json(objectAnswer(base)));
+    await run(s.id);
+    routes.set(s.url('/api/object?id=62087'), json(objectAnswer({ ...base, objReadyDt: '2029-03-31' })));
+    await run(s.id);
+
+    // Две редакции и два снимка — но ни одного утверждения про срок, сумму или событие.
+    expect(await revisions(s.id)).toHaveLength(2);
+    expect(await records(s.id)).toHaveLength(2);
+    expect(await canonCount(s.id, `(a.event_type IS NOT NULL OR a.valid_from IS NOT NULL OR a.value_numeric IS NOT NULL)`)).toBe(0);
+    // Роль застройщика при этом записана один раз, а не по разу на снимок.
+    expect(await canonCount(s.id, `a.predicate = 'participates_in_project'`)).toBe(1);
+  });
+});

@@ -38,6 +38,9 @@ export class NotFoundError extends Error {
   }
 }
 
+/** Кто источник записи: модель, старые данные, оператор или реестр (этап 20B). */
+export type AssertionOrigin = 'extraction' | 'legacy_import' | 'manual' | 'registry';
+
 export interface IAssertionRow {
   id: number;
   status: string;
@@ -49,7 +52,7 @@ export const upsertAssertion = async (
   client: PoolClient,
   content: IAssertionContent,
   meta: {
-    origin: 'extraction' | 'legacy_import' | 'manual';
+    origin: AssertionOrigin;
     confidenceExtraction: number | null;
     confidenceIdentity: number | null;
     supersedesAssertionId?: number | null;
@@ -159,7 +162,7 @@ export interface IEvidenceInput {
   revisionId: number;
   stance: EvidenceStance;
   span: IEvidenceSpan;
-  origin: 'extraction' | 'legacy_import' | 'manual';
+  origin: AssertionOrigin;
   extractionId: number | null;
   legacyKind: 'mention' | 'event' | 'project_participant' | null;
   legacyId: number | null;

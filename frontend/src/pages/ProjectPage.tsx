@@ -5,6 +5,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { IProjectDossier } from '../api/types';
 import { GraphPanel } from '../components/GraphPanel';
+import { RegistryPanel } from '../components/RegistryPanel';
 import { StatementList } from '../components/StatementList';
 import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, IN_PERIOD_LABELS, PRECISION_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../lib/labels';
 import styles from './Dossier.module.css';
@@ -63,6 +64,8 @@ export const ProjectPage: FC = () => {
           </p>
         )}
       </header>
+
+      <RegistryPanel registry={d.registry} title="Данные реестра" />
 
       <section className={styles.section} aria-labelledby="state">
         <h2 id="state" className={styles.sectionTitle}>Состояние по действительной дате</h2>

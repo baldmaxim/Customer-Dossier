@@ -9,7 +9,9 @@
 
 import type { PoolClient } from 'pg';
 
+import { env } from '../../config/env.js';
 import { withTransaction } from '../../db/pool.js';
+import { publishRegistryRecord } from '../../registry/publish.js';
 import { itemIdentity } from '../../revisions/identity.js';
 import { pathAllowed } from '../profileMeta.js';
 import { listPageDegraded } from '../sourceHealth.js';
@@ -76,6 +78,9 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
   const prefixes = profile.meta?.allowedPathPrefixes ?? [];
   const cursor = (source.cursor.registry ?? {}) as IRegistryCursor;
   let requests = 0;
+  let publishedAssertions = 0;
+  let publishSkipped = 0;
+  let publishFailed = 0;
 
   const fetchJson = async (url: string): Promise<JsonFetch> => {
     if (requests > 0) await sleep(profile.limits.delayMs);
@@ -108,13 +113,18 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
     if (report.outcome === 'ok') report.outcome = 'parser_degraded';
   };
 
-  /** Снимок и редакция — одной транзакцией: снимок без своей редакции не существует. */
+  /**
+   * Снимок и редакция — одной транзакцией: снимок без своей редакции не существует.
+   * Канон — отдельной: отказ публикации не должен уносить собранные данные,
+   * как и у конвейера моделью (отказ — исход набора, а не падение запуска).
+   */
   const persist = async (doc: IIncomingDocument, record: IRegistryRecord, url: string, result: SiteFetchResult): Promise<void> => {
     if (dryRun) {
       report.counts.saved += 1;
       return;
     }
     const itemKey = itemIdentity({ externalId: doc.externalId, url: doc.url, body: doc.body }).key;
+    let publishable: number | null = null;
     await withTransaction(async (client: PoolClient) => {
       const stored = await storeDocument(doc, client);
       report.counts[STORE_COUNT[stored.outcome]] += 1;
@@ -127,9 +137,26 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
           record,
           fetchedAt: doc.fetchedAt ?? new Date(),
         });
+        publishable = stored.revisionId;
       }
       await saveConditional(client, source.id, url, result);
     });
+
+    if (publishable === null || !env.REGISTRY_PUBLISH_ENABLED) return;
+    try {
+      const published = await withTransaction(client => publishRegistryRecord(client, { revisionId: publishable!, body: doc.body, record }));
+      publishedAssertions += published.assertions;
+      for (const skip of published.skipped) {
+        publishSkipped += 1;
+        report.errors.push(`канон по записи ${url}: ${skip.what} — ${skip.reason}`);
+      }
+    } catch (err) {
+      // Собранное остаётся в базе; повторная публикация возможна следующим проходом.
+      publishFailed += 1;
+      const message = err instanceof Error ? err.message : String(err);
+      report.errors.push(`канон по записи ${url}: ${message}`);
+      report.healthReason = report.healthReason ?? `канон записан не полностью: ${message}`;
+    }
   };
 
   const addSample = (doc: IIncomingDocument): void => {
@@ -298,6 +325,10 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
   report.coverage.objects = objectIds.length;
   report.coverage.developers = profile.developerIds.length;
   report.coverage.requests = requests;
+  report.coverage.publishedAssertions = publishedAssertions;
+  report.coverage.publishSkipped = publishSkipped;
+  report.coverage.publishFailed = publishFailed;
+  report.coverage.publishEnabled = env.REGISTRY_PUBLISH_ENABLED;
   report.coverage.note =
     'реестр отдаёт текущее состояние записи; полнота каталога и история изменений до первого сбора неизвестны';
   if (report.outcome === 'ok' && report.health === 'ok' && report.counts.failed > 0) {

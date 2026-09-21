@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
+import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
 
@@ -195,7 +196,10 @@ companiesRouter.get('/:id', async (req, res) => {
     [id],
   );
 
-  res.json({ company, aliases, identifiers, relations });
+  // Реестр: карточка застройщика и его объекты по снимкам (этап 20B).
+  const registry = await loadCompanyRegistry(getPool(), id);
+  const registryProjects = await loadCompanyRegistryProjects(getPool(), id);
+  res.json({ company, aliases, identifiers, relations, registry, registryProjects });
 });
 
 /**

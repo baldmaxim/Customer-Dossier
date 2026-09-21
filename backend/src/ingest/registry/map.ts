@@ -40,6 +40,8 @@ export interface IRegistryIdentity {
 
 export interface IRegistryRecord {
   type: RegistryRecordType;
+  /** Вид объекта по профилю источника; у карточки застройщика не задан. */
+  projectKind?: 'residential' | 'office' | 'industrial' | 'infrastructure' | 'social' | 'other';
   identity: IRegistryIdentity;
   fields: IRegistryField[];
   payload: Record<string, unknown>;
@@ -186,7 +188,7 @@ export const mapRecord = (body: unknown, profile: IRegistryProfile, type: Regist
   };
   const fields = mapFields(root, profile.fields.object);
   const payload = toPayload(identity, fields);
-  return { type, identity, fields, payload, payloadHash: payloadHash(payload) };
+  return { type, projectKind: ident.projectKind, identity, fields, payload, payloadHash: payloadHash(payload) };
 };
 
 /** Форма хранения снимка: то же, что показывается, и ничего сверх того. */

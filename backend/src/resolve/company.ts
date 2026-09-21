@@ -48,6 +48,8 @@ export interface IResolveInput {
   documentId?: number | null;
   /** Редакция-основание: якорь реквизита и неоднозначного совпадения. */
   revisionId?: number | null;
+  /** Происхождение реквизита, если компания создаётся: по умолчанию разбор модели. */
+  identifierOrigin?: 'extraction' | 'manual' | 'registry';
 }
 
 export type ResolveMethod =
@@ -154,7 +156,7 @@ const createCompany = async (
   await addAlias(exec, id, input.surface, normalized);
   const typed = acceptedTaxId ? classifyTaxId(acceptedTaxId) : null;
   if (typed) {
-    await addIdentifier(exec, { ...typed, companyId: id, origin: 'extraction', sourceRevisionId: input.revisionId ?? null });
+    await addIdentifier(exec, { ...typed, companyId: id, origin: input.identifierOrigin ?? 'extraction', sourceRevisionId: input.revisionId ?? null });
   }
   return id;
 };

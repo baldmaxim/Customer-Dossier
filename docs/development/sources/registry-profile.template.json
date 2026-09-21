@@ -15,6 +15,7 @@
     "object": {
       "idPath": "objId",
       "namePath": "objCommercNm",
+      "projectKind": "residential",
       "cityPath": "rpdRegionName",
       "addressPath": "objAddr",
       "developerNamePath": "developer.shortName",
