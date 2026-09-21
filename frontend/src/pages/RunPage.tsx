@@ -3,26 +3,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { IRunDetail } from '../api/types';
+import type { IEnqueueResult, IRunDetail } from '../api/types';
 import { PublishPreviewPanel } from '../components/PublishPreviewPanel';
 import { describeLoadError } from '../lib/loadError';
 import {
   CANDIDATE_SET_STATUS_LABELS,
   CANDIDATE_VERDICT_LABELS,
   CHUNK_OUTCOME_LABELS,
+  ENQUEUE_OUTCOME_LABELS,
   RUN_STATUS_LABELS,
   formatDateTime,
 } from '../lib/labels';
 import styles from './Dossier.module.css';
-
-interface IActionResult {
-  outcome: string;
-  runId?: number;
-  reason?: string;
-  note?: string;
-  error?: string;
-  pipelineEnabled?: boolean;
-}
 
 /** Карточка запуска (этап 15B): редакция и публикация, цепочка повторов, чанки и ответы, кандидаты с цитатами. */
 export const RunPage: FC = () => {
@@ -39,16 +31,14 @@ export const RunPage: FC = () => {
   });
 
   const action = useMutation({
-    mutationFn: (path: string) => api.post<IActionResult>(path, {}),
+    mutationFn: (path: string) => api.post<IEnqueueResult>(path, {}),
     onSuccess: r => {
-      const texts: Record<string, string> = {
-        queued: `Поставлен запуск #${r.runId}.`,
-        already_live: `Такой запуск уже в работе: #${r.runId}.`,
-        already_retried: `Повтор уже поставлен: #${r.runId}.`,
-        cancelled: r.note ?? 'Запуск отменён.',
-      };
+      // Подписи исходов — общие с постановкой из админки и истории редакций (lib/labels.ts).
+      const label = ENQUEUE_OUTCOME_LABELS[r.outcome] ?? r.outcome;
+      const text =
+        r.outcome === 'cancelled' ? (r.note ?? `${label}.`) : r.runId === undefined ? `${label}.` : `${label}: #${r.runId}.`;
       const worker = r.pipelineEnabled === false && (r.outcome === 'queued' || r.outcome === 'already_retried') ? ' Исполнитель выключен: выполните `npm run pipeline:once`.' : '';
-      setNotice((texts[r.outcome] ?? r.outcome) + worker);
+      setNotice(text + worker);
       void queryClient.invalidateQueries({ queryKey: ['run'] });
       void queryClient.invalidateQueries({ queryKey: ['runs'] });
     },

@@ -376,3 +376,56 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Необязательные сведения о вставленной публикации: на 360 px — одна колонка, дальше — две. */
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+@media (min-width: 640px) {
+  .fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Поле в сетке не должно растягивать колонку: flex-basis из .input здесь не нужен. */
+.field .input {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.result {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+
+.result p {
+  margin: 0 0 8px;
+}
+
+.result p:last-child {
+  margin-bottom: 0;
+}
+
+.resultTitle {
+  font-weight: 600;
+}

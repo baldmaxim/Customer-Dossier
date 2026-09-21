@@ -19,7 +19,7 @@
 | 13 | IMPLEMENTED: snapshot-request@1 (409 на чужой ключ, конкурентный повтор), чтение сигналов в транзакции снимка, редакция основания в сигналах, coverage@1 фактов и схемы, dossier-snapshot@2; миграция 022 | NOT_RUN (`evidence/13/USER_RUN.md`) | `stages/13_REPORT.md` |
 | 12 | IMPLEMENTED: scope-match@1, dossier-template@2 (роль/цепочка/противоречия по объекту, корпусу, работам, роли, дате; контекст и scope_unknown), схема связей тем же правилом | NOT_RUN (`evidence/12/USER_RUN.md`) | `stages/12_REPORT.md` |
 
-Этап 09 — исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Закрытие приёмки по усиленным условиям: **PASS (core-gates)** — прогон пользователя 2026-09-16 (`evidence/09/USER_RUN_CLOSURE.md`, `CLOSURE_MATRIX.md`); печать в PDF, 390 px и Cache Storage — NOT_RUN. Этап 10 не открыт. Пакет этапов закрыт. LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
+Этап 09 — исторический статус: **PASS (core-gates)** (прогон пользователя, evidence/09/USER_RUN.md; PRINT_PDF=NOT_RUN). Закрытие приёмки по усиленным условиям: **PASS (core-gates)** — прогон пользователя 2026-09-16 (`evidence/09/USER_RUN_CLOSURE.md`, `CLOSURE_MATRIX.md`); печать в PDF, 390 px и Cache Storage — NOT_RUN. Пакет 10–19 после этого реализован и принят до C1b (разделы выше). LIVE_SOURCE=NOT_RUN. LOCAL_MODEL (синтетика, qwen3-8b): safety 24/25, recall 3/9 — переразбор рабочей базы на extract@3 не начинать.
 Последний этап с пройденными core-gates: 09 (прогоны пользователя: `evidence/02`, `03A`, `03B`, `04`, `05A`, `05B`, `06`, `07`, `08A`, `08B`, `09`).
 Порядок работы: после этапа — отчёт, commit, push в `main`; проверки с Docker — пауза и прогон пользователя.
 
@@ -61,7 +61,7 @@ OS/shell/Node: Windows 10 Pro 19045, PowerShell 5.1 + Git Bash, Node v24.14.1, n
 
 ## Последние артефакты
 
-Report: `docs/development/stages/09_REPORT.md` (раздел «Закрытие приёмки»; 00–08B — там же). Manifest: `CONTENT_MANIFEST.md`. Эксплуатация: `LOCAL_RUNBOOK.md`, готовность: `RELEASE_READINESS.md`. Handoff: `docs/development/HANDOFF.md`.
+Report: `docs/development/stages/09_REPORT.md` (раздел «Закрытие приёмки»; 00–08B — там же). Manifest: `CONTENT_MANIFEST.md`. Эксплуатация: `LOCAL_RUNBOOK.md`, первый настоящий прогон: `FIRST_REAL_DOSSIER.md`, готовность: `RELEASE_READINESS.md`. Handoff: `docs/development/HANDOFF.md`.
 ADR: ADR-001 (оператор, допуск источников), ADR-002 (публикации и редакции), ADR-003 (утверждения и решения),
 ADR-004 (запуски извлечения и публикация наборов), ADR-005 (идентичность и безопасное слияние), ADR-006 (адаптеры сайтов), ADR-007 (Telegram: курсоры, журнал бота), ADR-008 (смысл связей, время, события), ADR-009 (объяснимые сигналы), ADR-010 (обращения и рабочее досье), ADR-011 (схема связей, снимки, выгрузки).
 Проверка у пользователя: `docs/development/TESTING_LOCAL.md`. Результаты прогонов: `docs/development/evidence/*/USER_RUN.md`.
@@ -84,5 +84,9 @@ Commit/push в `main` — разрешены пользователем.
 
 ## Что осталось и следующая безопасная операция
 
-**Пакет 10–19 завершён (2026-09-17); приёмка остановлена на C1b (21.09).** **Следующее действие агента:** нет — ждать задачи
+**Пакет 10–19 завершён (2026-09-17); приёмка остановлена на C1b (21.09).** 21.09 отдельной задачей починен первый
+пользовательский маршрут: ручная вставка сохраняет публикацию с метаданными, первый запуск ставится из интерфейса
+по конкретной редакции, «Запуски» есть в навигации; порядок первого прогона — `FIRST_REAL_DOSSIER.md`, запуск портала —
+`start-portal.ps1`. Готовность этим не повышается: прогон на настоящем источнике и модели — за пользователем.
+**Следующее действие агента:** нет — ждать задачи
 или логов пользователя. При возобновлении приёмки — C1b по `evidence/acceptance_10_19/USER_RUN_CONSOLIDATED.md`. **Пользователя:** прогоны `evidence/10…/USER_RUN.md` на итоговом коде (можно пакетом в конце). По желанию: повторить `release:probe` новой версией (JSON без `availability.checkedAt`) и визуальный проход (PDF, 390 px, Cache Storage). Отдельно: разобрать нарушение safety и промахи полноты по `benchmark-06.json` (у пользователя).

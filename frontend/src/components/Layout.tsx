@@ -41,6 +41,12 @@ const ALL_NAV: Array<INavItem & { dossier?: boolean }> = [
     icon: 'M3.5 20.5h17M7 20.5v-6M12 20.5V7.5M17 20.5v-9',
   },
   {
+    to: '/runs',
+    label: 'Запуски',
+    end: false,
+    icon: 'M4 7.5h9M4 12h9M4 16.5h5M16 9.5l4 2.5-4 2.5v-5Z',
+  },
+  {
     to: '/admin',
     label: 'Админка',
     end: false,

@@ -86,11 +86,15 @@ Legacy apply и `clearDocumentContribution` не возвращать. Слия�
 Этапы 10–19 реализованы; приёмка 10–19 остановлена владельцем 21.09 на шаге C1b (точка кода `11e88af`).
 Варианты: возобновить с C1b по `evidence/acceptance_10_19/USER_RUN_CONSOLIDATED.md`; либо эксплуатация на синтетике
 с выключенным фоном и источниками в `paused`. Пилот — только по манифесту (`npm run pilot:check`) и решению владельца.
+21.09 починен первый пользовательский маршрут (ручная вставка с метаданными, постановка первого запуска по редакции
+из интерфейса, «Запуски» в навигации, `start-portal.ps1`). Ближайшее — прогон пользователя по `FIRST_REAL_DOSSIER.md`
+на отдельной постоянной базе: выбор источника, допуск, сбор, разбор, проверка, досье и снимок. Статусы
+LOCAL_MODEL_VALIDATED и LIVE_SOURCE_VALIDATED от этого не меняются.
 
 ## Запреты
 Не писать в рабочую БД; не включать MERGE_APPLY_ENABLED на рабочей базе без backup; не подключать источники/облачную модель;
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`09_USER_ACCEPTANCE.md`, `prompts/TG_Info_Next_Stages_2026-09-16/README_START_HERE.md` и `COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `evidence/09/CLOSURE_MATRIX.md`, `evidence/09/USER_RUN_CLOSURE.md`, `CONTENT_MANIFEST.md`, `LOCAL_RUNBOOK.md`, `RELEASE_READINESS.md`, ADR-011,
+`09_USER_ACCEPTANCE.md`, `prompts/TG_Info_Next_Stages_2026-09-16/README_START_HERE.md` и `COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `evidence/09/CLOSURE_MATRIX.md`, `evidence/09/USER_RUN_CLOSURE.md`, `CONTENT_MANIFEST.md`, `LOCAL_RUNBOOK.md`, `FIRST_REAL_DOSSIER.md`, `RELEASE_READINESS.md`, ADR-011,
 `TESTING_LOCAL.md`; ключевые файлы: `backend/src/snapshot/*.ts`, `backend/src/graph/*.ts`, `docs/migrations/020_dossier_snapshots.sql`, `frontend/src/pages/SnapshotPage.tsx`.

@@ -1022,3 +1022,35 @@ export interface IPublishResult {
   evidenceAdded: number;
   evidenceSuperseded: number;
 }
+
+// Первое досье: ручная вставка и постановка запуска по одной редакции
+/** Исход сохранения текста. Сохранение — не разбор: запуск ставится отдельным действием. */
+export type ManualPasteOutcome =
+  | 'inserted'
+  | 'duplicate'
+  | 'new_revision'
+  | 'unchanged'
+  | 'stale'
+  | 'too_short'
+  | 'edited_skipped';
+
+export interface IManualPasteResult {
+  outcome: ManualPasteOutcome;
+  /** Legacy-документ с цитатами; null — текст не сохранён (too_short, edited_skipped). */
+  documentId: number | null;
+  sourceItemId: number | null;
+  revisionId: number | null;
+  revisionNo: number | null;
+}
+
+/** Ответ постановки, повтора и отмены запуска. Неуспешные исходы приходят с `error` и `code`. */
+export interface IEnqueueResult {
+  outcome: string;
+  runId?: number;
+  reason?: string;
+  note?: string;
+  error?: string;
+  code?: string;
+  /** false — поставленное выполнит только `npm run pipeline:once`. */
+  pipelineEnabled?: boolean;
+}

@@ -73,10 +73,13 @@ manualRouter.post('/', async (req, res) => {
   );
 
   const status = result.outcome === 'inserted' ? 201 : 200;
+  // Сохранение — не разбор: идентификаторы возвращаются, чтобы оператор открыл публикацию
+  // и отдельным действием поставил запуск по конкретной редакции.
   res.status(status).json({
     outcome: result.outcome,
     documentId: result.documentId,
     sourceItemId: result.sourceItemId,
     revisionId: result.revisionId,
+    revisionNo: result.revisionNo,
   });
 });

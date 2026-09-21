@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IDiffResponse, IRevision, IRevisionMeta } from '../api/types';
+import { EnqueueRunButton } from './EnqueueRunButton';
 import { CHRONOLOGY_LABELS, COMPLETENESS_LABELS, formatDateTime } from '../lib/labels';
 import styles from './RevisionHistory.module.css';
 
@@ -87,6 +88,8 @@ export const RevisionHistory: FC<IRevisionHistoryProps> = ({ itemId, latestRevis
                     >
                       Сравнить с показанной
                     </button>
+                    {/* Первый запуск по известной редакции ставится отсюда: существующий запуск для этого не нужен. */}
+                    <EnqueueRunButton revisionId={r.id} className={styles.button} label="Поставить на разбор" />
                   </div>
                 </td>
               </tr>

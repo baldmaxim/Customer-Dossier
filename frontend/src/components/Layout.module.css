@@ -185,6 +185,9 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
+    /* Шестая вкладка не должна распирать панель на 360 px: колонка ужимается, подпись переносится. */
+    min-width: 0;
+    padding: 0 2px;
     /* Тап-цель заведомо больше 44 px. */
     min-height: 48px;
     color: var(--muted);
@@ -215,6 +218,8 @@
 
   .tabLabel {
     line-height: 1.1;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
 }
 

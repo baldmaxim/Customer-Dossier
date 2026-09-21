@@ -2,6 +2,7 @@
 // Доступ — после входа оператора; изменяющие запросы — с CSRF (app.ts).
 // Этап 15B: список с фильтрами и курсором, карточка запуска, точечные enqueue/retry/cancel, публикация с токеном предпросмотра.
 
+import type { Response } from 'express';
 import { z } from 'zod';
 
 import { env } from '../config/env.js';
@@ -73,6 +74,26 @@ reprocessRouter.get('/reprocess/runs/:id', async (req, res) => {
 
 const ENQUEUE_STATUS: Record<string, number> = { queued: 201, already_live: 200, already_retried: 200, refused_policy: 422, not_found: 404, not_retryable: 409 };
 
+const ENQUEUE_ERROR: Record<string, string> = {
+  refused_policy: 'ИИ-обработка источника не допущена',
+  not_found: 'Редакция или запуск не найдены',
+  not_retryable: 'Этот запуск не повторяется',
+};
+
+/**
+ * Отказ — не молчаливый номер статуса: причина словами в `error` и машинный код в `code`, как в остальных
+ * маршрутах. Тело успешных исходов не меняется: клиент читает `outcome`, `runId` и `pipelineEnabled`.
+ */
+const sendEnqueue = (res: Response, result: { outcome: string; reason?: string }): void => {
+  const status = ENQUEUE_STATUS[result.outcome] ?? 200;
+  const body: Record<string, unknown> = { ...result, pipelineEnabled: env.PIPELINE_ENABLED };
+  if (status >= 400) {
+    body.code = result.outcome;
+    body.error = result.reason ?? ENQUEUE_ERROR[result.outcome] ?? 'Запуск не поставлен';
+  }
+  res.status(status).json(body);
+};
+
 reprocessRouter.post('/reprocess/revisions/:id/runs', async (req, res) => {
   const id = idOf(req.params.id);
   if (id === null) {
@@ -81,7 +102,7 @@ reprocessRouter.post('/reprocess/revisions/:id/runs', async (req, res) => {
   }
   // Постановка не вызывает модель: выполнит worker (PIPELINE_ENABLED) или `pipeline:once`.
   const result = await enqueueRevision(id, lmStudioProvider(), 'operator');
-  res.status(ENQUEUE_STATUS[result.outcome] ?? 200).json({ ...result, pipelineEnabled: env.PIPELINE_ENABLED });
+  sendEnqueue(res, result);
 });
 
 reprocessRouter.post('/reprocess/runs/:id/retry', async (req, res) => {
@@ -91,7 +112,7 @@ reprocessRouter.post('/reprocess/runs/:id/retry', async (req, res) => {
     return;
   }
   const result = await retryRunOnce(id, lmStudioProvider(), 'operator');
-  res.status(ENQUEUE_STATUS[result.outcome] ?? 200).json({ ...result, pipelineEnabled: env.PIPELINE_ENABLED });
+  sendEnqueue(res, result);
 });
 
 reprocessRouter.post('/reprocess/runs/:id/cancel', async (req, res) => {
