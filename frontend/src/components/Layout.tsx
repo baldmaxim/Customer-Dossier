@@ -20,22 +20,10 @@ const NAV: INavItem[] = [
     icon: 'M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5',
   },
   {
-    to: '/review',
-    label: 'Проверка',
-    end: false,
-    icon: 'M4.5 12.5l4.5 4.5 10.5-10.5',
-  },
-  {
     to: '/contractors',
     label: 'Подрядчики',
     end: false,
     icon: 'M3.5 20.5h17M7 20.5v-6M12 20.5V7.5M17 20.5v-9',
-  },
-  {
-    to: '/runs',
-    label: 'Запуски',
-    end: false,
-    icon: 'M4 7.5h9M4 12h9M4 16.5h5M16 9.5l4 2.5-4 2.5v-5Z',
   },
   {
     to: '/admin',

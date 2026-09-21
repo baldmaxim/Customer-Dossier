@@ -143,7 +143,7 @@ export const PublishPreviewPanel: FC<{ setId: number }> = ({ setId }) => {
         <button type="button" className={styles.button} onClick={() => void preview.refetch()}>
           Обновить предпросмотр
         </button>
-        <Link to="/review">Очередь проверки</Link>
+        <Link to="/admin/review">Очередь проверки</Link>
       </div>
     </div>
   );

@@ -2,14 +2,14 @@ import { FC, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { api } from '../api/client';
-import type { IRunPage, RunStatus } from '../api/types';
-import { describeLoadError } from '../lib/loadError';
-import { CANDIDATE_SET_STATUS_LABELS, RUN_STATUS_LABELS, formatDateTime } from '../lib/labels';
-import { Button } from '../components/ui/Button';
-import { EmptyState } from '../components/ui/Section';
-import { TableScroll } from '../components/ui/TableScroll';
-import styles from './Dossier.module.css';
+import { api } from '../../api/client';
+import type { IRunPage, RunStatus } from '../../api/types';
+import { describeLoadError } from '../../lib/loadError';
+import { CANDIDATE_SET_STATUS_LABELS, RUN_STATUS_LABELS, formatDateTime } from '../../lib/labels';
+import { Button } from '../../components/ui/Button';
+import { EmptyState } from '../../components/ui/Section';
+import { TableScroll } from '../../components/ui/TableScroll';
+import styles from '../Dossier.module.css';
 
 const PAGE = 50;
 const STATUSES: RunStatus[] = ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled'];
@@ -145,7 +145,7 @@ export const RunsPage: FC = () => {
             {data?.items.map(r => (
               <tr key={r.id}>
                 <td>
-                  <Link to={`/runs/${r.id}`}>#{r.id}</Link>
+                  <Link to={`/admin/process/${r.id}`}>#{r.id}</Link>
                   {r.previousRunId !== null && <span className={styles.meta}> ← #{r.previousRunId}</span>}
                 </td>
                 <td>

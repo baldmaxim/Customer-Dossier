@@ -521,6 +521,32 @@ export interface ISignalRefreshState {
   staleReasons: string[];
 }
 
+/** Сводка по базе для главной и для ступени «Результат». */
+export interface ISummaryResponse {
+  byIdentity: Array<{ identityStatus: string; n: number }>;
+  totals: {
+    companies: number;
+    projects: number;
+    documents: number;
+    pendingMerges: number;
+    lonelyCompanies: number;
+  } | null;
+  refresh: ISignalRefreshState;
+}
+
+/** Состояние конвейера: очередь, извлечения и включённость фоновых заданий. */
+export interface IPipelineOverview {
+  queue: Array<{ status: string; n: number }>;
+  extractions: Array<{ promptVersion: string; model: string; status: string; n: number }>;
+  rejectedEvents: Array<{ type: string; n: number }>;
+  worker: {
+    ingestEnabled: boolean;
+    pipelineEnabled: boolean;
+    autoPublish: boolean;
+    metricsAutoRefresh: boolean;
+  };
+}
+
 export interface ISignalsResponse {
   status: 'ok' | 'not_computed' | 'not_in_snapshot';
   refresh: ISignalRefreshState;

@@ -2,13 +2,13 @@ import { FC, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { api } from '../api/client';
-import type { IReviewQueueItem } from '../api/types';
-import { AmbiguityDetail } from '../components/AmbiguityDetail';
-import { AmbiguityList } from '../components/AmbiguityList';
-import { AssertionDetail } from '../components/AssertionDetail';
-import { REVIEW_QUEUE_KIND_LABELS, formatDateTime } from '../lib/labels';
-import styles from './Dossier.module.css';
+import { api } from '../../api/client';
+import type { IReviewQueueItem } from '../../api/types';
+import { AmbiguityDetail } from '../../components/AmbiguityDetail';
+import { AmbiguityList } from '../../components/AmbiguityList';
+import { AssertionDetail } from '../../components/AssertionDetail';
+import { REVIEW_QUEUE_KIND_LABELS, formatDateTime } from '../../lib/labels';
+import styles from '../Dossier.module.css';
 
 const KINDS = ['all', 'identity', 'polarity_conflict', 'role_period_conflict', 'correction', 'dispute'] as const;
 

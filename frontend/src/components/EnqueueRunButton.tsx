@@ -67,7 +67,7 @@ export const EnqueueRunButton: FC<IEnqueueRunButtonProps> = ({ revisionId, class
           {result.runId !== undefined && (
             <>
               {': '}
-              <Link to={`/runs/${result.runId}`}>запуск #{result.runId}</Link>
+              <Link to={`/admin/process/${result.runId}`}>запуск #{result.runId}</Link>
             </>
           )}
           {'. '}

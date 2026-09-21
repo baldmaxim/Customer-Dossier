@@ -1,17 +1,20 @@
 import { FC } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import { Layout } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
-import { AdminPage } from './pages/AdminPage';
+import { AdminLayout } from './pages/admin/AdminLayout';
+import { CollectPage } from './pages/admin/CollectPage';
+import { PipelinePage } from './pages/admin/PipelinePage';
+import { ResultPage } from './pages/admin/ResultPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { ProjectPage } from './pages/ProjectPage';
-import { RunPage } from './pages/RunPage';
-import { RunsPage } from './pages/RunsPage';
-import { ReviewQueuePage } from './pages/ReviewQueuePage';
+import { RunPage } from './pages/admin/RunPage';
+import { RunsPage } from './pages/admin/RunsPage';
+import { ReviewQueuePage } from './pages/admin/ReviewQueuePage';
 import { SearchPage } from './pages/SearchPage';
 
 const queryClient = new QueryClient({
@@ -26,6 +29,12 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Старая ссылка на запуск: номер сохраняется. */
+const RunsRedirect: FC = () => {
+  const { id } = useParams();
+  return <Navigate to={`/admin/process/${id ?? ''}`} replace />;
+};
+
 /** Вход снят на время разработки: портал открывается сразу. */
 const Portal: FC = () => (
   <Layout>
@@ -34,11 +43,23 @@ const Portal: FC = () => (
       <Route path="/company/:id" element={<CompanyPage />} />
       <Route path="/contractors" element={<ContractorsPage />} />
       <Route path="/documents/:id" element={<DocumentPage />} />
-      <Route path="/admin" element={<AdminPage />} />
-      <Route path="/runs" element={<RunsPage />} />
-      <Route path="/runs/:id" element={<RunPage />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
-      <Route path="/review" element={<ReviewQueuePage />} />
+
+      {/* Админка — конвейер: сбор → обработка → результат. Вложенный роут один,
+          и только здесь: подшапка ступеней рисуется один раз. */}
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<PipelinePage />} />
+        <Route path="collect" element={<CollectPage />} />
+        <Route path="process" element={<RunsPage />} />
+        <Route path="process/:id" element={<RunPage />} />
+        <Route path="result" element={<ResultPage />} />
+        <Route path="review" element={<ReviewQueuePage />} />
+      </Route>
+
+      {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов. */}
+      <Route path="/runs" element={<Navigate to="/admin/process" replace />} />
+      <Route path="/runs/:id" element={<RunsRedirect />} />
+      <Route path="/review" element={<Navigate to="/admin/review" replace />} />
       {/* Обращения и снимки сняты с портала: данные в базе целы, экранов нет.
           Редиректы постоянные — по старым ссылкам из закладок и отчётов. */}
       <Route path="/cases/*" element={<Navigate to="/" replace />} />

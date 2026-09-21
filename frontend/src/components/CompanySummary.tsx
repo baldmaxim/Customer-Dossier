@@ -72,7 +72,7 @@ export const CompanySummary: FC<{ companyId: number }> = ({ companyId }) => {
             <ul className={styles.list}>
               {s.contradictions.map(c => (
                 <li key={`${c.kind}-${c.assertionId}`} className={styles.listItem}>
-                  {REVIEW_QUEUE_KIND_LABELS[c.kind] ?? c.kind} · утверждение #{c.assertionId} · <Link to="/review">в очередь проверки</Link>
+                  {REVIEW_QUEUE_KIND_LABELS[c.kind] ?? c.kind} · утверждение #{c.assertionId} · <Link to="/admin/review">в очередь проверки</Link>
                 </li>
               ))}
             </ul>

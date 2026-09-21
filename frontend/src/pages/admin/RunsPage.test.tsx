@@ -2,7 +2,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { fakeApi, offlineApi, renderWithProviders } from '../test/render';
+import { fakeApi, offlineApi, renderWithProviders } from '../../test/render';
 import { RunsPage } from './RunsPage';
 
 const run = (id: number) => ({

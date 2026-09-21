@@ -17,7 +17,7 @@ const noHorizontalOverflow = async (page: Page): Promise<void> => {
 
 test('T18-02 кэш service worker: ответы /api не сохраняются', async ({ page }) => {
   await open(page, '/');
-  await open(page, '/runs');
+  await open(page, '/admin/process');
   await noHorizontalOverflow(page);
 
   const cachedApi = await page.evaluate(async () => {
@@ -40,16 +40,16 @@ test('T18-03 Origin и Host: запрос с чужой страницы и на
 });
 
 test('T18-01 очередь проверки: неоднозначности постранично, «всего» по фильтру', async ({ page }) => {
-  await open(page, '/review');
+  await open(page, '/admin/review');
   await page.getByLabel('Вид').selectOption('identity');
   await expect(page.getByText(/Всего: \d+; страница 1/)).toBeVisible();
   await noHorizontalOverflow(page);
 });
 
 test('T18-01 запуски: список отличает пустой результат от ошибки; карточка открывается', async ({ page }) => {
-  await open(page, '/runs');
+  await open(page, '/admin/process');
   await expect(page.getByText(/Всего по фильтру: \d+/)).toBeVisible();
-  const link = page.locator('table a[href^="/runs/"]').first();
+  const link = page.locator('table a[href^="/admin/process/"]').first();
   if ((await link.count()) > 0) {
     await link.click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Запуск #');
@@ -59,7 +59,7 @@ test('T18-01 запуски: список отличает пустой резу
 });
 
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
-  for (const path of ['/', '/review', '/runs', '/admin', '/contractors']) {
+  for (const path of ['/', '/contractors', '/admin', '/admin/collect', '/admin/process', '/admin/result', '/admin/review']) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await noHorizontalOverflow(page);

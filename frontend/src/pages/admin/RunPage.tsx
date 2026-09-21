@@ -2,10 +2,10 @@ import { FC, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
-import { api } from '../api/client';
-import type { IEnqueueResult, IRunDetail } from '../api/types';
-import { PublishPreviewPanel } from '../components/PublishPreviewPanel';
-import { describeLoadError } from '../lib/loadError';
+import { api } from '../../api/client';
+import type { IEnqueueResult, IRunDetail } from '../../api/types';
+import { PublishPreviewPanel } from '../../components/PublishPreviewPanel';
+import { describeLoadError } from '../../lib/loadError';
 import {
   CANDIDATE_SET_STATUS_LABELS,
   CANDIDATE_VERDICT_LABELS,
@@ -13,8 +13,8 @@ import {
   ENQUEUE_OUTCOME_LABELS,
   RUN_STATUS_LABELS,
   formatDateTime,
-} from '../lib/labels';
-import styles from './Dossier.module.css';
+} from '../../lib/labels';
+import styles from '../Dossier.module.css';
 
 /** Карточка запуска (этап 15B): редакция и публикация, цепочка повторов, чанки и ответы, кандидаты с цитатами. */
 export const RunPage: FC = () => {
@@ -52,7 +52,7 @@ export const RunPage: FC = () => {
         <p className={styles.error} role="alert">
           {run.isError ? describeLoadError(run.error) : 'Некорректный номер запуска.'}
         </p>
-        <Link to="/runs">К списку запусков</Link>
+        <Link to="/admin/process">К списку запусков</Link>
       </div>
     );
   }
@@ -64,7 +64,7 @@ export const RunPage: FC = () => {
     <div className={styles.page}>
       <header className={styles.header}>
         <p className={styles.meta}>
-          <Link to="/runs">Запуски</Link> / #{r.id}
+          <Link to="/admin/process">Запуски</Link> / #{r.id}
         </p>
         <h1 className={styles.title}>
           Запуск #{r.id}: {RUN_STATUS_LABELS[r.status] ?? r.status}
@@ -112,7 +112,7 @@ export const RunPage: FC = () => {
               {' '}
               · повторы:{' '}
               {r.lineage.retries.map(x => (
-                <Link key={x.id} to={`/runs/${x.id}`}>
+                <Link key={x.id} to={`/admin/process/${x.id}`}>
                   #{x.id} ({RUN_STATUS_LABELS[x.status] ?? x.status}){' '}
                 </Link>
               ))}
@@ -192,7 +192,7 @@ export const RunPage: FC = () => {
         </ul>
         {r.ambiguities.length > 0 && (
           <p className={styles.meta}>
-            Неоднозначные упоминания этой редакции: {r.ambiguities.map(a => `«${a.surface}» (${a.status})`).join(', ')} — разбор в <Link to="/review">очереди проверки</Link>. Решение по
+            Неоднозначные упоминания этой редакции: {r.ambiguities.map(a => `«${a.surface}» (${a.status})`).join(', ')} — разбор в <Link to="/admin/review">очереди проверки</Link>. Решение по
             упоминанию не публикует набор и не сливает компании.
           </p>
         )}

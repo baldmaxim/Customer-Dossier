@@ -7,6 +7,7 @@
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { z } from 'zod';
 
+import { env } from '../config/env.js';
 import { query, execute } from '../db/pool.js';
 import { rejectMerge, listPendingMerges } from '../resolve/merge.js';
 import {
@@ -381,5 +382,17 @@ adminRouter.get('/pipeline', async (_req, res) => {
   const rejected = await query(
     `SELECT type, count(*)::int AS n FROM events WHERE status = 'rejected' GROUP BY type`,
   );
-  res.json({ queue, extractions, rejectedEvents: rejected });
+  // Состояние фоновых заданий — здесь, а не только в /reprocess/runs: экран конвейера
+  // обязан отличать «выключено оператором» от «сломано» и от «нет данных».
+  res.json({
+    queue,
+    extractions,
+    rejectedEvents: rejected,
+    worker: {
+      ingestEnabled: env.INGEST_ENABLED,
+      pipelineEnabled: env.PIPELINE_ENABLED,
+      autoPublish: env.REPROCESS_AUTO_PUBLISH,
+      metricsAutoRefresh: env.METRICS_AUTO_REFRESH,
+    },
+  });
 });

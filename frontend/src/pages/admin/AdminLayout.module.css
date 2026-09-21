@@ -1,0 +1,81 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+
+.lead {
+  max-width: var(--prose);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+/* Ступени конвейера. На телефоне — полоса с прокруткой внутри себя, не второй
+   таб-бар: третьей навигации в дереве быть не должно. */
+.steps {
+  display: flex;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-1);
+  overflow-x: auto;
+  overscroll-behavior: contain;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--ctl-h);
+  padding: 0 var(--ctl-px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.step:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.stepActive {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.stepNo {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepActive .stepNo {
+  color: var(--accent);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: var(--fs-md);
+}
+
+.noticeText {
+  flex: 1;
+  min-width: 0;
+}
