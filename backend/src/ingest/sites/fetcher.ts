@@ -75,10 +75,13 @@ export const fetchSitePage = async (
   url: string,
   policy: ISourceNetworkPolicy,
   conditional: IConditional | null,
+  /** Заголовки адаптера: реестру нужен accept: application/json, иначе сервер вправе отдать HTML. */
+  extraHeaders: Readonly<Record<string, string>> = {},
 ): Promise<SiteFetchResult> => {
   const headers: Record<string, string> = {
     'user-agent': env.INGEST_USER_AGENT,
     'accept-language': 'ru,en;q=0.8',
+    ...extraHeaders,
   };
   if (conditional?.etag) headers['if-none-match'] = conditional.etag;
   if (conditional?.lastModified) headers['if-modified-since'] = conditional.lastModified;

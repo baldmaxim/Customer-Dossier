@@ -85,7 +85,7 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
   const fetchJson = async (url: string): Promise<JsonFetch> => {
     if (requests > 0) await sleep(profile.limits.delayMs);
     requests += 1;
-    const result = await fetchSitePage(url, policy, dryRun ? null : await loadConditional(source.id, url));
+    const result = await fetchSitePage(url, policy, dryRun ? null : await loadConditional(source.id, url), { accept: 'application/json' });
     if (result.kind === 'not_modified') return { kind: 'not_modified' };
     if (result.kind !== 'ok') return { kind: 'failed', result };
     try {
