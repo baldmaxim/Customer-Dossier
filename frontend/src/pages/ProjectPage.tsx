@@ -157,18 +157,6 @@ export const ProjectPage: FC = () => {
 
       <GraphPanel projectId={projectId} />
 
-      {d.cases.length > 0 && (
-        <section className={styles.section} aria-labelledby="cases">
-          <h2 id="cases" className={styles.sectionTitle}>Обращения по объекту</h2>
-          <ul className={styles.list}>
-            {d.cases.map(c => (
-              <li key={c.id} className={styles.listItem}>
-                <Link to={`/cases/${c.id}`}>{c.title}</Link> · {c.status === 'open' ? 'открыто' : 'закрыто'}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 };

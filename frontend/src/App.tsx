@@ -4,17 +4,13 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { Layout } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
-import { DOSSIER_UI_ENABLED } from './lib/features';
 import { AdminPage } from './pages/AdminPage';
-import { CasePage } from './pages/CasePage';
-import { CasesPage } from './pages/CasesPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { RunPage } from './pages/RunPage';
 import { RunsPage } from './pages/RunsPage';
-import { SnapshotPage } from './pages/SnapshotPage';
 import { ReviewQueuePage } from './pages/ReviewQueuePage';
 import { SearchPage } from './pages/SearchPage';
 
@@ -41,12 +37,12 @@ const Portal: FC = () => (
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/runs" element={<RunsPage />} />
       <Route path="/runs/:id" element={<RunPage />} />
-      {/* Рабочее досье (этап 08A). Откат — VITE_DOSSIER_UI=false: маршруты скрыты, обращения в базе сохраняются. */}
-      {DOSSIER_UI_ENABLED && <Route path="/cases" element={<CasesPage />} />}
-      {DOSSIER_UI_ENABLED && <Route path="/cases/:id" element={<CasePage />} />}
-      {DOSSIER_UI_ENABLED && <Route path="/projects/:id" element={<ProjectPage />} />}
-      {DOSSIER_UI_ENABLED && <Route path="/review" element={<ReviewQueuePage />} />}
-      {DOSSIER_UI_ENABLED && <Route path="/snapshots/:id" element={<SnapshotPage />} />}
+      <Route path="/projects/:id" element={<ProjectPage />} />
+      <Route path="/review" element={<ReviewQueuePage />} />
+      {/* Обращения и снимки сняты с портала: данные в базе целы, экранов нет.
+          Редиректы постоянные — по старым ссылкам из закладок и отчётов. */}
+      <Route path="/cases/*" element={<Navigate to="/" replace />} />
+      <Route path="/snapshots/*" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </Layout>

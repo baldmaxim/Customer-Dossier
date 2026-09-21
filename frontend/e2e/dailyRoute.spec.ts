@@ -1,7 +1,7 @@
-// Ежедневный маршрут аналитика на тестовом стенде (этап 18): Origin-гард, очередь проверки, запуски,
-// обращение → краткое досье → снимок → HTML → печать, отсутствие переполнения по ширине, кэш service worker без /api.
-// Вход по токену снят — портал открывается сразу.
-// Данные — синтетические (seed:test-release, seed:test-brief). Печать в PDF оценивает человек: здесь только файл-артефакт.
+// Ежедневный маршрут на тестовом стенде: Origin- и Host-гарды, очередь проверки, запуски,
+// отсутствие переполнения по ширине, кэш service worker без /api.
+// Вход по токену снят — портал открывается сразу. Обращения и снимки с портала убраны.
+// Данные — синтетические (seed:test-release).
 import { expect, test, type Page } from '@playwright/test';
 
 /** Открыть экран и дождаться, что оболочка портала отрисована. */
@@ -15,16 +15,6 @@ const noHorizontalOverflow = async (page: Page): Promise<void> => {
   expect(scroll, `scrollWidth ${scroll} > innerWidth ${width}`).toBeLessThanOrEqual(width + 1);
 };
 
-const firstCaseId = async (page: Page): Promise<number> => {
-  const res = await page.request.get('/api/cases?limit=20');
-  expect(res.status()).toBe(200);
-  const body = (await res.json()) as { items: Array<{ id: number; title: string }> };
-  const brief = body.items.find(c => c.title.includes('корпуса 3')) ?? body.items[0];
-  if (!brief) throw new Error('обращений нет: выполните seed:test-brief');
-  return brief.id;
-};
-
-// Щит ACC-07: ответы /api не должны попадать в Cache Storage ни при какой навигации.
 test('T18-02 кэш service worker: ответы /api не сохраняются', async ({ page }) => {
   await open(page, '/');
   await open(page, '/runs');
@@ -68,36 +58,8 @@ test('T18-01 запуски: список отличает пустой резу
   await noHorizontalOverflow(page);
 });
 
-test('T18-04 снимок: краткое досье, HTML-выгрузка без скриптов, печатная раскладка', async ({ page }, info) => {
-  await open(page, '/');
-  const id = await firstCaseId(page);
-  const created = await page.request.post(`/api/cases/${id}/snapshots`, { data: { idempotencyKey: `e2e-${info.project.name}-${Date.now()}` } });
-  expect([200, 201]).toContain(created.status());
-  const snapshotId = ((await created.json()) as { id: number }).id;
-
-  await page.goto(`/snapshots/${snapshotId}`);
-  await expect(page.getByRole('heading', { name: 'Кратко для переговоров' })).toBeVisible();
-  await expect(page.getByText('Целостность подтверждена')).toBeVisible();
-  await noHorizontalOverflow(page);
-
-  const html = await page.request.get(`/api/snapshots/${snapshotId}/export.html`);
-  expect(html.status()).toBe(200);
-  const text = await html.text();
-  expect(text).toContain('Кратко для переговоров');
-  expect(text).not.toMatch(/<script/i);
-
-  await page.setContent(text);
-  await page.emulateMedia({ media: 'print' });
-  const overflow = await page.evaluate(() => Array.from(document.querySelectorAll('table, blockquote, p, li')).filter(el => el.scrollWidth > el.clientWidth + 1).length);
-  expect(overflow).toBe(0);
-  if (info.project.name === 'desktop') {
-    // Файл для ручной проверки человеком (обрезка, переносы, основания); PASS печати этим тестом не выставляется.
-    await page.pdf({ path: info.outputPath('snapshot-print.pdf'), format: 'A4', printBackground: true });
-  }
-});
-
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
-  for (const path of ['/', '/cases', '/review', '/runs', '/admin', '/contractors']) {
+  for (const path of ['/', '/review', '/runs', '/admin', '/contractors']) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await noHorizontalOverflow(page);

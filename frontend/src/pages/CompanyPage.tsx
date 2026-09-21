@@ -7,7 +7,6 @@ import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } fr
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
 import { GraphPanel } from '../components/GraphPanel';
-import { DOSSIER_UI_ENABLED } from '../lib/features';
 import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
 import styles from './CompanyPage.module.css';
@@ -136,9 +135,9 @@ export const CompanyPage: FC = () => {
         </div>
       )}
 
-      {DOSSIER_UI_ENABLED && <CompanySummary companyId={companyId} companyName={company.name} />}
+      <CompanySummary companyId={companyId} />
 
-      {DOSSIER_UI_ENABLED && <GraphPanel companyId={companyId} />}
+      <GraphPanel companyId={companyId} />
 
       <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
 
@@ -154,7 +153,7 @@ export const CompanyPage: FC = () => {
             {projects.map(p => (
               <article key={`${p.id}-${p.role}`} className={styles.card}>
                 <div className={styles.projectHead}>
-                  <span className={styles.projectName}>{DOSSIER_UI_ENABLED ? <Link to={`/projects/${p.id}`}>{p.name}</Link> : p.name}</span>
+                  <span className={styles.projectName}><Link to={`/projects/${p.id}`}>{p.name}</Link></span>
                   <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
                   <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
                   {p.city && <span className={styles.tag}>{p.city}</span>}

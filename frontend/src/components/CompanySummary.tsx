@@ -9,7 +9,7 @@ import styles from '../pages/Dossier.module.css';
 import { StatementList } from './StatementList';
 
 /** Верх досье компании: резюме шаблонами, контрагенты по типу связи, противоречия, ограничения выборки, обращения. */
-export const CompanySummary: FC<{ companyId: number; companyName: string }> = ({ companyId, companyName }) => {
+export const CompanySummary: FC<{ companyId: number }> = ({ companyId }) => {
   const query = useQuery({
     queryKey: ['company', companyId, 'dossier-summary'],
     queryFn: () => api.get<ICompanySummary>(`/api/companies/${companyId}/dossier-summary`),
@@ -29,9 +29,6 @@ export const CompanySummary: FC<{ companyId: number; companyName: string }> = ({
       <section className={styles.section} aria-labelledby="summary">
         <div className={styles.row}>
           <h2 id="summary" className={styles.sectionTitle}>Резюме</h2>
-          <Link className={styles.buttonPrimary} to={`/cases?new=1&companyId=${companyId}&companyName=${encodeURIComponent(companyName)}`}>
-            Создать обращение
-          </Link>
         </div>
         <p className={s.stale ? styles.warn : styles.meta}>
           Собрано {formatDateTime(s.generatedAt)}
@@ -82,18 +79,6 @@ export const CompanySummary: FC<{ companyId: number; companyName: string }> = ({
           )}
           <h3 className={styles.sectionTitle}>Ограничения выборки</h3>
           <StatementList items={s.limits} />
-          {s.cases.length > 0 && (
-            <>
-              <h3 className={styles.sectionTitle}>Обращения</h3>
-              <ul className={styles.list}>
-                {s.cases.map(c => (
-                  <li key={c.id} className={styles.listItem}>
-                    <Link to={`/cases/${c.id}`}>{c.title}</Link> · {c.status === 'open' ? 'открыто' : 'закрыто'}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </section>
       </div>
     </div>
