@@ -69,6 +69,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'dossier_case_versions', class: 'history', why: 'неизменяемая история обращений' },
   { table: 'dossier_snapshots', class: 'domain', why: 'снимки: payload, hash, метаданные' },
   { table: 'dossier_snapshot_redactions', class: 'history', why: 'журнал вымарываний с hash до/после' },
+  { table: 'registry_records', class: 'domain', why: 'снимки записей реестра: типизированные поля редакции (этап 20A)' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];

@@ -5,7 +5,7 @@
 import { BOT_CAPABILITIES, WEB_PREVIEW_CAPABILITIES, type CapabilityState } from './telegram/capabilities.js';
 
 export interface IAdapterCapabilities {
-  adapter: 'site_rss' | 'site_html_list' | 'telegram_web_preview' | 'telegram_bot';
+  adapter: 'site_rss' | 'site_html_list' | 'registry_api' | 'telegram_web_preview' | 'telegram_bot';
   parserVersion: string;
   history: { state: CapabilityState; note: string };
   fullText: { state: CapabilityState; note: string };
@@ -43,6 +43,21 @@ export const SITE_HTML_LIST_CAPABILITIES: IAdapterCapabilities = {
   conditionalRequests: { state: 'limited', note: 'по заголовкам сервера, если есть' },
 };
 
+export const REGISTRY_API_CAPABILITIES: IAdapterCapabilities = {
+  adapter: 'registry_api',
+  parserVersion: 'registry@1',
+  history: {
+    state: 'not_supported',
+    note: 'реестр отдаёт текущее состояние записи; что в нём было до первого сбора — неизвестно и не восстанавливается',
+  },
+  fullText: { state: 'supported', note: 'текст снимка строится рендером из полей профиля: полнота — по карте полей, а не по длине' },
+  edits: { state: 'supported', note: 'изменение любого поля даёт новую редакцию; именно в разнице снимков смысл источника' },
+  deletes: { state: 'not_observable', note: 'исчезновение записи из каталога удалением объекта не является' },
+  media: { state: 'not_supported', note: 'вложения не собираются' },
+  dates: { state: 'limited', note: 'дата сведений — только если реестр её сообщил; временем сбора не подменяется' },
+  conditionalRequests: { state: 'limited', note: 'ETag/Last-Modified — если сервер их отдаёт' },
+};
+
 const telegram = (c: typeof WEB_PREVIEW_CAPABILITIES, adapter: IAdapterCapabilities['adapter'], parserVersion: string, fullText: string): IAdapterCapabilities => ({
   adapter,
   parserVersion,
@@ -58,6 +73,7 @@ const telegram = (c: typeof WEB_PREVIEW_CAPABILITIES, adapter: IAdapterCapabilit
 export const SOURCE_CAPABILITIES: readonly IAdapterCapabilities[] = [
   SITE_RSS_CAPABILITIES,
   SITE_HTML_LIST_CAPABILITIES,
+  REGISTRY_API_CAPABILITIES,
   telegram(WEB_PREVIEW_CAPABILITIES, 'telegram_web_preview', 'tg_web@2', 'текст поста полон; медиа-пост — caption_only'),
   telegram(BOT_CAPABILITIES, 'telegram_bot', 'telegram_bot_text@1', 'пересланный текст полон; подпись без вложения — полнота неизвестна'),
 ];

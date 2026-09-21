@@ -854,6 +854,56 @@ Remove-Item backup-release.dump, before.json, bench-release.json -ErrorAction Si
 
 ---
 
+## O. Этап 20A — источник-реестр (наш.дом.рф)
+
+Сеть не нужна: интеграционный тест подменяет транспорт и работает на синтетическом реестре `*.test`.
+
+### O1. Миграция и тесты
+
+```powershell
+cd backend
+npm run migrate -- --dry        # в плане должна появиться 025_registry_source.sql, destructive — нет
+npm run migrate                 # применить на тестовой/копии; рабочую базу — только осознанно
+$env:TEST_DATABASE_URL = 'postgresql://tg_test:tg_test@127.0.0.1:55433/tg_info_test'
+npm run test:integration -- src/ingest/registry/registry.int.test.ts
+```
+
+Ожидается: все тесты зелёные. Проверяются: первый сбор пишет редакцию и снимок; повтор тех же данных —
+только наблюдение (`items_skipped 1`, редакция одна); перенос срока сдачи — вторая редакция и второй снимок;
+403 → `blocked`, 429 → `rate_limited` с `retry_after_at`, не-JSON → `parser_degraded`, негодный профиль →
+`config_invalid` без запросов; проба ничего не пишет (ни редакций, ни снимков, ни `http_cache`).
+
+### O2. Контрольные числа
+
+```powershell
+npm run release:check
+npm run release:manifest
+```
+
+Ожидается: `registry_records` в перечнях, `UNCLASSIFIED_TABLE` нет, проверка связности
+`registry_record_without_revision` — 0.
+
+### O3. Живой источник (только осознанно, по §6–7 `sources/SOURCE_PROFILE_CONTRACT.md`)
+
+**Это контрольная точка всего этапа: если реестр не отвечает с вашей машины, дальше идти незачем.**
+
+```powershell
+npm run ingest:once -- --add-site https://наш.дом.рф     # заводится на паузе, допуск unknown
+# заполнить профиль по шаблону docs/development/sources/registry-profile.template.json:
+#   реальные адреса эндпоинтов и objectIds: ["62087"]
+npm run ingest:once -- --site-profile <ключ> --file registry-profile.json
+# допуск НА СБОР ставит оператор в админке (/admin/collect → «Допуск»), ИИ-допуск не выдавать
+npm run ingest:once -- --probe-site <ключ>               # ничего не пишет
+```
+
+Что прислать по пробе: строку исхода, `layout_stats` и образец текста снимка.
+
+- `ok` + непустой `object_fields` + в образце есть строка «Застройщик объекта …, ИНН …» — карта полей совпала,
+  можно делать один проход `--source <ключ>` при `INGEST_ENABLED=false`.
+- `ok`, но полей ноль — ответ пришёл, а карта полей не совпала: нужны реальные имена полей из ответа.
+- `blocked` (403) — источник не отдаёт данные этой машине. Не обходить: варианты — официальное API ЕИСЖС
+  по ключу (меняется только профиль) либо ручная вставка. Решение за владельцем.
+
 ## Уборка
 
 ```bash

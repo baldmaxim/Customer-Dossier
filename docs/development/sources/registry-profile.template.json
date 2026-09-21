@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "mode": "registry_api",
+  "allowedHosts": [],
+  "endpoints": {
+    "object": "https://replace-me.invalid/api/object?id={id}",
+    "developer": "https://replace-me.invalid/api/developer?id={id}",
+    "list": "https://replace-me.invalid/api/object?offset={offset}&limit={limit}"
+  },
+  "objectIds": [],
+  "developerIds": [],
+  "list": { "itemsPath": "data.list", "idPath": "objId", "limit": 20, "maxPages": 1 },
+  "responsePath": { "object": "data", "developer": "data" },
+  "identity": {
+    "object": {
+      "idPath": "objId",
+      "namePath": "objCommercNm",
+      "cityPath": "rpdRegionName",
+      "addressPath": "objAddr",
+      "developerNamePath": "developer.shortName",
+      "developerFormPath": "developer.orgForm.shortForm",
+      "developerInnPath": "developer.devInn",
+      "groupNamePath": "groupName"
+    },
+    "developer": {
+      "idPath": "devId",
+      "namePath": "shortName",
+      "formPath": "orgForm.shortForm",
+      "innPath": "devInn",
+      "groupNamePath": "groupName"
+    }
+  },
+  "fields": {
+    "object": [
+      { "label": "Статус объекта", "path": "objStatus", "format": "text" },
+      { "label": "Признак проблемности", "path": "problemFlag", "format": "text" },
+      { "label": "Стадия банкротства застройщика", "path": "bankruptStage.bankruptStageDesc", "format": "text" },
+      { "label": "Срок сдачи", "path": "objReady100PercDt", "format": "date" },
+      { "label": "Количество этажей", "path": "objFloorMax", "format": "number" },
+      { "label": "Количество квартир", "path": "objElemLivingCnt", "format": "number" },
+      { "label": "Жилая площадь", "path": "objSquareLiving", "format": "number", "unit": "м2" }
+    ],
+    "developer": [
+      { "label": "Стадия банкротства", "path": "bankruptStage.bankruptStageDesc", "format": "text" },
+      { "label": "Объектов в реестре", "path": "objCount", "format": "number" }
+    ]
+  },
+  "limits": { "maxItemsPerRun": 10, "delayMs": 4000 },
+  "expectations": { "minItemsOnList": 1 },
+  "meta": {
+    "contract": "source-profile@1",
+    "owner": null,
+    "collectionMethod": "registry_api",
+    "allowedOrigins": ["replace-me.invalid"],
+    "allowedPathPrefixes": ["/api/"],
+    "expectedCompleteness": "full",
+    "dateNotes": null,
+    "restrictions": [],
+    "frequency": { "pollIntervalSec": null, "maxRequestsPerRun": 12 },
+    "permissionsEvidence": { "collect": null, "aiProcessing": null },
+    "reviewStatus": "draft"
+  }
+}

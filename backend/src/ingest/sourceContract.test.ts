@@ -12,6 +12,7 @@ import { evaluateSourcePolicy } from './policy.js';
 import { SOURCE_PROFILE_CONTRACT, pathAllowed, sourceProfileMetaSchema } from './profileMeta.js';
 import { parseSiteDate } from './sites/dates.js';
 import { parseArticlePage, parseListPage } from './sites/parsers.js';
+import { parseRegistryProfile } from './registry/profile.js';
 import { parseSiteProfile } from './sites/profile.js';
 import { classifySourceHealth, listPageDegraded, type ISourceHealthInput } from './sourceHealth.js';
 import { telegramProfileSchema } from './telegram/webCrawler.js';
@@ -163,7 +164,7 @@ describe('состояние источника source-health@1 (T16-01, T16-06,
 
 describe('реестр возможностей (T16-06)', () => {
   it('ни один адаптер не обещает полную историю и наблюдение удалений', () => {
-    expect(SOURCE_CAPABILITIES.map(c => c.adapter)).toEqual(['site_rss', 'site_html_list', 'telegram_web_preview', 'telegram_bot']);
+    expect(SOURCE_CAPABILITIES.map(c => c.adapter)).toEqual(['site_rss', 'site_html_list', 'registry_api', 'telegram_web_preview', 'telegram_bot']);
     for (const c of SOURCE_CAPABILITIES) {
       expect(c.history.state, c.adapter).not.toBe('supported');
       expect(c.deletes.state, c.adapter).not.toBe('supported');
@@ -181,5 +182,13 @@ describe('шаблоны профилей (T16-08)', () => {
     expect(site.startUrls.every(u => new URL(u).hostname.endsWith('.invalid'))).toBe(true);
     const tg = telegramProfileSchema.parse(template('telegram-profile.template.json'));
     expect(tg.meta).toMatchObject({ reviewStatus: 'draft', collectionMethod: 'telegram_web_preview', permissionsEvidence: { collect: null, aiProcessing: null } });
+  });
+
+  it('шаблон реестра (этап 20A) — draft с адресом-заглушкой; карту полей оператор сверяет пробой', () => {
+    const registry = parseRegistryProfile(template('registry-profile.template.json'));
+    expect(registry.meta).toMatchObject({ reviewStatus: 'draft', collectionMethod: 'registry_api', permissionsEvidence: { collect: null, aiProcessing: null } });
+    expect(new URL(registry.endpoints.object.replace('{id}', '1')).hostname.endsWith('.invalid')).toBe(true);
+    // Шаблон не перечисляет записи: что собирать, решает оператор, а не заготовка.
+    expect(registry.objectIds).toEqual([]);
   });
 });

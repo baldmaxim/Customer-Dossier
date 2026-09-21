@@ -15,13 +15,13 @@ const hostName = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/, 'имя хоста');
+  .regex(/^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/, 'имя хоста');
 
 const pathPrefix = z
   .string()
   .trim()
   .max(120)
-  .regex(/^\/[A-Za-z0-9._~\-/%]*$/, 'префикс пути начинается с / и без параметров');
+  .regex(/^\/[A-Za-z0-9._~\-/%]*$/, 'префикс пути начинается с / и без параметров; кириллица — в процентной кодировке');
 
 const evidence = z
   .object({
@@ -36,7 +36,7 @@ export const sourceProfileMetaSchema = z
   .object({
     contract: z.literal(SOURCE_PROFILE_CONTRACT).default(SOURCE_PROFILE_CONTRACT),
     owner: z.string().trim().max(120).nullable().default(null),
-    collectionMethod: z.enum(['rss', 'html_list', 'telegram_web_preview', 'telegram_bot', 'unknown']).default('unknown'),
+    collectionMethod: z.enum(['rss', 'html_list', 'registry_api', 'telegram_web_preview', 'telegram_bot', 'unknown']).default('unknown'),
     /** Для сведения и сверки с allowlist; сетевой доступ определяет safeFetch по base_url и хостам профиля. */
     allowedOrigins: z.array(hostName).max(10).default([]),
     allowedPathPrefixes: z.array(pathPrefix).max(20).default([]),

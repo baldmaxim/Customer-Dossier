@@ -6,7 +6,7 @@
 
 import { env } from '../config/env.js';
 import { crawlTelegramChannel } from './telegram/webCrawler.js';
-import { crawlSite } from './sites/crawler.js';
+import { crawlSource } from './crawl.js';
 import { emptyBatchStats, type IBatchStats } from './store.js';
 import { evaluateSourcePolicy } from './policy.js';
 import {
@@ -72,7 +72,7 @@ export const ingestWebsiteSource = async (source: ISource): Promise<IIngestRepor
   const runId = await startRun(source.id);
   const startedAt = Date.now();
   try {
-    const report = await crawlSite(source, { sourceRunId: runId });
+    const report = await crawlSource(source, { sourceRunId: runId });
     await finishSiteRun(runId, source.id, report, Date.now() - startedAt);
     const stats = emptyBatchStats();
     stats.inserted = report.counts.saved;

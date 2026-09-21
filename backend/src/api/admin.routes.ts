@@ -20,7 +20,7 @@ import {
 } from '../ingest/sources.js';
 import { PERMISSION_STATUSES, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
-import { parseSiteProfile } from '../ingest/sites/profile.js';
+import { parseSourceProfile } from '../ingest/crawl.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
@@ -189,7 +189,7 @@ adminRouter.put('/sources/:id/profile', async (req, res) => {
     return;
   }
   try {
-    parseSiteProfile(config as Record<string, unknown>);
+    parseSourceProfile(config as Record<string, unknown>);
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err), code: 'profile_invalid' });
     return;

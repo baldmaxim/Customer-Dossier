@@ -25,7 +25,7 @@ const hostName = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/, 'имя хоста');
+  .regex(/^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/, 'имя хоста');
 
 const httpUrl = z
   .string()

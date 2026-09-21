@@ -90,7 +90,7 @@ interface ISiteCursor {
 
 const sleep = (ms: number): Promise<void> => (ms > 0 ? new Promise(resolve => setTimeout(resolve, ms)) : Promise.resolve());
 
-const fatalFromFetch = (result: Exclude<SiteFetchResult, { kind: 'ok' } | { kind: 'not_modified' }>): {
+export const fatalFromFetch = (result: Exclude<SiteFetchResult, { kind: 'ok' } | { kind: 'not_modified' }>): {
   outcome: SiteRunOutcome;
   health: SiteHealth;
 } => {
@@ -104,7 +104,7 @@ const fatalFromFetch = (result: Exclude<SiteFetchResult, { kind: 'ok' } | { kind
   return { outcome: 'network', health: 'error' };
 };
 
-const STORE_COUNT: Record<StoreOutcome, keyof ICrawlCounts> = {
+export const STORE_COUNT: Record<StoreOutcome, keyof ICrawlCounts> = {
   inserted: 'saved',
   duplicate: 'saved',
   new_revision: 'changed',

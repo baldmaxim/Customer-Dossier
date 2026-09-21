@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 
 import { closeDb } from '../db/pool.js';
-import { parseSiteProfile } from './sites/profile.js';
+import { parseSourceProfile } from './crawl.js';
 import { telegramProfileSchema } from './telegram/webCrawler.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
 import { runIngestPass, ingestTelegramSource } from './scheduler.js';
@@ -169,9 +169,9 @@ const main = async (): Promise<void> => {
       return;
     }
     const profile = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
-    const parsed = parseSiteProfile(profile);
+    const parsed = parseSourceProfile(profile);
     await setSourceConfig(source.id, profile);
-    console.log(`[site] профиль ${source.key} записан: режим ${parsed.mode}, страниц до ${parsed.pagination?.maxPages ?? 1}, записей до ${parsed.limits.maxItemsPerRun}`);
+    console.log(`[site] профиль ${source.key} записан: режим ${parsed.mode}, ${parsed.detail}, записей до ${parsed.maxItemsPerRun}`);
     return;
   }
 

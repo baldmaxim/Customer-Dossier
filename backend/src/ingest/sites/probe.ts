@@ -1,13 +1,14 @@
 // Проба сайта-источника (этап 05A): уже допущенный источник, одна страница, до трёх записей,
 // без записи в базу, без условных заголовков, без включения опроса и без изменения допуска.
 
+import { crawlSource } from '../crawl.js';
 import type { ISource } from '../sources.js';
-import { crawlSite, type ICrawlReport } from './crawler.js';
+import type { ICrawlReport } from './crawler.js';
 
 export const PROBE_LIMITS = { maxPages: 1, maxItems: 3 } as const;
 
 export const probeWebsiteSource = async (source: ISource): Promise<ICrawlReport> =>
-  crawlSite(source, { dryRun: true, ...PROBE_LIMITS });
+  crawlSource(source, { dryRun: true, ...PROBE_LIMITS });
 
 export const printProbe = (report: ICrawlReport): void => {
   console.log(`[probe-site] исход: ${report.outcome}, здоровье: ${report.health}${report.healthReason ? ` — ${report.healthReason}` : ''}`);
