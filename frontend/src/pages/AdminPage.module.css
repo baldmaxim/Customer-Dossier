@@ -14,7 +14,7 @@
   color: var(--muted);
   font-size: 0.88rem;
   margin: 0 0 14px;
-  max-width: 66ch;
+  max-width: var(--prose);
 }
 
 .hint code,
@@ -272,8 +272,12 @@
   padding: 3px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-full);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
+  /* Ярлык не переносится, но и не распирает ячейку. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -319,19 +323,23 @@
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.75rem;
-  max-width: 260px;
+  font-size: var(--fs-xs);
+  max-width: var(--prose-lead);
+  overflow-wrap: anywhere;
 }
 
+/* Здесь была проза с nowrap внутри ячейки шириной 260px — текст выходил
+   за границу колонки. Остальные nowrap в файле стоят на коротких ярлыках
+   и числах, их трогать нельзя: иначе числа начнут переноситься. */
 .dim {
   color: var(--muted);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .error {
   color: var(--danger);
-  font-size: 0.8rem;
-  max-width: 240px;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
 }
 
 @keyframes rise {
@@ -387,7 +395,7 @@
 
 @media (min-width: 640px) {
   .fields {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

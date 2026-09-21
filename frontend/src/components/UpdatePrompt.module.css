@@ -4,7 +4,7 @@
   transform: translateX(-50%);
   /* Над домашней полоской iPhone и жестовой шторкой Android. */
   bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 40;
+  z-index: var(--z-toast);
 
   display: flex;
   align-items: center;
@@ -68,7 +68,7 @@
 }
 
 /* На телефоне тост поднимается над нижней панелью навигации. */
-@media (max-width: 639px) {
+@media (max-width: 639.98px) {
   .toast {
     left: 12px;
     right: 12px;

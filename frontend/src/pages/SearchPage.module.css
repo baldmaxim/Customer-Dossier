@@ -1,6 +1,6 @@
 .hero {
-  max-width: 660px;
-  margin: 8px 0 18px;
+  max-width: var(--form-max);
+  margin: var(--sp-2) 0 var(--sp-5);
 }
 
 .title {
@@ -11,7 +11,7 @@
 .lead {
   color: var(--muted);
   margin: 0 0 18px;
-  max-width: 58ch;
+  max-width: var(--prose-lead);
   font-size: 0.95rem;
 }
 
@@ -61,7 +61,6 @@
 }
 
 .results {
-  max-width: 660px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -138,7 +137,7 @@
   color: var(--risk-yellow);
   font-size: 0.88rem;
   margin: 10px 0 0;
-  max-width: 62ch;
+  max-width: var(--prose-lead);
 }
 
 /* ─── Сводка «что в базе» ──────────────────────────────────────────────── */
@@ -153,7 +152,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }

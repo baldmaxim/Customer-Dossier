@@ -1,7 +1,7 @@
 .lead {
   color: var(--muted);
   margin: 8px 0 20px;
-  max-width: 62ch;
+  max-width: var(--prose-lead);
   font-size: 0.95rem;
 }
 
@@ -79,7 +79,9 @@
 
 /* ─── Таблица (планшет и десктоп) ──────────────────────────────────────── */
 
+/* Mobile-first: на телефоне видны карточки, таблица включается с 768px. */
 .tableWrap {
+  display: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -100,9 +102,9 @@
   vertical-align: middle;
 }
 
+/* Sticky внутри горизонтального скроллера отсчитывается от контейнера, а не от
+   окна: прилипания к шапке тут не было никогда. Снято, чтобы не обещать лишнего. */
 .table th {
-  position: sticky;
-  top: var(--header-h);
   background: var(--surface-2);
   color: var(--muted);
   font-weight: 600;
@@ -155,15 +157,15 @@
 .empty {
   color: var(--muted);
   padding: 20px 0;
-  max-width: 60ch;
+  max-width: var(--prose);
 }
 
 /* ─── Карточки (телефон) ───────────────────────────────────────────────── */
 
 .cards {
-  display: none;
+  display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .card {
@@ -221,15 +223,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 719px) {
-  .tableWrap {
-    display: none;
-  }
-
-  .cards {
-    display: flex;
-  }
-}
 
 @media (min-width: 640px) {
   .controls {
@@ -237,5 +230,15 @@
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 16px 24px;
+  }
+}
+
+@media (min-width: 768px) {
+  .tableWrap {
+    display: block;
+  }
+
+  .cards {
+    display: none;
   }
 }

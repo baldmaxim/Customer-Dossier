@@ -69,7 +69,7 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1200px) {
   .aggregates {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -155,10 +155,4 @@
 .contextTitle {
   margin: 0 0 4px;
   font-size: 0.92rem;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aggregateSummary {
-    transition: none;
-  }
 }

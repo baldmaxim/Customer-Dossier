@@ -77,7 +77,7 @@
   margin: 14px 0 0;
   font-size: 1rem;
   line-height: 1.5;
-  max-width: 72ch;
+  max-width: var(--prose);
   color: var(--text);
 }
 
@@ -175,8 +175,9 @@
   align-items: center;
   justify-content: center;
   min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
+  /* Счётчик из четырёх цифр не должен переполнять пилюлю. */
+  min-height: 22px;
+  padding: 1px var(--sp-2);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--muted);
@@ -328,8 +329,9 @@
   border: none;
   background: none;
   color: var(--muted);
-  padding: 0 12px;
-  height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  /* min-height, а не height: длинная подпись переносится, а не обрезается. */
+  min-height: var(--ctl-h-sm);
   border-radius: var(--radius-xs);
   font-size: 0.85rem;
   font-weight: 500;
@@ -479,7 +481,7 @@
 
 /* ─── Адаптив ──────────────────────────────────────────────────────────── */
 
-@media (min-width: 560px) {
+@media (min-width: 640px) {
   .hero {
     padding: 22px 24px 20px;
   }
@@ -498,7 +500,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1200px) {
   .hero {
     padding: 26px 28px 22px;
   }
@@ -509,5 +511,30 @@
 
   .verdict {
     font-size: 1.05rem;
+  }
+}
+
+/* Две колонки на широком экране. minmax(0, …) обязателен: иначе таблица
+   упоминаний распирает колонку и страница едет по горизонтали. */
+.columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.colMain,
+.colSide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
   }
 }
