@@ -130,7 +130,8 @@
 
 .canvas {
   overflow: auto;
-  overscroll-behavior: contain;
+  /* Вертикально скролл уходит странице, когда схема дошла до края. */
+  overscroll-behavior-x: contain;
   max-height: 70dvh;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -199,7 +200,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .table {

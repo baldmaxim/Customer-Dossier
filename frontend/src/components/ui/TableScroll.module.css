@@ -1,6 +1,9 @@
 .wrap {
   overflow-x: auto;
-  overscroll-behavior: contain;
+  /* Только по горизонтали. `overscroll-behavior: contain` без оси делает блок
+     скролл-контейнером по обеим осям, и колесо над таблицей перестаёт листать
+     страницу — при таблицах во всю ширину это выглядит как «прокрутка сломалась». */
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
 

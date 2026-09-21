@@ -247,7 +247,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .table {

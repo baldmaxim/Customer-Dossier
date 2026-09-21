@@ -24,7 +24,7 @@
   gap: var(--sp-2);
   padding-bottom: var(--sp-1);
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .step {

@@ -109,7 +109,7 @@
   overflow-wrap: anywhere;
   max-height: 60dvh;
   overflow: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .ins {
