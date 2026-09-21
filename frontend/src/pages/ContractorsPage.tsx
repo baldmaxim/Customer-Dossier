@@ -136,9 +136,10 @@ export const ContractorsPage: FC = () => {
               </thead>
               <tbody>
                 {items.map(row => (
-                  <tr key={row.companyId}>
+                  // Строка кликается целиком — тем же правилом, что в каталоге на главной (index.css).
+                  <tr key={row.companyId} className="row-link">
                     <td>
-                      <Link to={`/company/${row.companyId}`} className={styles.rowName}>
+                      <Link to={`/company/${row.companyId}`} className={`${styles.rowName} row-link-target`}>
                         {row.name}
                       </Link>
                       {row.city && <span className={styles.city}>{row.city}</span>}
@@ -160,9 +161,9 @@ export const ContractorsPage: FC = () => {
 
           <div className={styles.cards}>
             {items.map(row => (
-              <article key={row.companyId} className={styles.card}>
+              <article key={row.companyId} className={`${styles.card} row-link`}>
                 <div className={styles.cardHead}>
-                  <Link to={`/company/${row.companyId}`} className={styles.cardName}>
+                  <Link to={`/company/${row.companyId}`} className={`${styles.cardName} row-link-target`}>
                     {row.name}
                   </Link>
                 </div>

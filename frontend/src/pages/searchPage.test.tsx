@@ -7,6 +7,7 @@ import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { fakeApi, renderWithProviders } from '../test/render';
+import { ContractorsPage } from './ContractorsPage';
 import { SearchPage } from './SearchPage';
 
 const refresh = {
@@ -80,5 +81,20 @@ describe('Главная: строка целиком — цель перехо�
     const plain = screen.getByText('Без документа');
     expect(plain.closest('a')).toBeNull();
     expect(plain.closest('tr')?.className ?? '').not.toContain('row-link');
+  });
+});
+
+describe('Подрядчики: то же правило строки', () => {
+  it('строка таблицы и карточка на смартфоне открывают компанию целиком', async () => {
+    fakeApi([
+      { match: 'GET /api/contractors', respond: () => ({ status: 200, body: { status: 'ok', refresh, items: [row] } }) },
+    ]);
+    const { container } = renderWithProviders(<ContractorsPage />, '/contractors');
+
+    const links = await screen.findAllByRole('link', { name: 'ООО «Пример»' });
+    expect(links.every(l => l.className.includes('row-link-target'))).toBe(true);
+    expect(container.querySelectorAll('tr.row-link').length).toBe(1);
+    // Мобильная раскладка — та же строка карточкой, и она тоже целиком ссылка.
+    expect(container.querySelectorAll('article.row-link').length).toBe(1);
   });
 });

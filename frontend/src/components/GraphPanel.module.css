@@ -65,21 +65,31 @@
   outline-offset: 2px;
 }
 
-.filters {
+.filtersBox {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 12px 12px;
+  min-width: 0;
+}
+
+.filtersSummary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.86rem;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.filters {
+  padding: 0 12px 12px;
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-}
-
-.legend {
-  font-size: 0.86rem;
-  color: var(--muted);
-  padding: 0 4px;
 }
 
 .types {

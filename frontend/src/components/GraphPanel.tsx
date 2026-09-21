@@ -98,53 +98,57 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, frozen,
         )}
       </div>
 
+      {/* Фильтры свёрнуты там, где схема — боковая панель карточки: развёрнутыми они
+          занимали пол-экрана. На отдельном экране связей (defaultOpen) они открыты. */}
       {open && !frozen && (
-        <fieldset className={styles.filters}>
-          <legend className={styles.legend}>Фильтры</legend>
-          <div className={styles.types}>
-            {ALL_TYPES.map(t => (
-              <label key={t} className={styles.check}>
-                <input type="checkbox" checked={types.includes(t)} onChange={() => toggleType(t)} />
-                <svg width="28" height="10" aria-hidden="true">
-                  <line x1="0" y1="5" x2="28" y2="5" className={`${styles.edge} ${styles[`edge_${t}`]}`} />
-                </svg>
-                {GRAPH_EDGE_LABELS[t]}
+        <details className={styles.filtersBox} open={defaultOpen}>
+          <summary className={styles.filtersSummary}>Фильтры</summary>
+          <div className={styles.filters} role="group" aria-label="Фильтры схемы">
+            <div className={styles.types}>
+              {ALL_TYPES.map(t => (
+                <label key={t} className={styles.check}>
+                  <input type="checkbox" checked={types.includes(t)} onChange={() => toggleType(t)} />
+                  <svg width="28" height="10" aria-hidden="true">
+                    <line x1="0" y1="5" x2="28" y2="5" className={`${styles.edge} ${styles[`edge_${t}`]}`} />
+                  </svg>
+                  {GRAPH_EDGE_LABELS[t]}
+                </label>
+              ))}
+            </div>
+            <div className={styles.fields}>
+              <label className={styles.field}>
+                Глубина
+                <select value={depth} onChange={e => setDepth(Number(e.target.value))}>
+                  {[1, 2, 3].map(d => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
               </label>
-            ))}
-          </div>
-          <div className={styles.fields}>
-            <label className={styles.field}>
-              Глубина
-              <select value={depth} onChange={e => setDepth(Number(e.target.value))}>
-                {[1, 2, 3].map(d => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
+              <label className={styles.field}>
+                Корпус
+                <input value={building} onChange={e => setBuilding(e.target.value)} maxLength={120} placeholder="корпус 2" />
+              </label>
+              <label className={styles.field}>
+                Период с
+                <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+              </label>
+              <label className={styles.field}>
+                по
+                <input type="date" value={to} onChange={e => setTo(e.target.value)} />
+              </label>
+            </div>
+            <label className={styles.check}>
+              <input type="checkbox" checked={reviewedOnly} onChange={e => setReviewedOnly(e.target.checked)} />
+              только проверенные аналитиком
             </label>
-            <label className={styles.field}>
-              Корпус
-              <input value={building} onChange={e => setBuilding(e.target.value)} maxLength={120} placeholder="корпус 2" />
-            </label>
-            <label className={styles.field}>
-              Период с
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              по
-              <input type="date" value={to} onChange={e => setTo(e.target.value)} />
+            <label className={styles.check}>
+              <input type="checkbox" checked={includeUnconfirmed} onChange={e => setIncludeUnconfirmed(e.target.checked)} />
+              показать планы, заявления и отрицания
             </label>
           </div>
-          <label className={styles.check}>
-            <input type="checkbox" checked={reviewedOnly} onChange={e => setReviewedOnly(e.target.checked)} />
-            только проверенные аналитиком
-          </label>
-          <label className={styles.check}>
-            <input type="checkbox" checked={includeUnconfirmed} onChange={e => setIncludeUnconfirmed(e.target.checked)} />
-            показать планы, заявления и отрицания
-          </label>
-        </fieldset>
+        </details>
       )}
 
       {open && query.isLoading && <p className={styles.meta}>Строю схему…</p>}
@@ -331,12 +335,6 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, frozen,
               )}
             </div>
           )}
-
-          <ul className={styles.notes}>
-            {graph.notes.map(n => (
-              <li key={n}>{n}</li>
-            ))}
-          </ul>
         </>
       )}
     </section>
