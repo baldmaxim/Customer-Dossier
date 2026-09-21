@@ -58,6 +58,8 @@ export const ASSERTION_ROLE_LABELS: Record<string, string> = {
   designer: 'проектировщик',
   investor: 'инвестор',
   operator: 'эксплуатация',
+  // Застройщик по 214-ФЗ — не подрядная роль: приходит из реестра, модель её не выбирает.
+  developer: 'застройщик',
   general_contract: 'договор генподряда',
   subcontract: 'договор субподряда',
   supply: 'договор поставки',

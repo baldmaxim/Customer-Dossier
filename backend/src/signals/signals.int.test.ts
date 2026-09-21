@@ -116,7 +116,7 @@ describe('снимок сигналов на срез', () => {
 
     const res = await signalsOf(alfa);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', refresh: { active: { id: firstRefresh, rulesVersion: 'signals@1', cutoffAt: cutoff.toISOString() }, stale: false } });
+    expect(res.body).toMatchObject({ status: 'ok', refresh: { active: { id: firstRefresh, rulesVersion: 'signals@2', cutoffAt: cutoff.toISOString() }, stale: false } });
 
     const card = await api.call('GET', `/api/companies/${alfa}`, undefined);
     expect(card.body).not.toHaveProperty('risk');

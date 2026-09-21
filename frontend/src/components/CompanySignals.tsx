@@ -21,7 +21,7 @@ import {
 } from '../lib/labels';
 import { AssertionDetail } from './AssertionDetail';
 import { ProjectContextPanel } from './ProjectContextPanel';
-import { SignalAggregate } from './SignalAggregate';
+import { SignalAggregate, SignalDate } from './SignalAggregate';
 import styles from './CompanySignals.module.css';
 
 interface ICompanySignalsProps {
@@ -36,9 +36,14 @@ const datePart = (from: string | null, to: string | null, precision: string): st
   return precision === 'day' ? range : `${range} (${PRECISION_LABELS[precision] ?? precision})`;
 };
 
+/** Правила, по которым считаются числа этой панели. Снимок старее — новых чисел в нём нет. */
+const RULES = 'signals@2';
+
 /**
- * Объяснимые сигналы (этап 07): идентификация и полнота, опыт, публикации и события, контекст объекта.
- * Итоговой оценки нет: у каждого числа — правило, окно, знаменатель и исходные id.
+ * Объяснимые сигналы (этап 07, правила signals@2): идентификация и полнота, опыт, публикации
+ * и события, контекст объекта. Итоговой оценки нет: у каждого числа — правило, окно,
+ * знаменатель и исходные id. Числа signals@2 появляются только после пересчёта снимка,
+ * поэтому каждое из них выводится, лишь когда оно в снимке есть.
  */
 export const CompanySignals: FC<ICompanySignalsProps> = ({ companyId, projectNames }) => {
   const [openAssertion, setOpenAssertion] = useState<number | null>(null);
@@ -62,6 +67,12 @@ export const CompanySignals: FC<ICompanySignalsProps> = ({ companyId, projectNam
         <span>Сигналы ещё не рассчитывались (npm run metrics:refresh).</span>
       )}
       {refresh.stale && refresh.active && <span className={styles.stale}>Устарело: {refresh.staleReasons.join('; ')}</span>}
+      {refresh.active && refresh.active.rulesVersion !== RULES && (
+        <span className={styles.stale}>
+          Снимок считан прежними правилами ({refresh.active.rulesVersion}): части чисел в нём нет — пересчитайте
+          снимок (npm run metrics:refresh).
+        </span>
+      )}
     </div>
   );
 
@@ -118,6 +129,18 @@ export const CompanySignals: FC<ICompanySignalsProps> = ({ companyId, projectNam
           {Object.entries(experience.byRole).map(([role, agg]) => (
             <SignalAggregate key={role} label={ASSERTION_ROLE_LABELS[role] ?? role} aggregate={agg} idsLabel="Объекты" />
           ))}
+          {Object.entries(experience.byWorkPackage).map(([wp, agg]) => (
+            <SignalAggregate key={`wp-${wp}`} label={`пакет работ: ${wp}`} aggregate={agg} idsLabel="Объекты" />
+          ))}
+          {experience.contractsCount && (
+            <SignalAggregate label="договоров названо" aggregate={experience.contractsCount} idsLabel="Утверждения" />
+          )}
+          {experience.corporateCount && (
+            <SignalAggregate label="корпоративных связей" aggregate={experience.corporateCount} idsLabel="Утверждения" />
+          )}
+          {experience.counterparties && (
+            <SignalAggregate label="контрагентов названо" aggregate={experience.counterparties} idsLabel="Компании" />
+          )}
         </div>
         {experience.participations.length > 0 && (
           <ul className={styles.list}>
@@ -179,6 +202,14 @@ export const CompanySignals: FC<ICompanySignalsProps> = ({ companyId, projectNam
           <SignalAggregate label="событий без даты" aggregate={media.eventsUndated} idsLabel="Утверждения" />
           <SignalAggregate label="без даты, опубликованы за 90 дней" aggregate={media.eventsUndatedPublished90d} idsLabel="Утверждения" />
           <SignalAggregate label="событий проверено аналитиком" aggregate={media.reviewedShare} asShare idsLabel="Утверждения" />
+          {media.firstPublishedAt && <SignalDate label="первая публикация в выборке" date={media.firstPublishedAt} />}
+          {media.latestPublishedAt && <SignalDate label="последняя публикация в выборке" date={media.latestPublishedAt} />}
+          {media.legalCasesCount && (
+            <SignalAggregate label="судебных и банкротных дел" aggregate={media.legalCasesCount} idsLabel="Утверждения" />
+          )}
+          {Object.entries(media.eventsByType ?? {}).map(([type, agg]) => (
+            <SignalAggregate key={`et-${type}`} label={`событий: ${EVENT_LABELS[type] ?? type}`} aggregate={agg} idsLabel="Утверждения" />
+          ))}
         </div>
         {media.events.length > 0 && (
           <ul className={styles.list}>

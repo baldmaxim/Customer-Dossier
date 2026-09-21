@@ -1,6 +1,6 @@
 import { FC } from 'react';
 
-import type { ISignalAggregate } from '../api/types';
+import type { ISignalAggregate, ISignalDate } from '../api/types';
 import { formatDate, formatPercent } from '../lib/labels';
 import styles from './CompanySignals.module.css';
 
@@ -38,6 +38,28 @@ export const SignalAggregate: FC<ISignalAggregateProps> = ({ label, aggregate, a
           {idsLabel}: {aggregate.ids.length === 0 ? 'нет' : aggregate.ids.map(id => `#${id}`).join(', ')}
           {aggregate.idsTruncated && ' … (список сокращён)'}
         </p>
+      </div>
+    </details>
+  );
+};
+
+/**
+ * Дата из выборки (signals@2): первая и последняя публикация. Дата неизвестна — так и
+ * сказано: «дата неизвестна» не значит «давно» и не значит «сведений нет».
+ */
+export const SignalDate: FC<{ label: string; date: ISignalDate }> = ({ label, date }) => {
+  const unknown = date.status === 'insufficient_data' || date.value === null;
+  return (
+    <details className={styles.aggregate}>
+      <summary className={styles.aggregateSummary}>
+        <span className={`${styles.aggregateValue} ${unknown ? styles.insufficient : ''}`}>
+          {unknown ? 'дата неизвестна' : formatDate(date.value)}
+        </span>
+        <span className={styles.aggregateLabel}>{label}</span>
+      </summary>
+      <div className={styles.aggregateBody}>
+        <p>Правило: {date.rule}.</p>
+        <p>Публикация: {date.sourceItemId === null ? 'нет' : `#${date.sourceItemId}`}</p>
       </div>
     </details>
   );

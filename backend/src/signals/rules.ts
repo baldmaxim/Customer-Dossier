@@ -1,4 +1,8 @@
-// Правила signals@1: чистая детерминированная функция входа и среза. Никаких весов, шкал и вердиктов.
+// Правила signals@2: чистая детерминированная функция входа и среза. Никаких весов, шкал и вердиктов.
+//
+// signals@2 добавил числа, которые раньше были только списками: договоры, корпоративные связи,
+// названные контрагенты, события по видам, число судебных дел и края выборки по датам публикаций.
+// Правила прежних чисел не менялись; новое число — новая версия, а не тихая правка.
 //
 // Разделение, которое нельзя сливать в одно число:
 //  - идентификация и полнота выборки;
@@ -13,6 +17,7 @@ import {
   SIGNAL_RULES_VERSION,
   type ICompanySignalInput,
   type ICompanySignals,
+  type IDateSignal,
   type IEventItem,
   type IExperienceBlock,
   type IIdentityBlock,
@@ -130,6 +135,21 @@ const identityBlock = (input: ICompanySignalInput, publications: readonly ISigna
   };
 };
 
+/** Дата края выборки: какая публикация её дала. Ни одной даты — insufficient_data, а не «давно». */
+const edgeDate = (publications: readonly ISignalPublication[], edge: 'first' | 'latest'): IDateSignal => {
+  const dated = publications
+    .filter(p => p.publishedAt)
+    .map(p => ({ date: p.publishedAt!.slice(0, 10), sourceItemId: p.sourceItemId }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.sourceItemId - b.sourceItemId);
+  const rule =
+    edge === 'first'
+      ? 'самая ранняя дата публикации в выборке; публикации без даты не учитываются'
+      : 'самая поздняя дата публикации в выборке; публикации без даты не учитываются';
+  const pick = edge === 'first' ? dated[0] : dated[dated.length - 1];
+  if (!pick) return { value: null, status: 'insufficient_data', rule, sourceItemId: null };
+  return { value: pick.date, status: 'ok', rule, sourceItemId: pick.sourceItemId };
+};
+
 const experienceBlock = (input: ICompanySignalInput): IExperienceBlock => {
   const id = input.companyId;
   const current = input.assertions.filter(supports);
@@ -144,11 +164,37 @@ const experienceBlock = (input: ICompanySignalInput): IExperienceBlock => {
   }
   const reviewedIds = counted.filter(a => reviewLevel(a) === 'reviewed').map(a => a.id);
 
+  // Договор и корпоративная связь считаются по тому же правилу, что и участие: положительно,
+  // как факт, не отклонено. План, отрицание и слух остаются в списках, но не в числе.
+  const contractAssertions = current.filter(a => a.predicate === 'contract' && (a.subjectCompanyId === id || a.objectCompanyId === id));
+  const corporateAssertions = current.filter(a => a.predicate === 'corporate_relation' && (a.subjectCompanyId === id || a.objectCompanyId === id));
+  const positiveFact = (a: ISignalAssertion): boolean =>
+    a.polarity === 'positive' && FACT_MODALITIES.has(a.modality) && reviewLevel(a) !== 'rejected';
+  const countedContracts = contractAssertions.filter(positiveFact);
+  const countedCorporate = corporateAssertions.filter(positiveFact);
+  const otherSide = (a: ISignalAssertion): number | null => (a.subjectCompanyId === id ? a.objectCompanyId : a.subjectCompanyId);
+  const counterpartyIds = [...countedContracts, ...countedCorporate].map(otherSide).filter((x): x is number => x !== null);
+
   return {
     projects: aggregate(counted.map(a => a.objectProjectId!), 'разные объекты, где сообщается об участии компании (положительно, как факт, не отклонено); id — объекты'),
     byRole: Object.fromEntries(Object.entries(byRole).map(([role, ids]) => [role, aggregate(ids, `объекты с ролью ${role}; id — объекты`)])),
     byWorkPackage: Object.fromEntries(Object.entries(byWp).map(([wp, ids]) => [wp, aggregate(ids, `объекты с пакетом работ «${wp}»; id — объекты`)])),
     reviewed: share(reviewedIds, counted.length, 'доля утверждений об участии, подтверждённых аналитиком; знаменатель — учтённые утверждения об участии'),
+    contractsCount: aggregate(
+      countedContracts.map(a => a.id),
+      'договоры, о которых сообщается (положительно, как факт, не отклонено); знаменатель — все договорные утверждения со стороной-компанией; id — утверждения',
+      { denominator: contractAssertions.length },
+    ),
+    corporateCount: aggregate(
+      countedCorporate.map(a => a.id),
+      'корпоративные связи, о которых сообщается (положительно, как факт, не отклонено); знаменатель — все корпоративные утверждения; id — утверждения',
+      { denominator: corporateAssertions.length },
+    ),
+    counterparties: aggregate(
+      counterpartyIds,
+      'разные компании, названные другой стороной учтённого договора или корпоративной связи; сторона без карточки в число не входит; id — компании',
+      { denominator: countedContracts.length + countedCorporate.length },
+    ),
     participations: counted.map(a => ({
       assertionId: a.id,
       projectId: a.objectProjectId!,
@@ -278,6 +324,8 @@ const mediaBlock = (input: ICompanySignalInput, cutoff: Date, publications: read
       { window: window90, denominator: datedPublications.length },
     ),
     publicationsUndated: aggregate(publications.filter(p => !p.publishedAt).map(p => p.sourceItemId), 'публикации без даты публикации — ни в какое окно не входят'),
+    firstPublishedAt: edgeDate(publications, 'first'),
+    latestPublishedAt: edgeDate(publications, 'latest'),
     observations: publications.reduce((sum, p) => sum + p.observations, 0),
     families: aggregate(families.map(f => f.members[0]!), 'семьи публикаций с одинаковым текстом; id — первая публикация семьи', { insufficientWhenZero: true }),
     familiesByOrigin: {
@@ -299,6 +347,16 @@ const mediaBlock = (input: ICompanySignalInput, cutoff: Date, publications: read
     ),
     eventsFuture: aggregate(ids(e => e.dateStatus === 'future'), 'события с датой позже среза (план или ошибка даты) — не входят в окно', { window: window12 }),
     eventsByReview,
+    eventsByType: Object.fromEntries(
+      [...new Set(live.map(e => e.type))].sort().map(type => [
+        type,
+        aggregate(live.filter(e => e.type === type).map(e => e.assertionId), `неотклонённые события вида «${type}»; id — утверждения`),
+      ]),
+    ),
+    legalCasesCount: aggregate(
+      [...cases.values()].map(c => c.stages[0]!.assertionId),
+      'судебные и банкротные дела: стадии с одним номером дела — одно дело, без номера — отдельное; id — первая стадия дела',
+    ),
     reviewedShare: share(ids(e => e.review === 'reviewed'), live.length, 'доля событий, подтверждённых аналитиком; знаменатель — неотклонённые события'),
     legalCases: [...cases.values()].sort((a, b) => a.caseKey.localeCompare(b.caseKey)),
     courtRoles,

@@ -57,22 +57,12 @@
 }
 
 .aggregates {
+  /* auto-fit вместо фиксированных 1/2/3 колонок: плитка знает свою минимальную
+     ширину и не зависит от того, в какой колонке страницы её нарисовали. */
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 6px;
   margin-top: 8px;
-}
-
-@media (min-width: 768px) {
-  .aggregates {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1200px) {
-  .aggregates {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 .aggregate {
@@ -83,9 +73,12 @@
 }
 
 .aggregateSummary {
+  /* Значение над подписью: в строку подпись «участий проверено аналитиком» не
+     помещалась рядом с «недостаточно данных» и наезжала на соседнюю. */
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-height: 44px;
   padding: 8px 12px;
   cursor: pointer;
@@ -98,18 +91,23 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  max-width: 100%;
 }
 
+/* «недостаточно данных» и «дата неизвестна» — это текст, а не число: переносится. */
 .insufficient {
   font-size: 0.86rem;
   font-weight: 600;
   color: var(--muted);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .aggregateLabel {
   color: var(--muted);
   font-size: 0.84rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .aggregateBody {

@@ -1,0 +1,79 @@
+.meta {
+  margin: 0 0 var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.attribution {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-muted, var(--surface));
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+  /* Длинное значение на 360 px переносится, а не расталкивает страницу. */
+  overflow-wrap: anywhere;
+}
+
+.label {
+  flex: 1 1 12rem;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.value {
+  flex: 1 1 12rem;
+  font-size: var(--fs-md);
+}
+
+.changes {
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-md);
+  overflow-wrap: anywhere;
+}
+
+.changeDate {
+  display: block;
+  margin-bottom: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.from {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.to {
+  font-weight: 600;
+}
+
+@media (min-width: 720px) {
+  .fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -1,7 +1,7 @@
 // Типы read-model сигналов компании (этап 07, ADR-009). Вход — утверждения и публикации на срез,
 // выход — три независимых блока с правилом, окном, знаменателем и списком исходных id у каждого числа.
 
-export const SIGNAL_RULES_VERSION = 'signals@1';
+export const SIGNAL_RULES_VERSION = 'signals@2';
 
 export type ReviewLevel = 'reviewed' | 'text_grounded' | 'legacy_unreviewed' | 'disputed' | 'rejected';
 
@@ -95,6 +95,17 @@ export interface IAggregate {
   idsTruncated: boolean;
 }
 
+/**
+ * Дата, взятая из выборки (первая и последняя публикация): значение, правило и публикация,
+ * из которой она взята. Неизвестна — `insufficient_data` и null: «даты нет» не значит «давно».
+ */
+export interface IDateSignal {
+  value: string | null;
+  status: 'ok' | 'insufficient_data';
+  rule: string;
+  sourceItemId: number | null;
+}
+
 export type IdentityStatus = 'identified' | 'identifier_unverified' | 'name_only' | 'ambiguous';
 
 export interface IIdentityBlock {
@@ -132,6 +143,11 @@ export interface IExperienceBlock {
   byRole: Record<string, IAggregate>;
   byWorkPackage: Record<string, IAggregate>;
   reviewed: IAggregate;
+  /** signals@2: договоры и корпоративные связи числом, с тем же правилом «положительно, как факт». */
+  contractsCount: IAggregate;
+  corporateCount: IAggregate;
+  /** Разные компании, названные другой стороной договора или корпоративной связи. */
+  counterparties: IAggregate;
   participations: IParticipationItem[];
   /** План, возможность, заявление и отрицание участия — не опыт, показываются отдельно. */
   notCounted: Array<{ assertionId: number; projectId: number | null; role: string | null; modality: string; polarity: string; review: ReviewLevel }>;
@@ -185,6 +201,9 @@ export interface IMediaBlock {
   publications: IAggregate;
   publications90d: IAggregate;
   publicationsUndated: IAggregate;
+  /** signals@2: край выборки по датам публикаций — свежесть сведений, не активность компании. */
+  firstPublishedAt: IDateSignal;
+  latestPublishedAt: IDateSignal;
   observations: number;
   families: IAggregate;
   familiesByOrigin: { established: IAggregate; named: IAggregate; unknown: IAggregate };
@@ -195,6 +214,9 @@ export interface IMediaBlock {
   eventsUndatedPublished90d: IAggregate;
   eventsFuture: IAggregate;
   eventsByReview: Record<ReviewLevel, number>;
+  /** signals@2: события по видам и число судебных дел — числом, а не только списком. */
+  eventsByType: Record<string, IAggregate>;
+  legalCasesCount: IAggregate;
   reviewedShare: IAggregate;
   legalCases: ILegalCase[];
   courtRoles: { plaintiff: number; defendant: number; other: number; unknown: number };

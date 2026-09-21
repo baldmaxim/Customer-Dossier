@@ -54,11 +54,48 @@ export interface ICompanyRelation {
   otherCompanyName: string;
 }
 
+export interface IRegistryFieldChange {
+  label: string;
+  from: string | null;
+  to: string | null;
+}
+
+export interface IRegistryChangeEntry {
+  asOf: string | null;
+  fetchedAt: string;
+  changes: IRegistryFieldChange[];
+}
+
+/** Снимок реестра на дату (этап 20B): показывается с датой и атрибуцией, не как проверенный факт. */
+export interface IRegistryView {
+  source: { key: string; title: string };
+  externalRef: string;
+  asOf: string | null;
+  fetchedAt: string;
+  fields: Array<{ label: string; value: string }>;
+  developer: { name: string; legalForm: string | null; inn: string | null; ogrn: string | null } | null;
+  groupName: string | null;
+  address: string | null;
+  changes: IRegistryChangeEntry[];
+  coverage: { loaded: number; truncated: boolean };
+  attribution: string;
+}
+
+export interface IRegistryProjectRow {
+  projectId: number;
+  name: string;
+  city: string | null;
+  asOf: string | null;
+  fetchedAt: string;
+}
+
 export interface ICompanyResponse {
   company: ICompany;
   aliases: Array<{ alias: string; hits: number }>;
   identifiers?: ICompanyIdentifier[];
   relations?: ICompanyRelation[];
+  registry?: IRegistryView | null;
+  registryProjects?: IRegistryProjectRow[];
   /** Приходит вместо остального, если компания слита в другую. */
   mergedInto?: number;
 }
@@ -399,7 +436,7 @@ export interface ICompensatingPlan {
   steps: string[];
 }
 
-// ─── Сигналы компании (этап 07, signals@1) ────────────────────────────────
+// ─── Сигналы компании (этап 07, signals@2) ────────────────────────────────
 
 export type ReviewLevel = 'reviewed' | 'text_grounded' | 'legacy_unreviewed' | 'disputed' | 'rejected';
 
@@ -411,6 +448,14 @@ export interface ISignalAggregate {
   denominator: number | null;
   ids: number[];
   idsTruncated: boolean;
+}
+
+/** Дата из выборки (signals@2): неизвестна — insufficient_data, а не сегодняшняя. */
+export interface ISignalDate {
+  value: string | null;
+  status: 'ok' | 'insufficient_data';
+  rule: string;
+  sourceItemId: number | null;
 }
 
 export interface ISignalEvent {
@@ -471,6 +516,10 @@ export interface ICompanySignals {
     byRole: Record<string, ISignalAggregate>;
     byWorkPackage: Record<string, ISignalAggregate>;
     reviewed: ISignalAggregate;
+    /* signals@2. В снимках, считанных прежними правилами, этих чисел нет — отсюда `?`. */
+    contractsCount?: ISignalAggregate;
+    corporateCount?: ISignalAggregate;
+    counterparties?: ISignalAggregate;
     participations: ISignalParticipation[];
     notCounted: Array<{ assertionId: number; projectId: number | null; role: string | null; modality: string; polarity: string; review: ReviewLevel }>;
     contracts: Array<{
@@ -490,6 +539,8 @@ export interface ICompanySignals {
     publications: ISignalAggregate;
     publications90d: ISignalAggregate;
     publicationsUndated: ISignalAggregate;
+    firstPublishedAt?: ISignalDate;
+    latestPublishedAt?: ISignalDate;
     observations: number;
     families: ISignalAggregate;
     familiesByOrigin: { established: ISignalAggregate; named: ISignalAggregate; unknown: ISignalAggregate };
@@ -500,6 +551,8 @@ export interface ICompanySignals {
     eventsUndatedPublished90d: ISignalAggregate;
     eventsFuture: ISignalAggregate;
     eventsByReview: Record<ReviewLevel, number>;
+    eventsByType?: Record<string, ISignalAggregate>;
+    legalCasesCount?: ISignalAggregate;
     reviewedShare: ISignalAggregate;
     legalCases: Array<{
       caseKey: string;
@@ -762,6 +815,7 @@ export interface IProjectDossier {
   coParticipationNote: string;
   events: IStatement[];
   cases: Array<{ id: number; title: string; status: string }>;
+  registry: IRegistryView | null;
 }
 
 export interface ICompanySummary {

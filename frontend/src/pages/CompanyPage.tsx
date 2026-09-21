@@ -135,8 +135,13 @@ export const CompanyPage: FC = () => {
         </div>
       )}
 
-      {/* Две колонки с 1200px: слева то, что читают подряд, справа — связи
-          и сигналы. До 1200px порядок прежний, одной колонкой. */}
+      {/* Показатели — во всю ширину: в узкой колонке плитки рвали подписи, а места
+          для новых чисел не было. Ниже — две колонки с 1200px: слева то, что читают
+          подряд, справа схема связей. До 1200px порядок прежний, одной колонкой. */}
+      <section className={styles.metrics} aria-label="Показатели компании">
+        <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
+      </section>
+
       <div className={styles.columns}>
         <div className={styles.colMain}>
           <CompanySummary companyId={companyId} />
@@ -309,7 +314,6 @@ export const CompanyPage: FC = () => {
         </div>
         <aside className={styles.colSide}>
           <GraphPanel companyId={companyId} />
-          <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
         </aside>
       </div>
     </>

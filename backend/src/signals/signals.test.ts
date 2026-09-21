@@ -1,4 +1,4 @@
-// Этап 07 без БД: правила signals@1 на замороженном срезе. Данные синтетические.
+// Этап 07 без БД: правила signals@2 на замороженном срезе. Данные синтетические.
 
 import { describe, it, expect } from 'vitest';
 
@@ -205,6 +205,48 @@ describe('опыт: объект, роль, пакет, период — без 
     expect(computeCompanySignals(input([], [], { identifiers: [{ type: 'inn', validationStatus: 'checksum_valid' }] }), CUTOFF).identity.status).toBe('identified');
     expect(computeCompanySignals(input([], [], { identifiers: [{ type: 'inn', validationStatus: 'format_only' }] }), CUTOFF).identity.status).toBe('identifier_unverified');
     expect(computeCompanySignals(input([], [], { identifiers: [{ type: 'inn', validationStatus: 'checksum_valid' }], pendingMerges: 1 }), CUTOFF).identity.status).toBe('ambiguous');
+  });
+});
+
+describe('signals@2: новые числа с правилом и знаменателем', () => {
+  it('договоры и корпоративные связи: план и отрицание в число не идут, контрагенты — разные компании', () => {
+    const contract = assertion({ predicate: 'contract', role: 'subcontract', subjectCompanyId: 5, objectCompanyId: ME, valueNumeric: '70000000.00', valueCurrency: 'RUB', valueType: 'contract' });
+    const planned = assertion({ predicate: 'contract', role: 'general_contract', subjectCompanyId: ME, objectCompanyId: 6, modality: 'planned' });
+    const denied = assertion({ predicate: 'contract', role: 'subcontract', subjectCompanyId: 7, objectCompanyId: ME, polarity: 'negative' });
+    // Тот же контрагент во второй раз — одна компания, а не две.
+    const again = assertion({ predicate: 'corporate_relation', role: 'subsidiary', subjectCompanyId: ME, objectCompanyId: 5 });
+    const s = computeCompanySignals(input([contract, planned, denied, again], [publication(1)]), CUTOFF);
+
+    expect(s.rulesVersion).toBe('signals@2');
+    expect(s.experience.contractsCount).toMatchObject({ value: 1, denominator: 3, ids: [contract.id] });
+    expect(s.experience.corporateCount).toMatchObject({ value: 1, denominator: 1 });
+    expect(s.experience.counterparties).toMatchObject({ value: 1, ids: [5], denominator: 2 });
+  });
+
+  it('края выборки: дата неизвестна — «недостаточно данных», а не сегодняшняя', () => {
+    const undated = computeCompanySignals(input([], [publication(1, { publishedAt: null })]), CUTOFF);
+    expect(undated.media.firstPublishedAt).toMatchObject({ value: null, status: 'insufficient_data', sourceItemId: null });
+    expect(undated.media.latestPublishedAt.value).toBeNull();
+
+    const dated = computeCompanySignals(
+      input([], [publication(1, { publishedAt: '2026-01-10T09:00:00Z' }), publication(2, { publishedAt: '2026-09-01T09:00:00Z' }), publication(3, { publishedAt: null })]),
+      CUTOFF,
+    );
+    expect(dated.media.firstPublishedAt).toMatchObject({ value: '2026-01-10', sourceItemId: 1 });
+    expect(dated.media.latestPublishedAt).toMatchObject({ value: '2026-09-01', sourceItemId: 2 });
+  });
+
+  it('события по видам и дела: стадии одного номера — одно дело, отклонённое не считается', () => {
+    const delay = assertion({ eventType: 'delay', validFrom: '2026-05-01', periodPrecision: 'day' });
+    const filing = assertion({ eventType: 'court_case', caseNumber: 'А40-1/2026', eventStage: 'filed', validFrom: '2026-04-01', periodPrecision: 'day' });
+    const verdict = assertion({ eventType: 'court_case', caseNumber: 'А40-1/2026', eventStage: 'decided', validFrom: '2026-06-01', periodPrecision: 'day' });
+    const other = assertion({ eventType: 'court_case', caseNumber: 'А40-2/2026', validFrom: '2026-06-02', periodPrecision: 'day' });
+    const rejected = assertion({ eventType: 'delay', status: 'rejected' });
+    const s = computeCompanySignals(input([delay, filing, verdict, other, rejected], [publication(1)]), CUTOFF);
+
+    expect(s.media.eventsByType['delay']).toMatchObject({ value: 1, ids: [delay.id] });
+    expect(s.media.eventsByType['court_case']?.value).toBe(3);
+    expect(s.media.legalCasesCount.value).toBe(2);
   });
 });
 
