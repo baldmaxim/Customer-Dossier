@@ -40,12 +40,31 @@ describe('parseStrictBool (TC-010)', () => {
 });
 
 describe('parseEnv — фоновые задания и сеть (TC-001, TC-010)', () => {
-  it('без явных флагов все фоновые задания выключены', () => {
+  // Решение владельца 21.09.2026: поток «сбор → разбор → публикация» идёт сам.
+  // Бот и применение слияний остаются выключенными: бот без токена бессмыслен,
+  // слияние необратимо.
+  it('без явных флагов поток работает, а бот и слияние — нет', () => {
     const env = parseEnv(base);
+    expect(env.INGEST_ENABLED).toBe(true);
+    expect(env.PIPELINE_ENABLED).toBe(true);
+    expect(env.METRICS_AUTO_REFRESH).toBe(true);
+    expect(env.REPROCESS_AUTO_PUBLISH).toBe(true);
+    expect(env.BOT_ENABLED).toBe(false);
+    expect(env.MERGE_APPLY_ENABLED).toBe(false);
+  });
+
+  it('каждый флаг остаётся рубильником: =false выключает', () => {
+    const env = parseEnv({
+      ...base,
+      INGEST_ENABLED: 'false',
+      PIPELINE_ENABLED: 'false',
+      METRICS_AUTO_REFRESH: 'false',
+      REPROCESS_AUTO_PUBLISH: 'false',
+    });
     expect(env.INGEST_ENABLED).toBe(false);
     expect(env.PIPELINE_ENABLED).toBe(false);
     expect(env.METRICS_AUTO_REFRESH).toBe(false);
-    expect(env.BOT_ENABLED).toBe(false);
+    expect(env.REPROCESS_AUTO_PUBLISH).toBe(false);
   });
 
   it('флаг "0" не включает задание', () => {

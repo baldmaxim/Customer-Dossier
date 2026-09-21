@@ -6,6 +6,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 
 import { env } from '../config/env.js';
+import { query } from '../db/pool.js';
 import {
   NotPublishableError,
   PublicationConflictError,
@@ -53,6 +54,29 @@ reprocessRouter.get('/reprocess/runs', async (req, res) => {
   const page = await listRuns(parsed.data);
   // runs — прежнее имя поля (этап 03B); worker — кто выполнит поставленное.
   res.json({ ...page, runs: page.items, worker: { pipelineEnabled: env.PIPELINE_ENABLED, autoPublish: env.REPROCESS_AUTO_PUBLISH } });
+});
+
+/**
+ * Журнал публикаций: что ушло в карточки, что не ушло и почему.
+ * Таблица append-only (миграция 013) — здесь только чтение.
+ */
+reprocessRouter.get('/reprocess/publications', async (req, res) => {
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 200);
+  const items = await query(
+    `SELECT h.id, h.action, h.actor, h.note, h.created_at AS "createdAt",
+            h.from_set_id AS "fromSetId", h.to_set_id AS "toSetId",
+            h.source_item_id AS "sourceItemId",
+            s.title AS "sourceTitle", s.key AS "sourceKey",
+            cs.run_id AS "runId"
+     FROM publication_history h
+     JOIN source_items i ON i.id = h.source_item_id
+     JOIN sources s ON s.id = i.source_id
+     LEFT JOIN candidate_sets cs ON cs.id = h.to_set_id
+     ORDER BY h.created_at DESC, h.id DESC
+     LIMIT $1`,
+    [limit],
+  );
+  res.json({ items, limit });
 });
 
 reprocessRouter.get('/reprocess/runs/:id', async (req, res) => {

@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { getPool } from '../db/pool.js';
 import { approvedPolicySql } from '../ingest/policy.js';
-import { publishCandidateSet, type IPublishResult } from './publish.js';
+import { NotPublishableError, PublicationConflictError, publishCandidateSet, type IPublishResult } from './publish.js';
 import type { IModelProvider } from './provider.js';
 import { claimNextRun, enqueueRun, processRun, StaleLeaseError, type IRunResult } from './runs.js';
 
@@ -43,6 +43,8 @@ export interface IPassResult {
   run: IRunResult | null;
   error: string | null;
   publish: IPublishResult | null;
+  /** Разбор прошёл, но набор публиковать нельзя: причина словами. */
+  publishRefusal: string | null;
 }
 
 export const runReprocessPass = async (
@@ -61,6 +63,7 @@ export const runReprocessPass = async (
     try {
       const run = await processRun(provider, claim);
       let publish: IPublishResult | null = null;
+      let publishRefusal: string | null = null;
       if (options.autoPublish && run.candidateSetId !== null) {
         // Автопубликация без allowStale: устаревший разбор остаётся кандидатом.
         const version = (
@@ -71,14 +74,25 @@ export const runReprocessPass = async (
             [run.candidateSetId],
           )
         ).rows[0]!.version;
-        publish = await publishCandidateSet({ setId: run.candidateSetId, expectedVersion: version, actor: 'auto' });
+        try {
+          publish = await publishCandidateSet({ setId: run.candidateSetId, expectedVersion: version, actor: 'auto' });
+        } catch (err) {
+          // Отказ публикации — исход набора, а не падение запуска. Раньше он летел
+          // в общий catch, и успешный разбор попадал в лог как «запуск прерван».
+          if (err instanceof NotPublishableError || err instanceof PublicationConflictError) {
+            publishRefusal = err.message;
+            console.warn(`[reprocess] запуск ${claim.runId}: набор не опубликован — ${err.message}`);
+          } else {
+            throw err;
+          }
+        }
       }
-      results.push({ run, error: null, publish });
+      results.push({ run, error: null, publish, publishRefusal });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Потерянный lease — не ошибка данных: запуск продолжит другой worker.
       if (!(err instanceof StaleLeaseError)) console.error(`[reprocess] запуск ${claim.runId}: ${message}`);
-      results.push({ run: null, error: message, publish: null });
+      results.push({ run: null, error: message, publish: null, publishRefusal: null });
     }
   }
   return results;

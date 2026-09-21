@@ -33,7 +33,7 @@ const Items: FC<{ title: string; items: IPublishPreviewItem[] }> = ({ title, ite
  * Публикация идёт с токеном предпросмотра: если после него изменились допуск, редакции или решения — сервер откажет,
  * и нужно открыть предпросмотр заново.
  */
-export const PublishPreviewPanel: FC<{ setId: number }> = ({ setId }) => {
+export const PublishPreviewPanel: FC<{ setId: number; autoPublish?: boolean }> = ({ setId, autoPublish = false }) => {
   const queryClient = useQueryClient();
   const [allowStale, setAllowStale] = useState(false);
   const [result, setResult] = useState<{ tone: 'ok' | 'warn' | 'error'; text: string } | null>(null);
@@ -136,10 +136,19 @@ export const PublishPreviewPanel: FC<{ setId: number }> = ({ setId }) => {
           {result.text}
         </p>
       )}
+      {autoPublish && (
+        <p className={styles.meta}>
+          Публикация автоматическая (REPROCESS_AUTO_PUBLISH): набор уходит в карточки сразу после
+          полного разбора. Здесь видно, что именно в него вошло. Неполный и упавший запуск не
+          публикуются ни при каком флаге.
+        </p>
+      )}
       <div className={styles.row}>
-        <button type="button" className={styles.buttonPrimary} disabled={blocked || publish.isPending} onClick={() => publish.mutate(p)}>
-          Опубликовать этот набор
-        </button>
+        {!autoPublish && (
+          <button type="button" className={styles.buttonPrimary} disabled={blocked || publish.isPending} onClick={() => publish.mutate(p)}>
+            Опубликовать этот набор
+          </button>
+        )}
         <button type="button" className={styles.button} onClick={() => void preview.refetch()}>
           Обновить предпросмотр
         </button>

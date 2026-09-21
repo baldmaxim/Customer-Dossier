@@ -140,11 +140,13 @@ const printPassResults = (results: IPassResult[]): void => {
   }
 };
 
-export const processRunsCommand = async (loop: boolean): Promise<void> => {
+export const processRunsCommand = async (loop: boolean, autoPublish = false): Promise<void> => {
   const provider = lmStudioProvider();
   for (;;) {
-    // Из CLI — без автопостановки и без автопубликации: только уже поставленные запуски.
-    const results = await runReprocessPass(provider, { autoPublish: false });
+    // Из CLI — без автопостановки: выполняются только уже поставленные запуски.
+    // Публиковать или нет, решает вызывающий: по умолчанию нет, чтобы разовый
+    // прогон можно было посмотреть глазами.
+    const results = await runReprocessPass(provider, { autoPublish });
     if (results.length === 0) {
       console.log('[pipeline] очередь запусков пуста');
       return;

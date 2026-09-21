@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { buildCandidates, type IChunkInput } from './candidates.js';
+import { runComplete } from './publish.js';
 import { computeCoverage, planCodePointChunks } from './chunking.js';
 import { buildFingerprint, type IModelProvider } from './provider.js';
 import { company, event, extraction, INN_A, INN_B, link, project } from './__fixtures__/extraction.js';
@@ -176,5 +177,29 @@ describe('buildCandidates', () => {
     const build = buildCandidates([chunk('текст', 0, 0, 5, extraction({ doc_relevant: false }))], null);
     expect(build.relevant).toBe(false);
     expect(build.assertions).toEqual([]);
+  });
+});
+
+// Автопубликация включена по умолчанию, поэтому важно зафиксировать: она не
+// смягчает условие публикации. Неполный, упавший и незавершённый запуск не
+// публикуются ни при каком флаге — это проверка в publish.ts, а не в воркере.
+describe('runComplete — что вообще можно публиковать', () => {
+  it('полный завершённый запуск публикуется', () => {
+    expect(runComplete({ status: 'completed', covered_chars: 1854, total_chars: 1854 })).toBe(true);
+  });
+
+  it('частичное покрытие текста не публикуется даже при статусе completed', () => {
+    expect(runComplete({ status: 'completed', covered_chars: 1200, total_chars: 1854 })).toBe(false);
+  });
+
+  it('partial, failed, running и отсутствующий запуск не публикуются', () => {
+    for (const status of ['partial', 'failed', 'running', 'queued', 'cancelled']) {
+      expect(runComplete({ status, covered_chars: 1854, total_chars: 1854 }), status).toBe(false);
+    }
+    expect(runComplete(null)).toBe(false);
+  });
+
+  it('неизвестная длина текста не считается полным покрытием', () => {
+    expect(runComplete({ status: 'completed', covered_chars: 0, total_chars: null })).toBe(false);
   });
 });

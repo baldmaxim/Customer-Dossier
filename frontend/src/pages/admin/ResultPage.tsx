@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { ISummaryResponse } from '../../api/types';
 import { AmbiguityList } from '../../components/AmbiguityList';
+import { PublicationLog } from '../../components/admin/PublicationLog';
 import { MergeQueuePanel } from '../../components/MergeQueuePanel';
 import { describeLoadError } from '../../lib/loadError';
 import { formatDateTime } from '../../lib/labels';
@@ -48,6 +49,15 @@ export const ResultPage: FC = () => {
             ? `Снимок сигналов №${refresh.active.id} на срез ${formatDateTime(refresh.active.cutoffAt)}.`
             : 'Снимок сигналов не рассчитан: карточки и каталог компаний покажут пусто, пока не выполнен `npm run metrics:refresh`.'}
         </p>
+      </section>
+
+      <section className={styles.section}>
+        <h2>Журнал публикаций</h2>
+        <p className={styles.hint}>
+          Публикация автоматическая: набор уходит в карточки сразу после полного разбора. Отказ —
+          это исход, а не поломка: «нет допуска» и «разбор устарел» разбираются по одному запуску.
+        </p>
+        <PublicationLog />
       </section>
 
       <section className={styles.section}>

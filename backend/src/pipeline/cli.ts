@@ -155,7 +155,8 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  return processRunsCommand(has('--loop'));
+  // --publish: разовый проход публикует наборы так же, как фоновый исполнитель.
+  return processRunsCommand(has('--loop'), has('--publish'));
 };
 
 main()

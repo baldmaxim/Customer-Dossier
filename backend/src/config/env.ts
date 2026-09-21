@@ -78,18 +78,22 @@ export const parseEnv = (source: EnvSource) => {
     TG_BOT_TOKEN: source.TG_BOT_TOKEN?.trim() ?? '',
     TG_BOT_ALLOWED_USER_IDS: optional(source, 'TG_BOT_ALLOWED_USER_IDS', ''),
 
-    // Фоновые задания. По умолчанию выключены: открыть портал не значит
-    // начать сбор, обращение к модели или пересчёт.
-    INGEST_ENABLED: parseStrictBool('INGEST_ENABLED', source.INGEST_ENABLED, false),
-    PIPELINE_ENABLED: parseStrictBool('PIPELINE_ENABLED', source.PIPELINE_ENABLED, false),
-    METRICS_AUTO_REFRESH: parseStrictBool('METRICS_AUTO_REFRESH', source.METRICS_AUTO_REFRESH, false),
+    // Фоновые задания. Портал работает сам: сбор идёт по источникам с
+    // подтверждённым допуском, разбор ставится по новым редакциям, сигналы
+    // пересчитываются. Каждый флаг остаётся рубильником: =false выключает.
+    // Допуск источника это не отменяет — без него живого запроса не будет.
+    INGEST_ENABLED: parseStrictBool('INGEST_ENABLED', source.INGEST_ENABLED, true),
+    PIPELINE_ENABLED: parseStrictBool('PIPELINE_ENABLED', source.PIPELINE_ENABLED, true),
+    METRICS_AUTO_REFRESH: parseStrictBool('METRICS_AUTO_REFRESH', source.METRICS_AUTO_REFRESH, true),
     BOT_ENABLED: parseStrictBool('BOT_ENABLED', source.BOT_ENABLED, false),
     // Запись публикаций и редакций (миграция 011). Выключение — откат к
     // прежнему поведению: правки постов снова теряются, legacy-чтение не страдает.
     REVISION_WRITE_ENABLED: parseStrictBool('REVISION_WRITE_ENABLED', source.REVISION_WRITE_ENABLED, true),
-    // Автопубликация наборов кандидатов нового конвейера (этап 03B). По умолчанию
-    // выключена: набор ждёт предпросмотра и решения оператора (--publish).
-    REPROCESS_AUTO_PUBLISH: parseStrictBool('REPROCESS_AUTO_PUBLISH', source.REPROCESS_AUTO_PUBLISH, false),
+    // Автопубликация наборов кандидатов (этап 03B). Решение владельца 21.09.2026:
+    // включена по умолчанию — ручной предпросмотр каждого набора неудобен.
+    // Ослабления проверок это не означает: неполный и упавший запуск не публикуются
+    // ни при каком флаге, устаревший разбор остаётся кандидатом.
+    REPROCESS_AUTO_PUBLISH: parseStrictBool('REPROCESS_AUTO_PUBLISH', source.REPROCESS_AUTO_PUBLISH, true),
     // Применение и отмена слияния сущностей (этап 04). По умолчанию выключено: предпросмотр,
     // журнал и чтение слитых сущностей работают, запись — только после явного включения.
     MERGE_APPLY_ENABLED: parseStrictBool('MERGE_APPLY_ENABLED', source.MERGE_APPLY_ENABLED, false),

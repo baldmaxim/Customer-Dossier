@@ -68,8 +68,11 @@ ADR-004 (запуски извлечения и публикация набор�
 
 ## Активные флаги (по умолчанию)
 
-`INGEST_ENABLED=false`, `PIPELINE_ENABLED=false` (новый конвейер 03B), `REPROCESS_AUTO_PUBLISH=false`,
-`MERGE_APPLY_ENABLED=false`, `EXTRACT_SCHEMA_VERSION=extract@3` (новые запуски), `METRICS_AUTO_REFRESH=false`, `BOT_ENABLED=false`, `HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`, `GRAPH_EXPORT_ENABLED=true`; фронтенд — `VITE_DOSSIER_UI` (включено).
+`INGEST_ENABLED=true`, `PIPELINE_ENABLED=true` (новый конвейер 03B), `REPROCESS_AUTO_PUBLISH=true`,
+`METRICS_AUTO_REFRESH=true` — поток «сбор → разбор → публикация» идёт сам (решение владельца 21.09.2026).
+`MERGE_APPLY_ENABLED=false`, `BOT_ENABLED=false`, `EXTRACT_SCHEMA_VERSION=extract@3` (новые запуски),
+`HOST=127.0.0.1`, `REVISION_WRITE_ENABLED=true`, `GRAPH_ENABLED=true`, `GRAPH_EXPORT_ENABLED=true`.
+Вход по токену снят; флага `VITE_DOSSIER_UI` больше нет — обращения и снимки убраны с портала.
 Legacy apply заблокирован в `pipeline/guard.ts`; слияние — безопасный путь за флагом.
 
 ## Уровни готовности

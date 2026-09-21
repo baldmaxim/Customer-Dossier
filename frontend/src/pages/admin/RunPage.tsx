@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../../api/client';
-import type { IEnqueueResult, IRunDetail } from '../../api/types';
+import type { IEnqueueResult, IRunDetail, IRunPage } from '../../api/types';
 import { PublishPreviewPanel } from '../../components/PublishPreviewPanel';
 import { describeLoadError } from '../../lib/loadError';
 import {
@@ -23,6 +23,12 @@ export const RunPage: FC = () => {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Флаги исполнителя берём у списка запусков: тот же источник правды, что и в конвейере.
+  const worker = useQuery({
+    queryKey: ['runs', 'worker'],
+    queryFn: () => api.get<IRunPage>('/api/reprocess/runs?limit=1'),
+  });
 
   const run = useQuery({
     queryKey: ['run', runId],
@@ -201,7 +207,7 @@ export const RunPage: FC = () => {
             <button type="button" className={styles.button} onClick={() => setShowPreview(!showPreview)} aria-expanded={showPreview}>
               {showPreview ? 'Скрыть предпросмотр' : 'Предпросмотр публикации'}
             </button>
-            {showPreview && <PublishPreviewPanel setId={r.candidateSet.id} />}
+            {showPreview && <PublishPreviewPanel setId={r.candidateSet.id} autoPublish={worker.data?.worker.autoPublish ?? false} />}
           </>
         )}
       </section>
