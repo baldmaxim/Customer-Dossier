@@ -203,6 +203,7 @@ export const collectInventory = async (exec: DbExecutor, now: Date = new Date())
       REPROCESS_AUTO_PUBLISH: env.REPROCESS_AUTO_PUBLISH,
       MERGE_APPLY_ENABLED: env.MERGE_APPLY_ENABLED,
       REVISION_WRITE_ENABLED: env.REVISION_WRITE_ENABLED,
+      GRAPH_ENABLED: env.GRAPH_ENABLED,
       GRAPH_EXPORT_ENABLED: env.GRAPH_EXPORT_ENABLED,
       HOST: env.HOST,
     },

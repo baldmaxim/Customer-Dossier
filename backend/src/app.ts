@@ -12,6 +12,7 @@ import { snapshotRouter } from './api/snapshot.routes.js';
 import { createOriginGuard, requireLoopbackHost } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
+import { graphRouter } from './api/graph.routes.js';
 import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
 import { reprocessRouter } from './api/reprocess.routes.js';
@@ -90,6 +91,7 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   app.use('/api', assertionsRouter);
   app.use('/api', reprocessRouter);
   app.use('/api', dossierRouter);
+  app.use('/api', graphRouter);
   app.use('/api', snapshotRouter);
 
   app.use('/api', (_req, res) => {

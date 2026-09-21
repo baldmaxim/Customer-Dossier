@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from 'react';
+import { FC, useMemo, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -17,12 +17,15 @@ const NODE_W = 170;
 const NODE_H = 40;
 
 interface IGraphPanelProps {
-  /** Ровно одно из трёх: узлы-основы схемы. */
+  /** Ровно одно из двух: узел-основа схемы. */
   companyId?: number;
   projectId?: number;
-  caseId?: number;
   /** Готовая схема (снимок): без запроса и фильтров. */
   frozen?: IGraph;
+  /** Раскрыть сразу: на отдельном экране связей схема и есть содержимое. */
+  defaultOpen?: boolean;
+  /** Клик по узлу перестраивает схему вокруг него. Без обработчика узлы не кликабельны. */
+  onRecenter?: (node: IGraphNode) => void;
 }
 
 const period = (e: IGraphEdge): string => (e.validFrom ? `${formatDate(e.validFrom)}${e.validTo ? ` — ${formatDate(e.validTo)}` : ''}` : 'период не указан');
@@ -43,7 +46,7 @@ const layout = (nodes: IGraphNode[]): Map<string, { x: number; y: number }> => {
  * Схема связей: рёбра — только утверждения со своим основанием. Тип различается подписью и штрихом линии;
  * толщина и цвет не означают надёжность. Для экранных дикторов и узких экранов — таблица с тем же содержанием.
  */
-export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId, frozen }) => {
+export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, frozen, defaultOpen, onRecenter }) => {
   const [types, setTypes] = useState<GraphEdgeType[]>(DEFAULT_TYPES);
   const [depth, setDepth] = useState(2);
   const [reviewedOnly, setReviewedOnly] = useState(false);
@@ -53,11 +56,10 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
   const [to, setTo] = useState('');
   const [view, setView] = useState<'schema' | 'table'>('schema');
   const [selected, setSelected] = useState<string | null>(null);
-  const [open, setOpen] = useState(Boolean(frozen));
+  const [open, setOpen] = useState(Boolean(frozen) || Boolean(defaultOpen));
 
   const params = useMemo(() => {
     const s = new URLSearchParams();
-    if (caseId) s.set('caseId', String(caseId));
     if (companyId) s.set('companyId', String(companyId));
     if (projectId) s.set('projectId', String(projectId));
     s.set('types', types.join(','));
@@ -68,7 +70,7 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
     if (from) s.set('from', from);
     if (to) s.set('to', to);
     return s.toString();
-  }, [caseId, companyId, projectId, types, depth, reviewedOnly, includeUnconfirmed, building, from, to]);
+  }, [companyId, projectId, types, depth, reviewedOnly, includeUnconfirmed, building, from, to]);
 
   const query = useQuery({ queryKey: ['graph', params], queryFn: () => api.get<IGraph>(`/api/graph?${params}`), enabled: open && !frozen });
   const graph = frozen ?? query.data;
@@ -84,12 +86,12 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
   const height = Math.max(...[...positions.values()].map(p => p.y + NODE_H + 10), 80);
 
   return (
-    <section className={styles.panel} aria-labelledby={`graph-${caseId ?? companyId ?? projectId ?? 'frozen'}`}>
+    <section className={styles.panel} aria-labelledby={`graph-${companyId ?? projectId ?? 'frozen'}`}>
       <div className={styles.head}>
-        <h2 id={`graph-${caseId ?? companyId ?? projectId ?? 'frozen'}`} className={styles.title}>
+        <h2 id={`graph-${companyId ?? projectId ?? 'frozen'}`} className={styles.title}>
           Схема связей{frozen ? ' (из снимка)' : ''}
         </h2>
-        {!frozen && (
+        {!frozen && !defaultOpen && (
           <button type="button" className={styles.button} onClick={() => setOpen(!open)} aria-expanded={open}>
             {open ? 'Скрыть' : 'Показать схему'}
           </button>
@@ -167,6 +169,21 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
             </span>
           </div>
 
+          {(graph.truncated || graph.notes.length > 0) && (
+            <div className={styles.limits} role="status">
+              {graph.truncated && (
+                <p>
+                  Показаны не все связи: достигнут предел узлов. Сузьте фильтр или раскройте конкретный узел —
+                  это граница обхода, а не «связей больше нет».
+                </p>
+              )}
+              {graph.notes.map(note => (
+                <p key={note}>{note}</p>
+              ))}
+              <p>Дальше {depth} шагов схема не строится: у крайних узлов могут быть другие связи.</p>
+            </div>
+          )}
+
           <ul className={styles.notes} aria-label="Легенда схемы">
             {ALL_TYPES.map(t => (
               <li key={t}>
@@ -225,8 +242,24 @@ export const GraphPanel: FC<IGraphPanelProps> = ({ companyId, projectId, caseId,
                 })}
                 {graph.nodes.map(n => {
                   const p = positions.get(n.key)!;
+                  const recenter = onRecenter && !n.seed ? () => onRecenter(n) : null;
                   return (
-                    <g key={n.key} transform={`translate(${p.x} ${p.y})`}>
+                    <g
+                      key={n.key}
+                      transform={`translate(${p.x} ${p.y})`}
+                      className={recenter ? styles.nodeClickable : undefined}
+                      {...(recenter
+                        ? {
+                            role: 'button',
+                            tabIndex: 0,
+                            'aria-label': `${n.label}: перестроить схему вокруг этого узла`,
+                            onClick: recenter,
+                            onKeyDown: (ev: KeyboardEvent<SVGGElement>) => {
+                              if (ev.key === 'Enter' || ev.key === ' ') recenter();
+                            },
+                          }
+                        : {})}
+                    >
                       <rect width={NODE_W} height={NODE_H} rx={n.kind === 'company' ? 6 : 0} className={n.seed ? styles.nodeSeed : styles.node} />
                       <text x={8} y={17} className={styles.nodeLabel}>
                         {n.label.length > 22 ? `${n.label.slice(0, 21)}…` : n.label}

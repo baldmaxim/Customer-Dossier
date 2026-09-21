@@ -251,3 +251,31 @@
 .arrow {
   fill: var(--text);
 }
+
+/* Границы обхода — видимой полосой над схемой, а не строкой в футере.
+   Усечённая выборка не означает «связей нет». */
+.limits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--risk-yellow-border);
+  border-radius: var(--radius);
+  background: var(--risk-yellow-bg);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.limits p {
+  margin: 0;
+}
+
+.nodeClickable {
+  cursor: pointer;
+}
+
+.nodeClickable:hover rect {
+  stroke: var(--accent);
+}

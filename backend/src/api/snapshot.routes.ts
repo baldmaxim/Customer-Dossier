@@ -6,8 +6,6 @@ import { z } from 'zod';
 
 import { env } from '../config/env.js';
 import { getPool } from '../db/pool.js';
-import { buildGraph, GRAPH_EDGE_TYPES, type NodeKey } from '../graph/graph.js';
-import { graphLoader } from '../graph/load.js';
 import { HistoricalCutoffError } from '../snapshot/build.js';
 import { snapshotToHtml, snapshotToJson, snapshotToMarkdown } from '../snapshot/export.js';
 import { SnapshotKeyConflictError } from '../snapshot/requestIdentity.js';
@@ -28,67 +26,6 @@ const disabled = (res: import('express').Response): boolean => {
 };
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
-const graphSchema = z.object({
-  companyId: z.coerce.number().int().positive().optional(),
-  projectId: z.coerce.number().int().positive().optional(),
-  caseId: z.coerce.number().int().positive().optional(),
-  types: z
-    .string()
-    .optional()
-    .transform(v => (v ? v.split(',').filter((t): t is (typeof GRAPH_EDGE_TYPES)[number] => (GRAPH_EDGE_TYPES as readonly string[]).includes(t)) : undefined)),
-  reviewedOnly: z.enum(['true', 'false']).optional(),
-  includeUnconfirmed: z.enum(['true', 'false']).optional(),
-  filterProjectId: z.coerce.number().int().positive().optional(),
-  building: z.string().trim().max(120).optional(),
-  from: date.optional(),
-  to: date.optional(),
-  depth: z.coerce.number().int().min(0).max(3).optional(),
-  limit: z.coerce.number().int().min(1).max(150).optional(),
-});
-
-snapshotRouter.get('/graph', async (req, res) => {
-  if (disabled(res)) return;
-  const parsed = graphSchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Некорректные параметры схемы' });
-    return;
-  }
-  const q = parsed.data;
-  const seeds: NodeKey[] = [];
-  if (q.caseId) {
-    const row = (await getPool().query<{ company_id: number | null; project_id: number | null }>('SELECT company_id, project_id FROM dossier_cases WHERE id = $1', [q.caseId])).rows[0];
-    if (!row) {
-      res.status(404).json({ error: 'Обращение не найдено' });
-      return;
-    }
-    // Приоритет текущему обращению: его компания и объект — узлы-основы.
-    if (row.company_id) seeds.push(`c:${row.company_id}`);
-    if (row.project_id) seeds.push(`p:${row.project_id}`);
-  }
-  if (q.companyId) seeds.push(`c:${q.companyId}`);
-  if (q.projectId) seeds.push(`p:${q.projectId}`);
-  if (seeds.length === 0) {
-    res.status(400).json({ error: 'Укажите companyId, projectId или caseId' });
-    return;
-  }
-  const graph = await buildGraph(
-    seeds,
-    {
-      ...(q.types && q.types.length > 0 ? { types: q.types } : {}),
-      reviewedOnly: q.reviewedOnly === 'true',
-      includeUnconfirmed: q.includeUnconfirmed === 'true',
-      projectId: q.filterProjectId ?? null,
-      building: q.building || null,
-      from: q.from ?? null,
-      to: q.to ?? null,
-      ...(q.depth !== undefined ? { depth: q.depth } : {}),
-      ...(q.limit !== undefined ? { limit: q.limit } : {}),
-    },
-    graphLoader(getPool()),
-  );
-  res.json(graph);
-});
 
 const createSchema = z.object({
   effectiveFrom: date.nullish().transform(v => v ?? null),

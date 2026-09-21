@@ -11,6 +11,7 @@ import { ResultPage } from './pages/admin/ResultPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
+import { LinksPage } from './pages/LinksPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { RunPage } from './pages/admin/RunPage';
 import { RunsPage } from './pages/admin/RunsPage';
@@ -41,6 +42,7 @@ const Portal: FC = () => (
     <Routes>
       <Route path="/" element={<SearchPage />} />
       <Route path="/company/:id" element={<CompanyPage />} />
+      <Route path="/links" element={<LinksPage />} />
       <Route path="/contractors" element={<ContractorsPage />} />
       <Route path="/documents/:id" element={<DocumentPage />} />
       <Route path="/projects/:id" element={<ProjectPage />} />

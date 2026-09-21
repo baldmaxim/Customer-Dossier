@@ -58,8 +58,20 @@ test('T18-01 запуски: список отличает пустой резу
   await noHorizontalOverflow(page);
 });
 
+test('связи: схема строится вокруг одного центра и честно называет границы', async ({ page }) => {
+  await open(page, '/');
+  // Центр берём из каталога: первая ссылка «схема» ведёт на /links?company=N.
+  const toGraph = page.locator('a[href^="/links?company="]').first();
+  if ((await toGraph.count()) === 0) return;
+  await toGraph.click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Связи');
+  await expect(page.getByLabel('Легенда схемы')).toBeVisible();
+  await expect(page.getByText(/промежуточные звенья не достраиваются/)).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
-  for (const path of ['/', '/contractors', '/admin', '/admin/collect', '/admin/process', '/admin/result', '/admin/review']) {
+  for (const path of ['/', '/links', '/contractors', '/admin', '/admin/collect', '/admin/process', '/admin/result', '/admin/review']) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await noHorizontalOverflow(page);

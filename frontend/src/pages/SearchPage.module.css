@@ -270,3 +270,62 @@
     font-size: 17px;
   }
 }
+
+/* Фильтры каталога: на телефоне переносятся, тап-цели остаются полными. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--ctl-h);
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+.resultList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resultItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.resultItem:last-child {
+  border-bottom: none;
+}
+
+.resultMeta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.rowBadge {
+  margin-inline-start: var(--sp-2);
+}
+
+.note {
+  max-width: var(--prose);
+  margin: var(--sp-4) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}

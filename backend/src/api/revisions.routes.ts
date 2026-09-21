@@ -32,6 +32,31 @@ const ITEM_FROM = `
   LEFT JOIN document_revisions lr ON lr.id = i.latest_revision_id
 `;
 
+/**
+ * Лента последнего: что вообще пришло в портал за последнее время.
+ * Порядок — по дате публикации источника, а при её отсутствии по наблюдению:
+ * момент, когда портал увидел текст, датой публикации не притворяется.
+ */
+revisionsRouter.get('/feed', async (req, res) => {
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 100);
+  const items = await query(
+    `SELECT i.id, s.title AS "sourceTitle", s.kind AS "sourceKind", s.key AS "sourceKey",
+            i.published_at AS "publishedAt", i.first_observed_at AS "firstObservedAt",
+            i.canonical_url AS "canonicalUrl", i.state,
+            lr.title, lr.completeness, lr.revision_no AS "revisionNo",
+            lr.legacy_document_id AS "documentId",
+            length(lr.body) AS "bodyChars",
+            (SELECT count(*)::int FROM document_revisions r WHERE r.source_item_id = i.id) AS "revisionCount"
+     FROM source_items i
+     JOIN sources s ON s.id = i.source_id
+     LEFT JOIN document_revisions lr ON lr.id = i.latest_revision_id
+     ORDER BY coalesce(i.published_at, i.first_observed_at) DESC, i.id DESC
+     LIMIT $1`,
+    [limit],
+  );
+  res.json({ items, limit });
+});
+
 /** Публикации, связанные с legacy-документом (из карточки: упоминание → документ → версии). */
 revisionsRouter.get('/documents/:id/items', async (req, res) => {
   const id = idOf(req.params.id);

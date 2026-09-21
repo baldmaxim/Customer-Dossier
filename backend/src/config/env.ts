@@ -93,8 +93,9 @@ export const parseEnv = (source: EnvSource) => {
     // Применение и отмена слияния сущностей (этап 04). По умолчанию выключено: предпросмотр,
     // журнал и чтение слитых сущностей работают, запись — только после явного включения.
     MERGE_APPLY_ENABLED: parseStrictBool('MERGE_APPLY_ENABLED', source.MERGE_APPLY_ENABLED, false),
-    // Схема связей, создание снимков, вымарывание и выгрузки (этап 08B). false — откат: маршруты отключены,
-    // ранее созданные снимки не меняются и читаются.
+    // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
+    GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
+    // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.
     GRAPH_EXPORT_ENABLED: parseStrictBool('GRAPH_EXPORT_ENABLED', source.GRAPH_EXPORT_ENABLED, true),
 
     HOST: parseListenHost(source.HOST),

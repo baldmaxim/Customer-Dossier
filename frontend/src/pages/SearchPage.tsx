@@ -1,22 +1,47 @@
+// Главная: весь пул компаний с фильтром по роли, поиск и лента последнего.
+//
+// Роль здесь — свойство связи, а не компании: одна фирма бывает заказчиком на
+// одном объекте и подрядчиком на другом. Поэтому фильтр подписан «выступала
+// в роли», и компания честно попадает сразу в несколько фильтров. Делить базу
+// на «раздел Заказчики» и «раздел Генподрядчики» нельзя — это ложная
+// классификация.
+
 import { FC, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { ICompanySearchItem } from '../api/types';
-import { ENTITY_TYPE_LABELS, IDENTITY_STATUS_LABELS } from '../lib/labels';
+import type { ICompanySearchItem, IContractorRow, ISignalRefreshState, ISummaryResponse } from '../api/types';
 import { identifierText } from '../components/EntityPickers';
+import { RecentFeed } from '../components/RecentFeed';
+import { Badge } from '../components/ui/Badge';
+import { EmptyState, Section } from '../components/ui/Section';
+import { Segmented } from '../components/ui/Segmented';
+import { TableScroll } from '../components/ui/TableScroll';
+import { ASSERTION_ROLE_LABELS, ENTITY_TYPE_LABELS, IDENTITY_STATUS_LABELS, formatDate } from '../lib/labels';
+import { describeLoadError } from '../lib/loadError';
 import styles from './SearchPage.module.css';
 
-interface ISummary {
-  byIdentity: Array<{ identityStatus: string; n: number }>;
-  totals: {
-    companies: number;
-    projects: number;
-    documents: number;
-    pendingMerges: number;
-    lonelyCompanies: number;
-  } | null;
+type Role = 'any' | 'customer' | 'general_contractor' | 'contractor' | 'subcontractor';
+type Sort = 'projects' | 'name';
+
+const ROLES: ReadonlyArray<{ value: Role; label: string; hint?: string }> = [
+  { value: 'any', label: 'Все', hint: 'все компании, какую бы роль они ни играли' },
+  { value: 'customer', label: 'Заказчики', hint: 'выступала заказчиком хотя бы на одном объекте' },
+  { value: 'general_contractor', label: 'Генподрядчики', hint: 'выступала генподрядчиком хотя бы на одном объекте' },
+  { value: 'contractor', label: 'Подрядчики', hint: 'выступала подрядчиком хотя бы на одном объекте' },
+  { value: 'subcontractor', label: 'Субподрядчики', hint: 'выступала субподрядчиком хотя бы на одном объекте' },
+];
+
+const SORTS: ReadonlyArray<{ value: Sort; label: string; hint?: string }> = [
+  { value: 'projects', label: 'По числу объектов', hint: 'объём опыта в выборке, не оценка надёжности' },
+  { value: 'name', label: 'По названию' },
+];
+
+interface ICatalog {
+  status: 'ok' | 'not_computed';
+  refresh: ISignalRefreshState;
+  items: IContractorRow[];
 }
 
 /** Дебаунс: запрос на каждый символ забьёт trgm-поиск без пользы. */
@@ -31,33 +56,38 @@ const useDebounced = (value: string, delay = 300): string => {
 
 export const SearchPage: FC = () => {
   const [input, setInput] = useState('');
+  const [role, setRole] = useState<Role>('any');
+  const [sort, setSort] = useState<Sort>('projects');
+  const [withPublications, setWithPublications] = useState(true);
   const query = useDebounced(input.trim());
 
   const searchQuery = useQuery({
     queryKey: ['search', query],
-    queryFn: () =>
-      api.get<{ items: ICompanySearchItem[] }>(
-        `/api/companies?q=${encodeURIComponent(query)}&limit=25`,
-      ),
+    queryFn: () => api.get<{ items: ICompanySearchItem[] }>(`/api/companies?q=${encodeURIComponent(query)}&limit=25`),
     enabled: query.length >= 2,
+  });
+
+  const catalog = useQuery({
+    queryKey: ['catalog', role, sort, withPublications],
+    queryFn: () =>
+      api.get<ICatalog>(`/api/contractors?role=${role}&sort=${sort}&includeInsufficient=${!withPublications}&limit=200`),
   });
 
   const summaryQuery = useQuery({
     queryKey: ['summary'],
-    queryFn: () => api.get<ISummary>('/api/contractors/summary'),
+    queryFn: () => api.get<ISummaryResponse>('/api/contractors/summary'),
   });
 
-  const items = searchQuery.data?.items ?? [];
+  const found = searchQuery.data?.items ?? [];
+  const rows = catalog.data?.items ?? [];
   const totals = summaryQuery.data?.totals;
-  const byIdentity = summaryQuery.data?.byIdentity ?? [];
 
   return (
     <>
       <section className={styles.hero}>
-        <h1 className={styles.title}>Как дела у Заказчика?</h1>
+        <h1 className={styles.title}>Кто есть в базе</h1>
         <p className={styles.lead}>
-          Введите название компании — «ПИК», «Самолёт» или «Глоракс». Написание значения не
-          имеет.
+          Найдите компанию по названию или посмотрите весь пул — заказчиков, генподрядчиков и подрядчиков.
         </p>
 
         <div className={styles.field}>
@@ -73,101 +103,117 @@ export const SearchPage: FC = () => {
             <path d="M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5" />
           </svg>
           <input
-            type="search"
             className={styles.input}
-            placeholder="Название компании"
+            type="search"
             value={input}
             onChange={e => setInput(e.target.value)}
+            placeholder="Название компании"
+            aria-label="Поиск компании"
             autoComplete="off"
-            enterKeyHint="search"
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
           />
         </div>
       </section>
 
       {query.length >= 2 && (
-        <div className={styles.results}>
-          {searchQuery.isLoading && <p className={styles.hint}>Ищу…</p>}
-          {searchQuery.isSuccess && items.length === 0 && (
-            <p className={styles.hint}>
-              Ничего не найдено. Компания попадёт в базу, когда её упомянут в отслеживаемых
-              источниках.
-            </p>
+        <Section title="Найдено по запросу">
+          {searchQuery.isError && <p role="alert">{describeLoadError(searchQuery.error)}</p>}
+          {searchQuery.isSuccess && found.length === 0 && (
+            <EmptyState>Совпадений нет. Проверьте написание или посмотрите весь пул ниже.</EmptyState>
           )}
-          {items.map(item => (
-            <Link key={item.id} to={`/company/${item.id}`} className={styles.resultRow}>
-              <span className={styles.resultText}>
-                <span className={styles.resultName}>{item.name}</span>
-                <span className={styles.resultMeta}>
-                  {[
-                    item.legalForm,
-                    item.entityType && item.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[item.entityType] : null,
-                    item.city,
-                    item.identifiers && item.identifiers.length > 0 ? item.identifiers.map(identifierText).join(', ') : 'реквизитов нет',
-                    item.projects !== null && item.projects !== undefined ? `объектов: ${item.projects}` : null,
-                    item.matchedAlias ? `написание «${item.matchedAlias}»` : null,
-                    item.homonyms ? `одноимённых: ${item.homonyms} — сверьте реквизиты` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </span>
-              <svg
-                className={styles.chevron}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m9.5 5.5 7 6.5-7 6.5" />
-              </svg>
-            </Link>
-          ))}
+          {found.length > 0 && (
+            <ul className={styles.resultList}>
+              {found.map(item => (
+                <li key={item.id} className={styles.resultItem}>
+                  <Link to={`/company/${item.id}`}>{item.name}</Link>
+                  <span className={styles.resultMeta}>
+                    {ENTITY_TYPE_LABELS[item.entityType ?? ''] ?? item.entityType ?? 'юрлицо'}
+                    {item.city ? ` · ${item.city}` : ''}
+                    {' · '}
+                    {item.identifiers && item.identifiers.length > 0
+                      ? item.identifiers.map(identifierText).join(', ')
+                      : 'реквизитов нет'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
+
+      <Section title="Пул компаний" note={totals ? `всего в базе ${totals.companies}` : undefined}>
+        <div className={styles.filters}>
+          <Segmented label="Роль" items={ROLES} value={role} onChange={setRole} />
+          <Segmented label="Сортировка" items={SORTS} value={sort} onChange={setSort} />
+          <label className={styles.check}>
+            <input type="checkbox" checked={withPublications} onChange={e => setWithPublications(e.target.checked)} />
+            <span>Только с публикациями</span>
+          </label>
         </div>
-      )}
 
-      {query.length < 2 && totals && (
-        <section className={styles.summary}>
-          <h2 className={styles.summaryTitle}>Что в базе</h2>
-          <div className={styles.summaryGrid}>
-            <SummaryStat value={totals.companies} label="компаний" />
-            <SummaryStat value={totals.projects} label="объектов" />
-            <SummaryStat value={totals.documents} label="разобрано сообщений" />
-          </div>
+        {catalog.isError && <p role="alert">{describeLoadError(catalog.error)}</p>}
 
-          {byIdentity.length > 0 && (
-            <p className={styles.hintPlain}>
-              Идентификация компаний:{' '}
-              {byIdentity.map(r => `${IDENTITY_STATUS_LABELS[r.identityStatus] ?? r.identityStatus} — ${r.n}`).join('; ')}.
-            </p>
-          )}
+        {catalog.data?.status === 'not_computed' && (
+          <EmptyState>
+            Снимок сигналов не рассчитан — каталог пуст не потому, что компаний нет. Выполните{' '}
+            <code>npm run metrics:refresh</code> или включите пересчёт по расписанию.
+          </EmptyState>
+        )}
 
-          {totals.pendingMerges > 0 && (
-            <p className={styles.hintPlain}>
-              <Link to="/admin">{totals.pendingMerges} пар</Link> ждут решения о слиянии.
-            </p>
-          )}
-          {/* Много компаний ровно с одним упоминанием — признак, что резолвер
-              стал слишком осторожным и плодит дубли. */}
-          {totals.companies > 20 && totals.lonelyCompanies / totals.companies > 0.5 && (
-            <p className={styles.warning}>
-              У {totals.lonelyCompanies} компаний ровно одно упоминание. Похоже на нераспознанные
-              дубли — стоит просмотреть очередь слияний.
-            </p>
-          )}
-        </section>
-      )}
+        {catalog.data?.status === 'ok' && rows.length === 0 && (
+          <EmptyState>
+            По этому фильтру компаний нет. Роль берётся из опубликованных утверждений: если её никто не
+            называл, компания не попадёт ни в один фильтр, кроме «Все».
+          </EmptyState>
+        )}
+
+        {rows.length > 0 && (
+          <TableScroll minWidth={860}>
+            <thead>
+              <tr>
+                <th>Компания</th>
+                <th>Город</th>
+                <th>Выступала в роли</th>
+                <th>Объектов</th>
+                <th>Публикаций</th>
+                <th>Событий за 12 мес.</th>
+                <th>Связи</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => (
+                <tr key={row.companyId}>
+                  <td>
+                    <Link to={`/company/${row.companyId}`}>{row.name}</Link>
+                    <Badge className={styles.rowBadge}>
+                      {IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}
+                    </Badge>
+                  </td>
+                  <td>{row.city ?? 'не установлен'}</td>
+                  <td>
+                    {row.roles.length === 0
+                      ? 'роль не названа'
+                      : row.roles.map(r => ASSERTION_ROLE_LABELS[r] ?? r).join(', ')}
+                  </td>
+                  <td>{row.projects ?? '—'}</td>
+                  <td>{row.publications ?? '—'}</td>
+                  <td>{row.eventsDated12m}</td>
+                  <td>
+                    <Link to={`/links?company=${row.companyId}`}>схема</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </TableScroll>
+        )}
+
+        <p className={styles.note}>
+          «Выступала в роли» — это то, что сказано в публикациях, а не тип компании: одна и та же фирма
+          бывает заказчиком на одном объекте и подрядчиком на другом.
+          {catalog.data?.refresh.active ? ` Срез: ${formatDate(catalog.data.refresh.active.cutoffAt)}.` : ''}
+        </p>
+      </Section>
+
+      <RecentFeed />
     </>
   );
 };
-
-const SummaryStat: FC<{ value: number; label: string }> = ({ value, label }) => (
-  <div className={styles.summaryStat}>
-    <div className={styles.summaryValue}>{value.toLocaleString('ru-RU')}</div>
-    <div className={styles.summaryLabel}>{label}</div>
-  </div>
-);
