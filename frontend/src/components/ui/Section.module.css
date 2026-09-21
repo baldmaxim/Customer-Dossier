@@ -1,0 +1,43 @@
+.section {
+  padding: var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  /* Секция внутри сетки не должна распираться своим содержимым. */
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-snug);
+}
+
+.note {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.empty {
+  padding: var(--sp-5) var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .section {
+    padding: var(--sp-5) var(--sp-6);
+  }
+}

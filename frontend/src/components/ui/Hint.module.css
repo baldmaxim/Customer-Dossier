@@ -1,0 +1,61 @@
+.bubble {
+  position: fixed;
+  z-index: var(--z-hint);
+  /* Не 100vw: на десктопе туда входит полоса прокрутки и появляется
+     горизонтальный скролл страницы. */
+  max-width: min(320px, calc(100% - 16px));
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+  /* Пузырь не перехватывает указатель: иначе наведение на него самого
+     считалось бы уходом с триггера и он мигал бы. */
+  pointer-events: none;
+  animation: hintIn var(--t-fast) var(--ease);
+}
+
+@keyframes hintIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Значок «?» рядом с подписью. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: var(--sp-1);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.mark:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* Значение с пояснением: точечное подчёркивание — видимый признак,
+   что подсказка есть. Без него «подсказки по наведению» не существует. */
+.term {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border-strong);
+  cursor: help;
+}

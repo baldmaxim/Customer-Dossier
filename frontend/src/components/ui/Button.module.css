@@ -1,0 +1,110 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  /* min-height, а не height: длинная русская подпись переносится, а не наезжает. */
+  min-height: var(--ctl-h);
+  padding: var(--sp-2) var(--ctl-px);
+  border: 1px solid transparent;
+  border-radius: var(--ctl-radius);
+  font-size: var(--fs-md);
+  font-weight: var(--ctl-fw);
+  line-height: var(--lh-tight);
+  text-align: center;
+  overflow-wrap: break-word;
+  min-width: 0;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+/* Одно поведение на весь портал: одна прозрачность и один курсор. */
+.button:disabled {
+  opacity: var(--ctl-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.sm {
+  min-height: var(--ctl-h-sm);
+  padding-inline: var(--ctl-px-sm);
+  font-size: var(--fs-sm);
+}
+
+.lg {
+  min-height: var(--ctl-h-lg);
+  padding-inline: var(--ctl-px-lg);
+  font-size: var(--fs-base);
+}
+
+.iconOnly {
+  width: var(--ctl-h);
+  padding-inline: 0;
+}
+
+.sm.iconOnly {
+  width: var(--ctl-h-sm);
+}
+
+.block {
+  width: 100%;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.ghost {
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.danger {
+  background: var(--surface);
+  border-color: var(--risk-red-border);
+  color: var(--danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--risk-red-bg);
+}
+
+/* Ссылка-кнопка: выглядит ссылкой, но тап-цель сохраняет. */
+.link {
+  min-height: var(--ctl-h-sm);
+  padding-inline: 0;
+  background: none;
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover:not(:disabled) {
+  color: var(--accent-hover);
+}

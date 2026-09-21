@@ -1,0 +1,47 @@
+.wrap {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Липкая шапка работает только внутри собственного окна прокрутки. Без высоты
+   sticky в горизонтальном скроллере бесполезен — так было в «Подрядчиках». */
+.tall {
+  max-height: calc(100dvh - var(--header-h) - var(--sp-7));
+  overflow-y: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+
+.table th,
+.table td {
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  /* Длинный URL больше не растягивает колонку за пределы экрана. */
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tall thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}

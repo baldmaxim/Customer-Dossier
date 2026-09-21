@@ -1,0 +1,51 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  /* min-height, а не height: счётчик из четырёх цифр не должен переполнять пилюлю. */
+  min-height: 22px;
+  max-width: 100%;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: var(--lh-snug);
+  /* Ярлык не переносится, но и не вылезает за ячейку: обрезается многоточием,
+     полное значение — в подсказке. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.neutral {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.accent {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.positive {
+  background: var(--risk-green-bg);
+  border-color: var(--risk-green-border);
+  color: var(--risk-green);
+}
+
+.warn {
+  background: var(--risk-yellow-bg);
+  border-color: var(--risk-yellow-border);
+  color: var(--risk-yellow);
+}
+
+.danger {
+  background: var(--risk-red-bg);
+  border-color: var(--risk-red-border);
+  color: var(--risk-red);
+}

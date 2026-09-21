@@ -72,7 +72,67 @@
 
   --header-h: 60px;
   --tabbar-h: 62px;
+
+  /* Отступы. Семь ступеней; значение вне шкалы допустимо только с комментарием
+     «почему». 22 разных gap в проекте появились именно от их отсутствия. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* Типографика. rem считается от 16px; базовый размер текста — 15px. */
+  --fs-xs: 0.75rem;      /* 12 — ярлыки, подписи колонок */
+  --fs-sm: 0.8125rem;    /* 13 — вторичная мета */
+  --fs-md: 0.875rem;     /* 14 — таблицы и плотные списки */
+  --fs-base: 0.9375rem;  /* 15 — основной текст */
+  --fs-lg: 1.0625rem;    /* 17 — заголовок секции */
+  --fs-xl: 1.3125rem;    /* 21 — заголовок карточки, h1 на телефоне */
+  --fs-2xl: 1.75rem;     /* 28 — h1 на десктопе, крупные числа сводки */
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-text: 1.55;
+
+  /* Контролы. По умолчанию — размеры под палец (≥44px): это безопасный край.
+     Ниже, в @media (pointer: fine), шкала ужимается для мыши. */
+  --ctl-h-sm: 40px;
+  --ctl-h: 44px;
+  --ctl-h-lg: 52px;
+  --ctl-px-sm: 10px;
+  --ctl-px: 14px;
+  --ctl-px-lg: 18px;
+  --ctl-radius: var(--radius-sm);
+  --ctl-fw: 500;
+  --ctl-disabled-opacity: 0.55;
+
+  /* Каркас и ширины. Интерфейс во всю ширину экрана: ограничивается не каркас,
+     а отдельные блоки — абзац по читаемости, форма по смыслу. */
+  --gutter: clamp(16px, 2vw, 24px);
+  --prose: 68ch;
+  --prose-lead: 52ch;
+  --form-max: 520px;
+  /* Устарело: осталось алиасом, пока страницы не переведены на блочные ширины. */
   --page-max: 1180px;
+
+  /* Слои. Раньше числа жили по файлам: 20 в шапке, 30 в таб-баре, 40 в тосте. */
+  --z-header: 20;
+  --z-tabbar: 30;
+  --z-toast: 40;
+  --z-hint: 50;
+}
+
+/* Мышь — можно плотнее: кнопка в 44px на десктопе выглядит раздутой. Направление
+   именно такое (уменьшать, а не увеличивать): если браузер запрос не поймёт,
+   останется безопасный размер под палец. */
+@media (pointer: fine) {
+  :root {
+    --ctl-h-sm: 32px;
+    --ctl-h: 38px;
+    --ctl-h-lg: 46px;
+  }
 }
 
 :root[data-theme='dark'] {
@@ -193,6 +253,33 @@ textarea {
 button {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Базовый вид полей — один на весь портал. Без этого блок .field input/select
+   переписывался в каждом модуле заново и расходился. */
+input,
+select,
+textarea {
+  min-height: var(--ctl-h);
+  padding: var(--sp-2) var(--ctl-px-sm);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--ctl-radius);
+  background: var(--surface);
+  color: var(--text);
+  /* Поле внутри сетки: без этого его inline-size распирает колонку. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 0;
+  padding: 0;
+}
+
+textarea {
+  line-height: var(--lh-text);
+  resize: vertical;
 }
 
 :focus-visible {

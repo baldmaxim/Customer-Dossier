@@ -6,6 +6,9 @@ import { api } from '../api/client';
 import type { IRunPage, RunStatus } from '../api/types';
 import { describeLoadError } from '../lib/loadError';
 import { CANDIDATE_SET_STATUS_LABELS, RUN_STATUS_LABELS, formatDateTime } from '../lib/labels';
+import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/Section';
+import { TableScroll } from '../components/ui/TableScroll';
 import styles from './Dossier.module.css';
 
 const PAGE = 50;
@@ -96,12 +99,11 @@ export const RunsPage: FC = () => {
           {field('fingerprint', 'Отпечаток (начало)')}
         </div>
         <div className={styles.row}>
-          <button type="submit" className={styles.buttonPrimary}>
+          <Button type="submit" variant="primary" hint="применить фильтры и начать с первой страницы">
             Показать
-          </button>
-          <button
-            type="button"
-            className={styles.button}
+          </Button>
+          <Button
+            hint="вернуть все фильтры к значениям по умолчанию"
             onClick={() => {
               setDraft(EMPTY);
               setFilters(EMPTY);
@@ -109,7 +111,7 @@ export const RunsPage: FC = () => {
             }}
           >
             Сбросить
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -125,72 +127,69 @@ export const RunsPage: FC = () => {
             Всего по фильтру: {data.total}; страница {cursors.length + 1}, на ней {data.items.length}
           </p>
         )}
-        {data && data.items.length === 0 && <p className={styles.meta}>Запусков по фильтру нет.</p>}
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Запуск</th>
-                <th>Статус</th>
-                <th>Редакция</th>
-                <th>Покрытие</th>
-                <th>Модель / схема</th>
-                <th>Допуск ИИ</th>
-                <th>Набор</th>
-                <th>Время</th>
+        {data && data.items.length === 0 && <EmptyState>Запусков по фильтру нет.</EmptyState>}
+        <TableScroll minWidth={980}>
+          <thead>
+            <tr>
+              <th>Запуск</th>
+              <th>Статус</th>
+              <th>Редакция</th>
+              <th>Покрытие</th>
+              <th>Модель / схема</th>
+              <th>Допуск ИИ</th>
+              <th>Набор</th>
+              <th>Время</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data?.items.map(r => (
+              <tr key={r.id}>
+                <td>
+                  <Link to={`/runs/${r.id}`}>#{r.id}</Link>
+                  {r.previousRunId !== null && <span className={styles.meta}> ← #{r.previousRunId}</span>}
+                </td>
+                <td>
+                  {RUN_STATUS_LABELS[r.status] ?? r.status}
+                  {r.error && <span className={styles.meta}> · {r.error}</span>}
+                </td>
+                <td>
+                  №{r.revisionNo}
+                  {r.latestRevisionNo > r.revisionNo && <span className={styles.warn}> (есть №{r.latestRevisionNo})</span>}
+                  <span className={styles.meta}> · {r.source.key}</span>
+                </td>
+                <td>
+                  чанков {r.coverage.chunksOk}/{r.coverage.chunks}
+                  {r.coverage.chunksFailed > 0 && <span className={styles.warn}> · сбой {r.coverage.chunksFailed}</span>}
+                  <span className={styles.meta}>
+                    {' '}
+                    · символов {r.coverage.coveredChars ?? '—'}/{r.coverage.totalChars ?? '—'}
+                  </span>
+                </td>
+                <td>
+                  {r.model ?? 'неизвестно'} · {r.schemaVersion ?? 'схема неизвестна'}
+                  <span className={styles.meta}> · {r.fingerprint.slice(0, 10)}</span>
+                </td>
+                <td>{r.policy.allowed ? 'действует' : `нет: ${r.policy.reason ?? 'не подтверждён'}`}</td>
+                <td>{r.candidateSet ? `#${r.candidateSet.id} · ${CANDIDATE_SET_STATUS_LABELS[r.candidateSet.status] ?? r.candidateSet.status}` : '—'}</td>
+                <td>
+                  {formatDateTime(r.createdAt)}
+                  {r.usage.latencyMs !== null ? <span className={styles.meta}> · {Math.round(r.usage.latencyMs / 1000)} с</span> : <span className={styles.meta}> · время неизвестно</span>}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {data?.items.map(r => (
-                <tr key={r.id}>
-                  <td>
-                    <Link to={`/runs/${r.id}`}>#{r.id}</Link>
-                    {r.previousRunId !== null && <span className={styles.meta}> ← #{r.previousRunId}</span>}
-                  </td>
-                  <td>
-                    {RUN_STATUS_LABELS[r.status] ?? r.status}
-                    {r.error && <span className={styles.meta}> · {r.error}</span>}
-                  </td>
-                  <td>
-                    №{r.revisionNo}
-                    {r.latestRevisionNo > r.revisionNo && <span className={styles.warn}> (есть №{r.latestRevisionNo})</span>}
-                    <span className={styles.meta}> · {r.source.key}</span>
-                  </td>
-                  <td>
-                    чанков {r.coverage.chunksOk}/{r.coverage.chunks}
-                    {r.coverage.chunksFailed > 0 && <span className={styles.warn}> · сбой {r.coverage.chunksFailed}</span>}
-                    <span className={styles.meta}>
-                      {' '}
-                      · символов {r.coverage.coveredChars ?? '—'}/{r.coverage.totalChars ?? '—'}
-                    </span>
-                  </td>
-                  <td>
-                    {r.model ?? 'неизвестно'} · {r.schemaVersion ?? 'схема неизвестна'}
-                    <span className={styles.meta}> · {r.fingerprint.slice(0, 10)}</span>
-                  </td>
-                  <td>{r.policy.allowed ? 'действует' : `нет: ${r.policy.reason ?? 'не подтверждён'}`}</td>
-                  <td>{r.candidateSet ? `#${r.candidateSet.id} · ${CANDIDATE_SET_STATUS_LABELS[r.candidateSet.status] ?? r.candidateSet.status}` : '—'}</td>
-                  <td>
-                    {formatDateTime(r.createdAt)}
-                    {r.usage.latencyMs !== null ? <span className={styles.meta}> · {Math.round(r.usage.latencyMs / 1000)} с</span> : <span className={styles.meta}> · время неизвестно</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </TableScroll>
         <div className={styles.row}>
-          <button type="button" className={styles.button} disabled={cursors.length === 0} onClick={() => setCursors(cursors.slice(0, -1))}>
+          <Button disabled={cursors.length === 0} onClick={() => setCursors(cursors.slice(0, -1))}>
             Назад
-          </button>
-          <button
-            type="button"
-            className={styles.button}
+          </Button>
+          <Button
             disabled={!data?.nextBeforeId}
+            hint="следующая страница: список идёт от новых запусков к старым"
             onClick={() => data?.nextBeforeId && setCursors([...cursors, data.nextBeforeId])}
           >
             Дальше
-          </button>
+          </Button>
         </div>
       </section>
     </div>

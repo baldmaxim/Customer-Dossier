@@ -1,0 +1,25 @@
+.group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  max-width: 100%;
+}
+
+.item {
+  border-radius: var(--radius-full);
+}
+
+.active {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.active:hover:not(:disabled) {
+  background: var(--surface);
+}
