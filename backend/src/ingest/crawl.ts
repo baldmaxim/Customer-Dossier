@@ -30,7 +30,7 @@ export const parseSourceProfile = (config: Record<string, unknown>): ISourceProf
     return {
       mode: profile.mode,
       maxItemsPerRun: profile.limits.maxItemsPerRun,
-      detail: `объектов ${profile.objectIds.length}, застройщиков ${profile.developerIds.length}, обход каталога ${profile.list ? 'есть' : 'нет'}`,
+      detail: `объектов ${profile.objectIds.length}, застройщиков ${profile.developerIds.length}; обхода каталога нет`,
     };
   }
   const profile = parseSiteProfile(config);

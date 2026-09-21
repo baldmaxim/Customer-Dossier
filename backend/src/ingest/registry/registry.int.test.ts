@@ -11,6 +11,11 @@ import { ingestWebsiteSource } from '../scheduler.js';
 import { getSourceById, setSourceConfig } from '../sources.js';
 import { setSiteTransportForTests } from '../sites/fetcher.js';
 import { probeWebsiteSource } from '../sites/probe.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { importRegistryFile } from './importFile.js';
 import { loadProjectRegistry } from '../../registry/read.js';
 
 type Route = (headers: Record<string, string>) => { status: number; headers?: Record<string, string>; body?: string };
@@ -48,10 +53,7 @@ const objectAnswer = (over: Record<string, unknown> = {}) => ({
 
 const registryProfile = (over: Record<string, unknown> = {}, host = 'registry-demo.test') => ({
   mode: 'registry_api',
-  endpoints: {
-    object: `https://${host}/api/object?id={id}`,
-    list: `https://${host}/api/list?offset={offset}&limit={limit}`,
-  },
+  endpoints: { object: `https://${host}/api/object?id={id}` },
   objectIds: ['62087'],
   identity: {
     object: {
@@ -199,20 +201,6 @@ describe('реестр: снимок, повтор без изменений, и
 });
 
 describe('реестр: обход каталога и отказы источника (T20A-05)', () => {
-  it('список даёт идентификаторы записей, лимит записей виден в покрытии', async () => {
-    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-c-demo.test/api/object?id={id}', list: 'https://registry-c-demo.test/api/list?offset={offset}&limit={limit}' }, objectIds: [], list: { itemsPath: 'data', idPath: 'objId', limit: 2, maxPages: 1 } }, 'registry-c-demo.test'), 'registry-c-demo.test');
-    routes.set(s.url('/api/list?offset=0&limit=2'), json({ data: [{ objId: 1 }, { objId: 2 }] }));
-    routes.set(s.url('/api/object?id=1'), json(objectAnswer({ objId: 1, objCommercNm: 'Демо-один' })));
-    routes.set(s.url('/api/object?id=2'), json(objectAnswer({ objId: 2, objCommercNm: 'Демо-два' })));
-
-    await run(s.id);
-    const rows = await revisions(s.id);
-    expect(rows.map(r => r.item_key)).toEqual(['ext:object:1', 'ext:object:2']);
-    const runRow = await lastRun(s.id);
-    expect(runRow.coverage).toMatchObject({ mode: 'registry_api', objects: 2, listPages: 1 });
-    expect(runRow.parser_version).toBe('registry@1');
-  });
-
   it('403 — blocked без записей, 429 — rate_limited с паузой, не «в реестре ничего нет»', async () => {
     const s = await registry(registryProfile({ endpoints: { object: 'https://registry-d-demo.test/api/object?id={id}' } }, 'registry-d-demo.test'), 'registry-d-demo.test');
     routes.set(s.url('/api/object?id=62087'), () => ({ status: 403, body: 'forbidden' }));
@@ -358,5 +346,66 @@ describe('реестр: детерминированная запись в ка�
     expect(await canonCount(s.id, `(a.event_type IS NOT NULL OR a.valid_from IS NOT NULL OR a.value_numeric IS NOT NULL)`)).toBe(0);
     // Роль застройщика при этом записана один раз, а не по разу на снимок.
     expect(await canonCount(s.id, `a.predicate = 'participates_in_project'`)).toBe(1);
+  });
+});
+
+describe('импорт файла без сети (T20C-02)', () => {
+  it('сохранённый оператором ответ даёт ту же редакцию, снимок и канон, что и сбор', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-j-demo.test/api/object?id={id}' } }, 'registry-j-demo.test'), 'registry-j-demo.test');
+    const file = path.join(os.tmpdir(), `registry-import-${Date.now()}.json`);
+    const answer = objectAnswer({
+      objId: 90001,
+      objCommercNm: 'Демо-Импорт 7',
+      groupName: null,
+      developer: { shortName: 'СЗ ИМПОРТ', devInn: '7810186540', orgForm: { shortForm: 'ООО' } },
+    });
+    fs.writeFileSync(file, JSON.stringify(answer), 'utf8');
+    try {
+      const first = await importRegistryFile((await getSourceById(s.id))!, file, { type: 'object' });
+      expect(first.kind).toBe('stored');
+      if (first.kind !== 'stored') return;
+      expect(first.outcome).toBe('inserted');
+      expect(first.externalRef).toBe('90001');
+      // Ни одного сетевого запроса: файл читается с диска.
+      expect(calls).toHaveLength(0);
+
+      const rows = await revisions(s.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.item_key).toBe('ext:object:90001');
+      expect(rows[0]!.body).toContain('Застройщик объекта «Демо-Импорт 7» — ООО СЗ ИМПОРТ, ИНН 7810186540.');
+      expect(await records(s.id)).toHaveLength(1);
+      expect(first.assertions).toBe(1);
+
+      // Повтор того же файла — наблюдение, не новая редакция и не новые утверждения.
+      const again = await importRegistryFile((await getSourceById(s.id))!, file, { type: 'object' });
+      expect(again.kind === 'stored' && again.outcome).toBe('unchanged');
+      expect(await revisions(s.id)).toHaveLength(1);
+      expect(await records(s.id)).toHaveLength(1);
+
+      // Изменённый файл — новая редакция и новый снимок.
+      fs.writeFileSync(file, JSON.stringify({ ...answer, objReadyDt: '2029-03-31' }), 'utf8');
+      const changed = await importRegistryFile((await getSourceById(s.id))!, file, { type: 'object' });
+      expect(changed.kind === 'stored' && changed.outcome).toBe('new_revision');
+      expect(await revisions(s.id)).toHaveLength(2);
+      expect(await records(s.id)).toHaveLength(2);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
+  it('несовпавшая карта полей возвращает пути ответа, а не пустой результат', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-k-demo.test/api/object?id={id}' } }, 'registry-k-demo.test'), 'registry-k-demo.test');
+    const file = path.join(os.tmpdir(), `registry-unmapped-${Date.now()}.json`);
+    fs.writeFileSync(file, JSON.stringify({ data: { id: 1, title: 'другая форма ответа' } }), 'utf8');
+    try {
+      const result = await importRegistryFile((await getSourceById(s.id))!, file, { type: 'object' });
+      expect(result.kind).toBe('unmapped');
+      if (result.kind !== 'unmapped') return;
+      expect(result.availablePaths).toContain('data.id');
+      expect(result.availablePaths).toContain('data.title');
+      expect(await revisions(s.id)).toHaveLength(0);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
   });
 });

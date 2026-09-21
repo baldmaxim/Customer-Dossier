@@ -5,6 +5,8 @@
 
 import type { PoolClient } from 'pg';
 
+import type { DbExecutor } from '../../db/pool.js';
+
 import type { IRegistryRecord } from './map.js';
 import { REGISTRY_RENDER_VERSION } from './render.js';
 
@@ -40,3 +42,40 @@ export const saveRegistryRecord = async (client: PoolClient, input: ISaveRegistr
     ],
   );
 };
+
+export interface ITrackedRegistryRecord {
+  recordType: string;
+  externalRef: string;
+  name: string;
+  asOf: string | null;
+  lastFetchedAt: Date;
+  snapshots: number;
+}
+
+/**
+ * Записи реестра, которые портал уже ведёт по этому источнику. Отдельного списка
+ * наблюдения нет: отслеживается ровно то, что оператор добавил или импортировал.
+ */
+export const listTrackedRecords = async (exec: DbExecutor, sourceId: number, limit = 200): Promise<ITrackedRegistryRecord[]> =>
+  (
+    await exec.query<{ record_type: string; external_ref: string; name: string; as_of: string | null; last_fetched_at: Date; snapshots: number }>(
+      `SELECT record_type, external_ref,
+              (payload->'identity'->>'name') AS name,
+              max(as_of::text) AS as_of,
+              max(fetched_at) AS last_fetched_at,
+              count(*)::int AS snapshots
+       FROM registry_records
+       WHERE source_id = $1
+       GROUP BY record_type, external_ref, payload->'identity'->>'name'
+       ORDER BY record_type, external_ref
+       LIMIT $2`,
+      [sourceId, limit],
+    )
+  ).rows.map(r => ({
+    recordType: r.record_type,
+    externalRef: r.external_ref,
+    name: r.name,
+    asOf: r.as_of,
+    lastFetchedAt: r.last_fetched_at,
+    snapshots: r.snapshots,
+  }));

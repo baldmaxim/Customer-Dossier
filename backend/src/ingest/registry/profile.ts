@@ -94,23 +94,14 @@ export const registryProfileSchema = z
       .object({
         object: httpUrlTemplate('{id}'),
         developer: httpUrlTemplate('{id}').optional(),
-        /** Поиск по застройщику или региону: параметры запроса задаёт сам адрес. */
-        list: httpUrlTemplate('{offset}').optional(),
       })
       .strict(),
-    /** Явный перечень записей. Пустые списки и отсутствие list — профилю нечего делать. */
+    /**
+     * Что собирать. Перечень ведёт оператор: обхода каталога нет и настроить его нельзя.
+     * Пустой список — законное состояние: записи приходят импортом файла.
+     */
     objectIds: z.array(idString).max(200).default([]),
     developerIds: z.array(idString).max(200).default([]),
-    list: z
-      .object({
-        itemsPath: jsonPath,
-        /** Путь к идентификатору внутри элемента списка. */
-        idPath: jsonPath,
-        limit: z.number().int().min(1).max(100).default(20),
-        maxPages: z.number().int().min(1).max(20).default(1),
-      })
-      .strict()
-      .optional(),
     /** Где в ответе лежит сама запись, если она завёрнута (например, data). */
     responsePath: z.object({ object: jsonPath.optional(), developer: jsonPath.optional() }).strict().default({}),
     fields: z
@@ -128,17 +119,10 @@ export const registryProfileSchema = z
       })
       .strict()
       .default({}),
-    expectations: z.object({ minItemsOnList: z.number().int().min(0).max(100).default(1) }).strict().default({}),
     meta: sourceProfileMetaSchema.optional(),
   })
   .strict()
   .superRefine((p, ctx) => {
-    if (p.objectIds.length === 0 && p.developerIds.length === 0 && !p.list) {
-      ctx.addIssue({ code: 'custom', message: 'нечего собирать: нужен objectIds, developerIds или list' });
-    }
-    if (p.list && !p.endpoints.list) {
-      ctx.addIssue({ code: 'custom', message: 'list требует endpoints.list' });
-    }
     if (p.developerIds.length > 0 && !p.endpoints.developer) {
       ctx.addIssue({ code: 'custom', message: 'developerIds требует endpoints.developer' });
     }
@@ -180,7 +164,7 @@ export const buildUrl = (template: string, values: Readonly<Record<string, strin
 /** Сетевая политика: хост base_url, хосты эндпоинтов и явно разрешённые, лимиты профиля. */
 export const policyForRegistryProfile = (baseUrl: string, profile: IRegistryProfile): ISourceNetworkPolicy => {
   const hosts = new Set<string>(profile.allowedHosts);
-  const candidates = [baseUrl, profile.endpoints.object, profile.endpoints.developer, profile.endpoints.list];
+  const candidates = [baseUrl, profile.endpoints.object, profile.endpoints.developer];
   for (const raw of candidates) {
     if (!raw) continue;
     try {

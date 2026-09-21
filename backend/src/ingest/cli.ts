@@ -6,6 +6,9 @@
 //   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
 //   npm run ingest:once -- --site-profile <key> --file profile.json  проверить и записать профиль сайта
 //   npm run ingest:once -- --telegram-profile <канал> --file profile.json  проверить и записать профиль канала
+//   npm run ingest:once -- --registry-import <key> --file answer.json [--type developer] [--url <адрес>]
+//                                              записать ответ реестра, сохранённый оператором (нужен допуск)
+//   npm run ingest:once -- --registry-objects <key>  что портал уже ведёт по этому реестру
 //   npm run ingest:once -- --source kzbuild    прогнать один источник (нужен допуск)
 //   npm run ingest:once                        прогнать все просроченные источники с допуском
 //   npm run ingest:once -- --remove <key>      удалить источник без документов
@@ -20,7 +23,9 @@
 
 import fs from 'node:fs';
 
-import { closeDb } from '../db/pool.js';
+import { closeDb, getPool } from '../db/pool.js';
+import { importRegistryFile } from './registry/importFile.js';
+import { listTrackedRecords } from './registry/records.js';
 import { parseSourceProfile } from './crawl.js';
 import { telegramProfileSchema } from './telegram/webCrawler.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
@@ -39,6 +44,17 @@ import { printProbe, probeWebsiteSource } from './sites/probe.js';
 import { ingestWebsiteSource } from './scheduler.js';
 import { evaluateSourcePolicy } from './policy.js';
 import type { ISource } from './sources.js';
+
+/** Исход записи словами: в логе оператора машинные ключи не нужны. */
+const STORE_LABEL: Record<string, string> = {
+  inserted: 'новая запись',
+  duplicate: 'новая запись (такой текст уже встречался)',
+  new_revision: 'данные изменились, сохранена новая редакция',
+  unchanged: 'без изменений',
+  stale: 'наблюдение старее текущей редакции',
+  too_short: 'слишком короткий текст',
+  edited_skipped: 'правка пропущена (REVISION_WRITE_ENABLED=false)',
+};
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -156,6 +172,64 @@ const main = async (): Promise<void> => {
     const report = await probeWebsiteSource(source);
     printProbe(report);
     if (report.outcome !== 'ok' && report.outcome !== 'not_modified') process.exitCode = 1;
+    return;
+  }
+
+  // Импорт ответа реестра из файла: сети нет, но это сбор — допуск обязателен.
+  const importKey = argValue('--registry-import');
+  if (importKey) {
+    const file = argValue('--file');
+    if (!file) {
+      console.error('[registry] нужен --file <answer.json>');
+      process.exitCode = 1;
+      return;
+    }
+    const source = await loadApprovedSource('website', importKey);
+    if (!source) return;
+    const type = argValue('--type') === 'developer' ? 'developer' : 'object';
+    const result = await importRegistryFile(source, file, { type, url: argValue('--url') ?? undefined });
+    if (result.kind === 'stored') {
+      console.log(`[registry] ${result.type} ${result.externalRef} «${result.name}»: ${STORE_LABEL[result.outcome] ?? result.outcome}, полей ${result.fields}`);
+      if (result.newRevision) console.log(`[registry] снимок записан, утверждений ${result.assertions}`);
+      for (const skip of result.skipped) console.warn(`[registry] канон: ${skip.what} — ${skip.reason}`);
+      if (result.publishError) {
+        console.error(`[registry] канон не записан: ${result.publishError}`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+    if (result.kind === 'unmapped') {
+      console.error('[registry] карта полей не совпала: в ответе нет идентификатора или названия.');
+      console.error(`[registry] пути в ответе: ${result.availablePaths.join(', ') || '—'}`);
+    } else if (result.kind === 'invalid_json') {
+      console.error(`[registry] файл не разобран как JSON: ${result.message}`);
+    } else if (result.kind === 'too_large') {
+      console.error(`[registry] файл ${result.bytes} байт, предел профиля ${result.limit}`);
+    } else {
+      console.error(`[registry] ${result.message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const trackedKey = argValue('--registry-objects');
+  if (trackedKey) {
+    const source = await getSourceByKey('website', trackedKey);
+    if (!source) {
+      console.error(`[registry] источник ${trackedKey} не зарегистрирован`);
+      process.exitCode = 1;
+      return;
+    }
+    const rows = await listTrackedRecords(getPool(), source.id);
+    if (rows.length === 0) {
+      console.log('[registry] по этому источнику записей нет: добавьте их в профиль или импортируйте файлом');
+      return;
+    }
+    for (const row of rows) {
+      console.log(
+        `[registry] ${row.recordType} ${row.externalRef} «${row.name}» · снимков ${row.snapshots} · сведения на ${row.asOf ?? 'дата не указана'} · получено ${row.lastFetchedAt.toISOString().slice(0, 10)}`,
+      );
+    }
     return;
   }
 

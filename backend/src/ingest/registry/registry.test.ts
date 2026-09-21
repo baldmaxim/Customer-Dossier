@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 import { sourceProfileMetaSchema } from '../profileMeta.js';
 import { availablePaths, formatValue, mapRecord, readPath, toIsoDate } from './map.js';
+import { objectIdFromUrl } from './importFile.js';
 import { RegistryProfileError, buildUrl, isRegistryConfig, parseRegistryProfile, policyForRegistryProfile } from './profile.js';
 import { REGISTRY_RENDER_VERSION, renderRecord } from './render.js';
 
@@ -58,9 +59,13 @@ describe('профиль реестра (T20A-01)', () => {
     expect(() => profile({ identity: { object: { idPath: 'a()', namePath: 'b' } } })).toThrow(/путь вида/);
   });
 
-  it('профилю нужна работа: без objectIds, developerIds и list он отвергается', () => {
-    expect(() => profile({ objectIds: [] })).toThrow(/нечего собирать/);
-    expect(() => profile({ objectIds: [], list: { itemsPath: 'data', idPath: 'objId' } })).toThrow(/endpoints.list/);
+  it('обход каталога настроить нельзя: собирается только перечень оператора', () => {
+    expect(() => profile({ list: { itemsPath: 'data', idPath: 'objId' } })).toThrow(RegistryProfileError);
+    expect(() => profile({ endpoints: { object: 'https://registry-demo.test/api/object?id={id}', list: 'https://registry-demo.test/api/list?offset={offset}' } })).toThrow(
+      RegistryProfileError,
+    );
+    // Пустой перечень законен: записи приходят импортом файла.
+    expect(profile({ objectIds: [] }).objectIds).toEqual([]);
     expect(() => profile({ developerIds: ['77'] })).toThrow(/endpoints.developer/);
   });
 
@@ -133,6 +138,20 @@ describe('карта полей (T20A-02)', () => {
 
   it('карточка застройщика требует своей identity', () => {
     expect(mapRecord(answer(), profile(), 'developer')).toBeNull();
+  });
+});
+
+describe('импорт из файла (T20C-01)', () => {
+  it('идентификатор берётся из адреса каталога, в том числе кириллического', () => {
+    expect(objectIdFromUrl('https://наш.дом.рф/сервисы/каталог-новостроек/объект/62087')).toBe('62087');
+    expect(objectIdFromUrl('https://xn--80az8a.xn--d1aqf.xn--p1ai/portal-kn/api/kn/objects/62087')).toBe('62087');
+    expect(objectIdFromUrl('https://xn--80az8a.xn--d1aqf.xn--p1ai/portal-kn/api/kn/objects/62087/deptrans-rating')).toBe('62087');
+    expect(objectIdFromUrl('62087')).toBe('62087');
+  });
+
+  it('без числового сегмента идентификатор не выдумывается', () => {
+    expect(objectIdFromUrl('https://наш.дом.рф/сервисы/каталог-новостроек/')).toBeNull();
+    expect(objectIdFromUrl('не адрес')).toBeNull();
   });
 });
 

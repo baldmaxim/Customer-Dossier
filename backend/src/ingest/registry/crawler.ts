@@ -7,19 +7,12 @@
 //  - 403 не обходится, 429 уважается, неразобранный JSON — parser_degraded,
 //    а не «в реестре ничего нет».
 
-import type { PoolClient } from 'pg';
-
-import { env } from '../../config/env.js';
-import { withTransaction } from '../../db/pool.js';
-import { publishRegistryRecord } from '../../registry/publish.js';
-import { itemIdentity } from '../../revisions/identity.js';
 import { pathAllowed } from '../profileMeta.js';
-import { listPageDegraded } from '../sourceHealth.js';
 import type { ISource } from '../sources.js';
-import { storeDocument, type IIncomingDocument } from '../store.js';
+import type { IIncomingDocument } from '../store.js';
 import { fetchSitePage, loadConditional, saveConditional, type SiteFetchResult } from '../sites/fetcher.js';
 import { STORE_COUNT, fatalFromFetch, type ICrawlOptions, type ICrawlReport } from '../sites/crawler.js';
-import { availablePaths, mapRecord, readPath, type IRegistryRecord, type RegistryRecordType } from './map.js';
+import { availablePaths, mapRecord, type IRegistryRecord, type RegistryRecordType } from './map.js';
 import {
   REGISTRY_PARSER_VERSION,
   RegistryProfileError,
@@ -28,13 +21,7 @@ import {
   policyForRegistryProfile,
   type IRegistryProfile,
 } from './profile.js';
-import { renderRecord, representationOf } from './render.js';
-import { saveRegistryRecord } from './records.js';
-
-interface IRegistryCursor {
-  lastListCount?: number;
-  lastListOffset?: number;
-}
+import { buildRegistryDocument, persistRegistryRecord } from './store.js';
 
 type JsonFetch =
   | { kind: 'ok'; value: unknown; result: Extract<SiteFetchResult, { kind: 'ok' }> }
@@ -74,9 +61,7 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
   const baseUrl = source.baseUrl ?? `https://${source.key}`;
   const policy = policyForRegistryProfile(baseUrl, profile);
   const maxItems = Math.min(options.maxItems ?? profile.limits.maxItemsPerRun, profile.limits.maxItemsPerRun);
-  const maxPages = Math.min(options.maxPages ?? profile.list?.maxPages ?? 1, profile.list?.maxPages ?? 1);
   const prefixes = profile.meta?.allowedPathPrefixes ?? [];
-  const cursor = (source.cursor.registry ?? {}) as IRegistryCursor;
   let requests = 0;
   let publishedAssertions = 0;
   let publishSkipped = 0;
@@ -113,49 +98,28 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
     if (report.outcome === 'ok') report.outcome = 'parser_degraded';
   };
 
-  /**
-   * Снимок и редакция — одной транзакцией: снимок без своей редакции не существует.
-   * Канон — отдельной: отказ публикации не должен уносить собранные данные,
-   * как и у конвейера моделью (отказ — исход набора, а не падение запуска).
-   */
+  /** Запись — общим путём (store.ts); здесь только счётчики запуска и условный кэш. */
   const persist = async (doc: IIncomingDocument, record: IRegistryRecord, url: string, result: SiteFetchResult): Promise<void> => {
     if (dryRun) {
       report.counts.saved += 1;
       return;
     }
-    const itemKey = itemIdentity({ externalId: doc.externalId, url: doc.url, body: doc.body }).key;
-    let publishable: number | null = null;
-    await withTransaction(async (client: PoolClient) => {
-      const stored = await storeDocument(doc, client);
-      report.counts[STORE_COUNT[stored.outcome]] += 1;
-      const isNewRevision = stored.outcome === 'inserted' || stored.outcome === 'duplicate' || stored.outcome === 'new_revision';
-      if (isNewRevision && stored.revisionId !== null) {
-        await saveRegistryRecord(client, {
-          sourceId: source.id,
-          itemKey,
-          revisionId: stored.revisionId,
-          record,
-          fetchedAt: doc.fetchedAt ?? new Date(),
-        });
-        publishable = stored.revisionId;
-      }
-      await saveConditional(client, source.id, url, result);
+    const stored = await persistRegistryRecord({
+      source,
+      record,
+      doc,
+      alsoInTransaction: client => saveConditional(client, source.id, url, result),
     });
-
-    if (publishable === null || !env.REGISTRY_PUBLISH_ENABLED) return;
-    try {
-      const published = await withTransaction(client => publishRegistryRecord(client, { revisionId: publishable!, body: doc.body, record }));
-      publishedAssertions += published.assertions;
-      for (const skip of published.skipped) {
-        publishSkipped += 1;
-        report.errors.push(`канон по записи ${url}: ${skip.what} — ${skip.reason}`);
-      }
-    } catch (err) {
-      // Собранное остаётся в базе; повторная публикация возможна следующим проходом.
+    report.counts[STORE_COUNT[stored.outcome]] += 1;
+    publishedAssertions += stored.assertions;
+    for (const skip of stored.skipped) {
+      publishSkipped += 1;
+      report.errors.push(`канон по записи ${url}: ${skip.what} — ${skip.reason}`);
+    }
+    if (stored.publishError !== null) {
       publishFailed += 1;
-      const message = err instanceof Error ? err.message : String(err);
-      report.errors.push(`канон по записи ${url}: ${message}`);
-      report.healthReason = report.healthReason ?? `канон записан не полностью: ${message}`;
+      report.errors.push(`канон по записи ${url}: ${stored.publishError}`);
+      report.healthReason = report.healthReason ?? `канон записан не полностью: ${stored.publishError}`;
     }
   };
 
@@ -205,103 +169,15 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
     report.counts.found += 1;
     report.layoutStats[`${type}_fields`] = (report.layoutStats[`${type}_fields`] ?? 0) + record.fields.length;
 
-    const asOf = record.identity.asOf;
-    const doc: IIncomingDocument = {
-      sourceId: source.id,
-      sourceRunId: options.sourceRunId ?? null,
-      // Ключ публикации — запись реестра, а не адрес: смена шаблона адреса не должна раздваивать историю.
-      externalId: `${type}:${record.identity.externalRef}`,
-      url,
-      title: record.identity.name,
-      body: renderRecord(record),
-      publishedAt: asOf ? new Date(`${asOf}T00:00:00Z`) : null,
-      publishedAtPrecision: asOf ? 'date_only' : null,
-      publishedAtRaw: asOf,
-      forwardFrom: null,
-      representation: representationOf(type),
-      completeness: 'full',
-      completenessReason: `registry_fields:${record.fields.length}`,
-      attachments: [],
-      sourceModifiedAt: null,
-      fetchedAt: new Date(),
-      parserVersion: REGISTRY_PARSER_VERSION,
-    };
+    const doc = buildRegistryDocument(source, record, url, options.sourceRunId ?? null);
     addSample(doc);
     await persist(doc, record, url, res.result);
   };
 
-  /** Обход каталога: адреса записей по списку. Полнота каталога не обещается. */
-  const discover = async (): Promise<string[]> => {
-    const list = profile.list;
-    const template = profile.endpoints.list;
-    if (!list || !template) return [];
-    const ids: string[] = [];
-    let pages = 0;
-    let stop = 'exhausted';
-    for (let offset = 0; pages < maxPages; offset += list.limit) {
-      const url = buildUrl(template, { offset, limit: list.limit });
-      if (!pathAllowed(url, prefixes)) {
-        report.layoutStats.outside_path_prefix = (report.layoutStats.outside_path_prefix ?? 0) + 1;
-        stop = 'outside_path_prefix';
-        break;
-      }
-      const res = await fetchJson(url);
-      if (res.kind === 'not_modified') {
-        stop = 'not_modified';
-        break;
-      }
-      if (res.kind === 'failed') {
-        fail(res.result, `список ${url}`);
-        stop = 'failed';
-        break;
-      }
-      if (res.kind === 'invalid_json') {
-        degrade(`список ${url}: ответ не разобран как JSON (${res.length} байт): ${res.message}`);
-        stop = 'parser_degraded';
-        break;
-      }
-      pages += 1;
-      report.pagesFetched += 1;
-      const items = readPath(res.value, list.itemsPath);
-      const rows = Array.isArray(items) ? items : [];
-      report.layoutStats.list_items = (report.layoutStats.list_items ?? 0) + rows.length;
-      if (listPageDegraded({ items: rows.length, htmlLength: res.result.text.length, minItems: profile.expectations.minItemsOnList, lastListCount: cursor.lastListCount ?? 0 })) {
-        degrade(`список ${url}: записей ${rows.length} при ожидаемых ${profile.expectations.minItemsOnList} — похоже на смену формата ответа`);
-        stop = 'parser_degraded';
-        break;
-      }
-      for (const row of rows) {
-        const id = readPath(row, list.idPath);
-        if (id === null || id === undefined) continue;
-        const text = String(id).trim();
-        if (text !== '' && !ids.includes(text)) ids.push(text);
-        if (ids.length >= maxItems) break;
-      }
-      cursor.lastListCount = rows.length;
-      cursor.lastListOffset = offset;
-      if (ids.length >= maxItems) {
-        stop = 'max_items';
-        break;
-      }
-      if (rows.length < list.limit) {
-        stop = 'exhausted';
-        break;
-      }
-      if (pages >= maxPages) {
-        stop = 'max_pages';
-        break;
-      }
-    }
-    report.coverage.listStopReason = stop;
-    report.coverage.listPages = pages;
-    return ids;
-  };
-
-  const discovered = await discover();
-  const objectIds: string[] = [];
-  for (const id of [...profile.objectIds, ...discovered]) {
-    if (!objectIds.includes(id)) objectIds.push(id);
-  }
+  // Собираются только записи, названные оператором в профиле. Обход каталога цели
+  // сбора не назначает: иначе «посмотреть, что есть у застройщика» незаметно
+  // превращалось бы в выкачивание каталога, которого никто не разрешал.
+  const objectIds = [...new Set(profile.objectIds)];
 
   for (const id of objectIds) {
     if (report.counts.found >= maxItems) break;
@@ -314,24 +190,15 @@ export const crawlRegistry = async (source: ISource, options: ICrawlOptions = {}
     await processRecord('developer', id);
   }
 
-  if (!dryRun && (cursor.lastListCount !== undefined || cursor.lastListOffset !== undefined)) {
-    await withTransaction(async (client: PoolClient) => {
-      await client.query(
-        `UPDATE sources SET cursor = jsonb_set(cursor, '{registry}', coalesce(cursor->'registry', '{}'::jsonb) || $2::jsonb), updated_at = now()
-         WHERE id = $1`,
-        [source.id, JSON.stringify({ lastListCount: cursor.lastListCount ?? null, lastListOffset: cursor.lastListOffset ?? null })],
-      );
-    });
-  }
-
   report.coverage.mode = 'registry_api';
+  report.coverage.targets = 'operator_list';
+  report.coverage.catalogSearch = 'not_supported';
   report.coverage.objects = objectIds.length;
   report.coverage.developers = profile.developerIds.length;
   report.coverage.requests = requests;
   report.coverage.publishedAssertions = publishedAssertions;
   report.coverage.publishSkipped = publishSkipped;
   report.coverage.publishFailed = publishFailed;
-  report.coverage.publishEnabled = env.REGISTRY_PUBLISH_ENABLED;
   report.coverage.note =
     'реестр отдаёт текущее состояние записи; полнота каталога и история изменений до первого сбора неизвестны';
   if (report.outcome === 'ok' && report.health === 'ok' && report.counts.failed > 0) {
