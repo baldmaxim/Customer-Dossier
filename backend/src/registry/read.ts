@@ -34,14 +34,14 @@ export interface IRegistryView {
 
 interface IRow {
   external_ref: string;
-  as_of: Date | null;
+  /** DATE приходит строкой 'YYYY-MM-DD': парсер типа переопределён в db/pool.ts,
+   *  иначе дата уезжала бы на сутки по часовому поясу. Преобразовывать её нечем и незачем. */
+  as_of: string | null;
   fetched_at: Date;
   payload: IRegistryPayload;
   source_key: string;
   source_title: string;
 }
-
-const isoDate = (value: Date | null): string | null => (value === null ? null : value.toISOString().slice(0, 10));
 
 export const ATTRIBUTION =
   'Сведения реестра на указанную дату. Это проектная декларация застройщика, опубликованная в реестре, а не проверенный факт: сроки и характеристики указывает сам застройщик.';
@@ -53,12 +53,12 @@ const build = (rows: readonly IRow[]): IRegistryView => {
     const current = rows[i]!;
     const previous = rows[i + 1]!;
     const diff = diffPayloads(previous.payload, current.payload);
-    if (diff.length > 0) changes.push({ asOf: isoDate(current.as_of), fetchedAt: current.fetched_at.toISOString(), changes: diff });
+    if (diff.length > 0) changes.push({ asOf: current.as_of, fetchedAt: current.fetched_at.toISOString(), changes: diff });
   }
   return {
     source: { key: latest.source_key, title: latest.source_title },
     externalRef: latest.payload.identity.externalRef,
-    asOf: isoDate(latest.as_of),
+    asOf: latest.as_of,
     fetchedAt: latest.fetched_at.toISOString(),
     fields: latest.payload.fields.map(f => ({ label: f.label, value: f.value })),
     developer: latest.payload.identity.developer,
@@ -108,7 +108,7 @@ export interface IRegistryProjectRow {
 
 export const loadCompanyRegistryProjects = async (exec: DbExecutor, companyId: number, limit = 50): Promise<IRegistryProjectRow[]> =>
   (
-    await exec.query<{ project_id: number; name: string; city: string | null; as_of: Date | null; fetched_at: Date }>(
+    await exec.query<{ project_id: number; name: string; city: string | null; as_of: string | null; fetched_at: Date }>(
       `SELECT DISTINCT ON (r.project_id) r.project_id, p.name, p.city, r.as_of, r.fetched_at
        FROM registry_records r JOIN projects p ON p.id = r.project_id
        WHERE r.company_id = $1 AND r.record_type = 'object' AND r.project_id IS NOT NULL AND p.merged_into_id IS NULL
@@ -116,4 +116,4 @@ export const loadCompanyRegistryProjects = async (exec: DbExecutor, companyId: n
        LIMIT $2`,
       [companyId, limit],
     )
-  ).rows.map(r => ({ projectId: r.project_id, name: r.name, city: r.city, asOf: isoDate(r.as_of), fetchedAt: r.fetched_at.toISOString() }));
+  ).rows.map(r => ({ projectId: r.project_id, name: r.name, city: r.city, asOf: r.as_of, fetchedAt: r.fetched_at.toISOString() }));

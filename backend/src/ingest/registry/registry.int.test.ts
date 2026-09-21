@@ -11,6 +11,7 @@ import { ingestWebsiteSource } from '../scheduler.js';
 import { getSourceById, setSourceConfig } from '../sources.js';
 import { setSiteTransportForTests } from '../sites/fetcher.js';
 import { probeWebsiteSource } from '../sites/probe.js';
+import { loadProjectRegistry } from '../../registry/read.js';
 
 type Route = (headers: Record<string, string>) => { status: number; headers?: Record<string, string>; body?: string };
 
@@ -116,7 +117,7 @@ const revisions = async (sourceId: number) =>
 
 const records = async (sourceId: number) =>
   (
-    await pool().query<{ item_key: string; record_type: string; external_ref: string; as_of: Date | null; payload: Record<string, any>; render_version: string; revision_id: string }>(
+    await pool().query<{ item_key: string; record_type: string; external_ref: string; as_of: string | null; payload: Record<string, any>; render_version: string; revision_id: string }>(
       `SELECT item_key, record_type, external_ref, as_of, payload, render_version, revision_id
        FROM registry_records WHERE source_id = $1 ORDER BY id`,
       [sourceId],
@@ -189,7 +190,11 @@ describe('реестр: снимок, повтор без изменений, и
     const rev = await revisions(s.id);
     expect(rev[0]!.body).toContain('Сведения реестра на 21.09.2026');
     expect(rev[0]!.published_at_precision).toBe('date_only');
-    expect((await records(s.id))[0]!.as_of).toEqual(new Date('2026-09-21T00:00:00Z'));
+    // DATE приходит строкой: сутки не уезжают по часовому поясу машины.
+    expect((await records(s.id))[0]!.as_of).toBe('2026-09-21');
+    const view = await loadProjectRegistry(getPool(), (await pool().query<{ project_id: number }>('SELECT project_id FROM registry_records WHERE source_id = $1', [s.id])).rows[0]!.project_id);
+    expect(view!.asOf).toBe('2026-09-21');
+    expect(view!.attribution).toContain('проектная декларация застройщика');
   });
 });
 
