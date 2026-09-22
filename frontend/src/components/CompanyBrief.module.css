@@ -1,0 +1,38 @@
+/* Краткая сводка (этап 22): пары «что — значение», читаются сверху вниз. */
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .line {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: var(--sp-3);
+    align-items: baseline;
+  }
+}
+
+.label {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.value {
+  font-size: var(--fs-base);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: var(--sp-4) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}

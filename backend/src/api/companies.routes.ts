@@ -9,6 +9,8 @@ import { z } from 'zod';
 
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
+import { loadCompanyPartners } from './companyPartners.js';
+import { loadCompanyPublications } from './companyPublications.js';
 import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
@@ -338,6 +340,43 @@ companiesRouter.get('/:id/mentions', async (req, res) => {
     items: rows,
     nextCursor: rows.length === limit && last ? `${last.publishedAt}|${last.id}` : null,
   });
+});
+
+const publicationsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(15),
+  cursor: z.string().max(80).optional(),
+});
+
+/**
+ * Лента публикаций о компании (этап 22): что о ней писали и что из этого взято в карточку.
+ *
+ * Заменяет для карточки ленту /mentions: та читает legacy-таблицу `mentions`, в которую
+ * новый конвейер не пишет вовсе, поэтому на свежих данных она всегда пуста.
+ */
+companiesRouter.get('/:id/publications', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const parsed = publicationsSchema.safeParse(req.query);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: 'Некорректные параметры' });
+    return;
+  }
+  const page = await loadCompanyPublications(id, parsed.data.limit, parsed.data.cursor);
+  res.json(page);
+});
+
+/**
+ * Контрагенты компании (этап 22): договоры, корпоративные связи и совместное участие
+ * на объектах — раздельно, без сведения в одно «связана с».
+ */
+companiesRouter.get('/:id/partners', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const limit = Number.parseInt(String(req.query.limit ?? '12'), 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  const items = await loadCompanyPartners(id, Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 12);
+  res.json({ items });
 });
 
 /** События компании: проекция card_events_v (legacy + опубликованные утверждения). */

@@ -1,3 +1,17 @@
+// Карточка компании: «Обзор» отвечает на вопрос «что с ней сейчас», «Подробно» — на
+// вопрос «откуда это известно».
+//
+// Раньше всё лежало одним столбцом из девяти блоков: сигналы с правилами и
+// знаменателями, резюме с атрибуцией каждой фразы, контрагенты, противоречия,
+// ограничения выборки, объекты, события, упоминания, варианты написания. Открыв
+// карточку, человек не мог сказать, на что смотреть. Доказательная часть никуда
+// не делась — она во второй вкладке, и ни одно число не изменилось.
+//
+// Обзор — сводка, лента публикаций и контрагенты. Лента берётся из публикаций и
+// опубликованных утверждений; прежний блок «Упоминания» читает legacy-таблицу
+// `mentions`, которую новый конвейер не наполняет, и остался в «Подробно» как
+// доступ к старым данным.
+
 import { FC, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useParams } from 'react-router-dom';
@@ -5,9 +19,13 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } from '../api/types';
 import { RegistryPanel } from '../components/RegistryPanel';
+import { CompanyBrief } from '../components/CompanyBrief';
+import { CompanyFeed } from '../components/CompanyFeed';
+import { CompanyPartners } from '../components/CompanyPartners';
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
 import { GraphPanel } from '../components/GraphPanel';
+import { Segmented } from '../components/ui/Segmented';
 import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
 import styles from './CompanyPage.module.css';
@@ -18,9 +36,17 @@ const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
   { value: 'positive', label: 'Позитив' },
 ];
 
+type View = 'overview' | 'details';
+
+const VIEWS: ReadonlyArray<{ value: View; label: string; hint?: string }> = [
+  { value: 'overview', label: 'Обзор', hint: 'сводка, последние публикации и контрагенты' },
+  { value: 'details', label: 'Подробно', hint: 'сигналы с правилами, доказательства, объекты, события и схема связей' },
+];
+
 export const CompanyPage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const companyId = Number(id);
+  const [view, setView] = useState<View>('overview');
   const [sentiment, setSentiment] = useState<Sentiment | 'all'>('all');
 
   const companyQuery = useQuery({
@@ -50,6 +76,8 @@ export const CompanyPage: FC = () => {
     enabled: Number.isFinite(companyId),
   });
 
+  // Старая лента упоминаний нужна только во вкладке «Подробно»: на обзоре её место
+  // занимает лента публикаций, и тянуть legacy-таблицу заранее незачем.
   const mentionsQuery = useInfiniteQuery({
     queryKey: ['company', companyId, 'mentions', sentiment],
     initialPageParam: null as string | null,
@@ -62,7 +90,7 @@ export const CompanyPage: FC = () => {
       );
     },
     getNextPageParam: last => last.nextCursor,
-    enabled: Number.isFinite(companyId),
+    enabled: Number.isFinite(companyId) && view === 'details',
   });
 
   if (!Number.isFinite(companyId)) return <p className={styles.empty}>Некорректный адрес карточки.</p>;
@@ -136,190 +164,203 @@ export const CompanyPage: FC = () => {
         </div>
       )}
 
-      {/* Показатели — во всю ширину: в узкой колонке плитки рвали подписи, а места
-          для новых чисел не было. Ниже — две колонки с 1200px: слева то, что читают
-          подряд, справа схема связей. До 1200px порядок прежний, одной колонкой. */}
-      <RegistryPanel registry={registry ?? null} title="Данные реестра о застройщике" />
+      <div className={styles.viewSwitch}>
+        <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} />
+      </div>
 
-      <section className={styles.metrics} aria-label="Показатели компании">
-        <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
-      </section>
+      {view === 'overview' ? (
+        // Обзор: слева то, что читают подряд, справа — с кем компания связана.
+        <div className={styles.columns}>
+          <div className={styles.colMain}>
+            <CompanyBrief companyId={companyId} facts={facts} projects={projects} events={events} />
+            <CompanyFeed companyId={companyId} companyName={company.name} />
+          </div>
+          <aside className={styles.colSide}>
+            <CompanyPartners companyId={companyId} />
+          </aside>
+        </div>
+      ) : (
+        <>
+          <RegistryPanel registry={registry ?? null} title="Данные реестра о застройщике" />
 
-      <div className={styles.columns}>
-        <div className={styles.colMain}>
-          <CompanySummary companyId={companyId} />
-
-          <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h2>Объекты</h2>
-              <span className={styles.count}>{projects.length}</span>
-            </div>
-            {projects.length === 0 ? (
-              <p className={styles.empty}>Объекты не найдены.</p>
-            ) : (
-              <div className={styles.stack}>
-                {projects.map(p => (
-                  <article key={`${p.id}-${p.role}`} className={styles.card}>
-                    <div className={styles.projectHead}>
-                      <span className={styles.projectName}><Link to={`/projects/${p.id}`}>{p.name}</Link></span>
-                      <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
-                      <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
-                      {p.city && <span className={styles.tag}>{p.city}</span>}
-                      {p.plannedCompletion && (
-                        <span className={styles.tag}>план {formatDate(p.plannedCompletion)}</span>
-                      )}
-                    </div>
-                    {p.counterparties && p.counterparties.length > 0 && (
-                      <div className={styles.counterparties}>
-                        Также на объекте:{' '}
-                        {p.counterparties.map((c, i) => (
-                          <span key={c.id}>
-                            {i > 0 && ', '}
-                            <Link to={`/company/${c.id}`}>{c.name}</Link> ({ROLE_LABELS[c.role]})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-            )}
+          {/* Показатели — во всю ширину: в узкой колонке плитки рвали подписи. */}
+          <section className={styles.metrics} aria-label="Показатели компании">
+            <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
           </section>
 
-          {events.length > 0 && (
-            <section className={styles.section}>
-              <div className={styles.sectionHead}>
-                <h2>События</h2>
-                <span className={styles.count}>{events.length}</span>
-              </div>
-              <ol className={styles.timeline}>
-                {events.map(e => (
-                  <li
-                    key={e.id}
-                    className={styles.event}
-                  >
-                    <div className={styles.eventHead}>
-                      <span className={styles.eventType}>По сообщению источника: {EVENT_LABELS[e.type] ?? e.type}</span>
-                      <span className={styles.eventDate}>
-                        {formatDate(e.occurredOn) || 'дата неизвестна'}
-                      </span>
-                    </div>
-                    <div className={styles.eventMeta}>
-                      {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
-                      {e.amountRub !== null && (
-                        <span className={styles.tag}>{formatMoney(e.amountRub)}</span>
-                      )}
-                      {e.url && (
-                        <a href={e.url} target="_blank" rel="noreferrer noopener">
-                          источник
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
+          <div className={styles.columns}>
+            <div className={styles.colMain}>
+              <CompanySummary companyId={companyId} />
 
-          <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h2>Упоминания</h2>
-              <div className={styles.segmented} role="group" aria-label="Тональность упоминаний">
-                {SENTIMENT_FILTERS.map(f => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    aria-pressed={sentiment === f.value}
-                    className={`${styles.segment} ${
-                      sentiment === f.value ? styles.segmentActive : ''
-                    }`}
-                    onClick={() => setSentiment(f.value)}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+              <section className={styles.section}>
+                <div className={styles.sectionHead}>
+                  <h2>Объекты</h2>
+                  <span className={styles.count}>{projects.length}</span>
+                </div>
+                {projects.length === 0 ? (
+                  <p className={styles.empty}>Объекты не найдены.</p>
+                ) : (
+                  <div className={styles.stack}>
+                    {projects.map(p => (
+                      <article key={`${p.id}-${p.role}`} className={styles.card}>
+                        <div className={styles.projectHead}>
+                          <span className={styles.projectName}><Link to={`/projects/${p.id}`}>{p.name}</Link></span>
+                          <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
+                          <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
+                          {p.city && <span className={styles.tag}>{p.city}</span>}
+                          {p.plannedCompletion && (
+                            <span className={styles.tag}>план {formatDate(p.plannedCompletion)}</span>
+                          )}
+                        </div>
+                        {p.counterparties && p.counterparties.length > 0 && (
+                          <div className={styles.counterparties}>
+                            Также на объекте:{' '}
+                            {p.counterparties.map((c, i) => (
+                              <span key={c.id}>
+                                {i > 0 && ', '}
+                                <Link to={`/company/${c.id}`}>{c.name}</Link> ({ROLE_LABELS[c.role]})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
 
-            {mentions.length === 0 ? (
-              <p className={styles.empty}>{mentionsQuery.isLoading ? 'Загрузка…' : 'Упоминаний нет.'}</p>
-            ) : (
-              <div className={styles.stack}>
-                {mentions.map(m => (
-                  <article
-                    key={m.id}
-                    className={`${styles.mention} ${
-                      m.sentiment === 'negative'
-                        ? styles.mentionNegative
-                        : m.sentiment === 'positive'
-                          ? styles.mentionPositive
-                          : ''
-                    }`}
-                  >
-                    <p className={styles.quote}>{m.quote}</p>
-                    <div className={styles.mentionMeta}>
-                      {/* Тональность подписана словом: одной полосы у края мало. */}
-                      <span
-                        className={`${styles.sentiment} ${
+              {events.length > 0 && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHead}>
+                    <h2>События</h2>
+                    <span className={styles.count}>{events.length}</span>
+                  </div>
+                  <ol className={styles.timeline}>
+                    {events.map(e => (
+                      <li key={e.id} className={styles.event}>
+                        <div className={styles.eventHead}>
+                          <span className={styles.eventType}>По сообщению источника: {EVENT_LABELS[e.type] ?? e.type}</span>
+                          <span className={styles.eventDate}>{formatDate(e.occurredOn) || 'дата неизвестна'}</span>
+                        </div>
+                        <div className={styles.eventMeta}>
+                          {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
+                          {e.amountRub !== null && <span className={styles.tag}>{formatMoney(e.amountRub)}</span>}
+                          {e.url && (
+                            <a href={e.url} target="_blank" rel="noreferrer noopener">
+                              источник
+                            </a>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
+              {/* Упоминания старого разбора. Новый конвейер в эту таблицу не пишет:
+                  свежие публикации — в ленте на вкладке «Обзор». */}
+              <section className={styles.section}>
+                <div className={styles.sectionHead}>
+                  <h2>Упоминания из старого разбора</h2>
+                  <div className={styles.segmented} role="group" aria-label="Тональность упоминаний">
+                    {SENTIMENT_FILTERS.map(f => (
+                      <button
+                        key={f.value}
+                        type="button"
+                        aria-pressed={sentiment === f.value}
+                        className={`${styles.segment} ${sentiment === f.value ? styles.segmentActive : ''}`}
+                        onClick={() => setSentiment(f.value)}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {mentions.length === 0 ? (
+                  <p className={styles.empty}>
+                    {mentionsQuery.isLoading
+                      ? 'Загрузка…'
+                      : 'Упоминаний старого разбора нет. Публикации, собранные нынешним конвейером, — в ленте на вкладке «Обзор».'}
+                  </p>
+                ) : (
+                  <div className={styles.stack}>
+                    {mentions.map(m => (
+                      <article
+                        key={m.id}
+                        className={`${styles.mention} ${
                           m.sentiment === 'negative'
-                            ? styles.sentimentNegative
+                            ? styles.mentionNegative
                             : m.sentiment === 'positive'
-                              ? styles.sentimentPositive
+                              ? styles.mentionPositive
                               : ''
                         }`}
                       >
-                        {SENTIMENT_LABELS[m.sentiment]}
+                        <p className={styles.quote}>{m.quote}</p>
+                        <div className={styles.mentionMeta}>
+                          {/* Тональность подписана словом: одной полосы у края мало. */}
+                          <span
+                            className={`${styles.sentiment} ${
+                              m.sentiment === 'negative'
+                                ? styles.sentimentNegative
+                                : m.sentiment === 'positive'
+                                  ? styles.sentimentPositive
+                                  : ''
+                            }`}
+                          >
+                            {SENTIMENT_LABELS[m.sentiment]}
+                          </span>
+                          <span>{formatDate(m.publishedAt)}</span>
+                          <span className={styles.source}>{m.sourceTitle}</span>
+                          {m.role && <span>{ROLE_LABELS[m.role]}</span>}
+                          {!m.quoteVerified && (
+                            <span className={styles.unverified} title="Цитата не найдена в тексте дословно">
+                              цитата не сверена
+                            </span>
+                          )}
+                          {m.url && (
+                            <a href={m.url} target="_blank" rel="noreferrer noopener">
+                              оригинал
+                            </a>
+                          )}
+                          <Link to={`/documents/${m.documentId}`}>версии</Link>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+
+                {mentionsQuery.hasNextPage && (
+                  <button
+                    type="button"
+                    className={styles.moreButton}
+                    onClick={() => void mentionsQuery.fetchNextPage()}
+                    disabled={mentionsQuery.isFetchingNextPage}
+                  >
+                    {mentionsQuery.isFetchingNextPage ? 'Загрузка…' : 'Показать ещё'}
+                  </button>
+                )}
+              </section>
+
+              {aliases.length > 1 && (
+                <section className={styles.section}>
+                  <h3 className={styles.aliasTitle}>Варианты написания</h3>
+                  <div className={styles.aliases}>
+                    {aliases.map(a => (
+                      <span key={a.alias} className={styles.tag}>
+                        {a.alias}
                       </span>
-                      <span>{formatDate(m.publishedAt)}</span>
-                      <span className={styles.source}>{m.sourceTitle}</span>
-                      {m.role && <span>{ROLE_LABELS[m.role]}</span>}
-                      {!m.quoteVerified && (
-                        <span className={styles.unverified} title="Цитата не найдена в тексте дословно">
-                          цитата не сверена
-                        </span>
-                      )}
-                      {m.url && (
-                        <a href={m.url} target="_blank" rel="noreferrer noopener">
-                          оригинал
-                        </a>
-                      )}
-                      <Link to={`/documents/${m.documentId}`}>версии</Link>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-
-            {mentionsQuery.hasNextPage && (
-              <button
-                type="button"
-                className={styles.moreButton}
-                onClick={() => void mentionsQuery.fetchNextPage()}
-                disabled={mentionsQuery.isFetchingNextPage}
-              >
-                {mentionsQuery.isFetchingNextPage ? 'Загрузка…' : 'Показать ещё'}
-              </button>
-            )}
-          </section>
-
-          {aliases.length > 1 && (
-            <section className={styles.section}>
-              <h3 className={styles.aliasTitle}>Варианты написания</h3>
-              <div className={styles.aliases}>
-                {aliases.map(a => (
-                  <span key={a.alias} className={styles.tag}>
-                    {a.alias}
-                  </span>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-        <aside className={styles.colSide}>
-          <GraphPanel companyId={companyId} />
-        </aside>
-      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+            <aside className={styles.colSide}>
+              <GraphPanel companyId={companyId} />
+            </aside>
+          </div>
+        </>
+      )}
     </>
   );
 };
-

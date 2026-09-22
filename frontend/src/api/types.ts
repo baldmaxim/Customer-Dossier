@@ -641,6 +641,62 @@ export interface ISummaryResponse {
 }
 
 /** Состояние конвейера: очередь, извлечения и включённость фоновых заданий. */
+/** Строка ленты публикаций о компании (этап 22). Одна публикация — одна строка. */
+export interface IPublicationFact {
+  assertionId: number | null;
+  predicate: string;
+  role: string | null;
+  eventType: string | null;
+  modality: string | null;
+  polarity: string | null;
+  status: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  otherCompanyId: number | null;
+  otherCompanyName: string | null;
+  amount: string | null;
+  currency: string | null;
+  valueType: string | null;
+  quote: string | null;
+}
+
+export interface IPublicationRow {
+  itemId: number;
+  revisionId: number;
+  documentId: number | null;
+  title: string | null;
+  topic: string | null;
+  publishedAt: string | null;
+  observedAt: string;
+  sourceTitle: string;
+  sourceKind: string;
+  url: string | null;
+  completeness: string;
+  snippet: string;
+  facts: IPublicationFact[];
+  moreFacts: number;
+}
+
+export type PartnerKind = 'contract' | 'corporate' | 'co_participation';
+
+export interface IPartnerLink {
+  kind: PartnerKind;
+  role: string | null;
+  ownRole: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  assertionId: number | null;
+  modality: string | null;
+  status: string | null;
+}
+
+export interface IPartnerRow {
+  companyId: number;
+  name: string;
+  city: string | null;
+  links: IPartnerLink[];
+}
+
 export interface IPipelineOverview {
   /** Состояния старого конвейера: новый путь их не меняет, экран по ним не строится. */
   queue: Array<{ status: string; n: number }>;

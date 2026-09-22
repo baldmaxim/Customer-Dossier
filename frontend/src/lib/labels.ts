@@ -432,6 +432,22 @@ export const CLAIMED_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
 ];
 
 /** Типы рёбер схемы связей (этап 08B). Различаются подписью и штрихом линии, не цветом надёжности. */
+/**
+ * На каком основании компания считается контрагентом (этап 22). Совместное участие —
+ * не договор: две фирмы на одном объекте могут не иметь отношений между собой.
+ */
+export const PARTNER_KIND_LABELS: Record<string, string> = {
+  contract: 'договор',
+  corporate: 'корпоративная связь',
+  co_participation: 'вместе на объекте',
+};
+
+export const PARTNER_KIND_HINTS: Record<string, string> = {
+  contract: 'обе стороны названы в одном предложении источника как стороны договора',
+  corporate: 'доля, контроль, группа или бренд — по сообщению источника',
+  co_participation: 'обе компании работают на одном объекте. Это не договор между ними и не доказательство отношений',
+};
+
 export const GRAPH_EDGE_LABELS: Record<string, string> = {
   participation: 'участие в объекте',
   contract: 'договор (сообщён источником)',
