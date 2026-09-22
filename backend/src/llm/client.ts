@@ -245,10 +245,12 @@ export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IH
   extractWith(options, HEADLINE_SPEC);
 
 /** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */
-export const checkLlmConnection = async (): Promise<{ ok: boolean; models: string[]; error?: string }> => {
+export const checkLlmConnection = async (
+  timeoutMs = 10_000,
+): Promise<{ ok: boolean; models: string[]; error?: string }> => {
   try {
     const response = await fetch(`${env.LMSTUDIO_BASE_URL}/models`, {
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return { ok: false, models: [], error: `HTTP ${response.status}` };
     const data = (await response.json()) as { data?: Array<{ id?: string }> };

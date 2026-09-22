@@ -146,12 +146,13 @@ export const processRunsCommand = async (loop: boolean, autoPublish = false): Pr
     // Из CLI — без автопостановки: выполняются только уже поставленные запуски.
     // Публиковать или нет, решает вызывающий: по умолчанию нет, чтобы разовый
     // прогон можно было посмотреть глазами.
-    const results = await runReprocessPass(provider, { autoPublish });
-    if (results.length === 0) {
+    // Из CLI без автоповтора: разовый прогон выполняет то, что поставлено, и не трогает историю.
+    const pass = await runReprocessPass(provider, { autoPublish });
+    if (pass.results.length === 0) {
       console.log('[pipeline] очередь запусков пуста');
       return;
     }
-    printPassResults(results);
+    printPassResults(pass.results);
     if (!loop) return;
   }
 };

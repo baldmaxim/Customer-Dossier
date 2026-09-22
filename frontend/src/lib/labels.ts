@@ -577,6 +577,23 @@ export const SOURCE_STATUS_LABELS: Record<string, string> = {
 };
 
 /** Состояние сырого документа в очереди разбора. */
+/**
+ * Где сейчас публикация и почему её нет в карточках (этап 22). Каждое состояние —
+ * ответ на вопрос оператора, а не внутреннее слово конвейера.
+ */
+export const REVISION_STATE_LABELS: Record<string, string> = {
+  published: 'в карточках',
+  completed_unpublished: 'разобрано, но не попало в карточки',
+  irrelevant: 'не о стройке — разбор пропущен',
+  in_queue: 'ждёт разбора моделью',
+  waiting: 'ещё не ставилось в разбор',
+  no_ai_permission: 'нет ИИ-допуска у источника',
+  failed_retrying: 'разбор упал, будет повтор',
+  failed_exhausted: 'разбор упал, попытки исчерпаны',
+  cancelled: 'разбор отменён допуском',
+  unknown: 'состояние не определено',
+};
+
 export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   queued: 'ждут разбора',
   extracting: 'разбираются',

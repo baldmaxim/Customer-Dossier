@@ -12,7 +12,7 @@ import { api } from '../../api/client';
 import type { IPipelineOverview, IRunPage, ISourceRow, ISummaryResponse } from '../../api/types';
 import { Badge } from '../../components/ui/Badge';
 import { Section } from '../../components/ui/Section';
-import { DOCUMENT_STATUS_LABELS, RUN_STATUS_LABELS, SOURCE_HEALTH_STATE_LABELS, formatDateTime } from '../../lib/labels';
+import { REVISION_STATE_LABELS, RUN_STATUS_LABELS, SOURCE_HEALTH_STATE_LABELS, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import styles from './PipelinePage.module.css';
 
@@ -57,7 +57,9 @@ export const PipelinePage: FC = () => {
   const collectApproved = items.filter(s => s.collectBlockedReason === null).length;
   const aiApproved = items.filter(s => s.aiBlockedReason === null).length;
   const worker = pipeline.data?.worker;
-  const queued = pipeline.data?.queue ?? [];
+  const states = pipeline.data?.revisions ?? [];
+  const failures = pipeline.data?.failures ?? [];
+  const model = pipeline.data?.model;
   const totals = summary.data?.totals;
   const refresh = summary.data?.refresh;
 
@@ -89,6 +91,23 @@ export const PipelinePage: FC = () => {
             envKey="METRICS_AUTO_REFRESH"
             hintOff="выключено оператором (METRICS_AUTO_REFRESH=false); срез считает npm run metrics:refresh"
           />
+          <FlagBadge
+            on={worker.retryEnabled}
+            label="Повтор упавшего разбора"
+            envKey="REPROCESS_RETRY_ENABLED"
+            hintOff="упавший запуск останется в истории и сам в поток не вернётся (REPROCESS_RETRY_ENABLED=false)"
+          />
+          {/* Без модели разбор не идёт вовсе: запуски не ставятся, собранное не портится. */}
+          <Badge
+            tone={model?.ok ? 'positive' : 'warn'}
+            hint={
+              model?.ok
+                ? 'LM Studio отвечает по адресу LMSTUDIO_BASE_URL'
+                : `локальная модель не отвечает: ${model?.error ?? 'причина неизвестна'}. Пока её нет, разбор не ставится и ничего не теряется`
+            }
+          >
+            Модель: {model?.ok ? 'отвечает' : 'не отвечает'}
+          </Badge>
         </div>
       )}
 
@@ -125,15 +144,22 @@ export const PipelinePage: FC = () => {
             </p>
           ) : (
             <>
+              {/* Состояние последних редакций: каждая строка отвечает, почему текста нет в карточках.
+                  Прежний счётчик считал колонку старого конвейера и не менялся никогда. */}
               <div className={styles.rows}>
-                {queued.length === 0 && <Row label="Документов в очереди">0</Row>}
-                {queued.map(q => (
-                  <Row key={q.status} label={DOCUMENT_STATUS_LABELS[q.status] ?? q.status}>
+                {states.length === 0 && <Row label="Публикаций пока нет">0</Row>}
+                {states.map(q => (
+                  <Row key={q.state} label={REVISION_STATE_LABELS[q.state] ?? q.state}>
                     {q.n}
                   </Row>
                 ))}
-                <Row label="Запусков в выборке">{runs.data?.total ?? '—'}</Row>
               </div>
+              {failures.length > 0 && (
+                <p className={styles.note}>
+                  Почему падало за неделю:{' '}
+                  {failures.map(f => `${f.reason} (${f.n})`).join('; ')}
+                </p>
+              )}
               <p className={styles.note}>
                 Последние запуски:{' '}
                 {(runs.data?.items ?? []).length === 0

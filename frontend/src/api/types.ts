@@ -642,7 +642,14 @@ export interface ISummaryResponse {
 
 /** Состояние конвейера: очередь, извлечения и включённость фоновых заданий. */
 export interface IPipelineOverview {
+  /** Состояния старого конвейера: новый путь их не меняет, экран по ним не строится. */
   queue: Array<{ status: string; n: number }>;
+  /** Где сейчас последние редакции: почему текст не в карточках (этап 22). */
+  revisions: Array<{ state: string; n: number }>;
+  /** Причины падений за неделю, словами. */
+  failures: Array<{ reason: string; n: number }>;
+  /** Отвечает ли локальная модель. Не отвечает — разбор стоит, данные целы. */
+  model: { ok: boolean; error: string | null; models: string[] };
   extractions: Array<{ promptVersion: string; model: string; status: string; n: number }>;
   rejectedEvents: Array<{ type: string; n: number }>;
   worker: {
@@ -650,6 +657,8 @@ export interface IPipelineOverview {
     pipelineEnabled: boolean;
     autoPublish: boolean;
     metricsAutoRefresh: boolean;
+    retryEnabled: boolean;
+    retryMax: number;
   };
 }
 

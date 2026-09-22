@@ -18,7 +18,8 @@ import {
   getSourceById,
   updateSourcePolicy,
 } from '../ingest/sources.js';
-import { PERMISSION_STATUSES, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
+import { PERMISSION_STATUSES, approvedPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
+import { checkLlmConnection } from '../llm/client.js';
 import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
 import { parseSourceProfile } from '../ingest/crawl.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
@@ -370,10 +371,70 @@ adminRouter.post('/metrics/refresh', async (_req, res) => {
 });
 
 /** Состояние пайплайна: что в очереди и насколько плох текущий промпт. */
+/**
+ * Что на самом деле происходит с публикациями (этап 22).
+ *
+ * Прежний экран показывал `raw_documents.status` — колонку старого конвейера, которую
+ * новый путь не трогает вообще: цифра «в очереди» не менялась никогда, сколько бы
+ * текстов ни было разобрано. Считаем по последним редакциям и их запускам, и каждое
+ * состояние отвечает на вопрос «почему текст не в карточках».
+ */
+const REVISION_STATES_SQL = `
+  WITH latest AS (
+    SELECT r.id AS revision_id, si.id AS item_id,
+           ${approvedPolicySql('s', 'ai_processing')} AS ai_allowed
+    FROM document_revisions r
+    JOIN source_items si ON si.id = r.source_item_id
+    JOIN sources s ON s.id = si.source_id
+    WHERE r.revision_no = (SELECT max(r2.revision_no) FROM document_revisions r2
+                             WHERE r2.source_item_id = r.source_item_id)
+  ),
+  rolled AS (
+    SELECT l.revision_id, l.item_id, l.ai_allowed,
+           count(er.id)::int AS runs_total,
+           count(er.id) FILTER (WHERE er.status IN ('failed', 'partial'))::int AS fails,
+           bool_or(er.status IN ('queued', 'running')) AS live,
+           bool_or(er.status = 'completed') AS done,
+           bool_or(er.status = 'completed' AND er.relevant IS FALSE) AS irrelevant,
+           bool_or(er.status IN ('failed', 'partial')) AS broken,
+           bool_or(er.status = 'cancelled') AS cancelled
+    FROM latest l
+    LEFT JOIN extraction_runs er ON er.revision_id = l.revision_id
+    GROUP BY l.revision_id, l.item_id, l.ai_allowed
+  )
+  SELECT CASE
+           WHEN done AND irrelevant THEN 'irrelevant'
+           WHEN done AND EXISTS (SELECT 1 FROM item_publications p
+                                   WHERE p.source_item_id = rolled.item_id AND p.active_set_id IS NOT NULL)
+             THEN 'published'
+           WHEN done THEN 'completed_unpublished'
+           WHEN live THEN 'in_queue'
+           WHEN NOT ai_allowed THEN 'no_ai_permission'
+           WHEN broken AND fails >= $1::int THEN 'failed_exhausted'
+           WHEN broken THEN 'failed_retrying'
+           WHEN cancelled THEN 'cancelled'
+           WHEN runs_total = 0 THEN 'waiting'
+           ELSE 'unknown'
+         END AS state,
+         count(*)::int AS n
+  FROM rolled
+  GROUP BY 1
+  ORDER BY 2 DESC`;
+
 adminRouter.get('/pipeline', async (_req, res) => {
   const queue = await query(
     `SELECT status, count(*)::int AS n FROM raw_documents GROUP BY status ORDER BY n DESC`,
   );
+  const revisions = await query<{ state: string; n: number }>(REVISION_STATES_SQL, [env.REPROCESS_RETRY_MAX]);
+  // Причины падений словами: без них «упало» не отличить от «модель не была запущена».
+  const failures = await query<{ reason: string; n: number }>(
+    `SELECT left(coalesce(error, 'причина не записана'), 200) AS reason, count(*)::int AS n
+     FROM extraction_runs
+     WHERE status IN ('failed', 'partial') AND finished_at > now() - interval '7 days'
+     GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
+  );
+  // Доступность локальной модели: без неё разбор не идёт, и это не поломка данных.
+  const llm = await checkLlmConnection(3000);
   const extractions = await query(
     `SELECT prompt_version AS "promptVersion", model, status, count(*)::int AS n
      FROM extractions GROUP BY prompt_version, model, status
@@ -385,7 +446,12 @@ adminRouter.get('/pipeline', async (_req, res) => {
   // Состояние фоновых заданий — здесь, а не только в /reprocess/runs: экран конвейера
   // обязан отличать «выключено оператором» от «сломано» и от «нет данных».
   res.json({
+    // queue — состояния старого конвейера; новый путь их не меняет. Оставлено для чтения
+    // исторических баз, экран строится по revisions.
     queue,
+    revisions,
+    failures,
+    model: { ok: llm.ok, error: llm.error ?? null, models: llm.models },
     extractions,
     rejectedEvents: rejected,
     worker: {
@@ -393,6 +459,8 @@ adminRouter.get('/pipeline', async (_req, res) => {
       pipelineEnabled: env.PIPELINE_ENABLED,
       autoPublish: env.REPROCESS_AUTO_PUBLISH,
       metricsAutoRefresh: env.METRICS_AUTO_REFRESH,
+      retryEnabled: env.REPROCESS_RETRY_ENABLED,
+      retryMax: env.REPROCESS_RETRY_MAX,
     },
   });
 });

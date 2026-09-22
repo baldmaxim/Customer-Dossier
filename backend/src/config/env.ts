@@ -103,6 +103,14 @@ export const parseEnv = (source: EnvSource) => {
     // Ослабления проверок это не означает: неполный и упавший запуск не публикуются
     // ни при каком флаге, устаревший разбор остаётся кандидатом.
     REPROCESS_AUTO_PUBLISH: parseStrictBool('REPROCESS_AUTO_PUBLISH', source.REPROCESS_AUTO_PUBLISH, true),
+    // Возврат упавшего разбора в поток. Без него запуск, упавший из-за выключенной модели
+    // или таймаута, не повторялся никогда: автопостановка берёт только редакции, у которых
+    // нет ни одного запуска. Повтор — новый запуск, прежний остаётся в истории.
+    REPROCESS_RETRY_ENABLED: parseStrictBool('REPROCESS_RETRY_ENABLED', source.REPROCESS_RETRY_ENABLED, true),
+    // Потолок неудач на редакцию: дальше это не сбой модели, а текст, который ей не даётся.
+    REPROCESS_RETRY_MAX: parsePositiveInt('REPROCESS_RETRY_MAX', source.REPROCESS_RETRY_MAX, 3),
+    // Пауза перед повтором в минутах.
+    REPROCESS_RETRY_BACKOFF_MIN: parsePositiveInt('REPROCESS_RETRY_BACKOFF_MIN', source.REPROCESS_RETRY_BACKOFF_MIN, 15),
     // Применение и отмена слияния сущностей (этап 04). По умолчанию выключено: предпросмотр,
     // журнал и чтение слитых сущностей работают, запись — только после явного включения.
     MERGE_APPLY_ENABLED: parseStrictBool('MERGE_APPLY_ENABLED', source.MERGE_APPLY_ENABLED, false),

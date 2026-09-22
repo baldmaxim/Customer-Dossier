@@ -6,6 +6,7 @@ import { buildCandidates, type IChunkInput } from './candidates.js';
 import { runComplete } from './publish.js';
 import { computeCoverage, planCodePointChunks } from './chunking.js';
 import { buildFingerprint, type IModelProvider } from './provider.js';
+import { runReprocessPass } from './worker.js';
 import { company, event, extraction, INN_A, INN_B, link, project } from './__fixtures__/extraction.js';
 
 const cp = (s: string): string[] => Array.from(s);
@@ -201,5 +202,29 @@ describe('runComplete — что вообще можно публиковать'
 
   it('неизвестная длина текста не считается полным покрытием', () => {
     expect(runComplete({ status: 'completed', covered_chars: 0, total_chars: null })).toBe(false);
+  });
+});
+
+describe('runReprocessPass — модель не отвечает', () => {
+  // Раньше проход всё равно ставил запуски: они тут же падали, а автопостановка
+  // берёт только редакции без единого запуска — текст уходил из потока навсегда.
+  // База здесь заведомо недоступна (setup.ts): попытка запроса уронила бы тест.
+  it('не ставит, не повторяет и не захватывает ничего', async () => {
+    const provider: IModelProvider = {
+      provider: 'test',
+      model: 'test',
+      params: {},
+      extract: () => Promise.reject(new Error('модель не должна вызываться')),
+    };
+
+    const pass = await runReprocessPass(provider, {
+      enqueueLimit: 10,
+      retry: { max: 3, backoffMinutes: 15 },
+      probeModel: () => Promise.resolve({ ok: false, error: 'connect ECONNREFUSED 127.0.0.1:1234' }),
+    });
+
+    expect(pass.results).toEqual([]);
+    expect(pass.retried).toBe(0);
+    expect(pass.skipped).toContain('модель не отвечает');
   });
 });

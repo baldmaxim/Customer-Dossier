@@ -53,6 +53,15 @@ describe('parseEnv — фоновые задания и сеть (TC-001, TC-010
     expect(env.MERGE_APPLY_ENABLED).toBe(false);
   });
 
+  // Упавший разбор раньше не возвращался в поток никогда: чинить приходилось руками.
+  it('повтор упавшего разбора включён, с потолком попыток и паузой', () => {
+    const env = parseEnv(base);
+    expect(env.REPROCESS_RETRY_ENABLED).toBe(true);
+    expect(env.REPROCESS_RETRY_MAX).toBe(3);
+    expect(env.REPROCESS_RETRY_BACKOFF_MIN).toBe(15);
+    expect(parseEnv({ ...base, REPROCESS_RETRY_ENABLED: 'false' }).REPROCESS_RETRY_ENABLED).toBe(false);
+  });
+
   it('каждый флаг остаётся рубильником: =false выключает', () => {
     const env = parseEnv({
       ...base,

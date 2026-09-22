@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
+import { checkLlmConnection } from './llm/client.js';
 import { runBotLoop } from './ingest/telegramBot.js';
 import { startBackgroundJobs } from './jobs.js';
 import { startMetricsScheduler } from './metrics/refresh.js';
@@ -45,23 +46,44 @@ const startIngestScheduler = (signal: AbortSignal): void => {
   void tick();
 };
 
+/** Проверка модели перед проходом: короткая, это loopback-адрес, а не источник. */
+const MODEL_PROBE_TIMEOUT_MS = 3000;
+
 const startPipelineWorker = (signal: AbortSignal): void => {
   let running = false;
   const provider = lmStudioProvider();
+  // Печатаем недоступность модели один раз, а не каждые полминуты.
+  let reportedSkip: string | null = null;
 
   const tick = async (): Promise<void> => {
     // Запуск обрабатывается дольше тика: наложение проходов дало бы двойную нагрузку на GPU.
     if (running || signal.aborted) return;
     running = true;
     try {
-      const results = await runReprocessPass(provider, {
+      const pass = await runReprocessPass(provider, {
         autoPublish: env.REPROCESS_AUTO_PUBLISH,
         enqueueLimit: env.EXTRACT_BATCH_SIZE,
+        probeModel: () => checkLlmConnection(MODEL_PROBE_TIMEOUT_MS),
+        retry: env.REPROCESS_RETRY_ENABLED
+          ? { max: env.REPROCESS_RETRY_MAX, backoffMinutes: env.REPROCESS_RETRY_BACKOFF_MIN }
+          : null,
       });
-      if (results.length > 0) {
-        const completed = results.filter(r => r.run?.status === 'completed').length;
-        const published = results.filter(r => r.publish?.outcome === 'published').length;
-        console.log(`[pipeline] запусков ${results.length}: завершено ${completed}, в карточки ${published}`);
+      if (pass.skipped !== null) {
+        // Ни постановки, ни вызовов модели, ни тем: редакции ждут, ничего не сгорает.
+        if (pass.skipped !== reportedSkip) {
+          console.warn(`[pipeline] проход пропущен — ${pass.skipped}. Разбор продолжится, когда модель ответит`);
+          reportedSkip = pass.skipped;
+        }
+        return;
+      }
+      if (reportedSkip !== null) {
+        console.log('[pipeline] модель снова отвечает, разбор продолжается');
+        reportedSkip = null;
+      }
+      if (pass.results.length > 0) {
+        const completed = pass.results.filter(r => r.run?.status === 'completed').length;
+        const published = pass.results.filter(r => r.publish?.outcome === 'published').length;
+        console.log(`[pipeline] запусков ${pass.results.length}: завершено ${completed}, в карточки ${published}`);
       }
       // Темы — после разбора и последовательно с ним: параллельный запрос к локальной
       // модели делит VRAM и возвращает таймауты (TG_Info/CLAUDE.md, раздел LM Studio).
