@@ -73,10 +73,31 @@ const outcome = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const revision = {
+  id: 9,
+  sourceItemId: 5,
+  revisionNo: 1,
+  title: null,
+  body: ['Генподрядчиком ЖК «Пример» выступает ООО «Пример».', '', 'Работы начнутся осенью.'].join('\n'),
+  representation: 'telegram_web_text@1',
+  bodyHash: 'abc',
+  completeness: 'full',
+  completenessReason: null,
+  attachments: [],
+  publishedAt: '2026-09-21T11:50:00Z',
+  sourceModifiedAt: null,
+  firstObservedAt: '2026-09-21T11:50:00Z',
+  chronology: 'observed_order',
+  sameContentAsRevisionId: null,
+  legacyDocumentId: 19,
+  origin: 'ingest',
+};
+
 const routes = (over: Record<string, unknown> = {}, items = [item()]): IFakeRoute[] => [
   { match: 'GET /api/documents/19/items', respond: () => ({ status: 200, body: { items } }) },
   { match: 'GET /api/items/5/extraction', respond: () => ({ status: 200, body: outcome(over) }) },
   { match: 'GET /api/items/5/revisions', respond: () => ({ status: 200, body: { items: [] } }) },
+  { match: 'GET /api/revisions/9', respond: () => ({ status: 200, body: { revision } }) },
 ];
 
 describe('Страница документа', () => {
@@ -87,9 +108,31 @@ describe('Страница документа', () => {
     expect(await screen.findByRole('heading', { name: 'Объединение Москвы и области и цены жилья' })).toBeTruthy();
     expect(screen.getByText('тема составлена моделью')).toBeTruthy();
     expect(await screen.findByText('разобрано, сведения в карточках')).toBeTruthy();
-    expect((await screen.findAllByRole('link', { name: 'ООО «Пример»' }))[0]?.getAttribute('href')).toBe('/company/42');
+    // У ссылки подписан вид карточки: «А101» и «Деснаречье» вели в разные разделы неразличимо.
+    expect((await screen.findAllByRole('link', { name: /ООО «Пример».*компания/ }))[0]?.getAttribute('href')).toBe(
+      '/company/42',
+    );
     expect(screen.getByText(/генподрядчиком выступает/)).toBeTruthy();
     expect(screen.getByText(/не то, что это правда/)).toBeTruthy();
+  });
+
+  it('текст публикации показан на странице, а не спрятан под разбором', async () => {
+    fakeApi(routes());
+    renderPage();
+
+    // За этим сюда и приходят из карточки компании: прочитать саму новость.
+    expect(await screen.findByText(/Работы начнутся осенью/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Текст публикации' })).toBeTruthy();
+  });
+
+  it('стороны утверждения не дублируют ссылки: они текстом', async () => {
+    fakeApi(routes());
+    renderPage();
+
+    await screen.findByText('разобрано, сведения в карточках');
+    // Ровно одна ссылка на карточку компании — в общем блоке, а не ещё раз в утверждении.
+    expect(screen.getAllByRole('link', { name: /ООО «Пример»/ })).toHaveLength(1);
+    expect(screen.getByText('ООО «Пример» · ЖК «Пример»')).toBeTruthy();
   });
 
   it('нерелевантный текст: сказано, что взято ничего и почему', async () => {

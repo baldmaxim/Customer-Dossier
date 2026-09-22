@@ -15,6 +15,9 @@ interface IRevisionHistoryProps {
  * Список редакций публикации, текст выбранной и построчное сравнение двух.
  * Только чтение: разбор идёт сам, ставить его руками отсюда нечем.
  * Текст выводится как текст: React экранирует всё, HTML источника не исполняется.
+ *
+ * Текущая редакция здесь не печатается — она показана выше блоком «Текст публикации».
+ * Пока текст выводился и там и там, одна и та же новость шла на странице дважды.
  */
 export const RevisionHistory: FC<IRevisionHistoryProps> = ({ itemId, latestRevisionId }) => {
   const [shown, setShown] = useState<number | null>(null);
@@ -130,10 +133,13 @@ export const RevisionHistory: FC<IRevisionHistoryProps> = ({ itemId, latestRevis
         </div>
       )}
 
-      {textQuery.data && (
+      {textQuery.data && shownId !== latestRevisionId && (
         <div className={styles.panel}>
           <div className={styles.panelHead}>
             Редакция {textQuery.data.revision.revisionNo} · {textQuery.data.revision.representation}
+            <button type="button" className={styles.button} onClick={() => setShown(latestRevisionId)}>
+              Закрыть
+            </button>
           </div>
           <pre className={styles.text}>{textQuery.data.revision.body}</pre>
         </div>

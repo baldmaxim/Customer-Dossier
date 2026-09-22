@@ -229,3 +229,23 @@
     height: 28px;
   }
 }
+
+/* Возврат на шаг назад: тап-цель не меньше 44px, как и остальные контролы. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-sm, 36px);
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.back:hover,
+.back:focus-visible {
+  color: var(--text);
+}

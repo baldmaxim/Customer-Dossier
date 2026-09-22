@@ -75,19 +75,25 @@ export const ItemExtraction: FC<{ itemId: number }> = ({ itemId }) => {
         </EmptyState>
       ) : (
         <>
+          {/* Единственное место со ссылками на этой странице. Раньше те же названия были
+              ссылками и здесь, и в каждом утверждении: одно и то же слово вело в одно и то
+              же место дважды, и было не видно, карточка это компании или объекта. */}
           {(o.companies.length > 0 || o.projects.length > 0) && (
-            <p className={styles.entities}>
+            <div className={styles.entities}>
+              <span className={styles.entitiesLabel}>Открыть карточку:</span>
               {o.companies.map(c => (
                 <Link key={`c-${c.id}`} className={styles.entity} to={`/company/${c.id}`}>
                   {c.name}
+                  <span className={styles.entityKind}>компания</span>
                 </Link>
               ))}
               {o.projects.map(p => (
                 <Link key={`p-${p.id}`} className={styles.entity} to={`/projects/${p.id}`}>
                   {p.name}
+                  <span className={styles.entityKind}>объект</span>
                 </Link>
               ))}
-            </p>
+            </div>
           )}
 
           <ul className={styles.list}>
@@ -106,13 +112,8 @@ export const ItemExtraction: FC<{ itemId: number }> = ({ itemId }) => {
                   )}
                   {a.validFrom !== null && <span className={styles.muted}>{formatDate(a.validFrom)}</span>}
                 </div>
-                <p className={styles.parties}>
-                  {a.parties.map(p => (
-                    <Link key={`${p.kind}-${p.side}-${p.id}`} to={p.kind === 'company' ? `/company/${p.id}` : `/projects/${p.id}`}>
-                      {p.name}
-                    </Link>
-                  ))}
-                </p>
+                {/* Стороны — текстом: ссылки на те же карточки собраны выше одним блоком. */}
+                <p className={styles.parties}>{a.parties.map(p => p.name).join(' · ')}</p>
                 {a.quotes.map(q => (
                   <blockquote key={`${q.spanStart}-${q.spanEnd}-${q.stance}`} className={styles.quote}>
                     {q.quote}

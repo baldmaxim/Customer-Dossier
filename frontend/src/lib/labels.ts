@@ -19,6 +19,15 @@ export const COMPLETENESS_LABELS: Record<TextCompleteness, string> = {
   unknown: 'полнота неизвестна',
 };
 
+/** Полнота — по происхождению текста, а не по его длине: короткий пост бывает полным. */
+export const COMPLETENESS_HINTS: Record<string, string> = {
+  full: 'источник отдал текст целиком',
+  excerpt: 'источник отдал только анонс; полная версия осталась на странице публикации',
+  caption_only: 'в посте были фото или видео, портал сохранил только подпись к ним',
+  failed: 'текст получить не удалось — это сбой загрузки, а не пустая публикация',
+  unknown: 'откуда взят текст, достоверно неизвестно',
+};
+
 /** Статус утверждения: «найдено в тексте» и «подтверждено аналитиком» — разные вещи. */
 export const ASSERTION_STATUS_LABELS: Record<AssertionStatus, string> = {
   candidate: 'кандидат',

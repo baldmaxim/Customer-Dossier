@@ -21,15 +21,30 @@
 .entities {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2);
   margin: var(--sp-2) 0 var(--sp-3);
 }
 
+.entitiesLabel {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
 .entity {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
+}
+
+/* Вид карточки подписан у самой ссылки: «А101» и «Деснаречье» ведут в разные разделы. */
+.entityKind {
+  color: var(--muted);
+  font-size: var(--fs-xs);
 }
 
 .list {

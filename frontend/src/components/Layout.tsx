@@ -1,5 +1,5 @@
 import { FC, ReactNode } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useTheme } from '../hooks/useTheme';
 import styles from './Layout.module.css';
@@ -59,6 +59,31 @@ interface ILayoutProps {
   children: ReactNode;
 }
 
+/**
+ * Возврат на шаг назад — на каждой странице, кроме главной.
+ *
+ * Ссылки внутри текста уводят на карточки компаний и объектов, а обратного пути с них
+ * не было вовсе: в установленном приложении кнопки браузера нет, и человек оказывался
+ * в тупике. Если истории нет (прямая ссылка, перезагрузка), ведём на главную, а не
+ * выбрасываем из портала.
+ */
+const BackBar: FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  if (location.pathname === '/') return null;
+
+  // key === 'default' — первая запись истории: возвращаться некуда.
+  return location.key === 'default' ? (
+    <Link className={styles.back} to="/">
+      ← К компаниям
+    </Link>
+  ) : (
+    <button type="button" className={styles.back} onClick={() => navigate(-1)}>
+      ← Назад
+    </button>
+  );
+};
+
 export const Layout: FC<ILayoutProps> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const themeLabel = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
@@ -101,7 +126,10 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main}>
+        <BackBar />
+        {children}
+      </main>
 
       {/* Нижняя панель — только на смартфоне: до неё дотягивается большой палец,
           а шапку на объекте держат одной рукой. */}

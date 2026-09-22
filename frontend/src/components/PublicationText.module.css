@@ -1,0 +1,33 @@
+/* Текст публикации: читается как новость, а не как служебный дамп. */
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.text {
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  /* Переносы строк источника сохраняем, а длинные ссылки не рвут вёрстку на 360px. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: var(--prose);
+}
+
+.muted,
+.mutedInline {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.muted {
+  margin: var(--sp-1) 0 0;
+}

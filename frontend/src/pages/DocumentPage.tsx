@@ -1,21 +1,23 @@
 import { FC, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { ISourceItem } from '../api/types';
 import { ItemExtraction } from '../components/ItemExtraction';
+import { PublicationText } from '../components/PublicationText';
 import { RevisionHistory } from '../components/RevisionHistory';
 import { Badge } from '../components/ui/Badge';
 import { COMPLETENESS_LABELS, SOURCE_KIND_LABELS, formatDateTime } from '../lib/labels';
 import styles from './DocumentPage.module.css';
 
 /**
- * Публикация целиком: о чём текст, что портал из него взял и какие были редакции.
+ * Публикация целиком: сам текст, что портал из него взял и какие были редакции.
  *
- * Порядок отвечает на вопрос оператора «что тут важного»: сперва тема и состояние
- * разбора, потом извлечённое со ссылками на карточки, и только потом сам текст с
- * историей версий. Действий здесь нет — обработка идёт сама.
+ * Порядок — от новости к служебному: сначала текст источника (за этим сюда и приходят
+ * из карточки компании), потом разбор, и только потом история редакций. Раньше текст
+ * лежал последним, под таблицей версий, и страница выглядела как отчёт о разборе
+ * вместо самой публикации. Действий здесь нет — обработка идёт сама.
  */
 export const DocumentPage: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +75,8 @@ export const DocumentPage: FC = () => {
         </p>
       ) : (
         <>
+          {current && <PublicationText revisionId={current.latestRevisionId} originalUrl={current.originalUrl} />}
+
           {current && <ItemExtraction itemId={current.id} />}
 
           {items.length > 1 && (
@@ -115,14 +119,15 @@ export const DocumentPage: FC = () => {
           {current && (
             <section className={styles.section}>
               <div className={styles.sectionHead}>
-                <h2>Текст и версии</h2>
+                <h2>Редакции публикации</h2>
                 {current.state === 'deleted_observed' && (
                   <span className={styles.warn}>удаление наблюдалось {formatDateTime(current.deletedObservedAt)}</span>
                 )}
               </div>
               <p className={styles.hint}>
-                Цитаты выше привязаны к сохранённой редакции. Более поздние правки публикации видны здесь и в
-                карточки автоматически не попадают — портал разберёт их отдельно.
+                Выше показана редакция, к которой привязаны цитаты. Здесь — все сохранённые версии: правку
+                поста можно открыть и сравнить. В карточки правки автоматически не попадают — портал
+                разберёт их отдельно.
               </p>
               <RevisionHistory itemId={current.id} latestRevisionId={current.latestRevisionId} />
             </section>
@@ -130,9 +135,6 @@ export const DocumentPage: FC = () => {
         </>
       )}
 
-      <p className={styles.back}>
-        <Link to="/">← к поиску</Link>
-      </p>
     </>
   );
 };
