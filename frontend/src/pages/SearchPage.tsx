@@ -166,16 +166,17 @@ export const SearchPage: FC = () => {
           </EmptyState>
         )}
 
+        {/* Пять колонок, а не восемь: остальные числа живут в карточке компании, где
+            у каждого есть правило, окно и знаменатель. Здесь список нужен, чтобы
+            выбрать компанию, а не чтобы её оценить. */}
         {rows.length > 0 && (
-          <TableScroll minWidth={860}>
+          <TableScroll minWidth={640}>
             <thead>
               <tr>
                 <th>Компания</th>
-                <th>Город</th>
                 <th>Выступала в роли</th>
                 <th>Объектов</th>
                 <th>Публикаций</th>
-                <th>Событий за 12 мес.</th>
                 <th>Связи</th>
               </tr>
             </thead>
@@ -187,11 +188,11 @@ export const SearchPage: FC = () => {
                     <Link className="row-link-target" to={`/company/${row.companyId}`}>
                       {row.name}
                     </Link>
+                    <span className={styles.rowCity}>{row.city ?? 'город не установлен'}</span>
                     <Badge className={styles.rowBadge}>
                       {IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}
                     </Badge>
                   </td>
-                  <td>{row.city ?? 'не установлен'}</td>
                   <td>
                     {row.roles.length === 0
                       ? 'роль не названа'
@@ -199,7 +200,6 @@ export const SearchPage: FC = () => {
                   </td>
                   <td>{row.projects ?? '—'}</td>
                   <td>{row.publications ?? '—'}</td>
-                  <td>{row.eventsDated12m}</td>
                   <td>
                     <Link className="row-link-above" to={`/links?company=${row.companyId}`}>
                       схема

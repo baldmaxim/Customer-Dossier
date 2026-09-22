@@ -329,3 +329,10 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
 }
+
+/* Город — под именем компании: отдельная колонка ради одного слова съедала ширину. */
+.rowCity {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}

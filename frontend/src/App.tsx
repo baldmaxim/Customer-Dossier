@@ -9,7 +9,6 @@ import { CollectPage } from './pages/admin/CollectPage';
 import { PipelinePage } from './pages/admin/PipelinePage';
 import { ResultPage } from './pages/admin/ResultPage';
 import { CompanyPage } from './pages/CompanyPage';
-import { ContractorsPage } from './pages/ContractorsPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LinksPage } from './pages/LinksPage';
 import { ProjectPage } from './pages/ProjectPage';
@@ -43,7 +42,6 @@ const Portal: FC = () => (
       <Route path="/" element={<SearchPage />} />
       <Route path="/company/:id" element={<CompanyPage />} />
       <Route path="/links" element={<LinksPage />} />
-      <Route path="/contractors" element={<ContractorsPage />} />
       <Route path="/documents/:id" element={<DocumentPage />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
 
@@ -58,7 +56,10 @@ const Portal: FC = () => (
         <Route path="review" element={<ReviewQueuePage />} />
       </Route>
 
-      {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов. */}
+      {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов.
+          «Подрядчики» были вторым видом того же каталога компаний — экран снят,
+          адрес ведёт на главную, где тот же список с теми же фильтрами. */}
+      <Route path="/contractors" element={<Navigate to="/" replace />} />
       <Route path="/runs" element={<Navigate to="/admin/process" replace />} />
       <Route path="/runs/:id" element={<RunsRedirect />} />
       <Route path="/review" element={<Navigate to="/admin/review" replace />} />
