@@ -258,6 +258,13 @@ export const sourceLabel = (source: { sourceTitle: string; sourceKey?: string | 
     ? `@${source.sourceKey}`
     : source.sourceTitle;
 
+/** Где остановился сбор истории в последнем проходе (coverage.stopReason), когда задан срок сбора. */
+export const HISTORY_STOP_LABELS: Record<string, string> = {
+  history_in_progress: 'история догружается',
+  history_depth_reached: 'собрано за весь срок',
+  channel_start_reached: 'собрано с начала канала',
+};
+
 export const formatDateTime = (iso: string | null): string => {
   if (!iso) return '';
   const date = new Date(iso);
@@ -372,8 +379,11 @@ export const COVERAGE_STOP_LABELS: Record<string, string> = {
   channel_start_reached: 'дошли до начала канала',
   gap_open_max_pages: 'разрыв постов ещё не догружен',
   gap_closed: 'разрыв постов догружен',
-  policy_blocked: 'остановлено: допуск отозван',
+  policy_blocked: 'остановлено: источник выключен',
   identity_changed: 'остановлено: другой канал',
+  history_in_progress: 'история догружается по сроку сбора',
+  history_depth_reached: 'история собрана за весь срок',
+  pagination_loop: 'остановлено: пагинация зациклилась',
 };
 
 // ─── Сигналы (этап 07) ────────────────────────────────────────────────────
@@ -549,7 +559,7 @@ export const SOURCE_HEALTH_STATE_LABELS: Record<string, string> = {
   never_run: 'не запускался',
   healthy: 'работает',
   degraded: 'разбор деградировал',
-  policy_blocked: 'доступ закрыт',
+  policy_blocked: 'выключен',
   temporary_error: 'временная ошибка',
   partial_history: 'неполная история',
 };

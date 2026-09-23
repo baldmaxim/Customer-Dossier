@@ -16,7 +16,7 @@ import { getPool, withTransaction } from '../../db/pool.js';
 import { hostMatchesPolicy, type ISourceNetworkPolicy } from '../../net/safeFetch.js';
 import { itemIdentity } from '../../revisions/identity.js';
 import { storeDocument, type IIncomingDocument, type StoreOutcome } from '../store.js';
-import type { ISource } from '../sources.js';
+import { historyCutoff, type ISource } from '../sources.js';
 import { fetchSitePage, loadConditional, saveConditional, type SiteFetchResult } from './fetcher.js';
 import {
   canonicalUrlFor,
@@ -457,6 +457,23 @@ export const crawlSite = async (source: ISource, options: ICrawlOptions = {}): P
         report.healthReason = `страница ${report.pagesFetched}: селектор списка нашёл ${page.items.length} записей (ожидалось не меньше ${profile.expectations.minItemsOnList})`;
         stopReason = 'parser_degraded';
         break;
+      }
+      // Глубина истории (этап 22, sources.history_days): архив дальше не листаем, когда все
+      // датированные записи страницы старше границы. Головные (свежие) страницы не прерываем.
+      // Граничная страница с записями по обе стороны сохраняется целиком — «не меньше глубины».
+      const cutoff = historyCutoff(source.historyDays, new Date());
+      if (cutoff && !headPhase) {
+        const dated = page.items.map(i => i.date.date).filter((d): d is Date => d !== null);
+        if (dated.length > 0 && dated.every(d => d < cutoff)) {
+          stopReason = 'history_depth_reached';
+          if (!dryRun) {
+            await getPool().query(
+              `UPDATE sources SET cursor = jsonb_set(cursor, '{site}', coalesce(cursor->'site', '{}'::jsonb) || $2::jsonb) WHERE id = $1`,
+              [source.id, JSON.stringify({ backlogNext: null, caughtUp: true })],
+            );
+          }
+          break;
+        }
       }
       const { docs, fresh } = await processItems(page);
       addSamples(docs);

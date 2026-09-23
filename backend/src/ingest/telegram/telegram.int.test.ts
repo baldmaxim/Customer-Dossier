@@ -9,7 +9,7 @@ import { closeDb, getPool } from '../../db/pool.js';
 import { insertSyntheticSource, resetAndMigrate } from '../../__tests__/integration/db.js';
 import type { SafeTransport } from '../../net/safeFetch.js';
 import { ingestTelegramSource } from '../scheduler.js';
-import { getSourceById, getSourceByKey, setSourceConfig, updateCursor, updateSourcePolicy } from '../sources.js';
+import { getSourceById, getSourceByKey, setSourceConfig, setSourceHistoryDays, updateCursor, updateSourcePolicy } from '../sources.js';
 import { pollBotUpdates, setBotApiForTests } from '../telegramBot.js';
 import { setTelegramTransportForTests } from '../telegramWeb.js';
 
@@ -218,6 +218,105 @@ describe('web-preview: курсор, разрыв и покрытие (TC-047, T
     expect(await lastRun(id)).toMatchObject({ outcome: 'identity_changed' });
     expect((await sourceState(id)).health).toBe('identity_uncertain');
     expect(await postIds(id)).toEqual([]);
+  });
+});
+
+// --- Этап 22: глубина истории и имя канала ------------------------------------------------
+
+const DAY = 86_400_000;
+const daysAgo = (n: number): string => new Date(Date.now() - n * DAY).toISOString();
+
+/** Пост с датой «n дней назад»: граница истории считается от текущего времени. */
+const datedPost = (channel: string, id: number, ageDays: number): string =>
+  `<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="${channel}/${id}"><div class="tgme_widget_message_bubble">
+   <div class="tgme_widget_message_text">${LONG}Пост номер ${id}.</div>
+   <div class="tgme_widget_message_footer"><a class="tgme_widget_message_date"><time datetime="${daysAgo(ageDays)}"></time></a></div></div></div></div>`;
+
+const datedPage = (channel: string, posts: Array<[number, number]>, head = ''): string =>
+  `<html><head>${head}</head><body><section class="tgme_channel_history">${posts.map(([id, age]) => datedPost(channel, id, age)).join('')}</section></body></html>`;
+
+describe('web-preview: глубина истории по дате (этап 22)', () => {
+  it('догружает историю назад до границы, старше неё не сохраняет, повторно не листает', async () => {
+    const key = 'synthetic_depth';
+    const id = await channelSource(key);
+    await setSourceHistoryDays(id, 30);
+    pages.set(`https://t.me/s/${key}`, () => ({ status: 200, body: datedPage(key, range(100, 110).map(n => [n, 1])) }));
+    pages.set(`https://t.me/s/${key}?before=100`, () => ({ status: 200, body: datedPage(key, range(80, 99).map(n => [n, 10])) }));
+    pages.set(`https://t.me/s/${key}?before=80`, () => ({
+      status: 200,
+      body: datedPage(key, [...range(60, 69).map((n): [number, number] => [n, 40]), ...range(70, 79).map((n): [number, number] => [n, 20])]),
+    }));
+
+    await run(id);
+
+    expect(await postIds(id)).toEqual(range(70, 110));
+    const state = await sourceState(id);
+    expect(state.cursor.tg.historyBefore).toBe(70);
+    expect(state.cursor.tg.historyCoveredTo).toBeTruthy();
+    expect((await lastRun(id)).coverage.stopReason).toBe('history_depth_reached');
+
+    // Следующий проход: граница уже пройдена — только первая страница, архив не листается.
+    requested.length = 0;
+    await run(id);
+    expect(requested).toEqual([`https://t.me/s/${key}`]);
+  });
+
+  it('увеличенная глубина догружается с того же места до начала канала', async () => {
+    const key = 'synthetic_deeper';
+    const id = await channelSource(key);
+    await setSourceHistoryDays(id, 30);
+    pages.set(`https://t.me/s/${key}`, () => ({ status: 200, body: datedPage(key, range(20, 25).map(n => [n, 1])) }));
+    pages.set(`https://t.me/s/${key}?before=20`, () => ({
+      status: 200,
+      body: datedPage(key, [...range(10, 14).map((n): [number, number] => [n, 50]), ...range(15, 19).map((n): [number, number] => [n, 5])]),
+    }));
+    await run(id);
+    expect(await postIds(id)).toEqual(range(15, 25));
+
+    await setSourceHistoryDays(id, 90);
+    pages.set(`https://t.me/s/${key}?before=15`, () => ({ status: 200, body: datedPage(key, range(10, 14).map(n => [n, 50])) }));
+    pages.set(`https://t.me/s/${key}?before=10`, () => ({ status: 200, body: datedPage(key, []) }));
+    await run(id);
+
+    expect(await postIds(id)).toEqual(range(10, 25));
+    expect((await sourceState(id)).cursor.tg.historyComplete).toBe(true);
+    expect((await lastRun(id)).coverage.stopReason).toBe('channel_start_reached');
+  });
+
+  it('без глубины первый запуск историю по-прежнему не собирает', async () => {
+    const key = 'synthetic_nodepth';
+    const id = await channelSource(key);
+    pages.set(`https://t.me/s/${key}`, () => ({ status: 200, body: datedPage(key, range(5, 9).map(n => [n, 1])) }));
+    await run(id);
+    expect(requested).toEqual([`https://t.me/s/${key}`]);
+    expect(await postIds(id)).toEqual(range(5, 9));
+  });
+});
+
+describe('web-preview: имя канала (этап 22)', () => {
+  it('имя со страницы канала заменяет ключ, но не перетирает название оператора', async () => {
+    const key = 'synthetic_named';
+    const id = await channelSource(key);
+    const head = '<meta property="og:title" content="Демо: стройка изнутри">';
+    pages.set(`https://t.me/s/${key}`, () => ({ status: 200, body: datedPage(key, [[1, 1]], head) }));
+
+    await run(id);
+    expect((await getSourceById(id))!.title).toBe('Демо: стройка изнутри');
+
+    await pool().query(`UPDATE sources SET title = 'Название оператора' WHERE id = $1`, [id]);
+    await run(id);
+    expect((await getSourceById(id))!.title).toBe('Название оператора');
+  });
+
+  it('имя чужого канала (identity_changed) в источник не пишется', async () => {
+    const key = 'synthetic_named_foreign';
+    const id = await channelSource(key);
+    pages.set(`https://t.me/s/${key}`, () => ({
+      status: 200,
+      body: datedPage('someone_else', [[3, 1]], '<meta property="og:title" content="Чужой канал">'),
+    }));
+    await run(id);
+    expect((await getSourceById(id))!.title).toBe(key);
   });
 });
 

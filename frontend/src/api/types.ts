@@ -389,6 +389,8 @@ export interface ISourceRow {
   policyDecidedAt: string | null;
   policyExpiresAt: string | null;
   isSynthetic: boolean;
+  /** Срок сбора: глубина истории в днях; null — только новые (канал) / весь архив (сайт). */
+  historyDays: number | null;
   /** Почему сбор запрещён; null — разрешён. Считает сервер тем же gate. */
   collectBlockedReason: string | null;
   aiBlockedReason: string | null;

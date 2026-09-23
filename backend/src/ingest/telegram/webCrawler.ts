@@ -17,7 +17,7 @@ import { env } from '../../config/env.js';
 import { getPool, withTransaction } from '../../db/pool.js';
 import { evaluateSourcePolicy, type PermissionStatus } from '../policy.js';
 import type { ICrawlReport } from '../sites/crawler.js';
-import type { ISource } from '../sources.js';
+import { historyCutoff, type ISource } from '../sources.js';
 import { storeDocument, type IIncomingDocument, type StoreOutcome } from '../store.js';
 import {
   TelegramFetchError,
@@ -37,6 +37,12 @@ export const telegramProfileSchema = z
     maxPagesPerRun: z.number().int().min(1).max(10).default(3),
     /** Страниц при первом запуске: история глубже не собирается. */
     initialPages: z.number().int().min(1).max(5).default(1),
+    /**
+     * Страниц истории за проход, когда у источника задана глубина (sources.history_days).
+     * В прежнем темпе запросов (delayMs между страницами): год активного канала догружается
+     * за несколько проходов, а не одним залпом.
+     */
+    historyPagesPerRun: z.number().int().min(1).max(30).default(15),
     /** Как часто перечитывать уже известные посты первой страницы ради правок. */
     recheckIntervalSec: z.number().int().min(0).max(86_400 * 7).default(3600),
     delayMs: z.number().int().min(0).max(60_000).optional(),
@@ -54,6 +60,10 @@ interface ITgCursor {
   gap?: { after: number; before: number } | null;
   historyBefore?: number | null;
   lastRecheckAt?: string | null;
+  /** Граница по дате, до которой история уже догружена (этап 22). Увеличили глубину — догрузка продолжится. */
+  historyCoveredTo?: string | null;
+  /** Дошли до первого поста канала: глубже истории нет. */
+  historyComplete?: boolean;
 }
 
 const STORE_COUNT: Record<StoreOutcome, 'saved' | 'changed' | 'skipped'> = {
@@ -168,7 +178,14 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
   const recheckDue =
     !stored.lastRecheckAt || now.getTime() - new Date(stored.lastRecheckAt).getTime() >= profile.recheckIntervalSec * 1000;
 
-  let cursor: ITgCursor = { lastPostId, gap: stored.gap ?? null, historyBefore: stored.historyBefore ?? null, lastRecheckAt: stored.lastRecheckAt ?? null };
+  let cursor: ITgCursor = {
+    lastPostId,
+    gap: stored.gap ?? null,
+    historyBefore: stored.historyBefore ?? null,
+    lastRecheckAt: stored.lastRecheckAt ?? null,
+    historyCoveredTo: stored.historyCoveredTo ?? null,
+    historyComplete: stored.historyComplete ?? false,
+  };
   let missing = 0;
   let requests = 0;
   const pageLimit = firstRun ? Math.min(profile.initialPages, profile.maxPagesPerRun) : profile.maxPagesPerRun;
@@ -330,6 +347,42 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
       await persist(inGap, { ...cursor, gap: closed ? null : { after: gap.after, before: oldest } });
       stopReason = closed ? 'gap_closed' : stopReason;
     }
+
+    // --- Глубина истории: назад до даты (этап 22, sources.history_days) --------------------
+    // Первый запуск по-прежнему не собирает историю сам по себе — только если оператор задал
+    // глубину. Посты старше границы не сохраняются; граница, до которой дошли, пишется в
+    // курсор, и увеличенная потом глубина догружается с того же места.
+    const cutoff = historyCutoff(source.historyDays, now);
+    const coveredTo = cursor.historyCoveredTo ? new Date(cursor.historyCoveredTo) : null;
+    if (cutoff && !cursor.historyComplete && (coveredTo === null || coveredTo > cutoff)) {
+      // Старый курсор без границы истории — начинаем от самого старого поста первой страницы.
+      let before: number | null = cursor.historyBefore ?? (Number.isFinite(minId) ? minId : null);
+      let pages = 0;
+      stopReason = 'history_in_progress';
+      while (before !== null && pages < profile.historyPagesPerRun) {
+        pages += 1;
+        const page = await fetchPage(before);
+        const older = parsePage(page.html);
+        if (older === null) return finalize();
+        if (older.length === 0) {
+          await persist([], { ...cursor, historyBefore: null, historyComplete: true, historyCoveredTo: cutoff.toISOString() });
+          stopReason = 'channel_start_reached';
+          break;
+        }
+        // Пост без даты не выкидываем: граница — по дате, а её у него нет.
+        const keep = older.filter(p => p.publishedAt === null || p.publishedAt >= cutoff);
+        const oldest = older.reduce((m, p) => Math.min(m, p.postId), Number.POSITIVE_INFINITY);
+        const reached = keep.length < older.length;
+        if (reached) {
+          const keptMin = keep.reduce((m, p) => Math.min(m, p.postId), before);
+          await persist(keep, { ...cursor, historyBefore: keptMin, historyCoveredTo: cutoff.toISOString() });
+          stopReason = 'history_depth_reached';
+          break;
+        }
+        await persist(keep, { ...cursor, historyBefore: oldest });
+        before = oldest;
+      }
+    }
   } catch (err) {
     if (err instanceof PolicyRevokedError) {
       report.outcome = 'policy_blocked';
@@ -351,6 +404,9 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
       lastPostId: cursor.lastPostId ?? null,
       gap: cursor.gap ?? null,
       historyBefore: cursor.historyBefore ?? null,
+      historyDays: source.historyDays ?? null,
+      historyCoveredTo: cursor.historyCoveredTo ?? null,
+      historyComplete: cursor.historyComplete ?? false,
       missingIdsUnexplained: missing,
       recheckedEdits: recheckDue,
       capabilities: {

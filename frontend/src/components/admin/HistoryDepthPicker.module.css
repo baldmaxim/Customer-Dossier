@@ -1,0 +1,17 @@
+.picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+}
+
+/* 16px — не меньше: иначе Safari зумит страницу при фокусе на поле. */
+.select,
+.days {
+  min-height: var(--ctl-h);
+  font-size: 16px;
+}
+
+.days {
+  width: 88px; /* пять цифр и стрелки поля числа */
+}

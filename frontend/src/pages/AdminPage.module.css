@@ -437,3 +437,46 @@
 .resultTitle {
   font-weight: 600;
 }
+
+/* Вкладки вида источника и подпись счётчика рядом. */
+.tabsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.tabsRow .hint {
+  margin: 0;
+}
+
+/* Состояние источника коротко (SourcesTable): подробности — под «подробнее». */
+.statusBrief {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.statusLine {
+  font-weight: 500;
+}
+
+.statusMeta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.statusReason {
+  color: var(--risk-yellow);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.statusMore summary {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}

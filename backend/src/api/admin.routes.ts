@@ -13,6 +13,8 @@ import { rejectMerge, listPendingMerges } from '../resolve/merge.js';
 import {
   SourcePolicyValidationError,
   addTelegramSource,
+  setSourceEnabled,
+  setSourceHistoryDays,
   addWebsiteSource,
   deleteSource,
   getSourceById,
@@ -48,7 +50,7 @@ adminRouter.get('/sources', async (_req, res) => {
             s.policy_scope AS "policyScope", s.policy_basis AS "policyBasis",
             s.policy_reference AS "policyReference", s.policy_owner AS "policyOwner",
             s.policy_decided_at AS "policyDecidedAt", s.policy_expires_at AS "policyExpiresAt",
-            s.is_synthetic AS "isSynthetic",
+            s.is_synthetic AS "isSynthetic", s.history_days AS "historyDays",
             s.health, s.health_reason AS "healthReason", s.last_attempt_at AS "lastAttemptAt",
             s.parser_version AS "parserVersion",
             r.started_at AS "lastRunAt", r.status AS "lastRunStatus",
@@ -221,6 +223,52 @@ adminRouter.patch('/sources/:id', async (req, res) => {
     [id, parsed.data.status],
   );
   if (updated === 0) {
+    res.status(404).json({ error: 'Источник не найден' });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+/**
+ * Включить / выключить источник одной кнопкой (решение владельца 23.09.2026): сбор и ИИ-обработка
+ * вместе, плюс расписание опроса. Журнал допуска пишется так же, как у полного редактора.
+ */
+const enabledSchema = z.object({ enabled: z.boolean() });
+
+adminRouter.post('/sources/:id/enabled', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const parsed = enabledSchema.safeParse(req.body);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: 'Некорректные параметры' });
+    return;
+  }
+  try {
+    const source = await setSourceEnabled(id, parsed.data.enabled, 'operator');
+    if (!source) {
+      res.status(404).json({ error: 'Источник не найден' });
+      return;
+    }
+    res.json({ source });
+  } catch (err) {
+    if (err instanceof SourcePolicyValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+});
+
+/** Глубина истории в днях: 1…3650 или null (только новое / весь архив пагинации сайта). */
+const historySchema = z.object({ days: z.number().int().min(1).max(3650).nullable() });
+
+adminRouter.put('/sources/:id/history', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  const parsed = historySchema.safeParse(req.body);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: 'Срок сбора — целое число дней от 1 до 3650 или «только новое»' });
+    return;
+  }
+  if (!(await setSourceHistoryDays(id, parsed.data.days))) {
     res.status(404).json({ error: 'Источник не найден' });
     return;
   }

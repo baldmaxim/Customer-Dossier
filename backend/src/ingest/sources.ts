@@ -23,13 +23,16 @@ export interface ISource {
   aiProcessingStatus: PermissionStatus;
   policyExpiresAt: Date | null;
   isSynthetic: boolean;
+  /** Глубина истории в днях (миграция 028). null — только новое / весь архив пагинации сайта. */
+  historyDays?: number | null;
 }
 
 const SELECT_COLUMNS = `
   id, kind, key, title, base_url AS "baseUrl", cursor, config,
   status, poll_interval_sec AS "pollIntervalSec", fail_streak AS "failStreak",
   access_status AS "accessStatus", ai_processing_status AS "aiProcessingStatus",
-  policy_expires_at AS "policyExpiresAt", is_synthetic AS "isSynthetic"
+  policy_expires_at AS "policyExpiresAt", is_synthetic AS "isSynthetic",
+  history_days AS "historyDays"
 `;
 
 /**
@@ -404,3 +407,74 @@ export const updateSourcePolicy = async (
     return updated.rows[0] ?? null;
   });
 };
+
+/**
+ * Основание и ответственный, которые подставляются, когда оператор включает источник
+ * одной кнопкой в админке (решение владельца 23.09.2026: допуск — «включить/выключить»).
+ * Решение по-прежнему принимает человек нажатием; журнал `source_policy_log` пишется так же.
+ * Основание, уже записанное оператором раньше, не перетирается.
+ */
+export const TOGGLE_BASIS = 'Включено оператором в админке портала';
+export const TOGGLE_OWNER = 'оператор портала';
+
+/**
+ * Включить или выключить источник целиком: сбор и ИИ-обработку вместе, плюс расписание опроса.
+ * Выключение отзывает оба допуска: разбор уже собранного останавливается так же, как сбор
+ * (запуск в полёте отменится по отзыву допуска, собранное и опубликованное остаётся).
+ */
+export const setSourceEnabled = async (
+  sourceId: number,
+  enabled: boolean,
+  changedBy: string,
+): Promise<ISource | null> => {
+  const current = await queryOne<{
+    kind: SourceKind;
+    policyBasis: string | null;
+    policyOwner: string | null;
+    policyReference: string | null;
+    policyScope: string | null;
+  }>(
+    `SELECT kind, policy_basis AS "policyBasis", policy_owner AS "policyOwner",
+            policy_reference AS "policyReference", policy_scope AS "policyScope"
+     FROM sources WHERE id = $1`,
+    [sourceId],
+  );
+  if (!current) return null;
+
+  const updated = await updateSourcePolicy(
+    sourceId,
+    {
+      accessStatus: enabled ? 'approved' : 'revoked',
+      aiProcessingStatus: enabled ? 'approved' : 'revoked',
+      scope: current.policyScope,
+      basis: current.policyBasis?.trim() ? current.policyBasis : enabled ? TOGGLE_BASIS : null,
+      reference: current.policyReference,
+      owner: current.policyOwner?.trim() ? current.policyOwner : enabled ? TOGGLE_OWNER : null,
+      // Срок действия разрешения в упрощённом режиме не используется: выключает оператор.
+      expiresAt: null,
+    },
+    changedBy,
+  );
+
+  // Ручные входы (бот, форма) не опрашиваются по расписанию — их статус не трогаем.
+  if (current.kind !== 'manual') {
+    await execute(
+      `UPDATE sources
+       SET status = $2::source_status,
+           fail_streak = CASE WHEN $2 = 'active' THEN 0 ELSE fail_streak END,
+           next_run_at = CASE WHEN $2 = 'active' THEN now() ELSE next_run_at END,
+           updated_at = now()
+       WHERE id = $1`,
+      [sourceId, enabled ? 'active' : 'paused'],
+    );
+  }
+  return updated;
+};
+
+/** Глубина истории в днях; null — только новое (канал) / весь архив пагинации (сайт). */
+export const setSourceHistoryDays = async (sourceId: number, days: number | null): Promise<boolean> =>
+  (await execute(`UPDATE sources SET history_days = $2, updated_at = now() WHERE id = $1`, [sourceId, days])) > 0;
+
+/** Граница истории по дате: всё, что опубликовано раньше, не собирается. */
+export const historyCutoff = (days: number | null | undefined, now: Date): Date | null =>
+  days ? new Date(now.getTime() - days * 86_400_000) : null;
