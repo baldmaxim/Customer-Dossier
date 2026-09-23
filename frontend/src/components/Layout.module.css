@@ -142,7 +142,7 @@
   }
 
   .headerInner {
-    height: 56px;
+    height: var(--header-h);
   }
 
   .logoLight,
@@ -226,15 +226,15 @@
 @media (min-width: 640px) {
   .logoLight,
   .logoDark {
-    height: 28px;
+    height: 24px;
   }
 }
 
-/* Возврат на шаг назад: тап-цель не меньше 44px, как и остальные контролы. */
+/* Возврат на шаг назад: 44px на тач-экране, 38px под мышью — как остальные контролы. */
 .back {
   display: inline-flex;
   align-items: center;
-  min-height: var(--ctl-sm, 36px);
+  min-height: var(--ctl-h);
   margin-bottom: var(--sp-3);
   padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
   border: none;

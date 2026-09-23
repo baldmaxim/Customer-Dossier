@@ -1,0 +1,161 @@
+/* Список публикаций и панель чтения. Mobile-first: одна колонка, с 900px — две. */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* Телефон: открыта публикация — списка не видно, и наоборот. */
+.detail {
+  display: none;
+  min-width: 0;
+}
+
+.detailOpen .list {
+  display: none;
+}
+
+.detailOpen .detail {
+  display: block;
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Вся карточка — одна кнопка: нажатие в любом месте открывает публикацию. */
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  width: 100%;
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+/* Только для мыши: на тач-экране :hover «залипает» после нажатия. */
+@media (hover: hover) {
+  .item:hover {
+    background: var(--surface-2);
+  }
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.itemActive,
+.itemActive:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+/* Дата крупнее всего в карточке: ленту читают по времени. */
+.itemDate {
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.itemTime {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.itemSource {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.itemTitle {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.itemMark {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+
+.itemSnippet,
+.itemFacts {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.itemFacts {
+  -webkit-line-clamp: 1;
+  color: var(--text);
+}
+
+.more {
+  margin-top: var(--sp-3);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+@media (min-width: 900px) {
+  .layout {
+    /* 360–420px: в карточку помещаются дата, канал и две строки текста без переносов слов. */
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .detail,
+  .detailOpen .detail {
+    display: block;
+    /* Панель стоит на месте, пока листается список. */
+    position: sticky;
+    /* Шапка выше на safe-area (iPad в режиме приложения): иначе панель уходит под неё. */
+    top: calc(var(--header-h) + env(safe-area-inset-top) + var(--sp-4));
+    max-height: calc(100dvh - var(--header-h) - env(safe-area-inset-top) - var(--sp-6));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .detailOpen .list {
+    display: block;
+  }
+}
+
+/* Фокус переводится на панель программно (телефон): рамку от этого не рисуем. */
+.detail:focus {
+  outline: none;
+}

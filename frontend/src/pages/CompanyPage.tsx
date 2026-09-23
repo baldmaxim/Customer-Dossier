@@ -1,33 +1,30 @@
-// Карточка компании: «Обзор» отвечает на вопрос «что с ней сейчас», «Подробно» — на
-// вопрос «откуда это известно».
+// Карточка компании: три вкладки на три вопроса.
 //
-// Раньше всё лежало одним столбцом из девяти блоков: сигналы с правилами и
-// знаменателями, резюме с атрибуцией каждой фразы, контрагенты, противоречия,
-// ограничения выборки, объекты, события, упоминания, варианты написания. Открыв
-// карточку, человек не мог сказать, на что смотреть. Доказательная часть никуда
-// не делась — она во второй вкладке, и ни одно число не изменилось.
+//   «Обзор»      — что с компанией сейчас: сводка и с кем работает, рядом, без прокрутки;
+//   «Публикации» — что о ней пишут: список слева, сам пост справа в виде Telegram;
+//   «Подробно»   — откуда это известно: сигналы с правилами, досье, объекты, события, схема.
 //
-// Обзор — сводка, лента публикаций и контрагенты. Лента берётся из публикаций и
-// опубликованных утверждений; прежний блок «Упоминания» читает legacy-таблицу
-// `mentions`, которую новый конвейер не наполняет, и остался в «Подробно» как
-// доступ к старым данным.
+// Раньше лента публикаций стояла в обзоре под сводкой, и половина экрана справа пустовала,
+// а чтобы прочитать пост, приходилось уходить на отдельную страницу со служебным разбором.
+// Доказательная часть никуда не делась — ни одно число не изменилось, изменился порядок.
 
 import { FC, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { ICompanyResponse, IEventRow, IMention, IProjectRow, Sentiment } from '../api/types';
+import type { ICompanyResponse, IEventRow, IMention, IProjectRow, IPublicationRow, Sentiment } from '../api/types';
 import { RegistryPanel } from '../components/RegistryPanel';
 import { CompanyBrief } from '../components/CompanyBrief';
-import { CompanyFeed } from '../components/CompanyFeed';
 import { CompanyPartners } from '../components/CompanyPartners';
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
 import { GraphPanel } from '../components/GraphPanel';
+import { PublicationBrowser, type IPublicationListItem } from '../components/PublicationBrowser';
 import { Segmented } from '../components/ui/Segmented';
 import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
+import { factText } from '../lib/publicationFacts';
 import styles from './CompanyPage.module.css';
 
 const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
@@ -36,12 +33,31 @@ const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
   { value: 'positive', label: 'Позитив' },
 ];
 
-type View = 'overview' | 'details';
+type View = 'overview' | 'publications' | 'details';
 
 const VIEWS: ReadonlyArray<{ value: View; label: string; hint?: string }> = [
-  { value: 'overview', label: 'Обзор', hint: 'сводка, последние публикации и контрагенты' },
+  { value: 'overview', label: 'Обзор', hint: 'сводка и контрагенты' },
+  { value: 'publications', label: 'Публикации', hint: 'что о компании пишут: список и сам пост' },
   { value: 'details', label: 'Подробно', hint: 'сигналы с правилами, доказательства, объекты, события и схема связей' },
 ];
+
+/** Чистое «упомянута» ничего не говорит о компании — в строке списка оно шум. */
+const SILENT_PREDICATES = new Set(['company_mentioned', 'project_mentioned']);
+
+const toListItem = (row: IPublicationRow): IPublicationListItem => ({
+  key: row.itemId,
+  revisionId: row.revisionId,
+  title: row.title,
+  topic: row.topic,
+  publishedAt: row.publishedAt,
+  observedAt: row.observedAt,
+  sourceTitle: row.sourceTitle,
+  sourceKey: row.sourceKey,
+  sourceKind: row.sourceKind,
+  url: row.url,
+  snippet: row.snippet,
+  facts: row.facts.filter(f => !SILENT_PREDICATES.has(f.predicate)).map(factText),
+});
 
 export const CompanyPage: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -76,8 +92,22 @@ export const CompanyPage: FC = () => {
     enabled: Number.isFinite(companyId),
   });
 
-  // Старая лента упоминаний нужна только во вкладке «Подробно»: на обзоре её место
-  // занимает лента публикаций, и тянуть legacy-таблицу заранее незачем.
+  // Публикации грузятся, когда их открыли: обзор не ждёт ленту.
+  const publicationsQuery = useInfiniteQuery({
+    queryKey: ['company', companyId, 'publications'],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '20' });
+      if (pageParam) params.set('cursor', pageParam);
+      return api.get<{ items: IPublicationRow[]; nextCursor: string | null }>(
+        `/api/companies/${companyId}/publications?${params}`,
+      );
+    },
+    getNextPageParam: last => last.nextCursor,
+    enabled: Number.isFinite(companyId) && view === 'publications',
+  });
+
+  // Старая лента упоминаний — только во вкладке «Подробно»: тянуть legacy-таблицу заранее незачем.
   const mentionsQuery = useInfiniteQuery({
     queryKey: ['company', companyId, 'mentions', sentiment],
     initialPageParam: null as string | null,
@@ -144,10 +174,6 @@ export const CompanyPage: FC = () => {
             </div>
           </div>
         </div>
-
-        <p className={styles.heroFoot}>
-          Сведения собраны из открытых публикаций и не являются проверкой контрагента или оценкой надёжности.
-        </p>
       </header>
 
       {similar.length > 0 && (
@@ -165,21 +191,30 @@ export const CompanyPage: FC = () => {
       )}
 
       <div className={styles.viewSwitch}>
-        <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} />
+        <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} size="md" />
       </div>
 
-      {view === 'overview' ? (
-        // Обзор: слева то, что читают подряд, справа — с кем компания связана.
-        <div className={styles.columns}>
-          <div className={styles.colMain}>
-            <CompanyBrief companyId={companyId} facts={facts} projects={projects} events={events} />
-            <CompanyFeed companyId={companyId} companyName={company.name} />
-          </div>
-          <aside className={styles.colSide}>
-            <CompanyPartners companyId={companyId} />
-          </aside>
+      {view === 'overview' && (
+        // Сводка и контрагенты рядом: оба блока короткие, и в одну колонку справа пустовало.
+        <div className={styles.overview}>
+          <CompanyBrief companyId={companyId} facts={facts} projects={projects} events={events} />
+          <CompanyPartners companyId={companyId} />
         </div>
-      ) : (
+      )}
+
+      {view === 'publications' && (
+        <PublicationBrowser
+          items={(publicationsQuery.data?.pages.flatMap(p => p.items) ?? []).map(toListItem)}
+          isLoading={publicationsQuery.isLoading}
+          error={publicationsQuery.error}
+          hasMore={publicationsQuery.hasNextPage}
+          loadingMore={publicationsQuery.isFetchingNextPage}
+          onLoadMore={() => void publicationsQuery.fetchNextPage()}
+          empty="Публикаций об этой компании в выборке нет. Это значит только то, что в собранных источниках её не нашли, — а не то, что о ней не писали."
+        />
+      )}
+
+      {view === 'details' && (
         <>
           <RegistryPanel registry={registry ?? null} title="Данные реестра о застройщике" />
 

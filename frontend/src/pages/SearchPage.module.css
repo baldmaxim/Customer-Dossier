@@ -1,48 +1,41 @@
-.hero {
-  max-width: var(--form-max);
-  margin: var(--sp-2) 0 var(--sp-5);
-}
+/* Главная: переключатель и поиск одной строкой, дальше — список. */
 
-.title {
-  letter-spacing: -0.03em;
-  margin-bottom: 8px;
-}
-
-.lead {
-  color: var(--muted);
-  margin: 0 0 18px;
-  max-width: var(--prose-lead);
-  font-size: 0.95rem;
+/* Раньше здесь были заголовок в 30px, абзац и поле в 56px: первый экран уходил на шапку. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
 
 .field {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1 1 220px;
 }
 
 .fieldIcon {
   position: absolute;
-  left: 15px;
-  width: 19px;
-  height: 19px;
+  left: var(--sp-3);
+  width: 16px;
+  height: 16px;
   color: var(--faint);
   pointer-events: none;
 }
 
 .input {
   width: 100%;
-  /* 52 px — крупная тап-цель и место под иконку слева. */
-  min-height: 52px;
-  padding: 13px 16px 13px 44px;
+  min-height: var(--ctl-h);
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) 34px; /* 34 = иконка 16 + отступы */
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-sm);
-  transition:
-    border-color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
+  /* 16px и не меньше: иначе Safari и Chrome на Android зумят страницу при фокусе. */
+  font-size: 16px;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
 .input::placeholder {
@@ -55,220 +48,8 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* Крестик очистки в Safari/Chrome красится в цвет темы. */
 .input::-webkit-search-cancel-button {
   filter: grayscale(1) opacity(0.55);
-}
-
-.results {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  animation: rise 180ms var(--ease) both;
-}
-
-.resultRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  min-height: 56px;
-  transition: background-color var(--t-fast) var(--ease);
-}
-
-.resultRow:last-child {
-  border-bottom: none;
-}
-
-.resultRow:hover {
-  background: var(--surface-2);
-  text-decoration: none;
-}
-
-.resultText {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.resultName {
-  font-weight: 500;
-  color: var(--text);
-}
-
-.resultMeta {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.chevron {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  color: var(--faint);
-  transition: transform var(--t-fast) var(--ease);
-}
-
-.resultRow:hover .chevron {
-  transform: translateX(2px);
-  color: var(--accent);
-}
-
-.hint {
-  color: var(--muted);
-  padding: 16px 15px;
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.hintPlain {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin: 14px 0 0;
-}
-
-.warning {
-  color: var(--risk-yellow);
-  font-size: 0.88rem;
-  margin: 10px 0 0;
-  max-width: var(--prose-lead);
-}
-
-/* ─── Сводка «что в базе» ──────────────────────────────────────────────── */
-
-.summary {
-  margin-top: 32px;
-}
-
-.summaryTitle {
-  margin-bottom: 12px;
-}
-
-.summaryGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.summaryStat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  transition: border-color var(--t-fast) var(--ease);
-}
-
-.summaryStat:hover {
-  border-color: var(--border-strong);
-}
-
-.summaryValue {
-  font-size: 1.7rem;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.15;
-}
-
-.summaryLabel {
-  color: var(--muted);
-  font-size: 0.82rem;
-  margin-top: 2px;
-}
-
-.riskCard {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px 16px;
-}
-
-.riskTitle {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-
-.bar {
-  display: flex;
-  height: 8px;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: var(--surface-2);
-  margin-bottom: 14px;
-}
-
-.barPart {
-  display: block;
-  height: 100%;
-}
-
-.barRed {
-  background: var(--risk-red-dot);
-}
-.barYellow {
-  background: var(--risk-yellow-dot);
-}
-.barGreen {
-  background: var(--risk-green-dot);
-}
-/* Серый в полосе штрихуется: «мало данных» — не ещё один оттенок благополучия. */
-.barGrey {
-  background: repeating-linear-gradient(
-    45deg,
-    var(--risk-grey-dot) 0 3px,
-    var(--surface-3) 3px 6px
-  );
-}
-
-.riskRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  align-items: center;
-}
-
-.riskItem {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.riskCount {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (min-width: 768px) {
-  .hero {
-    margin: 20px 0 24px;
-  }
-
-  .input {
-    min-height: 56px;
-    /* Только px и только ≥ 16: rem-значение меньше 16 px заставит Safari
-       зумить страницу при фокусе. */
-    font-size: 17px;
-  }
 }
 
 /* Фильтры каталога: на телефоне переносятся, тап-цели остаются полными. */
@@ -276,8 +57,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 
 .check {
@@ -289,50 +70,30 @@
   font-size: var(--fs-md);
 }
 
-.resultList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* Нативный чекбокс — 13px: палец в него не попадает. 20 — видимый квадрат, вся строка — цель. */
+.check input {
+  width: 20px;
+  height: 20px;
 }
 
-.resultItem {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-2) var(--sp-3);
-  padding: var(--sp-2) 0;
-  border-bottom: 1px solid var(--border);
-  min-width: 0;
-}
-
-.resultItem:last-child {
-  border-bottom: none;
-}
-
-.resultMeta {
+.total {
+  margin-left: auto;
   color: var(--muted);
   font-size: var(--fs-sm);
-  overflow-wrap: anywhere;
 }
 
-.rowBadge {
-  margin-inline-start: var(--sp-2);
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-.note {
-  max-width: var(--prose);
-  margin: var(--sp-4) 0 0;
+.muted {
   color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
 }
 
-/* Город — под именем компании: отдельная колонка ради одного слова съедала ширину. */
-.rowCity {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-sm);
+/* На телефоне поле во всю строку, с 640px — короткое: оно для одного-двух слов. */
+@media (min-width: 640px) {
+  .field {
+    max-width: 320px;
+  }
 }

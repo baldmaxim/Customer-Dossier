@@ -1,0 +1,156 @@
+/* Публикация в духе Telegram: шапка канала, «чат» с пузырём, кнопка открыть оригинал. */
+
+.post {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.close {
+  flex-basis: 100%;
+  min-height: var(--ctl-h);
+  margin-left: calc(var(--sp-2) * -1);
+  padding: 0 var(--sp-2);
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Аватар канала — первая буква имени: картинок каналов портал не хранит.
+   40px — как аватар в шапке канала Telegram: крупнее сливается с датой. */
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+}
+
+.channelText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.channelName {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.channelMeta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Дата — крупно: в ленте новостей это первое, что ищут глазами. */
+.date {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: 400;
+}
+
+/* Фон «чата»: пузырь читается как сообщение, а не как карточка отчёта. */
+.chat {
+  flex: 1 1 auto;
+  padding: var(--sp-4);
+  background: var(--surface-2);
+}
+
+.bubble {
+  position: relative;
+  max-width: var(--prose);
+  padding: var(--sp-3) var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
+  /* Рамка, а не только тень: в тёмной теме пузырь темнее фона чата, и тень там не видна. */
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.media {
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) var(--sp-3);
+  padding: var(--sp-5) var(--sp-4);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 var(--sp-2);
+  font-weight: 600;
+}
+
+.text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-text);
+  /* Переносы строк поста сохраняются, длинные ссылки не распирают пузырь на 360px. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.stamp {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ctl-h);
+  border-top: 1px solid var(--border);
+  font-weight: 500;
+}

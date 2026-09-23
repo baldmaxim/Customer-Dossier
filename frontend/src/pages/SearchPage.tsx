@@ -1,29 +1,40 @@
-// Главная: весь пул компаний с фильтром по роли, поиск и лента последнего.
+// Главная: компании или публикации — один переключатель и одна строка поиска.
 //
-// Роль здесь — свойство связи, а не компании: одна фирма бывает заказчиком на
-// одном объекте и подрядчиком на другом. Поэтому фильтр подписан «выступала
-// в роли», и компания честно попадает сразу в несколько фильтров. Делить базу
-// на «раздел Заказчики» и «раздел Генподрядчики» нельзя — это ложная
-// классификация.
+// Поиск меняет смысл вместе с переключателем: в «Компаниях» это название, в «Публикациях» —
+// слово из текста, канал или имя компании в посте. Режим и запрос живут в адресе: «Назад»
+// из карточки возвращает туда же, а ссылкой на поиск можно поделиться.
+//
+// Роль в каталоге — свойство связи, а не компании: одна фирма бывает заказчиком на одном
+// объекте и подрядчиком на другом. Поэтому фильтр подписан «выступала в роли», и компания
+// честно попадает сразу в несколько фильтров.
 
 import { FC, useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { ICompanySearchItem, IContractorRow, ISignalRefreshState, ISummaryResponse } from '../api/types';
-import { identifierText } from '../components/EntityPickers';
-import { RecentFeed } from '../components/RecentFeed';
-import { Badge } from '../components/ui/Badge';
-import { EmptyState, Section } from '../components/ui/Section';
+import { PublicationBrowser, type IPublicationListItem } from '../components/PublicationBrowser';
+import { EmptyState } from '../components/ui/Section';
 import { Segmented } from '../components/ui/Segmented';
 import { TableScroll } from '../components/ui/TableScroll';
-import { ASSERTION_ROLE_LABELS, ENTITY_TYPE_LABELS, IDENTITY_STATUS_LABELS, formatDate } from '../lib/labels';
+import { ASSERTION_ROLE_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import styles from './SearchPage.module.css';
 
+type Mode = 'companies' | 'publications';
 type Role = 'any' | 'customer' | 'general_contractor' | 'contractor' | 'subcontractor';
 type Sort = 'projects' | 'name';
+
+const MODES: ReadonlyArray<{ value: Mode; label: string; hint?: string }> = [
+  { value: 'companies', label: 'Компании', hint: 'каталог и поиск по названию' },
+  { value: 'publications', label: 'Публикации', hint: 'лента и поиск по тексту постов' },
+];
+
+const PLACEHOLDER: Record<Mode, string> = {
+  companies: 'Название компании',
+  publications: 'Слово из текста, канал, компания',
+};
 
 const ROLES: ReadonlyArray<{ value: Role; label: string; hint?: string }> = [
   { value: 'any', label: 'Все', hint: 'все компании, какую бы роль они ни играли' },
@@ -44,7 +55,21 @@ interface ICatalog {
   items: IContractorRow[];
 }
 
-/** Дебаунс: запрос на каждый символ забьёт trgm-поиск без пользы. */
+interface IFeedItem {
+  id: number;
+  revisionId: number | null;
+  sourceTitle: string;
+  sourceKind: string;
+  sourceKey: string;
+  publishedAt: string | null;
+  firstObservedAt: string;
+  url: string | null;
+  title: string | null;
+  topic: string | null;
+  snippet: string | null;
+}
+
+/** Дебаунс: запрос на каждый символ забьёт поиск без пользы. */
 const useDebounced = (value: string, delay = 300): string => {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -54,43 +79,200 @@ const useDebounced = (value: string, delay = 300): string => {
   return debounced;
 };
 
-export const SearchPage: FC = () => {
-  const [input, setInput] = useState('');
+const feedToListItem = (row: IFeedItem): IPublicationListItem => ({
+  key: row.id,
+  revisionId: row.revisionId,
+  title: row.title,
+  topic: row.topic,
+  publishedAt: row.publishedAt,
+  observedAt: row.firstObservedAt,
+  sourceTitle: row.sourceTitle,
+  sourceKey: row.sourceKey,
+  sourceKind: row.sourceKind,
+  url: row.url,
+  snippet: row.snippet,
+});
+
+/** Каталог компаний: пять чисел в строке, под названием ничего — детали в карточке. */
+const CompanyCatalog: FC = () => {
   const [role, setRole] = useState<Role>('any');
   const [sort, setSort] = useState<Sort>('projects');
   const [withPublications, setWithPublications] = useState(true);
-  const query = useDebounced(input.trim());
-
-  const searchQuery = useQuery({
-    queryKey: ['search', query],
-    queryFn: () => api.get<{ items: ICompanySearchItem[] }>(`/api/companies?q=${encodeURIComponent(query)}&limit=25`),
-    enabled: query.length >= 2,
-  });
 
   const catalog = useQuery({
     queryKey: ['catalog', role, sort, withPublications],
     queryFn: () =>
       api.get<ICatalog>(`/api/contractors?role=${role}&sort=${sort}&includeInsufficient=${!withPublications}&limit=200`),
   });
-
-  const summaryQuery = useQuery({
+  const summary = useQuery({
     queryKey: ['summary'],
     queryFn: () => api.get<ISummaryResponse>('/api/contractors/summary'),
   });
-
-  const found = searchQuery.data?.items ?? [];
   const rows = catalog.data?.items ?? [];
-  const totals = summaryQuery.data?.totals;
+  const total = summary.data?.totals?.companies;
 
   return (
     <>
-      <section className={styles.hero}>
-        <h1 className={styles.title}>Кто есть в базе</h1>
-        <p className={styles.lead}>
-          Найдите компанию по названию или посмотрите весь пул — заказчиков, генподрядчиков и подрядчиков.
-        </p>
+      <div className={styles.filters}>
+        <Segmented label="Роль" items={ROLES} value={role} onChange={setRole} />
+        <Segmented label="Сортировка" items={SORTS} value={sort} onChange={setSort} />
+        <label className={styles.check}>
+          <input type="checkbox" checked={withPublications} onChange={e => setWithPublications(e.target.checked)} />
+          <span>Только с публикациями</span>
+        </label>
+        {total !== undefined && <span className={styles.total}>всего в базе {total}</span>}
+      </div>
 
-        <div className={styles.field}>
+      {catalog.isError && <p role="alert">{describeLoadError(catalog.error)}</p>}
+      {catalog.data?.status === 'not_computed' && (
+        <EmptyState>
+          Снимок сигналов не рассчитан — каталог пуст не потому, что компаний нет. Выполните{' '}
+          <code>npm run metrics:refresh</code> или включите пересчёт по расписанию.
+        </EmptyState>
+      )}
+      {catalog.data?.status === 'ok' && rows.length === 0 && (
+        <EmptyState>По этому фильтру компаний нет: роль берётся только из публикаций, где её назвали.</EmptyState>
+      )}
+
+      {rows.length > 0 && (
+        <TableScroll minWidth={720}>
+          <thead>
+            <tr>
+              <th>Компания</th>
+              <th>Город</th>
+              <th>Выступала в роли</th>
+              <th className={styles.num}>Объектов</th>
+              <th className={styles.num}>Публикаций</th>
+              <th>Связи</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              // Строка кликается целиком: ссылка с именем накрывает её собой (index.css).
+              <tr key={row.companyId} className="row-link">
+                <td>
+                  <Link className="row-link-target" to={`/company/${row.companyId}`}>
+                    {row.name}
+                  </Link>
+                </td>
+                <td className={styles.muted}>{row.city ?? '—'}</td>
+                <td>{row.roles.length === 0 ? '—' : row.roles.map(r => ASSERTION_ROLE_LABELS[r] ?? r).join(', ')}</td>
+                <td className={styles.num}>{row.projects ?? '—'}</td>
+                <td className={styles.num}>{row.publications ?? '—'}</td>
+                <td>
+                  <Link className="row-link-above" to={`/links?company=${row.companyId}`}>
+                    схема
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </TableScroll>
+      )}
+    </>
+  );
+};
+
+/** Поиск компаний по названию: те же колонки, что у каталога, насколько поиск их знает. */
+const CompanyResults: FC<{ query: string }> = ({ query }) => {
+  const search = useQuery({
+    queryKey: ['search', query],
+    queryFn: () => api.get<{ items: ICompanySearchItem[] }>(`/api/companies?q=${encodeURIComponent(query)}&limit=25`),
+  });
+  const found = search.data?.items ?? [];
+
+  if (search.isError) return <p role="alert">{describeLoadError(search.error)}</p>;
+  if (search.isLoading) return <p className={styles.muted}>Поиск…</p>;
+  if (found.length === 0) return <EmptyState>Совпадений нет. Проверьте написание или очистите поиск.</EmptyState>;
+
+  return (
+    <TableScroll minWidth={480}>
+      <thead>
+        <tr>
+          <th>Компания</th>
+          <th>Город</th>
+          <th className={styles.num}>Объектов</th>
+        </tr>
+      </thead>
+      <tbody>
+        {found.map(item => (
+          <tr key={item.id} className="row-link">
+            <td>
+              <Link className="row-link-target" to={`/company/${item.id}`}>
+                {item.name}
+              </Link>
+            </td>
+            <td className={styles.muted}>{item.city ?? '—'}</td>
+            <td className={styles.num}>{item.projects ?? '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </TableScroll>
+  );
+};
+
+/** Лента публикаций и поиск по ним: список слева, пост справа. */
+const PublicationFeed: FC<{ query: string }> = ({ query }) => {
+  const feed = useInfiniteQuery({
+    queryKey: ['feed', query],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '30' });
+      if (query.length >= 2) params.set('q', query);
+      if (pageParam) params.set('cursor', pageParam);
+      return api.get<{ items: IFeedItem[]; nextCursor: string | null }>(`/api/feed?${params}`);
+    },
+    getNextPageParam: last => last.nextCursor,
+  });
+
+  return (
+    <PublicationBrowser
+      items={(feed.data?.pages.flatMap(p => p.items) ?? []).map(feedToListItem)}
+      isLoading={feed.isLoading}
+      error={feed.error}
+      hasMore={feed.hasNextPage}
+      loadingMore={feed.isFetchingNextPage}
+      onLoadMore={() => void feed.fetchNextPage()}
+      empty={
+        query.length >= 2
+          ? 'По этому запросу публикаций нет. Поиск идёт по тексту поста, его теме и названию канала.'
+          : 'Публикаций пока нет. Сбор идёт только по источникам с подтверждённым допуском.'
+      }
+    />
+  );
+};
+
+export const SearchPage: FC = () => {
+  const [params, setParams] = useSearchParams();
+  const mode: Mode = params.get('view') === 'publications' ? 'publications' : 'companies';
+  const [input, setInput] = useState(params.get('q') ?? '');
+  const query = useDebounced(input.trim());
+
+  // Запрос — в адрес без новой записи истории: «Назад» ведёт с карточки к поиску, а не по буквам.
+  useEffect(() => {
+    const current = params.get('q') ?? '';
+    if (current === query) return;
+    const next = new URLSearchParams(params);
+    if (query === '') next.delete('q');
+    else next.set('q', query);
+    setParams(next, { replace: true });
+  }, [query, params, setParams]);
+
+  const switchMode = (value: Mode): void => {
+    const next = new URLSearchParams(params);
+    if (value === 'companies') next.delete('view');
+    else next.set('view', value);
+    setParams(next);
+  };
+
+  const searching = query.length >= 2;
+
+  return (
+    <>
+      <h1 className="visually-hidden">{mode === 'companies' ? 'Компании' : 'Публикации'}</h1>
+      <div className={styles.bar}>
+        <Segmented label="Что показать" items={MODES} value={mode} onChange={switchMode} size="md" />
+        <label className={styles.field}>
           <svg
             className={styles.fieldIcon}
             viewBox="0 0 24 24"
@@ -107,118 +289,22 @@ export const SearchPage: FC = () => {
             type="search"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Название компании"
-            aria-label="Поиск компании"
+            placeholder={PLACEHOLDER[mode]}
+            aria-label={mode === 'companies' ? 'Поиск компании' : 'Поиск по публикациям'}
             autoComplete="off"
           />
-        </div>
-      </section>
+        </label>
+      </div>
 
-      {query.length >= 2 && (
-        <Section title="Найдено по запросу">
-          {searchQuery.isError && <p role="alert">{describeLoadError(searchQuery.error)}</p>}
-          {searchQuery.isSuccess && found.length === 0 && (
-            <EmptyState>Совпадений нет. Проверьте написание или посмотрите весь пул ниже.</EmptyState>
-          )}
-          {found.length > 0 && (
-            <ul className={styles.resultList}>
-              {found.map(item => (
-                <li key={item.id} className={styles.resultItem}>
-                  <Link to={`/company/${item.id}`}>{item.name}</Link>
-                  <span className={styles.resultMeta}>
-                    {ENTITY_TYPE_LABELS[item.entityType ?? ''] ?? item.entityType ?? 'юрлицо'}
-                    {item.city ? ` · ${item.city}` : ''}
-                    {' · '}
-                    {item.identifiers && item.identifiers.length > 0
-                      ? item.identifiers.map(identifierText).join(', ')
-                      : 'реквизитов нет'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+      {mode === 'companies' ? (
+        searching ? (
+          <CompanyResults query={query} />
+        ) : (
+          <CompanyCatalog />
+        )
+      ) : (
+        <PublicationFeed query={searching ? query : ''} />
       )}
-
-      <Section title="Пул компаний" note={totals ? `всего в базе ${totals.companies}` : undefined}>
-        <div className={styles.filters}>
-          <Segmented label="Роль" items={ROLES} value={role} onChange={setRole} />
-          <Segmented label="Сортировка" items={SORTS} value={sort} onChange={setSort} />
-          <label className={styles.check}>
-            <input type="checkbox" checked={withPublications} onChange={e => setWithPublications(e.target.checked)} />
-            <span>Только с публикациями</span>
-          </label>
-        </div>
-
-        {catalog.isError && <p role="alert">{describeLoadError(catalog.error)}</p>}
-
-        {catalog.data?.status === 'not_computed' && (
-          <EmptyState>
-            Снимок сигналов не рассчитан — каталог пуст не потому, что компаний нет. Выполните{' '}
-            <code>npm run metrics:refresh</code> или включите пересчёт по расписанию.
-          </EmptyState>
-        )}
-
-        {catalog.data?.status === 'ok' && rows.length === 0 && (
-          <EmptyState>
-            По этому фильтру компаний нет. Роль берётся из опубликованных утверждений: если её никто не
-            называл, компания не попадёт ни в один фильтр, кроме «Все».
-          </EmptyState>
-        )}
-
-        {/* Пять колонок, а не восемь: остальные числа живут в карточке компании, где
-            у каждого есть правило, окно и знаменатель. Здесь список нужен, чтобы
-            выбрать компанию, а не чтобы её оценить. */}
-        {rows.length > 0 && (
-          <TableScroll minWidth={640}>
-            <thead>
-              <tr>
-                <th>Компания</th>
-                <th>Выступала в роли</th>
-                <th>Объектов</th>
-                <th>Публикаций</th>
-                <th>Связи</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(row => (
-                // Строка кликается целиком: ссылка с именем накрывает её собой (index.css).
-                <tr key={row.companyId} className="row-link">
-                  <td>
-                    <Link className="row-link-target" to={`/company/${row.companyId}`}>
-                      {row.name}
-                    </Link>
-                    <span className={styles.rowCity}>{row.city ?? 'город не установлен'}</span>
-                    <Badge className={styles.rowBadge}>
-                      {IDENTITY_STATUS_LABELS[row.identityStatus] ?? row.identityStatus}
-                    </Badge>
-                  </td>
-                  <td>
-                    {row.roles.length === 0
-                      ? 'роль не названа'
-                      : row.roles.map(r => ASSERTION_ROLE_LABELS[r] ?? r).join(', ')}
-                  </td>
-                  <td>{row.projects ?? '—'}</td>
-                  <td>{row.publications ?? '—'}</td>
-                  <td>
-                    <Link className="row-link-above" to={`/links?company=${row.companyId}`}>
-                      схема
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableScroll>
-        )}
-
-        <p className={styles.note}>
-          «Выступала в роли» — это то, что сказано в публикациях, а не тип компании: одна и та же фирма
-          бывает заказчиком на одном объекте и подрядчиком на другом.
-          {catalog.data?.refresh.active ? ` Срез: ${formatDate(catalog.data.refresh.active.cutoffAt)}.` : ''}
-        </p>
-      </Section>
-
-      <RecentFeed />
     </>
   );
 };

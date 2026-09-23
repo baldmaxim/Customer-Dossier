@@ -226,6 +226,38 @@ export const formatDate = (iso: string | null): string => {
   return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+/**
+ * Дата поста для лент: «23 сентября» — крупно, год только если не текущий. Время — отдельно
+ * (`formatTime`): в ленте дата важнее, а «10:17» читается как пометка рядом.
+ */
+export const formatPostDate = (iso: string | null, now: Date = new Date()): string => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+};
+
+export const formatTime = (iso: string | null): string => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+};
+
+/**
+ * Как назвать источник на экране. У Telegram-каналов имя собирается со страницы канала
+ * при сборе; пока его нет, `title` равен ключу («propertyinsider») — тогда показываем
+ * «@propertyinsider», как это пишет сам Telegram, а не голый технический ключ.
+ */
+export const sourceLabel = (source: { sourceTitle: string; sourceKey?: string | null; sourceKind: string }): string =>
+  source.sourceKind === 'telegram' && source.sourceKey && source.sourceTitle === source.sourceKey
+    ? `@${source.sourceKey}`
+    : source.sourceTitle;
+
 export const formatDateTime = (iso: string | null): string => {
   if (!iso) return '';
   const date = new Date(iso);

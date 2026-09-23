@@ -1,107 +1,24 @@
-.head {
+/* Публикация отдельной страницей: пост по ширине чтения, без служебных блоков. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: 760px; /* ширина поста + поля: длиннее строка читается хуже */
+}
+
+.sources {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 12px;
-  margin-bottom: 18px;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-.title {
-  margin: 0;
-}
-
-.meta {
-  flex-basis: 100%;
-  margin: 0;
+.sourcesLabel {
   color: var(--muted);
-  font-size: 0.88rem;
-  overflow-wrap: anywhere;
-}
-
-.hint {
-  color: var(--muted);
-  font-size: 0.88rem;
-  max-width: var(--prose);
-  margin: 0 0 18px;
+  font-size: var(--fs-sm);
 }
 
 .empty {
   color: var(--muted);
-  padding: 10px 0;
-}
-
-.items {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin-bottom: 24px;
-}
-
-@media (min-width: 768px) {
-  .items {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  }
-}
-
-.item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  text-align: left;
-  min-height: 44px;
-  padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background-color var(--t-fast) var(--ease);
-}
-
-.item:hover {
-  border-color: var(--border-strong);
-}
-
-.itemActive {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.itemSource {
-  font-weight: 600;
-}
-
-.itemKey {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--faint);
-  overflow-wrap: anywhere;
-}
-
-.itemMeta {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.warn {
-  font-size: 0.78rem;
-  color: var(--risk-yellow);
-}
-
-.section {
-  margin-bottom: 28px;
-}
-
-.sectionHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.back {
-  margin-top: 12px;
 }

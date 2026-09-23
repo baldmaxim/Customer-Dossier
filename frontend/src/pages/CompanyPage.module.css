@@ -6,9 +6,9 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  padding: 18px 18px 16px;
-  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
   animation: rise 200ms var(--ease) both;
 }
 
@@ -38,7 +38,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 12px 18px;
+  gap: var(--sp-3) var(--sp-4);
 }
 
 .heroTitle {
@@ -47,7 +47,7 @@
 }
 
 .name {
-  font-size: 1.45rem;
+  font-size: var(--fs-lg);
   letter-spacing: -0.025em;
   line-height: 1.15;
 }
@@ -55,17 +55,17 @@
 .facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  margin-top: 8px;
+  gap: var(--sp-1) var(--sp-3);
+  margin-top: var(--sp-1);
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 
 /* Разделитель точкой между реквизитами — без лишней вёрстки. */
 .fact + .fact::before {
   content: '·';
-  margin-right: 10px;
+  margin-right: var(--sp-3);
   color: var(--faint);
 }
 
@@ -483,11 +483,11 @@
 
 @media (min-width: 640px) {
   .hero {
-    padding: 22px 24px 20px;
+    padding: var(--sp-4) var(--sp-5);
   }
 
   .name {
-    font-size: 1.75rem;
+    font-size: var(--fs-xl);
   }
 
   .grid {
@@ -501,12 +501,8 @@
 }
 
 @media (min-width: 1200px) {
-  .hero {
-    padding: 26px 28px 22px;
-  }
-
   .name {
-    font-size: 2rem;
+    font-size: 1.5rem; /* 24 — между --fs-xl и --fs-2xl: имя крупнее секций, но не плакат */
   }
 
   .verdict {
@@ -544,7 +540,21 @@
   }
 }
 
-/* Переключатель «Обзор / Подробно»: карточка отвечает на два разных вопроса. */
+/* Переключатель вкладок: карточка отвечает на три разных вопроса. */
 .viewSwitch {
-  margin: var(--sp-4) 0;
+  margin: 0 0 var(--sp-3);
+}
+
+/* Обзор: сводка и контрагенты рядом — оба блока короткие, в одну колонку справа пустовало. */
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }

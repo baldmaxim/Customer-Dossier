@@ -121,6 +121,8 @@ export interface ISourceItem {
   sourceId: number;
   sourceTitle: string;
   sourceKind: string;
+  /** Ключ канала: сервер отдаёт его всегда (ITEM_COLUMNS), экран подписывает «@ключ», пока нет имени. */
+  sourceKey: string;
   itemKey: string;
   externalId: string | null;
   canonicalUrl: string | null;
@@ -670,6 +672,8 @@ export interface IPublicationRow {
   observedAt: string;
   sourceTitle: string;
   sourceKind: string;
+  /** Ключ канала: пока имя канала не собрано, экран показывает «@ключ» (sourceLabel). */
+  sourceKey: string;
   url: string | null;
   completeness: string;
   snippet: string;
