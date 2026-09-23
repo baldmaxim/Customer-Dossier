@@ -4,6 +4,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* В читалке панель ограничена по высоте: шапка стоит, прокручивается .chat. */
+  height: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -14,8 +16,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  flex: none;
   gap: var(--sp-2) var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -42,19 +45,44 @@
 }
 
 /* Аватар канала — первая буква имени: картинок каналов портал не хранит.
-   40px — как аватар в шапке канала Telegram: крупнее сливается с датой. */
+   32px — как аватар в списке чатов Telegram: крупнее съедает высоту шапки. */
 .avatar {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
+}
+
+/* Шапка канала — ссылка на оригинал: вся зона кликабельна, стрелка ↗ говорит, что уходим наружу. */
+.channelLink {
+  margin: calc(var(--sp-1) * -1) calc(var(--sp-2) * -1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .channelLink:hover {
+    background: var(--surface-2);
+  }
+
+  .channelLink:hover .channelName {
+    color: var(--accent);
+  }
+}
+
+.channelLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .channelText {
@@ -78,7 +106,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: var(--sp-2);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-base);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -92,14 +120,17 @@
 /* Фон «чата»: пузырь читается как сообщение, а не как карточка отчёта. */
 .chat {
   flex: 1 1 auto;
-  padding: var(--sp-4);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-3);
   background: var(--surface-2);
 }
 
 .bubble {
   position: relative;
   max-width: var(--prose);
-  padding: var(--sp-3) var(--sp-4) var(--sp-5);
+  padding: var(--sp-2) var(--sp-3) var(--sp-5);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
   /* Рамка, а не только тень: в тёмной теме пузырь темнее фона чата, и тень там не видна. */
   border: 1px solid var(--border);
@@ -108,8 +139,8 @@
 }
 
 .media {
-  margin: calc(var(--sp-3) * -1) calc(var(--sp-4) * -1) var(--sp-3);
-  padding: var(--sp-5) var(--sp-4);
+  margin: calc(var(--sp-2) * -1) calc(var(--sp-3) * -1) var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--surface-3);
   color: var(--muted);
@@ -144,13 +175,4 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--fs-sm);
-}
-
-.open {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--ctl-h);
-  border-top: 1px solid var(--border);
-  font-weight: 500;
 }

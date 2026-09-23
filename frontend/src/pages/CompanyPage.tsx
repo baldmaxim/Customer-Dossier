@@ -156,42 +156,44 @@ export const CompanyPage: FC = () => {
 
   return (
     <>
-      {/* Шапка карточки: кто это и насколько установлена личность. Итоговой оценки нет (этап 07). */}
-      <header className={styles.hero}>
-        <div className={styles.heroTop}>
-          <div className={styles.heroTitle}>
-            <h1 className={styles.name}>{company.name}</h1>
-            <div className={styles.facts}>
-              {facts.length > 0 ? (
-                facts.map(fact => (
-                  <span key={fact} className={styles.fact}>
-                    {fact}
-                  </span>
-                ))
-              ) : (
-                <span className={styles.factMuted}>Реквизиты не установлены</span>
-              )}
+      {/* Верхняя строка: кто это — компактно слева, рядом вкладки и (если есть) похожие компании.
+          Раньше шапка шла во всю ширину, а вкладки и плашка — отдельными строками: на экране
+          читалки публикаций это три строки высоты, отнятые у списка. Итоговой оценки нет (этап 07). */}
+      <div className={styles.top}>
+        <header className={styles.hero}>
+          <div className={styles.heroTop}>
+            <div className={styles.heroTitle}>
+              <h1 className={styles.name}>{company.name}</h1>
+              <div className={styles.facts}>
+                {facts.length > 0 ? (
+                  facts.map(fact => (
+                    <span key={fact} className={styles.fact}>
+                      {fact}
+                    </span>
+                  ))
+                ) : (
+                  <span className={styles.factMuted}>Реквизиты не установлены</span>
+                )}
+              </div>
             </div>
           </div>
+        </header>
+        <div className={styles.heroSwitch}>
+          <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} size="md" />
         </div>
-      </header>
-
-      {similar.length > 0 && (
-        <div className={styles.callout}>
-          <span className={styles.calloutTitle}>Похожие компании — возможно, это дубли</span>{' '}
-          {similar.map((s, i) => (
-            <span key={s.id}>
-              {i > 0 && ', '}
-              <Link to={`/company/${s.id}`}>{s.name}</Link>
-              {s.city ? ` (${s.city})` : ''}
-            </span>
-          ))}
-          . Слияние — в админке.
-        </div>
-      )}
-
-      <div className={styles.viewSwitch}>
-        <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} size="md" />
+        {similar.length > 0 && (
+          <div className={styles.callout}>
+            <span className={styles.calloutTitle}>Похожие компании — возможно, это дубли</span>{' '}
+            {similar.map((s, i) => (
+              <span key={s.id}>
+                {i > 0 && ', '}
+                <Link to={`/company/${s.id}`}>{s.name}</Link>
+                {s.city ? ` (${s.city})` : ''}
+              </span>
+            ))}
+            . Слияние — в админке.
+          </div>
+        )}
       </div>
 
       {view === 'overview' && (

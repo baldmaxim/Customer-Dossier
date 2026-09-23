@@ -78,14 +78,15 @@ describe('Страница публикации', () => {
     renderPage();
 
     expect(await screen.findByText(/Это проект рядом с Новыми Ватутинками/)).toBeTruthy();
-    expect(screen.getByText('Недвижимость изнутри')).toBeTruthy();
+    expect(screen.getByText(/^Недвижимость изнутри/)).toBeTruthy();
     // Год не проверяем: в текущем году он не печатается, и тест не должен зависеть от даты запуска.
     expect(screen.getByText(/^14 сентября/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Открыть в Telegram' }).getAttribute('href')).toBe(
-      'https://t.me/propertyinsider/36274',
-    );
+    // Ссылка на оригинал — сама шапка канала, а не кнопка под текстом.
+    expect(
+      screen.getByRole('link', { name: 'Недвижимость изнутри — открыть оригинал в Telegram' }).getAttribute('href'),
+    ).toBe('https://t.me/propertyinsider/36274');
     // Фото портал не хранит — сказано словами, а не молча пропущено.
-    expect(screen.getByText(/фото — портал вложения не сохраняет/)).toBeTruthy();
+    expect(screen.getByText(/фото — не сохраняется, открыть можно в оригинале/)).toBeTruthy();
   });
 
   it('служебного разбора и таблицы редакций на странице нет', async () => {
@@ -102,7 +103,7 @@ describe('Страница публикации', () => {
     fakeApi(routes([item({ sourceTitle: 'propertyinsider' })]));
     renderPage();
 
-    expect(await screen.findByText('@propertyinsider')).toBeTruthy();
+    expect(await screen.findByText(/^@propertyinsider/)).toBeTruthy();
   });
 
   it('та же новость в другом канале открывается переключателем', async () => {

@@ -7,9 +7,20 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: var(--sp-3) var(--sp-4);
-  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
   animation: rise 200ms var(--ease) both;
+  /* Шапка — по содержимому слева, а не во всю ширину: имя компании короче строки экрана. */
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+  min-width: 0;
 }
 
 /* Цветная полоса вверху — тот же светофор, продублированный подписью в бейдже. */
@@ -37,8 +48,12 @@
 .heroTop {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--sp-3) var(--sp-4);
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.heroSwitch {
+  flex: none;
 }
 
 .heroTitle {
@@ -94,9 +109,11 @@
   background: var(--risk-yellow-bg);
   border: 1px solid var(--risk-yellow-border);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 18px;
-  font-size: 0.88rem;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  /* Рядом со шапкой и вкладками, забирает остаток строки; не влезает — уходит ниже. */
+  flex: 1 1 280px;
+  min-width: 0;
   color: var(--text);
 }
 
@@ -483,7 +500,7 @@
 
 @media (min-width: 640px) {
   .hero {
-    padding: var(--sp-4) var(--sp-5);
+    padding: var(--sp-2) var(--sp-4);
   }
 
   .name {
@@ -538,11 +555,6 @@
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     align-items: start;
   }
-}
-
-/* Переключатель вкладок: карточка отвечает на три разных вопроса. */
-.viewSwitch {
-  margin: 0 0 var(--sp-3);
 }
 
 /* Обзор: сводка и контрагенты рядом — оба блока короткие, в одну колонку справа пустовало. */

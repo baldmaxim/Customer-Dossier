@@ -100,7 +100,8 @@ export const PublicationBrowser: FC<IPublicationBrowserProps> = ({
   if (items.length === 0) return <EmptyState>{empty}</EmptyState>;
 
   return (
-    <div className={`${styles.layout} ${detailOpen ? styles.detailOpen : ''}`}>
+    // data-fill-screen: на широком экране страница встаёт ровно в окно (Layout.module.css).
+    <div className={`${styles.layout} ${detailOpen ? styles.detailOpen : ''}`} data-fill-screen>
       <div className={styles.list}>
         <ul className={styles.items}>
           {items.map(item => {

@@ -233,9 +233,10 @@
 /* Возврат на шаг назад: 44px на тач-экране, 38px под мышью — как остальные контролы. */
 .back {
   display: inline-flex;
+  align-self: flex-start; /* в режиме «один экран» main — flex-колонка: без этого кнопка растянется */
   align-items: center;
   min-height: var(--ctl-h);
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
   padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
   border: none;
   background: none;
@@ -248,4 +249,19 @@
 .back:hover,
 .back:focus-visible {
   color: var(--text);
+}
+
+/* Экраны-читалки (список публикаций + пост): страница ровно в высоту окна, прокручиваются
+   только колонки. Включается самой читалкой (data-fill-screen), остальные страницы
+   прокручиваются как обычно. Без :has() браузер просто покажет обычную прокрутку. */
+@media (min-width: 900px) {
+  .main:has([data-fill-screen]) {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    /* 1px — нижняя рамка шапки. */
+    height: calc(100dvh - var(--header-h) - env(safe-area-inset-top) - 1px);
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-3);
+  }
 }

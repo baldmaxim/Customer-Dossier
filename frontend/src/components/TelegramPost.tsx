@@ -67,17 +67,38 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
             ← К списку
           </button>
         )}
-        <div className={styles.channel}>
-          <span className={styles.avatar} aria-hidden="true">
-            {initial}
-          </span>
-          <div className={styles.channelText}>
-            <span className={styles.channelName}>{channel}</span>
-            <span className={styles.channelMeta}>
-              {sourceKind === 'telegram' ? 'Telegram-канал' : sourceKind === 'website' ? 'сайт' : 'вставлено вручную'}
+        {/* Шапка канала — и есть ссылка на оригинал: отдельная кнопка внизу поста терялась под текстом. */}
+        {url ? (
+          <a
+            className={`${styles.channel} ${styles.channelLink}`}
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={`${channel} — открыть оригинал ${sourceKind === 'telegram' ? 'в Telegram' : 'в источнике'}`}
+          >
+            <span className={styles.avatar} aria-hidden="true">
+              {initial}
+            </span>
+            <span className={styles.channelText}>
+              <span className={styles.channelName}>
+                {channel} <span aria-hidden="true">↗</span>
+              </span>
+              <span className={styles.channelMeta}>
+                {sourceKind === 'telegram' ? 'Telegram-канал · открыть оригинал' : 'открыть оригинал'}
+              </span>
+            </span>
+          </a>
+        ) : (
+          <div className={styles.channel}>
+            <span className={styles.avatar} aria-hidden="true">
+              {initial}
+            </span>
+            <span className={styles.channelText}>
+              <span className={styles.channelName}>{channel}</span>
+              <span className={styles.channelMeta}>{sourceKind === 'telegram' ? 'Telegram-канал' : 'вставлено вручную'}</span>
             </span>
           </div>
-        </div>
+        )}
         <time className={styles.date} dateTime={when}>
           {formatPostDate(when)}
           <span className={styles.time}>{formatTime(when)}</span>
@@ -102,8 +123,8 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
           <div className={styles.bubble}>
             {attachments.length > 0 && (
               <div className={styles.media}>
-                {attachments.map(a => ATTACHMENT_LABELS[a.kind] ?? 'вложение').join(', ')} — портал вложения не
-                сохраняет, только текст
+                {attachments.map(a => ATTACHMENT_LABELS[a.kind] ?? 'вложение').join(', ')} — не сохраняется,
+                открыть можно в оригинале
               </div>
             )}
             {title && <p className={styles.title}>{title}</p>}
@@ -116,12 +137,6 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
           </div>
         )}
       </div>
-
-      {url && (
-        <a className={styles.open} href={url} target="_blank" rel="noreferrer noopener">
-          {sourceKind === 'telegram' ? 'Открыть в Telegram' : 'Открыть в источнике'}
-        </a>
-      )}
     </article>
   );
 };
