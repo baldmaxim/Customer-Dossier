@@ -112,3 +112,29 @@ describe('isPrivateChannelStub', () => {
     expect(isPrivateChannelStub(FIXTURE)).toBe(false);
   });
 });
+
+describe('parseChannelTitle — имя канала вместо username', () => {
+  const page = (head: string, body = ''): string => `<html><head>${head}</head><body>${body}</body></html>`;
+
+  it('берёт og:title: он опубликован для превью ссылок и меняется реже вёрстки', () => {
+    const html = page('<meta property="og:title" content="Недвижимость  изнутри"><title>Другое – Telegram</title>');
+    expect(parseChannelPage(html, 'propertyinsider').channelTitle).toBe('Недвижимость изнутри');
+  });
+
+  it('без og:title — шапка канала, затем <title> без суффикса сайта', () => {
+    expect(
+      parseChannelPage(page('', '<div class="tgme_channel_info_header_title"><span>Стройка онлайн</span></div>'), 'stroy')
+        .channelTitle,
+    ).toBe('Стройка онлайн');
+    expect(parseChannelPage(page('<title>Деловая стройка – Telegram</title>'), 'stroy').channelTitle).toBe(
+      'Деловая стройка',
+    );
+  });
+
+  it('username и слово «Telegram» именем не считаются: подставлять ключ вместо имени нельзя', () => {
+    // Фикстура: <title>kzbuild – Telegram</title> — это username, а не имя.
+    expect(parseChannelPage(FIXTURE, 'kzbuild').channelTitle).toBeNull();
+    expect(parseChannelPage(page('<meta property="og:title" content="@KzBuild">'), 'kzbuild').channelTitle).toBeNull();
+    expect(parseChannelPage(page('<title>Telegram</title>'), 'kzbuild').channelTitle).toBeNull();
+  });
+});

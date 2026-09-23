@@ -11,6 +11,7 @@
 // заголовка, и остаётся подписью модели — не заголовком источника и не доказательством.
 
 import { query } from '../db/pool.js';
+import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
 
 /** Что сказано о компании в этой публикации. Одна строка — одно опубликованное утверждение. */
 export interface IPublicationFact {
@@ -45,6 +46,8 @@ export interface IPublicationRow {
   observedAt: string;
   sourceTitle: string;
   sourceKind: string;
+  /** Ключ канала: пока имя не собрано (title = key), экран показывает «@ключ». */
+  sourceKey: string;
   url: string | null;
   completeness: string;
   snippet: string;
@@ -66,10 +69,12 @@ interface IItemRow {
   observedAt: string;
   sourceTitle: string;
   sourceKind: string;
+  sourceKey: string;
   url: string | null;
   completeness: string;
   snippet: string;
-  sortAt: string;
+  /** pg отдаёт timestamptz объектом Date: в курсор — только через keysetCursor. */
+  sortAt: Date;
 }
 
 /**
@@ -98,6 +103,7 @@ const ITEMS_SQL = `
          si.first_observed_at AS "observedAt",
          s.title AS "sourceTitle",
          s.kind AS "sourceKind",
+         s.key AS "sourceKey",
          coalesce(si.canonical_url, si.original_url) AS url,
          rev.completeness::text AS completeness,
          left(rev.body, 300) AS snippet,
@@ -165,7 +171,7 @@ export const loadCompanyPublications = async (
   limit: number,
   cursor: string | undefined,
 ): Promise<{ items: IPublicationRow[]; nextCursor: string | null }> => {
-  const [cursorAt, cursorId] = cursor ? cursor.split('|') : [null, null];
+  const [cursorAt, cursorId] = parseKeysetCursor(cursor);
   const items = await query<IItemRow>(ITEMS_SQL, [companyId, limit, cursorAt, cursorId]);
   if (items.length === 0) return { items: [], nextCursor: null };
 
@@ -215,6 +221,6 @@ export const loadCompanyPublications = async (
   const last = items[items.length - 1];
   return {
     items: rows,
-    nextCursor: items.length === limit && last ? `${last.sortAt}|${last.itemId}` : null,
+    nextCursor: items.length === limit && last ? keysetCursor(last.sortAt, last.itemId) : null,
   };
 };

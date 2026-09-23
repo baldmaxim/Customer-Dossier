@@ -7,6 +7,7 @@ import { query, queryOne } from '../db/pool.js';
 import { loadItemOutcome } from '../reprocess/itemOutcome.js';
 import { diffLines } from '../revisions/diff.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
 
 export const revisionsRouter = asyncRouter();
 
@@ -49,31 +50,61 @@ const ITEM_FROM = `
   ${HEADLINE_LATERAL}
 `;
 
+const feedSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  cursor: z.string().max(80).optional(),
+  /** Поиск по тексту публикации, её заголовку, теме и названию источника. */
+  q: z.string().trim().min(2).max(200).optional(),
+});
+
+/** Спецсимволы LIKE в запросе — буквы, а не шаблон: «50%» ищет «50%», а не всё подряд. */
+export const likePattern = (q: string): string => `%${q.replace(/[\\%_]/g, m => `\\${m}`)}%`;
+
 /**
- * Лента последнего: что вообще пришло в портал за последнее время.
+ * Лента публикаций и поиск по ним: что вообще пришло в портал.
  * Порядок — по дате публикации источника, а при её отсутствии по наблюдению:
  * момент, когда портал увидел текст, датой публикации не притворяется.
+ *
+ * Поиск — подстрокой без учёта регистра, а не морфологией: to_tsvector('russian') не знает
+ * брендов вроде «А101» и «MR Group», а оператор ищет именно их. Индекса по тексту нет —
+ * на локальной базе в тысячи публикаций это миллисекунды; при росте нужен gin_trgm_ops.
  */
 revisionsRouter.get('/feed', async (req, res) => {
-  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 100);
-  const items = await query(
+  const parsed = feedSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Некорректные параметры ленты: q — от 2 символов, limit — до 100' });
+    return;
+  }
+  const { limit, cursor, q } = parsed.data;
+  const [cursorAt, cursorId] = parseKeysetCursor(cursor);
+  const items = await query<{ id: number; sortAt: Date }>(
     `SELECT i.id, s.title AS "sourceTitle", s.kind AS "sourceKind", s.key AS "sourceKey",
             i.published_at AS "publishedAt", i.first_observed_at AS "firstObservedAt",
-            i.canonical_url AS "canonicalUrl", i.state,
-            lr.title, lr.completeness, lr.revision_no AS "revisionNo",
+            i.canonical_url AS "canonicalUrl", coalesce(i.canonical_url, i.original_url) AS url, i.state,
+            lr.id AS "revisionId", lr.title, lr.completeness, lr.revision_no AS "revisionNo",
             lr.legacy_document_id AS "documentId",
-            length(lr.body) AS "bodyChars",
+            length(lr.body)::int AS "bodyChars",
+            left(lr.body, 300) AS snippet,
             hl.topic, hl.model AS "topicModel",
-            (SELECT count(*)::int FROM document_revisions r WHERE r.source_item_id = i.id) AS "revisionCount"
+            (SELECT count(*)::int FROM document_revisions r WHERE r.source_item_id = i.id) AS "revisionCount",
+            coalesce(i.published_at, i.first_observed_at) AS "sortAt"
      FROM source_items i
      JOIN sources s ON s.id = i.source_id
      LEFT JOIN document_revisions lr ON lr.id = i.latest_revision_id
      ${HEADLINE_LATERAL}
+     WHERE ($2::text IS NULL OR lr.body ILIKE $2 OR lr.title ILIKE $2 OR hl.topic ILIKE $2 OR s.title ILIKE $2)
+       AND ($3::timestamptz IS NULL
+            OR (coalesce(i.published_at, i.first_observed_at), i.id) < ($3::timestamptz, $4::bigint))
      ORDER BY coalesce(i.published_at, i.first_observed_at) DESC, i.id DESC
      LIMIT $1`,
-    [limit],
+    [limit, q ? likePattern(q) : null, cursorAt, cursorId],
   );
-  res.json({ items, limit });
+  const last = items[items.length - 1];
+  res.json({
+    items: items.map(({ sortAt: _sortAt, ...rest }) => rest),
+    limit,
+    nextCursor: items.length === limit && last ? keysetCursor(last.sortAt, last.id) : null,
+  });
 });
 
 /** Публикации, связанные с legacy-документом (из карточки: упоминание → документ → версии). */

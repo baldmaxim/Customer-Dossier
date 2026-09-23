@@ -231,9 +231,26 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
     report.errors.push(report.healthReason ?? '');
   };
 
+  /**
+   * Имя канала вместо username. Раньше `sources.title` у каналов всегда равнялся ключу
+   * («propertyinsider»), и в лентах висело техническое имя. Пишем только туда, где имени
+   * ещё нет (title = key): название, заданное оператором, не перетирается.
+   */
+  let titleStored = false;
+  let pendingTitle: string | null = null;
+  const storeChannelTitle = async (title: string | null): Promise<void> => {
+    if (titleStored || dryRun || title === null) return;
+    titleStored = true;
+    await getPool().query(
+      `UPDATE sources SET title = $2, updated_at = now() WHERE id = $1 AND title = key AND $2 <> key`,
+      [source.id, title],
+    );
+  };
+
   /** Разбор и проверки страницы: вёрстка и идентичность канала. null — проход остановлен. */
   const parsePage = (html: string): ITelegramPost[] | null => {
     const parsed = parseChannelPage(html, source.key);
+    pendingTitle ??= parsed.channelTitle;
     report.pagesFetched += 1;
     for (const [k, v] of Object.entries(parsed.layoutStats)) report.layoutStats[k] = (report.layoutStats[k] ?? 0) + v;
     if (looksLikeLayoutChange(parsed)) {
@@ -263,6 +280,8 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
     report.httpStatus = first.httpStatus;
     const posts = parsePage(first.html);
     if (posts === null) return finalize();
+    // Только после проверки идентичности: имя чужого канала в источник не пишем.
+    await storeChannelTitle(pendingTitle);
 
     const fresh = posts.filter(p => p.postId > lastPostId);
     const toStore = recheckDue ? posts : fresh;

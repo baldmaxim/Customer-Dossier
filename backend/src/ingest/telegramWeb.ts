@@ -90,7 +90,41 @@ export interface IParsedChannelPage {
   layoutStats: Record<string, number>;
   /** Длина исходного HTML — второй сигнал для детектора слома вёрстки. */
   htmlLength: number;
+  /**
+   * Отображаемое имя канала («Недвижимость изнутри»), а не username. null — на странице
+   * его нет или оно совпадает с username: подставлять ключ вместо имени нельзя.
+   */
+  channelTitle: string | null;
 }
+
+/**
+ * Где t.me/s/ печатает имя канала, от самого машинного места к самому хрупкому.
+ * og:title опубликован для превью ссылок и меняется реже вёрстки; шапка канала и <title>
+ * — запасные пути. Необязательно: без имени сбор идёт как раньше.
+ */
+const CHANNEL_TITLE_SELECTORS = {
+  og: 'meta[property="og:title"]',
+  header: '.tgme_channel_info_header_title',
+} as const;
+
+/** « – Telegram» в конце <title>: суффикс сайта, не часть имени. */
+const TITLE_SUFFIX = /\s*[–—-]\s*Telegram\s*$/i;
+
+export const parseChannelTitle = ($: cheerio.CheerioAPI, channel: string): string | null => {
+  const candidates = [
+    $(CHANNEL_TITLE_SELECTORS.og).attr('content'),
+    $(CHANNEL_TITLE_SELECTORS.header).first().text(),
+    $('title').first().text().replace(TITLE_SUFFIX, ''),
+  ];
+  for (const raw of candidates) {
+    const title = (raw ?? '').replace(/\s+/g, ' ').trim();
+    // Пустое, слово «Telegram» и сам username — не имя канала.
+    if (title === '' || /^telegram$/i.test(title)) continue;
+    if (title.replace(/^@/, '').toLowerCase() === channel.toLowerCase()) continue;
+    return title.slice(0, 200);
+  }
+  return null;
+};
 
 /**
  * Текст поста с сохранением переводов строк: <br> и </div> в разметке Telegram
@@ -192,7 +226,7 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
   // Telegram отдаёт от старых к новым; нам удобнее от новых.
   posts.sort((a, b) => b.postId - a.postId);
 
-  return { posts, layoutStats, htmlLength: html.length };
+  return { posts, layoutStats, htmlLength: html.length, channelTitle: parseChannelTitle($, channel) };
 };
 
 export class TelegramFetchError extends Error {

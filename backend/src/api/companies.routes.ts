@@ -14,6 +14,7 @@ import { loadCompanyPublications } from './companyPublications.js';
 import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
+import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
 
 export const companiesRouter = asyncRouter();
 
@@ -317,9 +318,9 @@ companiesRouter.get('/:id/mentions', async (req, res) => {
   }
 
   const { limit, cursor, sentiment } = parsed.data;
-  const [cursorAt, cursorId] = cursor ? cursor.split('|') : [null, null];
+  const [cursorAt, cursorId] = parseKeysetCursor(cursor);
 
-  const rows = await query<{ publishedAt: string; id: number }>(
+  const rows = await query<{ publishedAt: Date; id: number }>(
     `SELECT m.id, m.surface_form AS "surfaceForm", m.role, m.quote,
             m.quote_verified AS "quoteVerified", m.sentiment, m.confidence,
             m.published_at   AS "publishedAt", m.document_id AS "documentId",
@@ -338,7 +339,7 @@ companiesRouter.get('/:id/mentions', async (req, res) => {
   const last = rows[rows.length - 1];
   res.json({
     items: rows,
-    nextCursor: rows.length === limit && last ? `${last.publishedAt}|${last.id}` : null,
+    nextCursor: rows.length === limit && last ? keysetCursor(last.publishedAt, last.id) : null,
   });
 });
 
