@@ -1,8 +1,8 @@
 // Карточка компании: три вкладки на три вопроса.
 //
-//   «Обзор»      — что с компанией сейчас: сводка и с кем работает, рядом, без прокрутки;
+//   «Обзор»      — что с компанией сейчас: сводка, объекты и с кем работает, рядом, без прокрутки;
 //   «Публикации» — что о ней пишут: список слева, сам пост справа в виде Telegram;
-//   «Подробно»   — откуда это известно: сигналы с правилами, досье, объекты, события, схема.
+//   «Подробно»   — откуда это известно: сигналы с правилами, досье, события, схема.
 //
 // Раньше лента публикаций стояла в обзоре под сводкой, и половина экрана справа пустовала,
 // а чтобы прочитать пост, приходилось уходить на отдельную страницу со служебным разбором.
@@ -17,12 +17,13 @@ import type { ICompanyResponse, IEventRow, IMention, IProjectRow, IPublicationRo
 import { RegistryPanel } from '../components/RegistryPanel';
 import { CompanyBrief } from '../components/CompanyBrief';
 import { CompanyPartners } from '../components/CompanyPartners';
+import { CompanyProjects } from '../components/CompanyProjects';
 import { CompanySignals } from '../components/CompanySignals';
 import { CompanySummary } from '../components/CompanySummary';
 import { GraphPanel } from '../components/GraphPanel';
 import { PublicationBrowser, type IPublicationListItem } from '../components/PublicationBrowser';
 import { Segmented } from '../components/ui/Segmented';
-import { ROLE_LABELS, STAGE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
+import { ROLE_LABELS, EVENT_LABELS, SENTIMENT_LABELS, formatDate, formatMoney } from '../lib/labels';
 import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS } from '../lib/labels';
 import { factText } from '../lib/publicationFacts';
 import styles from './CompanyPage.module.css';
@@ -36,9 +37,9 @@ const SENTIMENT_FILTERS: Array<{ value: Sentiment | 'all'; label: string }> = [
 type View = 'overview' | 'publications' | 'details';
 
 const VIEWS: ReadonlyArray<{ value: View; label: string; hint?: string }> = [
-  { value: 'overview', label: 'Обзор', hint: 'сводка и контрагенты' },
+  { value: 'overview', label: 'Обзор', hint: 'сводка, объекты и контрагенты' },
   { value: 'publications', label: 'Публикации', hint: 'что о компании пишут: список и сам пост' },
-  { value: 'details', label: 'Подробно', hint: 'сигналы с правилами, доказательства, объекты, события и схема связей' },
+  { value: 'details', label: 'Подробно', hint: 'сигналы с правилами, доказательства, события и схема связей' },
 ];
 
 /** Чистое «упомянута» ничего не говорит о компании — в строке списка оно шум. */
@@ -197,9 +198,12 @@ export const CompanyPage: FC = () => {
       </div>
 
       {view === 'overview' && (
-        // Сводка и контрагенты рядом: оба блока короткие, и в одну колонку справа пустовало.
+        // Слева сводка и объекты, справа контрагенты: в одну колонку справа пустовало.
         <div className={styles.overview}>
-          <CompanyBrief companyId={companyId} facts={facts} projects={projects} events={events} />
+          <div className={styles.overviewCol}>
+            <CompanyBrief companyId={companyId} facts={facts} projects={projects} events={events} />
+            <CompanyProjects projects={projects} isLoading={projectsQuery.isLoading} error={projectsQuery.error} />
+          </div>
           <CompanyPartners companyId={companyId} />
         </div>
       )}
@@ -228,43 +232,6 @@ export const CompanyPage: FC = () => {
           <div className={styles.columns}>
             <div className={styles.colMain}>
               <CompanySummary companyId={companyId} />
-
-              <section className={styles.section}>
-                <div className={styles.sectionHead}>
-                  <h2>Объекты</h2>
-                  <span className={styles.count}>{projects.length}</span>
-                </div>
-                {projects.length === 0 ? (
-                  <p className={styles.empty}>Объекты не найдены.</p>
-                ) : (
-                  <div className={styles.stack}>
-                    {projects.map(p => (
-                      <article key={`${p.id}-${p.role}`} className={styles.card}>
-                        <div className={styles.projectHead}>
-                          <span className={styles.projectName}><Link to={`/projects/${p.id}`}>{p.name}</Link></span>
-                          <span className={`${styles.tag} ${styles.tagRole}`}>{ROLE_LABELS[p.role]}</span>
-                          <span className={styles.tag}>{STAGE_LABELS[p.stage] ?? p.stage}</span>
-                          {p.city && <span className={styles.tag}>{p.city}</span>}
-                          {p.plannedCompletion && (
-                            <span className={styles.tag}>план {formatDate(p.plannedCompletion)}</span>
-                          )}
-                        </div>
-                        {p.counterparties && p.counterparties.length > 0 && (
-                          <div className={styles.counterparties}>
-                            Также на объекте:{' '}
-                            {p.counterparties.map((c, i) => (
-                              <span key={c.id}>
-                                {i > 0 && ', '}
-                                <Link to={`/company/${c.id}`}>{c.name}</Link> ({ROLE_LABELS[c.role]})
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
 
               {events.length > 0 && (
                 <section className={styles.section}>

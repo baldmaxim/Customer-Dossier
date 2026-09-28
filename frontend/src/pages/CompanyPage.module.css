@@ -210,34 +210,6 @@
   gap: 8px;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
-}
-
-.card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
-
-.projectHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.projectName {
-  font-weight: 600;
-  font-size: 0.98rem;
-  margin-right: 2px;
-}
-
 .tag {
   display: inline-flex;
   align-items: center;
@@ -248,19 +220,6 @@
   font-size: 0.76rem;
   font-weight: 500;
   white-space: nowrap;
-}
-
-.tagRole {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.counterparties {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-  font-size: 0.86rem;
-  color: var(--muted);
 }
 
 /* ─── События: лента с вертикальной осью ───────────────────────────────── */
@@ -557,12 +516,20 @@
   }
 }
 
-/* Обзор: сводка и контрагенты рядом — оба блока короткие, в одну колонку справа пустовало. */
+/* Обзор: сводка и объекты слева, контрагенты справа — в одну колонку справа пустовало. */
 .overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   align-items: start;
+}
+
+/* Левая колонка обзора: сводка и под ней объекты. */
+.overviewCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
 }
 
 @media (min-width: 900px) {

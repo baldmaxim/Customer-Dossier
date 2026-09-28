@@ -86,6 +86,23 @@ const partner = {
   ],
 };
 
+const projectRow = (over: Record<string, unknown> = {}) => ({
+  id: 55,
+  name: 'Развязка на М-7',
+  kind: 'infrastructure',
+  stage: 'construction',
+  city: 'Казань',
+  plannedCompletion: null,
+  actualCompletion: null,
+  role: 'general_contractor',
+  confidence: 0.9,
+  isCurrent: true,
+  counterparties: [{ id: 9, name: 'АО «Мостотрест»', role: 'designer' }],
+  ...over,
+});
+
+const projects = [projectRow(), projectRow({ role: 'customer', counterparties: null })];
+
 const revision = (id: number, body: string) => ({
   revision: {
     id,
@@ -125,7 +142,7 @@ const routes = () => [
   { match: 'GET /api/revisions/21', respond: () => ({ status: 200, body: revision(21, 'Полный текст первого поста.') }) },
   { match: 'GET /api/revisions/22', respond: () => ({ status: 200, body: revision(22, 'Полный текст второго поста.') }) },
   { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: [partner] } }) },
-  { match: 'GET /api/companies/7/projects', respond: () => ({ status: 200, body: { items: [] } }) },
+  { match: 'GET /api/companies/7/projects', respond: () => ({ status: 200, body: { items: projects } }) },
   { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: { status: 'not_computed', refresh: { active: null, lastFailure: null, running: false, stale: true, staleReasons: ['сигналы ещё не рассчитывались'] }, signals: null } }) },
@@ -157,6 +174,18 @@ describe('Карточка компании', () => {
     expect(await screen.findByText('ООО «Дорсервис»')).toBeTruthy();
     expect(screen.getByText('Коротко')).toBeTruthy();
     expect(screen.queryByText('Подряд на развязку передан другой фирме')).toBeNull();
+  });
+
+  it('обзор показывает найденные объекты: объект один раз, роли ярлыками', async () => {
+    fakeApi(routes());
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
+    expect(await within(section).findAllByRole('link', { name: 'Развязка на М-7' })).toHaveLength(1);
+    expect(within(section).getByText('генподрядчик')).toBeTruthy();
+    expect(within(section).getByText('заказчик')).toBeTruthy();
+    expect(within(section).getByText('Строится')).toBeTruthy();
+    expect(within(section).getByText(/Также на объекте/)).toBeTruthy();
   });
 
   it('совместное участие подписано как «вместе на объекте», а не как договор', async () => {
