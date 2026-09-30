@@ -61,6 +61,10 @@
   overflow-wrap: anywhere;
 }
 
+.project {
+  color: var(--muted);
+}
+
 .more,
 .muted,
 .note {

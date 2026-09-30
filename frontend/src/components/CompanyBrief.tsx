@@ -59,6 +59,8 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, facts, project
   const refresh = query.data?.refresh;
   const lastEvent = events[0] ?? null;
   const cities = [...new Set(projects.map(p => p.city).filter((c): c is string => Boolean(c)))];
+  // Строка на участие, а не на объект: две роли на одном объекте — один объект.
+  const projectCount = new Set(projects.map(p => p.id)).size;
 
   const rolesText = signals
     ? Object.entries(signals.experience.byRole)
@@ -85,9 +87,9 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, facts, project
         <Line label="Роли в публикациях">{rolesText === '' ? 'роль не названа' : rolesText}</Line>
 
         <Line label="Объекты">
-          {projects.length === 0
+          {projectCount === 0
             ? 'в выборке нет'
-            : `${projects.length}${cities.length > 0 ? ` · ${cities.slice(0, 4).join(', ')}` : ''}`}
+            : `${projectCount}${cities.length > 0 ? ` · ${cities.slice(0, 4).join(', ')}` : ''}`}
         </Line>
 
         <Line label="Публикации">

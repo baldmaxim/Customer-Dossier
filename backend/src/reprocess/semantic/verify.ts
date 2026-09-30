@@ -3,11 +3,20 @@
 // Три исхода для связи или события:
 //  - отброшено (rejected): сторона не подтверждена, вида связи нет для этого типа, стороны нет в цитате;
 //  - на проверку (review): текст найден, но смысл противоречит цитате — отрицание при положительном
-//    утверждении, план или слух при «состоявшемся факте», договор без признака договора;
+//    утверждении, план или слух при «состоявшемся факте», договор без признака договора,
+//    генподряд/подряд/субподряд без слова «подряд…» о самой компании;
 //    такое утверждение остаётся кандидатом и не публикуется;
 //  - принято: значения, которых нет в собственной цитате, обнулены (дата, сумма, корпус, номер дела).
 
-import { verifyExtraction, isNameInQuote, isQuoteVerbatim, type IVerifiedCompany, type IVerifiedProject } from '../../pipeline/verify.js';
+import {
+  verifyExtraction,
+  isNameInQuote,
+  isQuoteVerbatim,
+  nameWordSpans,
+  quoteWords,
+  type IVerifiedCompany,
+  type IVerifiedProject,
+} from '../../pipeline/verify.js';
 import type { IExtraction } from '../../llm/schema.js';
 import { normalizeName } from '../../resolve/normalize.js';
 import { KINDS_BY_TYPE, type ISemanticEvent, type ISemanticExtraction, type ISemanticRelation } from '../../llm/semantic/schema.js';
@@ -20,6 +29,8 @@ import {
   hasOutcomeCue,
   hasParticipationCue,
   modalityConflict,
+  ROLE_CUE_LABELS,
+  roleCueSpans,
 } from './cues.js';
 import {
   groundAmount,
@@ -111,6 +122,63 @@ const cueReview = (relation: ISemanticRelation): string | null => {
   return null;
 };
 
+type WordSpan = [number, number];
+
+/** Слово роли относится к имени рядом: не дальше стольких слов между ними. */
+const ROLE_CUE_NEAR_WORDS = 3;
+
+const overlaps = (a: WordSpan, b: WordSpan): boolean => a[0] <= b[1] && b[0] <= a[1];
+
+/**
+ * Насколько имя привязано к слову роли: меньше — ближе. При равном числе слов ближе имя после слова
+ * («технический заказчик A, генподрядчик B» — генподрядчик B). Дальше ROLE_CUE_NEAR_WORDS слов или через
+ * название объекта («генподрядчиком ЖК «Символ» ПИКа») — не привязано.
+ */
+const attachment = (cue: WordSpan, spans: readonly WordSpan[], projectSpans: readonly WordSpan[]): number =>
+  spans.reduce((best, span) => {
+    if (overlaps(cue, span)) return Math.min(best, -1);
+    const after = span[0] > cue[1];
+    const gap = after ? span[0] - cue[1] - 1 : cue[0] - span[1] - 1;
+    const [lo, hi] = after ? [cue[1], span[0]] : [span[1], cue[0]];
+    if (gap > ROLE_CUE_NEAR_WORDS || projectSpans.some(p => p[0] > lo && p[1] < hi)) return best;
+    return Math.min(best, gap * 2 + (after ? 0 : 1));
+  }, Number.POSITIVE_INFINITY);
+
+/**
+ * Роль подряда — только своим словом (ROLE_CUE_LABELS), и это слово не должно относиться к другой компании цитаты.
+ * «X реализует ЖК вместе с генподрядчиком Y» не делает X генподрядчиком, «X продолжает строительство ЖК» — тоже.
+ * Слово есть, но рядом ни одного имени — роль не оспариваем. Ошибка — в сторону «на проверку», а не ложной роли.
+ */
+const roleCueReview = (
+  relation: ISemanticRelation,
+  companyNames: ReadonlySet<string>,
+  projectNames: ReadonlySet<string>,
+): string | null => {
+  const label = ROLE_CUE_LABELS[relation.kind];
+  if (relation.type !== 'participation' || !label) return null;
+  const words = quoteWords(relation.quote);
+  const cues = roleCueSpans(relation.kind, words);
+  if (cues.length === 0) return `в цитате нет слова ${label} — роль не названа`;
+  const own = nameWordSpans(relation.subject, words);
+  const projectSpans = [...projectNames].flatMap(name => nameWordSpans(name, words));
+  const others = [...companyNames]
+    .filter(name => !sameName(name, relation.subject))
+    .map(name => ({ name, spans: nameWordSpans(name, words).filter(s => !own.some(o => overlaps(s, o))) }))
+    .filter(o => o.spans.length > 0);
+  let claimedBy: string | null = null;
+  for (const cue of cues) {
+    const mine = attachment(cue, own, projectSpans);
+    const nearest = others
+      .map(o => ({ name: o.name, score: attachment(cue, o.spans, projectSpans) }))
+      .reduce<{ name: string; score: number } | null>((a, b) => (a === null || b.score < a.score ? b : a), null);
+    const theirs = nearest?.score ?? Number.POSITIVE_INFINITY;
+    if (mine < theirs) return null;
+    if (theirs === Number.POSITIVE_INFINITY) return null;
+    claimedBy ??= nearest!.name;
+  }
+  return `слово ${label} в цитате относится к «${claimedBy}», а не к «${relation.subject}»`;
+};
+
 const verifyRelation = (
   relation: ISemanticRelation,
   text: string,
@@ -170,7 +238,10 @@ const verifyRelation = (
     quote: relation.quote,
     quoteVerified,
     confidenceFinal: relation.confidence * (quoteVerified ? 1 : UNVERIFIED_QUOTE_FACTOR),
-    review: modalityConflict(relation.polarity, relation.modality, relation.quote) ?? cueReview(relation),
+    review:
+      modalityConflict(relation.polarity, relation.modality, relation.quote) ??
+      cueReview(relation) ??
+      roleCueReview(relation, companyNames, projectNames),
   };
 };
 

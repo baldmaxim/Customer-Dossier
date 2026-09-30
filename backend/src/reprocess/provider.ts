@@ -25,7 +25,7 @@ export const EXECUTION_IDENTITY_VERSION = 'execution-identity@1';
  * Версия сборки кандидатов и проверки ответа (candidates.ts, pipeline/verify.ts, reprocess/semantic/{verify,assemble}.ts).
  * Меняется вручную при смысловой правке этих модулей — иначе запуск прежней проверкой выглядел бы как нынешний.
  */
-export const CANDIDATE_BUILD_VERSION = 'candidates@1+semantic-verify@1';
+export const CANDIDATE_BUILD_VERSION = 'candidates@1+semantic-verify@2';
 
 /** Контекст одного вызова: best-effort отмена и проверка перед каждой попыткой (включая повторы внутри клиента). */
 export interface IExtractContext {

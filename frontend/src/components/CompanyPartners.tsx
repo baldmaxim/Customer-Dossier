@@ -73,10 +73,11 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                       {PARTNER_KIND_LABELS[link.kind] ?? link.kind}
                     </Badge>
                     <span className={styles.linkText}>{linkText(link)}</span>
+                    {/* Объект подписан словом: ссылкой того же вида, что имя контрагента, он читался как ещё одна компания. */}
                     {link.projectId !== null && link.projectName && (
-                      <Link className={styles.project} to={`/projects/${link.projectId}`}>
-                        {link.projectName}
-                      </Link>
+                      <span className={styles.project}>
+                        объект <Link to={`/projects/${link.projectId}`}>«{link.projectName}»</Link>
+                      </span>
                     )}
                   </li>
                 ))}

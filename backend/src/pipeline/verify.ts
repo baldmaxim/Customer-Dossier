@@ -96,6 +96,26 @@ export const isNameInQuote = (name: string, quote: string): boolean => {
   return false;
 };
 
+/** Слова цитаты в той же нормализации, что у isNameInQuote. */
+export const quoteWords = (quote: string): string[] =>
+  flatten(quote)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 0);
+
+/** Где в цитате стоит имя — диапазоны слов [первое, последнее]; то же окно и тот же порог, что у isNameInQuote. */
+export const nameWordSpans = (name: string, words: readonly string[]): Array<[number, number]> => {
+  const normalizedName = normalizeName(name).norm;
+  if (normalizedName.length === 0) return [];
+  const nameWordCount = normalizedName.split(' ').length;
+  const spans: Array<[number, number]> = [];
+  for (let i = 0; i <= words.length - nameWordCount; i += 1) {
+    const window = words.slice(i, i + nameWordCount).join(' ');
+    if (trigramSimilarity(normalizedName, window) >= NAME_IN_QUOTE_THRESHOLD) spans.push([i, i + nameWordCount - 1]);
+  }
+  return spans;
+};
+
 /**
  * ИНН/ОГРН принимаем только при двух условиях сразу: контрольная сумма сходится
  * И эти цифры физически есть в тексте.

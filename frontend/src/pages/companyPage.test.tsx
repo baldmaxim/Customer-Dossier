@@ -186,6 +186,19 @@ describe('Карточка компании', () => {
     expect(within(section).getByText('заказчик')).toBeTruthy();
     expect(within(section).getByText('Строится')).toBeTruthy();
     expect(within(section).getByText(/Также на объекте/)).toBeTruthy();
+
+    // Две роли на одном объекте — один объект и в сводке.
+    const brief = screen.getByText('Коротко').closest('section')!;
+    expect(within(brief).getByText('1 · Казань')).toBeTruthy();
+  });
+
+  it('объект у контрагента подписан словом, а не выглядит ещё одной компанией', async () => {
+    fakeApi(routes());
+    renderCard();
+
+    const row = (await screen.findByText('ООО «Дорсервис»')).closest('li')!;
+    const objectLink = within(row).getByRole('link', { name: '«Развязка на М-7»' });
+    expect(objectLink.parentElement!.textContent).toBe('объект «Развязка на М-7»');
   });
 
   it('совместное участие подписано как «вместе на объекте», а не как договор', async () => {

@@ -48,6 +48,41 @@ export const hasCorporateCue = (kind: string, text: string): boolean => {
   const re = CORPORATE[kind];
   return re ? test(re, text) : false;
 };
+/**
+ * Роли подряда, которые называются только словом «подряд…». «Строит», «реализует», «ведёт» бывают и у девелопера:
+ * по ним девелопер становился генподрядчиком собственного ЖК, а сам ЖК — генподрядчиком.
+ */
+export const ROLE_CUE_LABELS: Readonly<Record<string, string>> = {
+  general_contractor: '«генподряд…»',
+  // Подрядчика описывают и работами: «приступила к работам по ВК корпуса 2».
+  contractor: '«подряд…» или «работы…»',
+  subcontractor: '«субподряд…»',
+};
+
+/**
+ * Где в словах цитаты (quoteWords) стоит слово роли — диапазоны [первое, последнее]. «Генеральным подрядчиком» —
+ * два слова; уточнение «подрядчик по благоустройству» входит в слово роли, иначе ближайшим оказывалось имя перед ним.
+ */
+export const roleCueSpans = (kind: string, words: readonly string[]): Array<[number, number]> => {
+  const spans: Array<[number, number]> = [];
+  const push = (start: number, end: number): void => {
+    spans.push(words[end + 1] === 'по' && words[end + 2] !== undefined ? [start, end + 2] : [start, end]);
+  };
+  words.forEach((w, i) => {
+    const next = words[i + 1];
+    if (kind === 'general_contractor') {
+      if (/^генподряд/u.test(w)) push(i, i);
+      else if (/^(генеральн\p{L}*|ген)$/u.test(w) && next !== undefined && /^подряд/u.test(next)) push(i, i + 1);
+    } else if (kind === 'subcontractor') {
+      if (/^субподряд/u.test(w)) push(i, i);
+    } else if (kind === 'contractor') {
+      if ((/подряд/u.test(w) || /^(работ|монтаж|выполня)/u.test(w)) && !/^(генеральн\p{L}*|ген)$/u.test(words[i - 1] ?? '')) push(i, i);
+      else if (/^(генеральн\p{L}*|ген)$/u.test(w) && next !== undefined && /^подряд/u.test(next)) push(i, i + 1);
+    }
+  });
+  return spans;
+};
+
 export const hasOutcomeCue = (text: string): boolean => test(OUTCOME, text);
 export const hasAwardCue = (text: string): boolean => test(AWARD, text);
 export const hasAppealCue = (text: string): boolean => test(CASE_STAGE_APPEAL, text);

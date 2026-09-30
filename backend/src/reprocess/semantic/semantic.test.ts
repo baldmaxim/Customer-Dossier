@@ -532,3 +532,50 @@ describe('ответ extract@2 по-прежнему собирается', () =
     expect(find(b, { predicate: 'participates_in_project' })[0]!.content).toMatchObject({ modality: 'unknown', role: 'general_contractor' });
   });
 });
+
+describe('роль подряда — только словом «подряд…» о самой компании', () => {
+  const roleReview = (q: string, companies: string[], projects: string[], subject: string, kind: ISemanticRelation['kind']): string[] =>
+    reviewReasons(
+      build(
+        q,
+        answer({
+          companies: companies.map(c => company(c, q)),
+          projects: projects.map(p => project(p, q)),
+          relations: [relation({ type: 'participation', kind, subject, project: projects[0]!, quote: q })],
+        }),
+      ),
+    );
+
+  it('девелопер не становится генподрядчиком от чужого слова «генподрядчик» в той же фразе', () => {
+    const q = 'OCTOBER GROUP реализует KOBZON CITY совместно с генеральным подрядчиком «ПУТЕВИ» с опережением плановых сроков.';
+    const names = ['OCTOBER GROUP', 'ПУТЕВИ'];
+    expect(roleReview(q, names, ['KOBZON CITY'], 'OCTOBER GROUP', 'general_contractor')).toEqual([
+      expect.stringContaining('относится к «ПУТЕВИ»'),
+    ]);
+    expect(roleReview(q, names, ['KOBZON CITY'], 'ПУТЕВИ', 'general_contractor')).toEqual([]);
+    // Роль заказчика словом «подряд» не проверяется.
+    expect(roleReview(q, names, ['KOBZON CITY'], 'OCTOBER GROUP', 'customer')).toEqual([]);
+  });
+
+  it('«продолжает строительство» — не генподряд', () => {
+    const q = 'OCTOBER GROUP продолжает строительство клубного дома KING & SONS с опережением графика.';
+    expect(roleReview(q, ['OCTOBER GROUP'], ['KING & SONS'], 'OCTOBER GROUP', 'general_contractor')).toEqual([
+      expect.stringContaining('нет слова «генподряд…»'),
+    ]);
+  });
+
+  it('в перечислении слово роли относится к имени после него, уточнение «по …» — часть роли', () => {
+    const q = 'KOBZON CITY: девелопер OCTOBER GROUP, технический заказчик SEVERIN, генеральный подрядчик СУ-10, подрядчик по благоустройству СК «Капитал».';
+    const names = ['OCTOBER GROUP', 'SEVERIN', 'СУ-10', 'СК Капитал'];
+    expect(roleReview(q, names, ['KOBZON CITY'], 'СУ-10', 'general_contractor')).toEqual([]);
+    expect(roleReview(q, names, ['KOBZON CITY'], 'SEVERIN', 'general_contractor')).toEqual([expect.stringContaining('относится к «СУ-10»')]);
+    expect(roleReview(q, names, ['KOBZON CITY'], 'СК Капитал', 'contractor')).toEqual([]);
+  });
+
+  it('имя за названием объекта к роли не относится, одиночное имя рядом со словом — относится', () => {
+    const q = 'Компания «Монолит» стала генподрядчиком ЖК «Символ» ПИКа.';
+    expect(roleReview(q, ['Монолит', 'ПИК'], ['Символ'], 'Монолит', 'general_contractor')).toEqual([]);
+    const q2 = 'Генподрядчиком выступает компания «Монолит», она же строит ЖК «Символ».';
+    expect(roleReview(q2, ['Монолит'], ['Символ'], 'Монолит', 'general_contractor')).toEqual([]);
+  });
+});
