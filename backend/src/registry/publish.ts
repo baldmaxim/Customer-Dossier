@@ -22,6 +22,7 @@ import { companyTitle, developerLine, groupLine, requisitesLine } from '../inges
 import { resolveCompany } from '../resolve/company.js';
 import { addIdentifier, classifyTaxId } from '../resolve/identifiers.js';
 import { resolveProject } from '../resolve/project.js';
+import { linkedRegistryProject } from './projectLink.js';
 
 export const REGISTRY_PUBLISH_VERSION = 'registry-publish@1';
 
@@ -43,6 +44,7 @@ export interface IRegistryPublishInput {
   /** Текст той самой редакции: цитаты проверяются по нему, и база сверит их ещё раз. */
   body: string;
   record: IRegistryRecord;
+  requestedProjectId?: number;
 }
 
 const participation = (companyId: number, projectId: number): IAssertionContent => ({
@@ -127,7 +129,12 @@ export const publishRegistryRecord = async (client: PoolClient, input: IRegistry
 
   const developer = record.identity.developer;
   if (!developer) {
-    out.skipped.push({ what: 'застройщик', reason: 'в записи реестра застройщик не назван' });
+    out.skipped.push({
+      what: 'застройщик',
+      reason: record.payload.captureMethod === 'browser_page'
+        ? 'на странице объекта нет реквизитов застройщика; имя сохранено в тексте снимка'
+        : 'в записи реестра застройщик не назван',
+    });
   } else {
     const title = companyTitle(developer.name, developer.legalForm);
     const resolved = await resolveCompany(client, {
@@ -150,24 +157,32 @@ export const publishRegistryRecord = async (client: PoolClient, input: IRegistry
     }
   }
 
-  if (record.type === 'object' && out.companyId !== null && developer) {
-    const project = await resolveProject(client, {
+  if (record.type === 'object') {
+    const source = (await client.query<{ source_id: number }>(
+      'SELECT source_id FROM registry_records WHERE revision_id = $1', [revisionId],
+    )).rows[0];
+    const linkedId = source ? await linkedRegistryProject(
+      client, source.source_id, record.identity.externalRef, input.requestedProjectId,
+    ) : null;
+    const project = linkedId === null ? await resolveProject(client, {
       surface: record.identity.name,
       kind: record.projectKind,
       city: record.identity.city,
       address: record.identity.address,
-      relatedCompanyIds: [out.companyId],
+      relatedCompanyIds: out.companyId === null ? [] : [out.companyId],
       revisionId,
-    });
+    }) : { projectId: linkedId };
     if (!project) {
       out.skipped.push({ what: 'объект', reason: `название «${record.identity.name}» не годится для идентификации объекта` });
     } else {
       out.projectId = project.projectId;
-      await write(
-        participation(out.companyId, project.projectId),
-        developerLine(record.identity.name, companyTitle(developer.name, developer.legalForm), developer.inn, developer.ogrn),
-        'роль застройщика на объекте',
-      );
+      if (out.companyId !== null && developer) {
+        await write(
+          participation(out.companyId, project.projectId),
+          developerLine(record.identity.name, companyTitle(developer.name, developer.legalForm), developer.inn, developer.ogrn),
+          'роль застройщика на объекте',
+        );
+      }
     }
   }
 

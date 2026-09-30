@@ -76,3 +76,13 @@
   margin: 0;
   font-size: var(--fs-md);
 }
+
+.evidence {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}

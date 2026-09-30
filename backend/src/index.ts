@@ -12,6 +12,7 @@ import { startMetricsScheduler } from './metrics/refresh.js';
 import { lmStudioProvider } from './reprocess/provider.js';
 import { runReprocessPass } from './reprocess/worker.js';
 import { runHeadlinePass } from './headline/service.js';
+import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -118,6 +119,7 @@ const main = async (): Promise<void> => {
     env,
     {
       ingest: startIngestScheduler,
+      domrf: startDomRfBrowserWorker,
       pipeline: startPipelineWorker,
       metrics: startMetricsScheduler,
       bot: signal => void runBotLoop(signal),

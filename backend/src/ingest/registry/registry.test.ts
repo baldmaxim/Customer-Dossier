@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { sourceProfileMetaSchema } from '../profileMeta.js';
 import { availablePaths, formatValue, mapRecord, readPath, toIsoDate } from './map.js';
 import { objectIdFromUrl } from './importFile.js';
+import { isDomRfBrowserCapture, mapDomRfBrowserCapture } from './browserCapture.js';
 import { RegistryProfileError, buildUrl, isRegistryConfig, parseRegistryProfile, policyForRegistryProfile } from './profile.js';
 import { REGISTRY_RENDER_VERSION, renderRecord } from './render.js';
 
@@ -152,6 +153,40 @@ describe('импорт из файла (T20C-01)', () => {
   it('без числового сегмента идентификатор не выдумывается', () => {
     expect(objectIdFromUrl('https://наш.дом.рф/сервисы/каталог-новостроек/')).toBeNull();
     expect(objectIdFromUrl('не адрес')).toBeNull();
+  });
+});
+
+describe('снимок видимой страницы ДОМ.РФ', () => {
+  const capture = () => ({
+    format: 'domrf-browser@1',
+    url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62087',
+    title: 'Большая Татарская 35',
+    address: 'Москва город, Район Замоскворечье',
+    developer: { name: 'СЗ ПРАКТИКА', group: 'ДОНСТРОЙ' },
+    contractor: 'ООО СУ-10 (ИНН: 7736255508)',
+    characteristics: [
+      { label: 'Количество квартир', value: '472' },
+      { label: 'Количество квартир', value: '472' },
+      { label: 'Сдача дома', value: 'I кв. 2028' },
+    ],
+    apartmentGroups: [],
+    sales: [],
+  });
+
+  it('берёт основные строки карточки и убирает дубликаты', () => {
+    const body = capture();
+    expect(isDomRfBrowserCapture(body)).toBe(true);
+    const record = mapDomRfBrowserCapture(body);
+    expect(record.identity.externalRef).toBe('62087');
+    expect(record.fields.filter(f => f.label === 'Количество квартир')).toHaveLength(1);
+    expect(renderRecord(record)).toContain('Группа компаний: ДОНСТРОЙ');
+    expect(renderRecord(record)).toContain('Генподрядчики: ООО СУ-10 (ИНН: 7736255508)');
+    expect(record.identity.developer).toBeNull();
+  });
+
+  it('не принимает чужой домен и URL без ID объекта', () => {
+    expect(() => mapDomRfBrowserCapture({ ...capture(), url: 'https://example.test/сервисы/каталог-новостроек/объект/62087' })).toThrow(/не принадлежит/);
+    expect(() => mapDomRfBrowserCapture({ ...capture(), url: 'https://наш.дом.рф/новостройки' })).toThrow(/не является карточкой/);
   });
 });
 

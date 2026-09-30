@@ -40,6 +40,16 @@ describe('панель реестра', () => {
     expect(screen.queryByText(/проверено/i)).toBeNull();
   });
 
+  it('показывает генподрядчика перед остальными характеристиками дома', () => {
+    const { container } = renderWithProviders(<RegistryPanel registry={view({ fields: [
+      { label: 'Количество этажей', value: '26' },
+      { label: 'Генподрядчики', value: 'ООО СУ-10 (ИНН: 7736255508)' },
+    ] })} />);
+    const text = container.textContent ?? '';
+    expect(text).toContain('ООО СУ-10 (ИНН: 7736255508)');
+    expect(text.indexOf('Генподрядчики')).toBeLessThan(text.indexOf('Количество этажей'));
+  });
+
   it('дата сведений стоит рядом с данными, а её отсутствие названо словами', () => {
     renderWithProviders(<RegistryPanel registry={view({ asOf: null })} />);
     expect(screen.getByText(/дата сведений в реестре не указана/)).toBeTruthy();

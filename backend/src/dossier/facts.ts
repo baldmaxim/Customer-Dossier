@@ -10,6 +10,11 @@ export interface IFactEvidence {
   revisionId: number;
   sourceItemId: number;
   sourceTitle: string;
+  sourceKey?: string;
+  sourceKind?: string;
+  url?: string | null;
+  observedAt?: string;
+  title?: string | null;
   publishedAt: string | null;
   dedupHash: string;
   /** Этап 17: у публикации есть более новая редакция, чем та, на которой основано доказательство. */
@@ -159,7 +164,9 @@ const withEvidence = async (exec: DbExecutor, rows: Array<Omit<IFact, 'evidence'
   const evidence = (
     await exec.query<IFactEvidence & { assertionId: number }>(
       `SELECT e.assertion_id AS "assertionId", e.id, e.stance::text AS stance, e.quote, e.revision_id AS "revisionId",
-              r.source_item_id AS "sourceItemId", s.title AS "sourceTitle",
+              r.source_item_id AS "sourceItemId", s.title AS "sourceTitle", s.key AS "sourceKey", s.kind AS "sourceKind",
+              coalesce(si.canonical_url, si.original_url) AS url, r.title,
+              to_char(si.first_observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "observedAt",
               to_char(r.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "publishedAt",
               encode(r.dedup_hash, 'hex') AS "dedupHash",
               coalesce(si.latest_revision_id IS DISTINCT FROM r.id AND si.latest_revision_id IS NOT NULL, false) AS "pendingRevision"

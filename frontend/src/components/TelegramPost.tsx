@@ -11,6 +11,7 @@ import { api } from '../api/client';
 import type { IRevision } from '../api/types';
 import { formatPostDate, formatTime, sourceLabel } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
+import { RegistryPublicationBody } from './RegistryPublicationBody';
 import styles from './TelegramPost.module.css';
 
 export interface ITelegramPostProps {
@@ -131,7 +132,7 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
             {revision.body.trim() === '' ? (
               <p className={styles.note}>Текста в публикации нет.</p>
             ) : (
-              <p className={styles.text}>{revision.body}</p>
+              <div className={styles.text}><RegistryPublicationBody body={revision.body} representation={revision.representation} /></div>
             )}
             <span className={styles.stamp}>{formatTime(when)}</span>
           </div>

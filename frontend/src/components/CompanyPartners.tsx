@@ -1,11 +1,8 @@
 // «С кем работает»: контрагенты компании с основанием связи.
 //
-// Основания не сводятся в одно «связана с» (ADR-008): договор, корпоративная связь
-// и совместное участие на объекте — разные вещи. Совместное участие показывается
-// последним и подписано явно: две фирмы на одном объекте могут не иметь отношений
-// между собой, и выдавать это за договор нельзя.
+// Совместное участие показывается у объектов: оно не доказывает отношения фирм.
 
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -15,6 +12,7 @@ import { ASSERTION_ROLE_LABELS, PARTNER_KIND_HINTS, PARTNER_KIND_LABELS } from '
 import { describeLoadError } from '../lib/loadError';
 import { Badge } from './ui/Badge';
 import { EmptyState, Section } from './ui/Section';
+import { AssertionDetail } from './AssertionDetail';
 import styles from './CompanyPartners.module.css';
 
 const roleText = (role: string | null): string | null => (role ? (ASSERTION_ROLE_LABELS[role] ?? role) : null);
@@ -22,16 +20,13 @@ const roleText = (role: string | null): string | null => (role ? (ASSERTION_ROLE
 const linkText = (link: IPartnerLink): string => {
   const role = roleText(link.role);
   const own = roleText(link.ownRole);
-  if (link.kind === 'co_participation') {
-    const pair = [own ? `мы — ${own}` : null, role ? `они — ${role}` : null].filter(Boolean).join(', ');
-    return pair === '' ? 'роли не названы' : pair;
-  }
   return role ?? own ?? 'вид связи не назван';
 };
 
-const KIND_ORDER: Record<string, number> = { contract: 0, corporate: 1, co_participation: 2 };
+const KIND_ORDER: Record<string, number> = { contract: 0, corporate: 1 };
 
 export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
+  const [openAssertion, setOpenAssertion] = useState<number | null>(null);
   const partners = useQuery({
     queryKey: ['company', companyId, 'partners'],
     queryFn: () => api.get<{ items: IPartnerRow[] }>(`/api/companies/${companyId}/partners?limit=12`),
@@ -40,13 +35,12 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
   const items = partners.data?.items ?? [];
 
   return (
-    <Section title="С кем работает" note="на каком основании — подписано у каждой строки">
+    <Section title="С кем связан" note="договоры и корпоративные связи из публикаций">
       {partners.isError && <p role="alert">{describeLoadError(partners.error)}</p>}
       {partners.isLoading && <p className={styles.muted}>Загрузка…</p>}
       {partners.isSuccess && items.length === 0 && (
         <EmptyState>
-          Контрагентов в выборке нет: ни договоров, ни корпоративных связей, ни другой компании на тех же
-          объектах. Это не значит, что их нет в действительности.
+          Прямых связей с организациями в выборке нет. Участников тех же объектов смотрите в списке объектов.
         </EmptyState>
       )}
 
@@ -66,10 +60,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
               <ul className={styles.links}>
                 {links.slice(0, 4).map((link, i) => (
                   <li key={`${link.kind}-${link.assertionId ?? i}-${link.projectId ?? 0}`} className={styles.link}>
-                    <Badge
-                      tone={link.kind === 'co_participation' ? 'neutral' : 'accent'}
-                      hint={PARTNER_KIND_HINTS[link.kind]}
-                    >
+                    <Badge tone="accent" hint={PARTNER_KIND_HINTS[link.kind]}>
                       {PARTNER_KIND_LABELS[link.kind] ?? link.kind}
                     </Badge>
                     <span className={styles.linkText}>{linkText(link)}</span>
@@ -78,6 +69,12 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                         {link.projectName}
                       </Link>
                     )}
+                    {link.assertionId !== null && (
+                      <button type="button" className={styles.evidence} onClick={() => setOpenAssertion(openAssertion === link.assertionId ? null : link.assertionId)}>
+                        {openAssertion === link.assertionId ? 'Скрыть основание' : 'Проверить основание'}
+                      </button>
+                    )}
+                    {link.assertionId !== null && openAssertion === link.assertionId && <AssertionDetail assertionId={link.assertionId} />}
                   </li>
                 ))}
                 {links.length > 4 && <li className={styles.more}>и ещё связей: {links.length - 4}</li>}
@@ -87,12 +84,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
         })}
       </ul>
 
-      {items.length > 0 && (
-        <p className={styles.note}>
-          «Вместе на объекте» — не договор между этими компаниями: так написано в источниках об объекте,
-          а не об их отношениях.
-        </p>
-      )}
+      {items.length > 0 && <p className={styles.note}>Связи приведены по сообщениям источников. Основание каждой связи можно открыть и проверить.</p>}
     </Section>
   );
 };

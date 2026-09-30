@@ -1,18 +1,16 @@
 // «С кем работает»: контрагенты компании одним компактным списком.
 //
-// Три разных основания не смешиваются в одно «связана с» (ADR-008):
+// В списке только связи между организациями с прямым утверждением:
 //   contract         — прямой договор: обе стороны названы в одном предложении;
 //   corporate        — корпоративная связь (доля, контроль, группа, бренд);
-//   co_participation — обе компании работают на одном объекте. Это НЕ договор
-//                      и не доказательство отношений между ними: заказчик и
-//                      субподрядчик могут не знать друг о друге.
+// Совместное участие видно в списке объектов, но не делает фирмы контрагентами.
 //
 // Схема связей (graph/*) отвечает на тот же вопрос обходом в глубину; здесь —
 // только соседи первого шага, чтобы карточка отвечала «кто рядом» без схемы.
 
 import { query } from '../db/pool.js';
 
-export type PartnerKind = 'contract' | 'corporate' | 'co_participation';
+export type PartnerKind = 'contract' | 'corporate';
 
 export interface IPartnerLink {
   kind: PartnerKind;
@@ -22,7 +20,7 @@ export interface IPartnerLink {
   ownRole: string | null;
   projectId: number | null;
   projectName: string | null;
-  /** Утверждение-основание. У совместного участия основания нет — это производная. */
+  /** Утверждение-основание прямой связи. */
   assertionId: number | null;
   modality: string | null;
   status: string | null;
@@ -59,36 +57,12 @@ const DIRECT_SQL = `
     AND pa.subject_company_id IS NOT NULL AND pa.object_company_id IS NOT NULL
     AND pa.subject_company_id <> pa.object_company_id`;
 
-/** Совместное участие на объекте: производная проекция, своего утверждения у неё нет. */
-const CO_SQL = `
-  SELECT cp.company_b_id AS "companyId", cp.role_b AS role, cp.role_a AS "ownRole",
-         cp.project_id AS "projectId", p.name AS "projectName"
-  FROM co_participations_v cp
-  JOIN projects p ON p.id = cp.project_id
-  WHERE cp.company_a_id = $1::bigint
-  UNION ALL
-  SELECT cp.company_a_id, cp.role_a, cp.role_b, cp.project_id, p.name
-  FROM co_participations_v cp
-  JOIN projects p ON p.id = cp.project_id
-  WHERE cp.company_b_id = $1::bigint`;
-
 interface IDirectRow extends IPartnerLink {
   companyId: number | null;
 }
 
-interface ICoRow {
-  companyId: number;
-  role: string | null;
-  ownRole: string | null;
-  projectId: number;
-  projectName: string;
-}
-
 export const loadCompanyPartners = async (companyId: number, limit: number): Promise<IPartnerRow[]> => {
-  const [direct, co] = await Promise.all([
-    query<IDirectRow>(DIRECT_SQL, [companyId]),
-    query<ICoRow>(CO_SQL, [companyId]),
-  ]);
+  const direct = await query<IDirectRow>(DIRECT_SQL, [companyId]);
 
   const byCompany = new Map<number, IPartnerLink[]>();
   const push = (id: number | null, link: IPartnerLink): void => {
@@ -100,18 +74,6 @@ export const loadCompanyPartners = async (companyId: number, limit: number): Pro
     const { companyId: other, ...link } = row;
     push(other, link);
   }
-  for (const row of co) {
-    push(row.companyId, {
-      kind: 'co_participation',
-      role: row.role,
-      ownRole: row.ownRole,
-      projectId: row.projectId,
-      projectName: row.projectName,
-      assertionId: null,
-      modality: null,
-      status: null,
-    });
-  }
   if (byCompany.size === 0) return [];
 
   const names = await query<{ id: number; name: string; city: string | null }>(
@@ -119,9 +81,7 @@ export const loadCompanyPartners = async (companyId: number, limit: number): Pro
     [[...byCompany.keys()]],
   );
 
-  // Договор весомее совместного участия, поэтому сортируем по числу прямых оснований,
-  // а не по общему числу строк: десять объектов рядом не делают контрагента ближе.
-  const weight = (links: IPartnerLink[]): number => links.filter(l => l.kind !== 'co_participation').length;
+  const weight = (links: IPartnerLink[]): number => links.filter(l => l.kind === 'contract').length;
   return names
     .map(c => ({ companyId: c.id, name: c.name, city: c.city, links: byCompany.get(c.id) ?? [] }))
     .sort((a, b) => weight(b.links) - weight(a.links) || b.links.length - a.links.length || a.name.localeCompare(b.name))

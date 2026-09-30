@@ -45,6 +45,8 @@ interface IRow {
 
 export const ATTRIBUTION =
   'Сведения реестра на указанную дату. Это проектная декларация застройщика, опубликованная в реестре, а не проверенный факт: сроки и характеристики указывает сам застройщик.';
+export const BROWSER_ATTRIBUTION =
+  'Текст видимой карточки наш.дом.рф на дату получения. Это опубликованные на сайте сведения об объекте, а не независимо проверенные факты.';
 
 const build = (rows: readonly IRow[]): IRegistryView => {
   const latest = rows[0]!;
@@ -66,7 +68,7 @@ const build = (rows: readonly IRow[]): IRegistryView => {
     address: latest.payload.identity.address,
     changes,
     coverage: { loaded: rows.length, truncated: rows.length === REGISTRY_HISTORY_LIMIT },
-    attribution: ATTRIBUTION,
+    attribution: latest.payload.captureMethod === 'browser_page' ? BROWSER_ATTRIBUTION : ATTRIBUTION,
   };
 };
 

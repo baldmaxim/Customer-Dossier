@@ -71,6 +71,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'dossier_snapshots', class: 'domain', why: 'снимки: payload, hash, метаданные' },
   { table: 'dossier_snapshot_redactions', class: 'history', why: 'журнал вымарываний с hash до/после' },
   { table: 'registry_records', class: 'domain', why: 'снимки записей реестра: типизированные поля редакции (этап 20A)' },
+  { table: 'domrf_targets', class: 'domain', why: 'добавленные оператором ссылки ДОМ.РФ и состояние браузерного разбора' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];
@@ -88,6 +89,7 @@ export const NOT_FINGERPRINTED: ReadonlyArray<{ object: string; why: string }> =
 /** Параметры окружения, которые сравниваются явно. Секреты сюда не входят. */
 export const CONFIG_KEYS = [
   'INGEST_ENABLED',
+  'DOMRF_BROWSER_ENABLED',
   'PIPELINE_ENABLED',
   'METRICS_AUTO_REFRESH',
   'BOT_ENABLED',
@@ -120,4 +122,4 @@ export const CONFIG_DENYLIST = [
 ] as const;
 
 /** Фоновые задания: после восстановления обязаны быть выключены до ручного решения оператора. */
-export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED'] as const;
+export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'DOMRF_BROWSER_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED'] as const;

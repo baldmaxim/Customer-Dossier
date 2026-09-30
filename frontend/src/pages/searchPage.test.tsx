@@ -48,17 +48,30 @@ const feedItem = {
 const routes = () => [
   { match: 'GET /api/contractors/summary', respond: () => ({ status: 200, body: { byIdentity: [], refresh, totals: { companies: 19, projects: 3, documents: 21, pendingMerges: 0, lonelyCompanies: 4 } } }) },
   { match: 'GET /api/contractors', respond: () => ({ status: 200, body: { status: 'ok', refresh, items: [row] } }) },
+  { match: 'GET /api/companies', respond: () => ({ status: 200, body: { items: [{ id: 42, name: 'ООО «Пример»', city: 'Москва', projects: 2 }] } }) },
+  { match: 'GET /api/projects/search', respond: () => ({ status: 200, body: { items: [{ id: 2875, name: 'СОБЫТИЕ 68275', city: 'Москва', kind: 'residential', level: 'complex', levelLabel: null, parentId: null, parentName: null, children: 0 }] } }) },
   { match: 'GET /api/feed', respond: () => ({ status: 200, body: { items: [feedItem], nextCursor: null } }) },
   { match: 'GET /api/revisions/9', respond: () => ({ status: 200, body: { revision: { id: 9, sourceItemId: 5, revisionNo: 1, title: null, body: 'Полный текст поста о корпусе 3.', representation: 'x', bodyHash: 'x', completeness: 'full', completenessReason: null, attachments: [], publishedAt: '2026-09-20T09:00:00Z', sourceModifiedAt: null, firstObservedAt: '2026-09-20T09:05:00Z', chronology: 'observed_order', sameContentAsRevisionId: null, legacyDocumentId: 19, origin: 'ingest' } } }) },
 ];
 
 describe('Главная', () => {
+  it('одна строка находит компанию и объект и ведёт в соответствующие карточки', async () => {
+    const api = fakeApi(routes());
+    renderWithProviders(<SearchPage />, '/?q=событие');
+
+    expect((await screen.findByRole('link', { name: 'СОБЫТИЕ 68275' })).getAttribute('href')).toBe('/projects/2875');
+    expect(screen.getByRole('link', { name: 'ООО «Пример»' }).getAttribute('href')).toBe('/company/42');
+    expect(screen.getByRole('searchbox', { name: 'Поиск компании или объекта' })).toBeTruthy();
+    expect(api.calls.some(c => c.url.startsWith('/api/projects/search?q='))).toBe(true);
+    expect(api.calls.some(c => c.url.startsWith('/api/companies?q='))).toBe(true);
+  });
   it('в строке каталога ссылка накрывает строку, «схема» остаётся отдельной целью', async () => {
     fakeApi(routes());
     const { container } = renderWithProviders(<SearchPage />);
 
     const link = await screen.findByRole('link', { name: 'ООО «Пример»' });
     expect(link.getAttribute('href')).toBe('/company/42');
+    expect(screen.getByRole('cell', { name: '№42' })).toBeTruthy();
     expect(link.className).toContain('row-link-target');
     expect(link.closest('tr')?.className).toContain('row-link');
     expect(screen.getByRole('link', { name: 'схема' }).className).toContain('row-link-above');
@@ -84,6 +97,25 @@ describe('Главная', () => {
     expect(screen.getAllByText('Недвижимость изнутри').length).toBeGreaterThan(0);
     expect(await screen.findByText('Полный текст поста о корпусе 3.')).toBeTruthy();
     expect(screen.getByRole('searchbox', { name: 'Поиск по публикациям' })).toBeTruthy();
+  });
+
+  it('в публикации ДОМ.РФ характеристики и генподрядчик показаны отдельно от исходного текста', async () => {
+    fakeApi(routes().map(route => route.match === 'GET /api/revisions/9'
+      ? { ...route, respond: () => ({ status: 200, body: { revision: {
+        id: 9, sourceItemId: 5, revisionNo: 1, title: 'СОБЫТИЕ',
+        body: 'Объект: «СОБЫТИЕ» (ID 68275 в реестре)\nСдача дома: I кв. 2029\nКоличество квартир: 507\nГенподрядчики: ООО СУ-10 (ИНН: 7736255508)',
+        representation: 'registry_object_browser@1', bodyHash: 'x', completeness: 'excerpt', completenessReason: null,
+        attachments: [], publishedAt: null, sourceModifiedAt: null, firstObservedAt: '2026-09-20T09:05:00Z',
+        chronology: 'observed_order', sameContentAsRevisionId: null, legacyDocumentId: 19, origin: 'ingest',
+      } } }) }
+      : route));
+    renderWithProviders(<SearchPage />, '/?view=publications');
+
+    const heading = await screen.findByRole('heading', { name: 'Характеристики объекта' });
+    const panel = heading.parentElement!;
+    expect(panel.textContent).toContain('ГенподрядчикиООО СУ-10 (ИНН: 7736255508)');
+    expect(panel.textContent).toContain('Сдача домаI кв. 2029');
+    expect(screen.getByText('Исходный текст снимка').closest('details')?.open).toBe(false);
   });
 
   it('в режиме публикаций поиск уходит в ленту, а не в поиск компаний', async () => {

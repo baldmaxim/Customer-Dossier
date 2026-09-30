@@ -87,8 +87,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+.companyNumber {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--muted);
+}
+
+.results {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.resultsTitle {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg);
+}
+
+.resultsTitle span {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
 }
 
 /* На телефоне поле во всю строку, с 640px — короткое: оно для одного-двух слов. */

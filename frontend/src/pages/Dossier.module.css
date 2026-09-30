@@ -89,6 +89,8 @@
   overflow-wrap: anywhere;
 }
 
+.statementSources { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; margin-top: 4px; color: var(--muted); font-size: 0.82rem; }
+
 .quote {
   margin: 4px 0 0;
   padding: 6px 10px;

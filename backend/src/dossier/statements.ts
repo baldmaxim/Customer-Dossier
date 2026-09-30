@@ -15,7 +15,8 @@ export interface IStatement {
   attribution: Attribution;
   assertionIds: number[];
   evidenceIds: number[];
-  quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string }>;
+  quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string;
+    revisionId?: number; sourceKey?: string; sourceKind?: string; url?: string | null; observedAt?: string; title?: string | null }>;
   /**
    * Решения аналитика по исходному утверждению до слияния сущностей. Не переносятся на это утверждение и не меняют
    * атрибуцию; поле есть только когда такие решения найдены (фразы без слияния и прежние снимки не меняются).
@@ -30,6 +31,7 @@ export interface IStatement {
 }
 
 const ROLE: Record<string, string> = {
+  developer: 'девелопер',
   customer: 'заказчик',
   general_contractor: 'генподрядчик',
   contractor: 'подрядчик',
@@ -167,7 +169,9 @@ export const factStatement = (code: string, fact: IFact, body: string, attributi
     attribution,
     assertionIds: [fact.assertionId],
     evidenceIds: evidence.map(e => e.id),
-    quotes: evidence.slice(0, 3).map(e => ({ evidenceId: e.id, quote: e.quote, sourceTitle: e.sourceTitle, publishedAt: e.publishedAt, stance: e.stance })),
+    quotes: evidence.slice(0, 3).map(e => ({ evidenceId: e.id, quote: e.quote, sourceTitle: e.sourceTitle,
+      sourceKey: e.sourceKey, sourceKind: e.sourceKind, url: e.url, observedAt: e.observedAt, title: e.title,
+      revisionId: e.revisionId, publishedAt: e.publishedAt, stance: e.stance })),
     sources: {
       publications: new Set(evidence.filter(e => e.stance === 'supports').map(e => e.sourceItemId)).size,
       textFamilies: new Set(evidence.filter(e => e.stance === 'supports').map(e => e.dedupHash)).size,

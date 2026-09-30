@@ -12,6 +12,7 @@ import { api } from '../../api/client';
 import type { ISourceRow } from '../../api/types';
 import { AddChannelForm, AddSiteForm } from '../../components/admin/AddSourceForms';
 import { ManualPaste } from '../../components/admin/ManualPaste';
+import { DomRfTargets } from '../../components/admin/DomRfTargets';
 import { SourcesTable, isSourceEnabled } from '../../components/admin/SourcesTable';
 import { EmptyState } from '../../components/ui/Section';
 import { Segmented } from '../../components/ui/Segmented';
@@ -100,6 +101,7 @@ export const CollectPage: FC = () => {
           <AddSiteForm onNotice={setNotice} />
         </section>
       )}
+      {tab === 'website' && <DomRfTargets onNotice={setNotice} />}
 
       {ofKind.length === 0 && sourcesQuery.isSuccess ? (
         <EmptyState>

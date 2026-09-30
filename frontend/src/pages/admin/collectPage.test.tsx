@@ -58,6 +58,8 @@ const sources = [
 
 const routes = () => [
   { match: 'GET /api/admin/sources', respond: () => ({ status: 200, body: { items: sources } }) },
+  { match: 'GET /api/admin/domrf-targets', respond: () => ({ status: 200, body: { items: [{ id: 1, externalRef: '62087', url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62087', projectId: 42, projectName: 'Большая Татарская 35', requestedAt: '2026-09-28T08:00:00Z', capturedAt: '2026-09-28T09:00:00Z', status: 'captured' }] } }) },
+  { match: 'POST /api/admin/domrf-targets', respond: () => ({ status: 200, body: { item: {} } }) },
   { match: 'POST /api/admin/sources/', respond: () => ({ status: 200, body: { source: {} } }) },
   { match: 'PUT /api/admin/sources/', respond: () => ({ status: 200, body: { ok: true } }) },
 ];
@@ -119,6 +121,16 @@ describe('Админка: сбор', () => {
     const picker = (await screen.findByRole('combobox', { name: 'Срок сбора: ЕРЗ.РФ' })) as HTMLSelectElement;
     expect(picker.value).toBe('365');
     expect(within(picker).getByRole('option', { name: 'весь архив' })).toBeTruthy();
+  });
+
+  it('сохраняет ссылку ДОМ.РФ и ID существующего объекта для браузерного разбора', async () => {
+    const api = fakeApi(routes());
+    renderWithProviders(<CollectPage />, '/admin/collect?tab=website');
+    expect(await screen.findByRole('link', { name: '№62087' })).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ссылка на объект ДОМ.РФ' }), { target: { value: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62088' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'ID объекта портала (необязательно)' }), { target: { value: '42' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить ссылку' }));
+    await waitFor(() => expect(api.calls).toContainEqual({ method: 'POST', url: '/api/admin/domrf-targets', body: { url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62088', projectId: 42 } }));
   });
 });
 
