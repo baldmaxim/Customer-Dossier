@@ -9,3 +9,6 @@ dev-dist/
 *.tsbuildinfo
 frontend/e2e-report/
 frontend/e2e-results/
+# экспорт Amnezia (vpn://…) и конфиги туннелей — ключи
+*.vpn
+awg0.conf

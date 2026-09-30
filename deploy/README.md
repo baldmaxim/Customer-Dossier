@@ -45,18 +45,19 @@ ssh quantor 'cp -a /opt/infra/nginx/conf.d /root/conf.d-backup-$(date +%F)'
 ### 1. Telegram через nl3
 
 С Selectel `t.me` и `api.telegram.org` не открываются. Владелец создаёт в приложении Amnezia нового
-клиента на сервере nl3 (протокол AmneziaWG) и экспортирует конфигурацию. На quantor:
+клиента на сервере nl3 (контейнер `amnezia-awg2`, AmneziaWG 3.1) и экспортирует конфигурацию. На quantor:
 
 ```bash
-ssh quantor 'add-apt-repository -y ppa:amnezia/ppa && apt-get install -y amneziawg'
-# awg0.conf — из host/awg0.conf.example и экспорта Amnezia (три правки описаны в шаблоне)
-ssh quantor 'install -d -m 700 /etc/amnezia/amneziawg'   # файл кладёт владелец, chmod 600
+# linux-headers-generic — чтобы DKMS собирал модуль и под следующее ядро, иначе после перезагрузки туннеля нет
+ssh quantor 'add-apt-repository -y ppa:amnezia/ppa && apt-get install -y "linux-headers-$(uname -r)" linux-headers-generic amneziawg'
+ssh quantor 'awg --version; dkms status | grep amneziawg'   # 3.1+, модуль под каждое ядро в /boot
+# awg0.conf — из host/awg0.conf.example и экспорта Amnezia (три правки описаны в шаблоне), chmod 600
 ssh quantor 'systemctl enable --now awg-quick@awg0'
 ssh quantor 'curl -4 -sS -o /dev/null -w "%{http_code}\n" https://t.me/; ip route get 8.8.8.8; ip route get 149.154.167.99'
 ```
 
 Ожидание: `302`; к 8.8.8.8 — через `eth0`, к 149.154.167.99 — через `awg0`. Quantor не задет: его
-трафик в Telegram не ходит.
+трафик в Telegram не ходит. Сделано 30.09.2026: туннель поднят, `t.me` отвечает и с хоста, и из контейнера.
 
 ### 2. Образы
 
