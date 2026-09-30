@@ -1,0 +1,27 @@
+# Контекст сборки — корень TG_Info. В образ не попадают секреты, зависимости с хоста и архивы.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/.local
+**/*.tsbuildinfo
+.git
+*.zip
+*.md
+*.json
+audit
+review
+prompts
+backend/test-db
+frontend/e2e
+frontend/e2e-report
+frontend/e2e-results
+frontend/dev-dist
+docs
+!docs/migrations
+!backend/package.json
+!backend/package-lock.json
+!backend/tsconfig.json
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json

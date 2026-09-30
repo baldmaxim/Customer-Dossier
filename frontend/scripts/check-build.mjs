@@ -47,12 +47,10 @@ if (!fs.existsSync(sw)) {
 }
 const purge = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'cachePurge.ts'), 'utf8');
 if (!/['"]api['"]/.test(purge)) fail('cachePurge.ts не удаляет старый кэш api');
-// Вход снят, выхода больше нет — остаётся очистка при старте: старые кэши `api`
-// от прежних версий не должны переживать обновление.
-{
-  const file = 'src/main.tsx';
+// Старые кэши `api` не переживают ни обновление (старт), ни выход оператора на сервере (ADR-013).
+for (const [file, why] of [['src/main.tsx', 'при старте'], ['src/hooks/useSession.ts', 'при выходе']]) {
   const full = path.join(ROOT, file);
-  if (!fs.existsSync(full) || !fs.readFileSync(full, 'utf8').includes('purgeSensitiveCaches')) fail(`очистка кэшей при старте не вызывается (${file})`);
+  if (!fs.existsSync(full) || !fs.readFileSync(full, 'utf8').includes('purgeSensitiveCaches')) fail(`очистка кэшей ${why} не вызывается (${file})`);
 }
 
 // 2. Секреты в бандле

@@ -111,7 +111,11 @@ const main = async (): Promise<void> => {
   const app = createApp();
   const server = app.listen(env.PORT, env.HOST, () => {
     console.log(`[api] слушает http://${env.HOST.includes(':') ? `[${env.HOST}]` : env.HOST}:${env.PORT}`);
-    console.log('[api] вход не требуется: портал открыт для локальных запросов');
+    console.log(
+      env.AUTH_MODE === 'token'
+        ? `[api] вход оператора по токену; адрес портала: ${env.PUBLIC_ORIGIN ?? 'только loopback'}`
+        : '[api] вход не требуется: портал открыт для локальных запросов',
+    );
   });
 
   const decision = startBackgroundJobs(

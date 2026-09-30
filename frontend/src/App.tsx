@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
+import { AuthGate } from './components/AuthGate';
 import { Layout } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -35,9 +36,13 @@ const RunsRedirect: FC = () => {
   return <Navigate to={`/admin/process/${id ?? ''}`} replace />;
 };
 
-/** Вход снят на время разработки: портал открывается сразу. */
-const Portal: FC = () => (
-  <Layout>
+interface IPortalProps {
+  /** Есть только на сервере (AUTH_MODE=token): локально выходить некуда. */
+  onLogout?: () => void;
+}
+
+const Portal: FC<IPortalProps> = ({ onLogout }) => (
+  <Layout onLogout={onLogout}>
     <Routes>
       <Route path="/" element={<SearchPage />} />
       <Route path="/company/:id" element={<CompanyPage />} />
@@ -75,7 +80,7 @@ const Portal: FC = () => (
 export const App: FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <Portal />
+      <AuthGate renderPortal={onLogout => <Portal onLogout={onLogout} />} />
       <UpdatePrompt />
     </BrowserRouter>
   </QueryClientProvider>

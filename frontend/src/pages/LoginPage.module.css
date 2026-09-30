@@ -1,0 +1,91 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(var(--sp-4), env(safe-area-inset-top)) max(var(--sp-4), env(safe-area-inset-right))
+    max(var(--sp-4), env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left));
+  background: var(--bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--sp-6);
+  }
+}
+
+.logo {
+  display: block;
+  height: 32px;
+  width: auto;
+  align-self: flex-start;
+}
+
+.logoDark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoLight {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoDark {
+  display: block;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-text);
+}
+
+.label {
+  font-weight: var(--ctl-fw);
+  font-size: var(--fs-md);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--ctl-h-lg);
+  padding: var(--sp-2) var(--ctl-px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--ctl-radius);
+  background: var(--surface);
+  color: var(--text);
+  /* 16px и не меньше: иначе Safari и Chrome на Android зумят страницу при фокусе. */
+  font-size: 16px;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input {
+    transition: none;
+  }
+}

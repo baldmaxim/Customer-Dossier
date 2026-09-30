@@ -46,6 +46,10 @@ export const TEST_PROCESS_ENV: Readonly<Record<string, string>> = {
   GRAPH_EXPORT_ENABLED: 'true',
   REVISION_WRITE_ENABLED: 'true',
   HOST: '127.0.0.1',
+  // Интеграционные тесты ходят в API без входа: серверный режим из оболочки их не касается.
+  AUTH_MODE: 'none',
+  PUBLIC_ORIGIN: '',
+  TRUST_PROXY: 'false',
   TZ: 'UTC',
 };
 

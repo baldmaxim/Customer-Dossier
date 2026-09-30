@@ -28,6 +28,10 @@ process.env.BOT_ENABLED = 'false';
 process.env.REPROCESS_AUTO_PUBLISH = 'false';
 process.env.MERGE_APPLY_ENABLED = 'false';
 process.env.GRAPH_EXPORT_ENABLED = 'true';
+// Серверный режим входа из оболочки не должен менять unit-тесты: вход проверяет auth.test.ts явно.
+process.env.AUTH_MODE = 'none';
+process.env.PUBLIC_ORIGIN = '';
+process.env.TRUST_PROXY = 'false';
 process.env.REVISION_WRITE_ENABLED = 'true';
 process.env.HOST = '127.0.0.1';
 // UTC, а не часовой пояс разработчика: даты не должны зависеть от машины.

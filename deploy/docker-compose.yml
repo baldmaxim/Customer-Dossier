@@ -1,0 +1,104 @@
+# Стек TG_Info на сервере quantor рядом с Quantor (ADR-013).
+#
+# Границы, которые этот файл соблюдает:
+#   - наружу не публикуется ни один порт: снаружи ходит только infra-nginx Quantor по сети
+#     infra_web к tginfo-web; API и база — во внутренней сети;
+#   - режим входа, адрес и доверие прокси зашиты здесь, а не в .env: сервер без входа
+#     не собирается ни опечаткой, ни забытой строкой;
+#   - у каждого контейнера предел памяти: на сервере четыре гигабайта на оба портала;
+#   - значения — в .env рядом с этим файлом (заполняет владелец), здесь только имена;
+#   - тег выпуска IMAGE_TAG приходит из файла RELEASE через update.sh и compose.sh.
+#
+# Внутренняя сеть — фиксированная 172.30.0.0/24: на её шлюзе 172.30.0.1 слушает обратный
+# SSH-туннель к LM Studio на домашнем ПК (deploy/README.md, «Модель»).
+
+name: tginfo
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: tginfo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tg_info
+      POSTGRES_USER: tg_info
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?требуется POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=ru-RU'
+    command: ['postgres', '-c', 'shared_buffers=96MB', '-c', 'max_connections=30', '-c', 'work_mem=8MB']
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tg_info -d tg_info']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    mem_limit: 384m
+    networks: [internal]
+
+  # Разовые команды: миграции отдельным шагом выкладки, а не при старте API.
+  migrate:
+    image: tginfo-api:${IMAGE_TAG:?запускайте через update.sh или compose.sh}
+    container_name: tginfo-migrate
+    profiles: ['tools']
+    env_file: .env
+    environment: &api-fixed
+      DATABASE_URL: postgresql://tg_info:${POSTGRES_PASSWORD}@db:5432/tg_info
+      DATABASE_SSL: 'false'
+      HOST: 0.0.0.0
+      PORT: '4100'
+      AUTH_MODE: token
+      TRUST_PROXY: 'true'
+      NODE_OPTIONS: --max-old-space-size=320
+    command: ['node', 'dist/db/migrate.js']
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 256m
+    networks: [internal]
+
+  api:
+    image: tginfo-api:${IMAGE_TAG:?запускайте через update.sh или compose.sh}
+    container_name: tginfo-api
+    restart: unless-stopped
+    env_file: .env
+    environment: *api-fixed
+    # Сбор и разбор идут в процессе API: SIGTERM — и минута на то, чтобы закрыть транзакции.
+    stop_grace_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:4100/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 448m
+    networks: [internal]
+
+  web:
+    image: tginfo-web:${IMAGE_TAG:?запускайте через update.sh или compose.sh}
+    container_name: tginfo-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    mem_limit: 32m
+    networks: [internal, infra_web]
+
+volumes:
+  db_data:
+
+networks:
+  internal:
+    driver: bridge
+    driver_opts:
+      # Имя интерфейса нужно правилу ufw для туннеля модели.
+      com.docker.network.bridge.name: br-tginfo
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
+  # Общая сеть с ingress-nginx Quantor (/opt/infra/nginx).
+  infra_web:
+    external: true

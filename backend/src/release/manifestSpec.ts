@@ -110,8 +110,7 @@ export const CONFIG_KEYS = [
 export const CONFIG_DENYLIST = [
   'DATABASE_URL',
   'TEST_DATABASE_URL',
-  // Вход по токену снят, но ключ может остаться в backend/.env пользователя:
-  // запрет держим, чтобы он не попал в манифест ни значением, ни хешем.
+  // Токен входа оператора (AUTH_MODE=token, ADR-013): ни значением, ни хешем.
   'OPERATOR_TOKEN',
   'TG_BOT_TOKEN',
   'TG_BOT_ALLOWED_USER_IDS',

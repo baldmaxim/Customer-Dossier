@@ -6,7 +6,8 @@ import { ApiError } from '../api/client';
  */
 export const describeLoadError = (err: unknown): string => {
   if (err instanceof ApiError) {
-    if (err.status === 403) return 'Запрос отклонён защитой (чужой адрес или страница) — откройте портал по адресу 127.0.0.1.';
+    if (err.status === 401) return 'Нет входа: сессия истекла, войдите заново.';
+    if (err.status === 403) return 'Запрос отклонён защитой (чужой адрес, страница или устаревшая сессия) — обновите страницу.';
     if (err.status === 404) return `Не найдено: ${err.message}`;
     if (err.status >= 500) return `Сбой сервера (${err.status}): ${err.message}. Данные не получены — это не пустой результат.`;
     return `Ошибка ${err.status}: ${err.message}`;

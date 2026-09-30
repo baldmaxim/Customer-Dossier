@@ -9,7 +9,8 @@ import { adminRouter } from './api/admin.routes.js';
 import { assertionsRouter } from './api/assertions.routes.js';
 import { dossierRouter } from './api/dossier.routes.js';
 import { snapshotRouter } from './api/snapshot.routes.js';
-import { createOriginGuard, requireLoopbackHost } from './api/guards.js';
+import { SessionStore, createAuthRouter, createRequireOperator, type IAuthOptions } from './api/auth.js';
+import { createHostGuard, createOriginGuard } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { graphRouter } from './api/graph.routes.js';
@@ -20,14 +21,34 @@ import { revisionsRouter } from './api/revisions.routes.js';
 
 export interface ICreateAppOptions {
   allowedOrigins?: readonly string[];
+  /** Имена, кроме loopback, которые допустимы в Host: публичный адрес портала за прокси. */
+  allowedHostnames?: readonly string[];
+  /** Для тестов: режим входа, токен и хранилище с подменённым временем. */
+  auth?: Partial<IAuthOptions>;
+  trustProxy?: boolean;
 }
 
-/** UI открывается с dev-сервера Vite или с самого API (preview/сборка через прокси). */
+/** UI открывается с dev-сервера Vite, с самого API (preview/сборка через прокси) или по PUBLIC_ORIGIN. */
 export const defaultAllowedOrigins = (): string[] => {
   const fromEnv = env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean);
   const self = [`http://127.0.0.1:${env.PORT}`, `http://localhost:${env.PORT}`, `http://[::1]:${env.PORT}`];
-  return [...new Set([...fromEnv, ...self])];
+  const publicOrigin = env.PUBLIC_ORIGIN === null ? [] : [env.PUBLIC_ORIGIN];
+  return [...new Set([...fromEnv, ...self, ...publicOrigin])];
 };
+
+const defaultAllowedHostnames = (): string[] =>
+  env.PUBLIC_ORIGIN === null ? [] : [new URL(env.PUBLIC_ORIGIN).hostname];
+
+const defaultAuthOptions = (): IAuthOptions => ({
+  mode: env.AUTH_MODE,
+  operatorToken: env.OPERATOR_TOKEN,
+  store: new SessionStore({
+    idleMs: env.SESSION_IDLE_MINUTES * 60_000,
+    maxMs: env.SESSION_MAX_HOURS * 3_600_000,
+  }),
+  secureCookie: env.PUBLIC_ORIGIN?.startsWith('https:') ?? false,
+  maxAgeSec: env.SESSION_MAX_HOURS * 3600,
+});
 
 /**
  * Параметры строки запроса API — только плоские значения: ключ без скобок и без повторов. Вложенный объект (`a[b]=1`)
@@ -46,14 +67,23 @@ export const rejectStructuredQuery = (req: Request, res: Response, next: NextFun
 export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   const app = express();
   const allowedOrigins = options.allowedOrigins ?? defaultAllowedOrigins();
+  const auth: IAuthOptions = { ...defaultAuthOptions(), ...options.auth };
 
   app.disable('x-powered-by');
+  // Один доверенный прокси перед API: адрес клиента — из X-Forwarded-For, который
+  // прокси перезаписывает. Без прокси заголовку не верим — его подделает кто угодно.
+  if (options.trustProxy ?? env.TRUST_PROXY) app.set('trust proxy', 1);
   // Строка запроса разбирается node:querystring, а не qs (ACC-04: GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g в qs@6.15.3,
   // зависимость express@4.22.2). Все параметры API плоские; вложенные ключи и повторы отвергает rejectStructuredQuery.
   app.set('query parser', 'simple');
   app.use(helmet());
   // Host и Origin проверяются до всего остального, включая разбор тела.
-  app.use('/api', requireLoopbackHost, createOriginGuard(allowedOrigins), rejectStructuredQuery);
+  app.use(
+    '/api',
+    createHostGuard(options.allowedHostnames ?? defaultAllowedHostnames()),
+    createOriginGuard(allowedOrigins),
+    rejectStructuredQuery,
+  );
   // CORS только сообщает браузеру, чей ответ можно читать. Авторизацией он
   // не является; credentials не разрешаем — UI ходит с того же origin через прокси.
   app.use(cors({ origin: [...allowedOrigins] }));
@@ -75,13 +105,17 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
     res.status(db ? 200 : 503).json({ ok: db, db });
   });
 
-  // Вход по токену снят на время разработки: портал открывается сразу.
-  // Защита остаётся на уровне сети — loopback-адрес, проверка Host и Origin.
+  // Режим входа сервер сообщает сам: UI узнаёт из /api/auth/session, нужен ли экран входа.
+  app.use('/api/auth', createAuthRouter(auth));
+
   app.use('/api', (_req, res, next) => {
     // Ответы с данными не кэшируются ни браузером, ни service worker'ом.
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  // Всё остальное, включая «не найдено», — только после входа (AUTH_MODE=token).
+  // Локально (AUTH_MODE=none) пропускает всё: защита — loopback, Host и Origin.
+  app.use('/api', createRequireOperator(auth));
   app.use('/api/manual', manualRouter);
   app.use('/api/companies', companiesRouter);
   app.use('/api/contractors', contractorsRouter);

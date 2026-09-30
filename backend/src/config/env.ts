@@ -4,9 +4,12 @@ import 'dotenv/config';
 
 import {
   EnvValueError,
+  parseAuthMode,
   parseListenHost,
   parseLlmBaseUrl,
+  parseOperatorToken,
   parsePositiveInt,
+  parsePublicOrigin,
   parseStrictBool,
 } from './parse.js';
 
@@ -30,6 +33,7 @@ export const parseEnv = (source: EnvSource) => {
   if (!databaseUrl || databaseUrl.trim() === '') {
     throw new EnvValueError('Не задана обязательная переменная окружения DATABASE_URL (см. backend/.env.example)');
   }
+  const authMode = parseAuthMode(source.AUTH_MODE);
 
   return {
     DATABASE_URL: databaseUrl,
@@ -123,9 +127,21 @@ export const parseEnv = (source: EnvSource) => {
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.
     GRAPH_EXPORT_ENABLED: parseStrictBool('GRAPH_EXPORT_ENABLED', source.GRAPH_EXPORT_ENABLED, true),
 
-    HOST: parseListenHost(source.HOST),
+    HOST: parseListenHost(source.HOST, authMode === 'token'),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),
     CORS_ORIGINS: optional(source, 'CORS_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173'),
+
+    // Вход оператора (ADR-013). none — локальная работа: loopback, без входа, как раньше.
+    // token — серверная выкладка: токен меняется на серверную сессию в HttpOnly-cookie.
+    AUTH_MODE: authMode,
+    OPERATOR_TOKEN: parseOperatorToken(authMode, source.OPERATOR_TOKEN),
+    SESSION_IDLE_MINUTES: parsePositiveInt('SESSION_IDLE_MINUTES', source.SESSION_IDLE_MINUTES, 120),
+    SESSION_MAX_HOURS: parsePositiveInt('SESSION_MAX_HOURS', source.SESSION_MAX_HOURS, 12),
+    // Адрес портала за обратным прокси (https://…): его хост — допустимый Host, сам адрес — Origin.
+    PUBLIC_ORIGIN: parsePublicOrigin(source.PUBLIC_ORIGIN, authMode),
+    // Перед API стоит прокси, который перезаписывает X-Forwarded-For адресом клиента.
+    // Без этого ограничения частоты видят один адрес прокси на всех.
+    TRUST_PROXY: parseStrictBool('TRUST_PROXY', source.TRUST_PROXY, false),
   } as const;
 };
 
