@@ -101,6 +101,9 @@ nano .env                 # фоновые флаги на первом запу
 остановлены → baseline → `pg_dump -Fc` в файл (`-f`, не `>`: PowerShell 5.1 портит бинарный поток) →
 источник не изменился → перенос. Файлы — в `/opt/portals/tg-info/transfer/` (chmod 700). Major-версия
 PostgreSQL сервера совпадает с рабочей базой (18, `postgres:18-alpine`): дамп 18 не восстанавливается в 17.
+Дампится база **по имени из `before-check.json` (`database.name`)**, а не `POSTGRES_DB` контейнера: в одном
+контейнере бывает несколько баз (30.09.2026 так выгрузили старую копию на миграции 023 вместо `tg_info_live`).
+После восстановления число строк `schema_migrations` равно `migrations.applied` из `before-manifest.json`.
 
 ```bash
 cd /opt/portals/tg-info
@@ -109,6 +112,7 @@ docker cp transfer/tg_info.dump tginfo-db:/tmp/tg_info.dump
 docker exec tginfo-db pg_restore -U tg_info -d tg_info --no-owner --no-privileges \
   --exit-on-error --single-transaction /tmp/tg_info.dump
 docker exec tginfo-db rm /tmp/tg_info.dump
+docker exec tginfo-db psql -U tg_info -d tg_info -tAc 'select count(*) from schema_migrations'   # = migrations.applied
 ./update.sh <TAG>
 ```
 
