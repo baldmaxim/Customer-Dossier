@@ -441,7 +441,9 @@ HKDF от пароля из `DATABASE_URL`, в дамп не попадает; �
 Провайдер, модель и маршрут в админке не переключаются: переход в облако — правка .env решением владельца.
 `qwen/qwen3-8b` в OpenRouter не брать: один хостинг, без строгой схемы, с рассуждением. Тексты уходят внешнему
 сервису — `pilot-manifest@1` это запрещает (`externalTransfer`). Модель выбирать `benchmark:model`, а не по цене.
-Доступность openrouter.ai с Selectel не проверена: не открывается — как Telegram, через `awg0`.
+С Selectel OpenRouter отвечает `403 Access denied by security policy` на любой запрос — это адрес, а не ключ
+(`checkOpenRouterKey`: 401 — ключ не принят, 403 — закрыто для адреса); на сервере он идёт через `awg0` до nl3
+(адреса `openrouter.ai` в `AllowedIPs`, deploy/README.md).
 
 Размер чанка — `EXTRACT_CHUNK_SIZE` / `EXTRACT_MAX_CHUNKS` (по умолчанию 3500/6,
 подобрано на живой нагрузке: 6000/4 давали таймауты). Подбирать под модель

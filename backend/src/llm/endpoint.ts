@@ -51,6 +51,17 @@ interface IOpenRouterEndpoint {
   supported_parameters?: string[] | null;
 }
 
+/** Короткое пояснение из тела отказа (`error` строкой или `error.message`); ключа в теле нет. */
+const errorDetail = async (response: Response): Promise<string> => {
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    const text = typeof body.error === 'string' ? body.error : (body.error as { message?: unknown } | undefined)?.message;
+    return typeof text === 'string' && text.trim() !== '' ? `: ${text.trim().slice(0, 120)}` : '';
+  } catch {
+    return '';
+  }
+};
+
 /** accepted — принят и лимит не исчерпан; rejected — не принят; unreachable — проверить не удалось. */
 export type KeyVerdict = 'accepted' | 'rejected' | 'exhausted' | 'unreachable';
 
@@ -68,8 +79,11 @@ export const checkOpenRouterKey = async (
 ): Promise<IKeyCheck> => {
   try {
     const response = await fetchImpl(`${baseUrl}/key`, { headers: requestHeaders({ apiKey }), signal: AbortSignal.timeout(timeoutMs) });
-    if (response.status === 401 || response.status === 403) {
-      return { verdict: 'rejected', error: `OpenRouter не принял ключ (HTTP ${response.status})` };
+    if (response.status === 401) return { verdict: 'rejected', error: 'OpenRouter не принял ключ (HTTP 401)' };
+    if (response.status === 403) {
+      // 403 — не про ключ: так OpenRouter закрывает доступ по адресу. С российских адресов (Selectel)
+      // отказ «Access denied by security policy» приходит на любой запрос, даже без ключа.
+      return { verdict: 'unreachable', error: `OpenRouter закрыт для адреса сервера (HTTP 403${await errorDetail(response)})` };
     }
     if (!response.ok) return { verdict: 'unreachable', error: `OpenRouter /key: HTTP ${response.status}` };
     const info = (await response.json()) as { data?: { limit_remaining?: unknown } };

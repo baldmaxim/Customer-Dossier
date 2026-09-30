@@ -15,6 +15,7 @@
 tginfo-api ─► tginfo-db                          (сеть tginfo_internal 172.30.0.0/24, мост br-tginfo)
 tginfo-api ─► 172.30.0.1:1234 ─обратный SSH─► домашний ПК, LM Studio 127.0.0.1:1234
 tginfo-api ─► сети Telegram ─awg0 (AmneziaWG)─► nl3 ─► t.me, api.telegram.org
+tginfo-api ─► адреса openrouter.ai ─awg0─► nl3 ─► OpenRouter (модель в облаке, если LLM_PROVIDER=openrouter)
 сайты и реестр — напрямую с адреса сервера
 ```
 
@@ -145,6 +146,11 @@ docker exec tginfo-db rm /tmp/r.dump
   `systemctl restart awg-quick@awg0` → проверка выше. Экспорт `vpn://…` — base64url от qCompress(JSON),
   текст конфига в `containers[0].awg.last_config → config`.
 - Сети Telegram сверять с https://core.telegram.org/resources/cidr.txt (сверено 30.09.2026).
+- **OpenRouter** тоже через `awg0`: с адреса Selectel он на любой запрос отвечает `403 Access denied by
+  security policy`, с nl3 — нормально. В `AllowedIPs` — адреса `openrouter.ai` по `/32` (30.09.2026:
+  `8.47.69.0`, `8.6.112.0` — так отвечает DNS сервера, `104.18.2.115`, `104.18.3.115` — так отвечают другие).
+  Проверка: `curl -sS -o /dev/null -w '%{http_code}' https://openrouter.ai/api/v1/key` на сервере → 401
+  (без ключа — это норма). Снова 403 — `getent ahostsv4 openrouter.ai` и дописать новые адреса.
 
 ### Модель (обратный SSH)
 
@@ -326,8 +332,9 @@ Start-ScheduledTask -TaskName 'TG_Info LLM tunnel'
 
 Всё это уже случилось один раз — второй раз не нужно.
 
-1. **Telegram из России.** С Selectel `t.me` и `api.telegram.org` — таймаут. Без `awg0` сбор каналов и бот
-   молча не работают. Прокси в `safeFetch` не добавлять — решается сетью.
+1. **Telegram и OpenRouter из России.** С Selectel `t.me` и `api.telegram.org` — таймаут, OpenRouter — `403
+   Access denied by security policy` даже без ключа (это не «ключ не принят»). Без `awg0` сбор каналов, бот
+   и облачная модель не работают. Прокси в `safeFetch` и клиент модели не добавлять — решается сетью.
 2. **AmneziaWG 3.x.** Экспорт из `amnezia-awg2` содержит параметры 3.x (`HeaderProtectionKey`, диапазоны
    `PersistentKeepalive = 25-35` и др.) — нужны `amneziawg-tools` и модуль ядра 3.1+ (PPA amnezia). Без
    `linux-headers-generic` модуль не собирается под новое ядро, и после перезагрузки туннеля нет.

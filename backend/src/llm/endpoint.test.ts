@@ -7,7 +7,7 @@ import { OPENROUTER_BASE_URL } from '../config/llm.js';
 import { EnvValueError } from '../config/parse.js';
 import { buildFingerprint, lmStudioProvider, type IChunkerParams } from '../reprocess/provider.js';
 import { extractHeadline, setAdminLlmApiKey } from './client.js';
-import { checkOpenRouter, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
+import { checkOpenRouter, checkOpenRouterKey, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
 
 const SECRET = 'sk-or-v1-test-secret-value';
 const base = { DATABASE_URL: 'postgresql://u:p@127.0.0.1:1/x' };
@@ -233,6 +233,19 @@ describe('проверка OpenRouter перед проходом', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/не принял ключ/);
     expect(result.error).not.toContain(SECRET);
+  });
+
+  it('403 с адреса сервера — OpenRouter закрыт для адреса, а не «ключ не принят»', async () => {
+    const { impl } = fakeFetch({ ...healthy, '/key': () => json(403, { success: false, error: 'Access denied by security policy.' }) });
+    const result = await checkOpenRouter(target, 1000, impl);
+    expect(result).toEqual({
+      ok: false,
+      models: [],
+      error: 'OpenRouter закрыт для адреса сервера (HTTP 403: Access denied by security policy.)',
+    });
+    expect(await checkOpenRouterKey(OPENROUTER_BASE_URL, SECRET, 1000, impl)).toMatchObject({ verdict: 'unreachable' });
+    const rejected = fakeFetch({ ...healthy, '/key': () => json(401, { error: { message: 'User not found.', code: 401 } }) });
+    expect(await checkOpenRouterKey(OPENROUTER_BASE_URL, SECRET, 1000, rejected.impl)).toMatchObject({ verdict: 'rejected' });
   });
 
   it('ключа нет ни в админке, ни в .env — прохода нет, OpenRouter не спрашивается', async () => {
