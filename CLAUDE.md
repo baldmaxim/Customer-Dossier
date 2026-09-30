@@ -60,6 +60,8 @@ npm run pilot:check -- --manifest <файл>  # этап 19: проверка п
 npm run release:probe -- --snapshot <id> [--case <id>] [--out f | --compare f]  # GET-проба запущенного API (перезапуск процесса, restore)
 npm run release:fingerprint [-- --out f.json]  # HEAD + sha256 рабочего дерева для привязки логов
 # frontend: npm run build && npm run check:build   # sw не кэширует /api, секретов-маркеров в бандле нет
+# сервер pulse.meridianai.ru (ADR-013): deploy/release.sh [--check] из корня TG_Info — сборка, перенос, update.sh;
+# обслуживание, туннели, перенос базы и грабли — deploy/README.md
 npm run pipeline:once -- --headlines [--limit N]  # темы публикаций (headline@1) для редакций без темы
 npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на срез (этап 07, правила signals@2) + legacy company_metrics
 ```
