@@ -1278,7 +1278,8 @@ export type AccessPermission =
   | 'entities.merge'
   | 'dossier.view'
   | 'dossier.manage'
-  | 'users.manage';
+  | 'users.manage'
+  | 'llm.manage';
 
 export interface IAuthUser {
   id: number;
@@ -1341,4 +1342,41 @@ export interface IAuthEventRow {
 export interface IRolesInfo {
   permissions: AccessPermission[];
   roles: Array<{ role: UserRole; permissions: AccessPermission[] }>;
+}
+
+// ─── Модель (вкладка админки «Модель») ───────────────────────────────────────
+
+export type LlmProvider = 'lmstudio' | 'openrouter';
+
+/** Откуда ключ OpenRouter: админка главнее .env. */
+export type LlmKeySource = 'admin' | 'env' | 'none';
+
+export type LlmKeyProblem = 'store_missing' | 'undecryptable';
+
+/** Сам ключ сервер не отдаёт никогда: только источник и четыре последних символа. */
+export interface ILlmKeyStatus {
+  source: LlmKeySource;
+  hint: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  envKeySet: boolean;
+  problem: LlmKeyProblem | null;
+  /** В DATABASE_URL есть пароль — ключ в базе есть чем зашифровать. */
+  canStore: boolean;
+}
+
+export interface ILlmSettings {
+  provider: LlmProvider;
+  model: string;
+  routeProviders: string[];
+  key: ILlmKeyStatus;
+  connection: { ok: boolean; error: string | null };
+}
+
+/** accepted — принят; exhausted — принят, но лимит исчерпан; unreachable — проверить не удалось. */
+export type LlmKeyVerdict = 'accepted' | 'exhausted' | 'unreachable';
+
+export interface ILlmKeySaved {
+  key: ILlmKeyStatus;
+  check: { verdict: LlmKeyVerdict; error: string | null };
 }

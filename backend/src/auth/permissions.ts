@@ -24,6 +24,8 @@ export const PERMISSIONS = [
   'dossier.manage',
   // Пользователи, сессии, журнал входа.
   'users.manage',
+  // Модель: ключ OpenRouter в админке (вкладка «Модель»).
+  'llm.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -32,11 +34,13 @@ export const ROLES = ['admin', 'operator', 'viewer'] as const;
 
 export type Role = (typeof ROLES)[number];
 
-const EVERYTHING_BUT_USERS = PERMISSIONS.filter(p => p !== 'users.manage');
+// Только администратору: пользователи и ключ модели — ключ OpenRouter это деньги счёта.
+const ADMIN_ONLY: readonly Permission[] = ['users.manage', 'llm.manage'];
+const OPERATOR_PERMISSIONS = PERMISSIONS.filter(p => !ADMIN_ONLY.includes(p));
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   admin: PERMISSIONS,
-  operator: EVERYTHING_BUT_USERS,
+  operator: OPERATOR_PERMISSIONS,
   viewer: ['portal.read'],
 };
 

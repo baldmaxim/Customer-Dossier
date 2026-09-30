@@ -37,7 +37,7 @@ export const openRouterRouting = (routeProviders: readonly string[]): Record<str
 export const requestRouting = (target: ILlmTarget): Record<string, unknown> | null =>
   target.provider === 'openrouter' ? openRouterRouting(target.routeProviders) : null;
 
-export const requestHeaders = (target: ILlmTarget): Record<string, string> => ({
+export const requestHeaders = (target: Pick<ILlmTarget, 'apiKey'>): Record<string, string> => ({
   'Content-Type': 'application/json',
   ...(target.apiKey !== '' ? { Authorization: `Bearer ${target.apiKey}` } : {}),
 });
@@ -51,11 +51,44 @@ interface IOpenRouterEndpoint {
   supported_parameters?: string[] | null;
 }
 
+/** accepted — принят и лимит не исчерпан; rejected — не принят; unreachable — проверить не удалось. */
+export type KeyVerdict = 'accepted' | 'rejected' | 'exhausted' | 'unreachable';
+
+export interface IKeyCheck {
+  verdict: KeyVerdict;
+  error?: string;
+}
+
+/** Ключ принят OpenRouter и лимит ключа не исчерпан. Перед проходом конвейера и при сохранении ключа в админке. */
+export const checkOpenRouterKey = async (
+  baseUrl: string,
+  apiKey: string,
+  timeoutMs: number,
+  fetchImpl: FetchLike = fetch,
+): Promise<IKeyCheck> => {
+  try {
+    const response = await fetchImpl(`${baseUrl}/key`, { headers: requestHeaders({ apiKey }), signal: AbortSignal.timeout(timeoutMs) });
+    if (response.status === 401 || response.status === 403) {
+      return { verdict: 'rejected', error: `OpenRouter не принял ключ (HTTP ${response.status})` };
+    }
+    if (!response.ok) return { verdict: 'unreachable', error: `OpenRouter /key: HTTP ${response.status}` };
+    const info = (await response.json()) as { data?: { limit_remaining?: unknown } };
+    const limitRemaining = info.data?.limit_remaining;
+    // null — у ключа нет своего лимита, тратит средства счёта.
+    if (typeof limitRemaining === 'number' && limitRemaining <= 0) {
+      return { verdict: 'exhausted', error: 'у ключа OpenRouter исчерпан лимит расходов' };
+    }
+    return { verdict: 'accepted' };
+  } catch (err) {
+    return { verdict: 'unreachable', error: err instanceof Error ? err.message : String(err) };
+  }
+};
+
 /**
  * Проверка перед проходом конвейера (worker.probeModel) и для экрана. Список моделей OpenRouter публичен
  * и о ключе ничего не говорит: без этой проверки запуски падали бы с 401/402, и после REPROCESS_RETRY_MAX
- * неудач редакция выпадала бы из автопотока. Поэтому ok — только если ключ принят, лимит ключа и средства
- * на счёте не исчерпаны и у модели есть хостинг со строгой схемой в пределах маршрута.
+ * неудач редакция выпадала бы из автопотока. Поэтому ok — только если ключ задан и принят, лимит ключа и
+ * средства на счёте не исчерпаны и у модели есть хостинг со строгой схемой в пределах маршрута.
  */
 export const checkOpenRouter = async (
   target: ILlmTarget,
@@ -65,15 +98,10 @@ export const checkOpenRouter = async (
   const get = (path: string): Promise<Response> =>
     fetchImpl(`${target.baseUrl}${path}`, { headers: requestHeaders(target), signal: AbortSignal.timeout(timeoutMs) });
   const fail = (error: string): ILlmConnection => ({ ok: false, models: [], error });
+  if (target.apiKey === '') return fail('ключ OpenRouter не задан: админка → «Модель» или LLM_API_KEY в .env');
+  const key = await checkOpenRouterKey(target.baseUrl, target.apiKey, timeoutMs, fetchImpl);
+  if (key.verdict !== 'accepted') return fail(key.error ?? 'ключ OpenRouter не проверен');
   try {
-    const key = await get('/key');
-    if (key.status === 401 || key.status === 403) return fail(`OpenRouter не принял LLM_API_KEY (HTTP ${key.status})`);
-    if (!key.ok) return fail(`OpenRouter /key: HTTP ${key.status}`);
-    const keyInfo = (await key.json()) as { data?: { limit_remaining?: unknown } };
-    const limitRemaining = keyInfo.data?.limit_remaining;
-    // null — у ключа нет своего лимита, тратит средства счёта.
-    if (typeof limitRemaining === 'number' && limitRemaining <= 0) return fail('у ключа OpenRouter исчерпан лимит расходов');
-
     // Остаток счёта — по возможности: не ответил — проверку не проваливаем, это скажет сам запрос (402).
     const credits = await get('/credits').catch(() => null);
     if (credits?.ok) {

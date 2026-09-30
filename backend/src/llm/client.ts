@@ -41,12 +41,22 @@ interface IChatCompletionResponse {
   error?: { message?: string; code?: number | string };
 }
 
-/** Куда идёт запрос — из env; ключ живёт только здесь и в заголовке. */
+/** Ключ OpenRouter из админки (settings/llmKey.ts): главнее LLM_API_KEY из .env. */
+let adminApiKey: string | null = null;
+
+export const setAdminLlmApiKey = (key: string | null): void => {
+  adminApiKey = key;
+};
+
+/**
+ * Куда идёт запрос — из env и ключа админки; ключ живёт только здесь и в заголовке.
+ * LM Studio ключ OpenRouter не получает, откуда бы тот ни пришёл.
+ */
 export const llmTarget = (): ILlmTarget => ({
   provider: env.LLM_PROVIDER,
   baseUrl: env.LMSTUDIO_BASE_URL,
   model: env.LMSTUDIO_MODEL,
-  apiKey: env.LLM_API_KEY,
+  apiKey: env.LLM_PROVIDER === 'openrouter' ? (adminApiKey ?? env.LLM_API_KEY) : '',
   routeProviders: env.OPENROUTER_PROVIDERS,
 });
 

@@ -1,4 +1,5 @@
-// Мой профиль: кто я, что мне можно, смена пароля, выход.
+// Профиль — вкладка админки (/admin/account): кто я, что мне можно, смена пароля, выход.
+// Заголовок страницы даёт AdminLayout.
 
 import { FC, useState } from 'react';
 
@@ -16,8 +17,6 @@ export const AccountPage: FC = () => {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Мой профиль</h1>
-
       <Section title={user.displayName}>
         <dl className={styles.facts}>
           <dt>Логин</dt>

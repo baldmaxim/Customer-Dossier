@@ -42,11 +42,24 @@ const NAV: INavItem[] = [
   },
 ];
 
+const PERSON = 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM4.5 20a7.5 7.5 0 0 1 15 0';
+
+/**
+ * Профиль — вкладка админки, отдельной ссылки в шапке нет. Читатель админку не видит,
+ * и вместо неё у него пункт «Профиль»: сменить пароль нужно и ему.
+ */
+const PROFILE_ITEM: INavItem = {
+  to: '/admin/account',
+  label: 'Профиль',
+  end: false,
+  permission: 'portal.read',
+  icon: PERSON,
+};
+
 const SUN =
   'M12 4.5v-2M12 21.5v-2M4.5 12h-2M21.5 12h-2M6.7 6.7 5.3 5.3M18.7 18.7l-1.4-1.4M6.7 17.3l-1.4 1.4M18.7 5.3l-1.4 1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z';
 const MOON = 'M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z';
 const EXIT = 'M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M10 16.5 14.5 12 10 7.5M14.5 12H4';
-const PERSON = 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM4.5 20a7.5 7.5 0 0 1 15 0';
 
 const Glyph: FC<{ d: string; className?: string }> = ({ d, className }) => (
   <svg
@@ -97,7 +110,7 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
   const { theme, toggle } = useTheme();
   const { user, can, logout } = useAuth();
   const themeLabel = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-  const nav = NAV.filter(item => can(item.permission));
+  const nav = [...NAV.filter(item => can(item.permission)), ...(can('admin.view') ? [] : [PROFILE_ITEM])];
 
   return (
     <div className={styles.shell}>
@@ -135,13 +148,14 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
             <Glyph d={theme === 'dark' ? SUN : MOON} className={styles.themeIcon} />
           </button>
 
-          <Link to="/account" className={styles.account} aria-label={`Мой профиль: ${user.displayName}`} title="Мой профиль">
-            <Glyph d={PERSON} className={styles.themeIcon} />
-            <span className={styles.accountName}>{user.displayName}</span>
-          </Link>
-
           {logout && (
-            <button type="button" className={styles.themeButton} onClick={logout} aria-label="Выйти" title="Выйти">
+            <button
+              type="button"
+              className={styles.themeButton}
+              onClick={logout}
+              aria-label="Выйти"
+              title={`Выйти (${user.displayName})`}
+            >
               <Glyph d={EXIT} className={styles.themeIcon} />
             </button>
           )}

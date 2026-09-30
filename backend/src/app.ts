@@ -11,6 +11,7 @@ import { dossierRouter } from './api/dossier.routes.js';
 import { snapshotRouter } from './api/snapshot.routes.js';
 import { createAttachAuth, createAuthRouter, createRequireAccess, type IAuthOptions } from './api/auth.js';
 import { createUsersRouter } from './api/users.routes.js';
+import { llmRouter } from './api/llm.routes.js';
 import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
@@ -62,6 +63,7 @@ export const dataRouters = (service: AuthService): ReadonlyArray<readonly [strin
   ['/contractors', contractorsRouter],
   ['', entitiesRouter],
   ['/admin', adminRouter],
+  ['/admin', llmRouter],
   ['', revisionsRouter],
   ['', assertionsRouter],
   ['', reprocessRouter],

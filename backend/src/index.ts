@@ -13,6 +13,7 @@ import { startMetricsScheduler } from './metrics/refresh.js';
 import { lmStudioProvider } from './reprocess/provider.js';
 import { runReprocessPass } from './reprocess/worker.js';
 import { runHeadlinePass } from './headline/service.js';
+import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
@@ -128,6 +129,17 @@ const main = async (): Promise<void> => {
     const users = await pgAuthStore.countUsers().catch(() => null);
     if (users === null) console.warn('[auth] таблицы пользователей нет — примените миграции (031)');
     else if (users === 0) console.warn('[auth] пользователей нет — войти некому. Первый администратор: node dist/auth/cli.js --create-admin <логин>');
+  }
+  // Ключ OpenRouter из админки — до фоновых заданий: первый проход конвейера уже идёт с ним.
+  const llmKey = await loadStoredLlmKey().catch(err => {
+    console.warn(`[llm] ключ из админки не прочитан: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  });
+  if (env.LLM_PROVIDER === 'openrouter' && llmKey?.problem === 'store_missing') {
+    console.warn('[llm] хранилища ключей нет — примените миграции (032); действует только LLM_API_KEY из .env');
+  }
+  if (llmKey?.problem === 'undecryptable') {
+    console.warn('[llm] ключ OpenRouter из админки не расшифровывается (сменился пароль базы?) — задайте его в админке заново');
   }
 
   const decision = startBackgroundJobs(

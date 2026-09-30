@@ -40,6 +40,9 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
   { methods: 'write', pattern: /^\/admin\/(sources|domrf-targets)(\/|$)/, permission: 'sources.manage' },
   { methods: 'write', pattern: /^\/manual$/, permission: 'sources.manage' },
 
+  // Модель: ключ OpenRouter.
+  { methods: 'write', pattern: /^\/admin\/llm(\/|$)/, permission: 'llm.manage' },
+
   // Разбор, публикация наборов, пересчёт сигналов.
   { methods: 'write', pattern: /^\/reprocess\//, permission: 'pipeline.manage' },
   { methods: 'write', pattern: /^\/admin\/metrics\/refresh$/, permission: 'pipeline.manage' },

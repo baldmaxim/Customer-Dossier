@@ -64,7 +64,9 @@ describe('вход', () => {
 
     const logout = await screen.findByRole('button', { name: 'Выйти' });
     expect(api.calls.find(c => c.url === '/api/auth/login')?.body).toEqual({ login: 'ivanov', password: 'Correct-Horse-7731' });
-    expect(screen.getByRole('link', { name: 'Мой профиль: Иван Иванов' })).not.toBeNull();
+    // Профиль — вкладка админки: отдельной ссылки в шапке нет, имя — в подсказке кнопки выхода.
+    expect(screen.queryByRole('link', { name: /Мой профиль/ })).toBeNull();
+    expect(logout.getAttribute('title')).toBe('Выйти (Иван Иванов)');
 
     fireEvent.click(logout);
     expect(await screen.findByLabelText('Логин')).not.toBeNull();
@@ -87,18 +89,20 @@ describe('вход', () => {
     expect((screen.getByLabelText('Пароль') as HTMLInputElement).value).toBe('');
   });
 
-  it('меню по правам: читатель не видит админку, оператор видит', async () => {
+  it('меню по правам: читатель вместо админки видит свой профиль, оператор — админку с профилем внутри', async () => {
     fakeApi([{ match: 'GET /api/auth/session', respond: () => signedIn(user('viewer', ['portal.read'])) }]);
     const viewer = renderWithProviders(gate());
     await screen.findByText('Портал');
     expect(screen.queryAllByRole('link', { name: 'Админка' })).toHaveLength(0);
     expect(screen.getAllByRole('link', { name: 'Компании' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Профиль' })[0]?.getAttribute('href')).toBe('/admin/account');
     viewer.unmount();
 
     fakeApi([{ match: 'GET /api/auth/session', respond: () => signedIn(user('operator', ['portal.read', 'admin.view'])) }]);
     renderWithProviders(gate());
     await screen.findByText('Портал');
     expect(screen.getAllByRole('link', { name: 'Админка' }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('link', { name: 'Профиль' })).toHaveLength(0);
   });
 
   it('выданный пароль: портал закрыт, пока пользователь не задаст свой', async () => {

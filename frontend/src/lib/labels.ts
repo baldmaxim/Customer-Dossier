@@ -5,6 +5,9 @@
 import type {
   AccessPermission,
   AssertionStatus,
+  LlmKeyProblem,
+  LlmKeySource,
+  LlmProvider,
   PermissionStatus,
   Role,
   Sentiment,
@@ -695,6 +698,23 @@ export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
   'dossier.view': 'Обращения и снимки досье: смотреть',
   'dossier.manage': 'Обращения и снимки досье: изменять',
   'users.manage': 'Пользователи, права и журнал входа',
+  'llm.manage': 'Модель: ключ OpenRouter',
+};
+
+export const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
+  lmstudio: 'LM Studio — модель на своём компьютере',
+  openrouter: 'OpenRouter — модель в облаке',
+};
+
+export const LLM_KEY_SOURCE_LABELS: Record<LlmKeySource, string> = {
+  admin: 'задан в админке',
+  env: 'из .env сервера (LLM_API_KEY)',
+  none: 'не задан',
+};
+
+export const LLM_KEY_PROBLEM_LABELS: Record<LlmKeyProblem, string> = {
+  store_missing: 'Хранилища ключей нет: примените миграцию 032. Пока действует только LLM_API_KEY из .env.',
+  undecryptable: 'Сохранённый ключ не расшифровывается — сменился пароль базы. Задайте ключ заново.',
 };
 
 export const AUTH_EVENT_LABELS: Record<string, string> = {

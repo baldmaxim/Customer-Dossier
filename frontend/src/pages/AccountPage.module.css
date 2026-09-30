@@ -6,11 +6,6 @@
   min-width: 0;
 }
 
-.title {
-  margin: 0;
-  font-size: var(--fs-2xl);
-}
-
 .facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

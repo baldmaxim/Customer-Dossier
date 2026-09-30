@@ -8,6 +8,7 @@ import { UpdatePrompt } from './components/UpdatePrompt';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { CollectPage } from './pages/admin/CollectPage';
 import { PipelinePage } from './pages/admin/PipelinePage';
+import { ModelPage } from './pages/admin/ModelPage';
 import { ResultPage } from './pages/admin/ResultPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { DocumentPage } from './pages/DocumentPage';
@@ -46,7 +47,8 @@ const Portal: FC = () => (
       <Route path="/links" element={<LinksPage />} />
       <Route path="/documents/:id" element={<DocumentPage />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
-      <Route path="/account" element={<AccountPage />} />
+      {/* Профиль — вкладка админки; старая ссылка ведёт туда же. */}
+      <Route path="/account" element={<Navigate to="/admin/account" replace />} />
 
       {/* Админка — конвейер: сбор → обработка → результат. Вложенный роут один,
           и только здесь: подшапка ступеней рисуется один раз. */}
@@ -57,7 +59,9 @@ const Portal: FC = () => (
         <Route path="process/:id" element={<RunPage />} />
         <Route path="result" element={<ResultPage />} />
         <Route path="review" element={<ReviewQueuePage />} />
+        <Route path="model" element={<ModelPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="account" element={<AccountPage />} />
       </Route>
 
       {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов.

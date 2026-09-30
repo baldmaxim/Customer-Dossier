@@ -6,7 +6,7 @@ import { parseEnv } from '../config/env.js';
 import { OPENROUTER_BASE_URL } from '../config/llm.js';
 import { EnvValueError } from '../config/parse.js';
 import { buildFingerprint, lmStudioProvider, type IChunkerParams } from '../reprocess/provider.js';
-import { extractHeadline } from './client.js';
+import { extractHeadline, setAdminLlmApiKey } from './client.js';
 import { checkOpenRouter, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
 
 const SECRET = 'sk-or-v1-test-secret-value';
@@ -48,8 +48,9 @@ describe('настройки модели (config/llm.ts)', () => {
     expect(env.LMSTUDIO_BASE_URL).toBe('http://127.0.0.1:1234/v1');
   });
 
-  it('openrouter без ключа или по http не собирается; текст ошибки без значения ключа', () => {
-    expect(errorText(() => parseEnv({ ...base, LLM_PROVIDER: 'openrouter' }))).toMatch(/LLM_API_KEY/);
+  it('openrouter по http не собирается, текст ошибки без значения ключа; без ключа в .env — собирается', () => {
+    // Ключ задают и в админке (settings/llmKey.ts): его отсутствие в .env — не ошибка конфигурации.
+    expect(parseEnv({ ...base, LLM_PROVIDER: 'openrouter' }).LLM_API_KEY).toBe('');
     const http = errorText(() => parseEnv({ ...base, LLM_PROVIDER: 'openrouter', LLM_API_KEY: SECRET, LMSTUDIO_BASE_URL: 'http://127.0.0.1:1234/v1' }));
     expect(http).toMatch(/https/);
     expect(http).not.toContain(SECRET);
@@ -141,12 +142,27 @@ describe('запрос к модели', () => {
     return calls;
   };
 
-  it('LM Studio — без ключа и без маршрута, как раньше', async () => {
-    const calls = capture([ok('{"topic":"Стройка школы"}')]);
-    const result = await extractHeadline({ body: 'Текст новости.', publishedAt: null });
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.headers.Authorization).toBeUndefined();
-    expect(calls[0]?.body).not.toHaveProperty('provider');
+  it('LM Studio — без ключа и без маршрута, как раньше; ключ из админки ему не уходит', async () => {
+    setAdminLlmApiKey(SECRET);
+    try {
+      const calls = capture([ok('{"topic":"Стройка школы"}')]);
+      const result = await extractHeadline({ body: 'Текст новости.', publishedAt: null });
+      expect(result.ok).toBe(true);
+      expect(calls[0]?.headers.Authorization).toBeUndefined();
+      expect(calls[0]?.body).not.toHaveProperty('provider');
+    } finally {
+      setAdminLlmApiKey(null);
+    }
+  });
+
+  it('ключ из админки главнее LLM_API_KEY; удалили — снова .env', async () => {
+    const client = await loadWith(OPENROUTER_ENV, () => import('./client.js'));
+    const calls = capture([ok('{"topic":"первый"}'), ok('{"topic":"второй"}')]);
+    client.setAdminLlmApiKey('sk-or-v1-from-admin-0002');
+    await client.extractHeadline({ body: 'Текст новости.', publishedAt: null });
+    client.setAdminLlmApiKey(null);
+    await client.extractHeadline({ body: 'Текст новости.', publishedAt: null });
+    expect(calls.map(c => c.headers.Authorization)).toEqual(['Bearer sk-or-v1-from-admin-0002', `Bearer ${SECRET}`]);
   });
 
   it('OpenRouter — ключ в заголовке, маршрут в теле, строгая схема на месте', async () => {
@@ -215,8 +231,15 @@ describe('проверка OpenRouter перед проходом', () => {
     const { impl } = fakeFetch({ ...healthy, '/key': () => json(401, { error: { message: 'User not found.' } }) });
     const result = await checkOpenRouter(target, 1000, impl);
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/LLM_API_KEY/);
+    expect(result.error).toMatch(/не принял ключ/);
     expect(result.error).not.toContain(SECRET);
+  });
+
+  it('ключа нет ни в админке, ни в .env — прохода нет, OpenRouter не спрашивается', async () => {
+    const { impl, seen } = fakeFetch(healthy);
+    const result = await checkOpenRouter({ ...target, apiKey: '' }, 1000, impl);
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/не задан/) });
+    expect(seen).toEqual([]);
   });
 
   it('лимит ключа или средства счёта исчерпаны — прохода нет', async () => {

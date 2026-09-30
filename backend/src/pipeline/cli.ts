@@ -73,6 +73,7 @@ import {
 } from '../reprocess/cli-commands.js';
 import { NotPublishableError, PublicationConflictError } from '../reprocess/publish.js';
 import { headlinesCommand } from '../headline/cli.js';
+import { loadStoredLlmKey } from '../settings/llmKey.js';
 
 const argValue = (flag: string): string | null => {
   const index = process.argv.indexOf(flag);
@@ -105,6 +106,10 @@ const checkModel = async (): Promise<void> => {
 };
 
 const main = async (): Promise<void> => {
+  // Ключ OpenRouter из админки живёт в базе: без этого CLI видел бы только LLM_API_KEY из .env.
+  if (env.LLM_PROVIDER === 'openrouter') {
+    await loadStoredLlmKey().catch(err => console.warn(`[llm] ключ из админки не прочитан: ${err instanceof Error ? err.message : String(err)}`));
+  }
   // Порядок проверок значим: --retry-skipped должен разбираться раньше --retry
   // по смыслу, хотя includes и сравнивает аргументы целиком.
   if (has('--check')) return checkModel();

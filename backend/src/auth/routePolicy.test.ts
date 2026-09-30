@@ -65,6 +65,8 @@ const WRITES: Record<string, string> = {
   'PATCH /users/:id': 'users.manage',
   'POST /users/:id/password': 'users.manage',
   'POST /users/:id/sessions/:sessionId/revoke': 'users.manage',
+  'PUT /admin/llm/key': 'llm.manage',
+  'DELETE /admin/llm/key': 'llm.manage',
 };
 
 describe('таблица прав маршрутов', () => {
@@ -97,8 +99,10 @@ describe('таблица прав маршрутов', () => {
     }
   });
 
-  it('пользователями управляет только администратор', () => {
+  it('пользователями и ключом модели управляет только администратор', () => {
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('users.manage'), role).toBe(role === 'admin');
+    for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('llm.manage'), role).toBe(role === 'admin');
+    expect(permissionFor('GET', '/admin/llm')).toBe('admin.view');
   });
 
   it('изменение без правила запрещено; чтение без правила — портал', () => {
