@@ -264,9 +264,8 @@ companiesRouter.get('/:id/legacy-risk', async (req, res) => {
 });
 
 /**
- * Объекты компании с её ролью на каждом. Читается проекция card_participations_v:
- * legacy-роли документов, ещё не переразобранных новым конвейером, плюс
- * опубликованные утверждения (этап 03B). Второго writer'а у карточки нет.
+ * Объекты, связанные с компанией участием или событием. Событие без утверждения
+ * об участии показывает объект в карточке, но не создаёт компании роль.
  */
 companiesRouter.get('/:id/projects', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);
@@ -280,18 +279,32 @@ companiesRouter.get('/:id/projects', async (req, res) => {
             p.project_level AS "projectLevel", p.parent_project_id AS "parentProjectId",
             p.planned_completion AS "plannedCompletion",
             p.actual_completion  AS "actualCompletion",
-            pp.role, pp.confidence, pp.is_current AS "isCurrent",
-            pp.evidence_document_id AS "evidenceDocumentId", pp.origin, pp.assertion_id AS "assertionId",
+            link.role, link.confidence, link.is_current AS "isCurrent",
+            link.evidence_document_id AS "evidenceDocumentId", link.origin, link.assertion_id AS "assertionId",
+            link.basis,
             -- контрагенты на том же объекте: кто ещё там работает
             (SELECT json_agg(json_build_object('id', c2.id, 'name', c2.name, 'role', pp2.role))
              FROM card_participations_v pp2
              JOIN companies c2 ON c2.id = pp2.company_id AND c2.merged_into_id IS NULL
              WHERE pp2.project_id = p.id AND pp2.company_id <> $1 AND pp2.is_current
             ) AS counterparties
-     FROM card_participations_v pp
-     JOIN projects p ON p.id = pp.project_id AND p.merged_into_id IS NULL
-     WHERE pp.company_id = $1
-     ORDER BY pp.is_current DESC, p.stage, p.name`,
+     FROM (
+       SELECT pp.project_id, pp.role, pp.confidence, pp.is_current, pp.evidence_document_id,
+              pp.origin, pp.assertion_id, 'participation'::text AS basis
+       FROM card_participations_v pp
+       WHERE pp.company_id = $1
+       UNION ALL
+       SELECT DISTINCT e.project_id, NULL::text, NULL::numeric, NULL::boolean,
+              NULL::bigint, 'event'::text, NULL::bigint, 'event'::text
+       FROM card_events_v e
+       WHERE e.company_id = $1 AND e.project_id IS NOT NULL AND e.status <> 'rejected'
+         AND NOT EXISTS (
+           SELECT 1 FROM card_participations_v pp
+           WHERE pp.company_id = e.company_id AND pp.project_id = e.project_id
+         )
+     ) link
+     JOIN projects p ON p.id = link.project_id AND p.merged_into_id IS NULL
+     ORDER BY (link.basis = 'event'), link.is_current DESC NULLS LAST, p.stage, p.name`,
     [id],
   );
 
@@ -366,8 +379,8 @@ companiesRouter.get('/:id/publications', async (req, res) => {
 });
 
 /**
- * Контрагенты компании (этап 22): договоры, корпоративные связи и совместное участие
- * на объектах — раздельно, без сведения в одно «связана с».
+ * Прямые связи компаний: договоры и корпоративные отношения с утверждением-основанием.
+ * Совместное участие находится в списке объектов и не считается связью компаний.
  */
 companiesRouter.get('/:id/partners', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);
@@ -393,11 +406,12 @@ companiesRouter.get('/:id/events', async (req, res) => {
             e.amount_rub AS "amountRub", e.quote, e.confidence, e.status,
             p.id AS "projectId", p.name AS "projectName",
             cp.id AS "counterpartyId", cp.name AS "counterpartyName",
-            d.url, e.origin
+            d.url, s.title AS "sourceTitle", s.key AS "sourceKey", s.kind AS "sourceKind", e.origin
      FROM card_events_v e
      LEFT JOIN projects  p  ON p.id  = e.project_id
      LEFT JOIN companies cp ON cp.id = e.counterparty_id
      LEFT JOIN raw_documents d ON d.id = e.document_id
+     LEFT JOIN sources s ON s.id = d.source_id
      WHERE e.company_id = $1 AND e.status <> 'rejected'
      ORDER BY e.severity DESC, e.occurred_on DESC NULLS LAST, e.id DESC
      LIMIT 100`,

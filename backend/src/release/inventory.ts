@@ -53,6 +53,7 @@ export const COUNTED_TABLES = [
   'dossier_snapshots',
   'dossier_snapshot_redactions',
   'registry_records',
+  'domrf_targets',
   'bot_processed_updates',
   'source_policy_log',
   'backfill_checkpoints',

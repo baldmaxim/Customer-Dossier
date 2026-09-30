@@ -191,6 +191,10 @@
     box-shadow var(--t-fast) var(--ease);
 }
 
+.idInput {
+  flex: 0 1 180px;
+}
+
 .input:focus,
 .textarea:focus {
   outline: none;

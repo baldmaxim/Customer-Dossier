@@ -174,12 +174,15 @@ export const dependencyState = async (
   put('aliases', await rows(`SELECT id || ':' || entity_id || ':' || hits AS k FROM entity_aliases WHERE entity_kind = '${kind}' AND entity_id = ANY($1::bigint[])`));
   put('mentions', await rows(`SELECT id || ':' || entity_id AS k FROM mentions WHERE entity_kind = '${kind}' AND entity_id = ANY($1::bigint[])`));
   if (kind === 'company') {
+    put('registryRecords', await rows(`SELECT id || ':' || coalesce(company_id::text, '') AS k FROM registry_records WHERE company_id = ANY($1::bigint[])`));
     put('identifiers', await rows(`SELECT id || ':' || company_id || ':' || status AS k FROM entity_identifiers WHERE company_id = ANY($1::bigint[])`));
     put('events', await rows(`SELECT id || ':' || coalesce(company_id::text, '') || ':' || coalesce(counterparty_id::text, '') AS k FROM events WHERE company_id = ANY($1::bigint[]) OR counterparty_id = ANY($1::bigint[])`));
     put('participants', await rows(`SELECT id || ':' || company_id AS k FROM project_participants WHERE company_id = ANY($1::bigint[])`));
     put('relations', await rows(`SELECT id || ':' || status AS k FROM company_relations WHERE from_company_id = ANY($1::bigint[]) OR to_company_id = ANY($1::bigint[])`));
     put('cases', await rows(`SELECT id || ':' || coalesce(company_id::text, '') || ':' || coalesce(claimed_client_company_id::text, '') AS k FROM dossier_cases WHERE company_id = ANY($1::bigint[]) OR claimed_client_company_id = ANY($1::bigint[])`));
   } else {
+    put('registryRecords', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM registry_records WHERE project_id = ANY($1::bigint[])`));
+    put('domRfTargets', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM domrf_targets WHERE project_id = ANY($1::bigint[])`));
     put('events', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM events WHERE project_id = ANY($1::bigint[])`));
     put('participants', await rows(`SELECT id || ':' || project_id AS k FROM project_participants WHERE project_id = ANY($1::bigint[])`));
     put('children', await rows(`SELECT id || ':' || parent_project_id AS k FROM projects WHERE parent_project_id = ANY($1::bigint[])`));
@@ -355,6 +358,7 @@ const buildPreview = async (
     }
     counts.identifiers = await count(client, `SELECT count(*)::int AS n FROM entity_identifiers WHERE company_id = $1 AND status = 'active'`, [s]);
     counts.events = await count(client, 'SELECT count(*)::int AS n FROM events WHERE company_id = $1 OR counterparty_id = $1', [s]);
+    counts.registryRecords = await count(client, 'SELECT count(*)::int AS n FROM registry_records WHERE company_id = $1', [s]);
     counts.participants = await count(client, 'SELECT count(*)::int AS n FROM project_participants WHERE company_id = $1', [s]);
     counts.participantDuplicates = await count(
       client,
@@ -392,6 +396,8 @@ const buildPreview = async (
       conflicts.push({ code: 'hierarchy_conflict', message: 'одна сущность входит в другую' });
     }
     counts.events = await count(client, 'SELECT count(*)::int AS n FROM events WHERE project_id = $1', [s]);
+    counts.registryRecords = await count(client, 'SELECT count(*)::int AS n FROM registry_records WHERE project_id = $1', [s]);
+    counts.domRfTargets = await count(client, 'SELECT count(*)::int AS n FROM domrf_targets WHERE project_id = $1', [s]);
     counts.participants = await count(client, 'SELECT count(*)::int AS n FROM project_participants WHERE project_id = $1', [s]);
     counts.participantDuplicates = await count(
       client,
@@ -536,6 +542,8 @@ const MOVABLE: Record<string, Record<string, string>> = {
   mentions: { entity_id: 'bigint' },
   events: { company_id: 'bigint', counterparty_id: 'bigint', project_id: 'bigint' },
   project_participants: { company_id: 'bigint', project_id: 'bigint' },
+  registry_records: { company_id: 'bigint', project_id: 'bigint' },
+  domrf_targets: { project_id: 'bigint' },
   entity_identifiers: { company_id: 'bigint' },
   company_relations: { from_company_id: 'bigint', to_company_id: 'bigint' },
   merge_queue: { status: 'merge_status' },
@@ -604,6 +612,9 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
   }
 
   const fk = kind === 'company' ? 'company_id' : 'project_id';
+  for (const id of await idsOf(client, `SELECT id FROM registry_records WHERE ${fk} = $1 ORDER BY id`, [s])) {
+    await updateColumn(client, moves, 'registry_records', id, fk, s, t);
+  }
   const other = kind === 'company' ? 'project_id' : 'company_id';
   for (const col of kind === 'company' ? ['company_id', 'counterparty_id'] : ['project_id']) {
     for (const id of await idsOf(client, `SELECT id FROM events WHERE ${col} = $1 ORDER BY id`, [s])) {
@@ -640,6 +651,9 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
       }
     }
   } else {
+    for (const id of await idsOf(client, 'SELECT id FROM domrf_targets WHERE project_id = $1 ORDER BY id', [s])) {
+      await updateColumn(client, moves, 'domrf_targets', id, 'project_id', s, t);
+    }
     for (const id of await idsOf(client, `SELECT id FROM projects WHERE parent_project_id = $1 AND merged_into_id IS NULL ORDER BY id`, [s])) {
       await updateColumn(client, moves, 'projects', id, 'parent_project_id', s, t);
     }

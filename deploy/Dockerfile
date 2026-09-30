@@ -28,6 +28,9 @@ COPY --from=api-build /app/backend/node_modules ./node_modules
 COPY --from=api-build /app/backend/dist ./dist
 # Раннер ищет миграции как dist/db/../../../docs/migrations.
 COPY docs/migrations /app/docs/migrations
+# Воркер ДОМ.РФ читает выражение разбора DOM из backend/scripts во время работы. Сам браузер
+# в образ не входит (Playwright на Alpine не поддерживает Chromium): DOMRF_BROWSER_ENABLED=false.
+COPY backend/scripts ./scripts
 USER node
 EXPOSE 4100
 CMD ["node", "dist/index.js"]

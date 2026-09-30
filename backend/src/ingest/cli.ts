@@ -6,9 +6,10 @@
 //   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
 //   npm run ingest:once -- --site-profile <key> --file profile.json  проверить и записать профиль сайта
 //   npm run ingest:once -- --telegram-profile <канал> --file profile.json  проверить и записать профиль канала
-//   npm run ingest:once -- --registry-import <key> --file answer.json [--type developer] [--url <адрес>]
+//   npm run ingest:once -- --registry-import <key> --file answer.json [--type developer] [--url <адрес>] [--project-id <id>]
 //                                              записать ответ реестра, сохранённый оператором (нужен допуск)
 //   npm run ingest:once -- --registry-objects <key>  что портал уже ведёт по этому реестру
+//   npm run ingest:once -- --domrf-pending  ссылки ДОМ.РФ из админки, ожидающие браузерного снимка
 //   npm run ingest:once -- --source kzbuild    прогнать один источник (нужен допуск)
 //   npm run ingest:once                        прогнать все просроченные источники с допуском
 //   npm run ingest:once -- --remove <key>      удалить источник без документов
@@ -25,6 +26,7 @@ import fs from 'node:fs';
 
 import { closeDb, getPool } from '../db/pool.js';
 import { importRegistryFile } from './registry/importFile.js';
+import { listDomRfTargets } from './registry/domrfTargets.js';
 import { listTrackedRecords } from './registry/records.js';
 import { parseSourceProfile } from './crawl.js';
 import { telegramProfileSchema } from './telegram/webCrawler.js';
@@ -136,6 +138,12 @@ const printReports = (reports: Awaited<ReturnType<typeof runIngestPass>>): void 
 };
 
 const main = async (): Promise<void> => {
+  if (process.argv.includes('--domrf-pending')) {
+    const targets = await listDomRfTargets(true);
+    if (targets.length === 0) console.log('[domrf] ожидающих ссылок нет');
+    for (const target of targets) console.log(`[domrf] ${target.externalRef} ${target.url}${target.projectId ? ` → объект портала №${target.projectId}` : ''}`);
+    return;
+  }
   const probeChannel = argValue('--probe');
   if (probeChannel) {
     await probe(probeChannel);
@@ -187,7 +195,9 @@ const main = async (): Promise<void> => {
     const source = await loadApprovedSource('website', importKey);
     if (!source) return;
     const type = argValue('--type') === 'developer' ? 'developer' : 'object';
-    const result = await importRegistryFile(source, file, { type, url: argValue('--url') ?? undefined });
+    const projectIdArg = argValue('--project-id');
+    const projectId = projectIdArg === null ? undefined : Number(projectIdArg);
+    const result = await importRegistryFile(source, file, { type, url: argValue('--url') ?? undefined, projectId });
     if (result.kind === 'stored') {
       console.log(`[registry] ${result.type} ${result.externalRef} «${result.name}»: ${STORE_LABEL[result.outcome] ?? result.outcome}, полей ${result.fields}`);
       if (result.newRevision) console.log(`[registry] снимок записан, утверждений ${result.assertions}`);
@@ -203,6 +213,8 @@ const main = async (): Promise<void> => {
       console.error(`[registry] пути в ответе: ${result.availablePaths.join(', ') || '—'}`);
     } else if (result.kind === 'invalid_json') {
       console.error(`[registry] файл не разобран как JSON: ${result.message}`);
+    } else if (result.kind === 'invalid_page') {
+      console.error(`[registry] снимок страницы некорректен: ${result.message}`);
     } else if (result.kind === 'too_large') {
       console.error(`[registry] файл ${result.bytes} байт, предел профиля ${result.limit}`);
     } else {

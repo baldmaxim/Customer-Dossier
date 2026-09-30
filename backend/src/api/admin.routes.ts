@@ -28,8 +28,39 @@ import { refreshCompanyMetrics } from '../metrics/refresh.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
 import { classifySourceHealth } from '../ingest/sourceHealth.js';
+import { DomRfTargetError, listDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
 
 export const adminRouter = asyncRouter();
+
+/** Адреса для браузерного парсинга: здесь нет сетевого обращения к ДОМ.РФ. */
+adminRouter.get('/domrf-targets', async (_req, res) => {
+  res.json({ items: await listDomRfTargets() });
+});
+
+adminRouter.post('/domrf-targets', async (req, res) => {
+  const parsed = z.object({ url: z.string().trim().min(1).max(1000), projectId: z.number().int().positive().nullable().optional() }).strict().safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Укажите ссылку и, при необходимости, ID объекта портала' }); return; }
+  try {
+    res.json({ item: await registerDomRfTarget(parsed.data) });
+  } catch (err) {
+    if (err instanceof DomRfTargetError) { res.status(400).json({ error: err.message }); return; }
+    throw err;
+  }
+});
+
+adminRouter.post('/domrf-targets/:id/rescan', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(400).json({ error: 'Некорректный ID' }); return; }
+  if (!(await requestDomRfRescan(id))) { res.status(404).json({ error: 'Ссылка не найдена' }); return; }
+  res.json({ ok: true });
+});
+
+adminRouter.delete('/domrf-targets/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) { res.status(400).json({ error: 'Некорректный ID' }); return; }
+  if (!(await removeDomRfTarget(id))) { res.status(404).json({ error: 'Ссылка не найдена' }); return; }
+  res.json({ ok: true });
+});
 
 interface ISourceAdminRow {
   id: number;

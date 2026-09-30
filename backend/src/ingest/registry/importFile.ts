@@ -16,7 +16,11 @@
 
 import fs from 'node:fs';
 
+import { withTransaction } from '../../db/pool.js';
+import { attachBrowserCaptureToProject, linkedRegistryProject } from '../../registry/projectLink.js';
+import { findDomRfTarget, markDomRfCaptured } from './domrfTargets.js';
 import type { ISource } from '../sources.js';
+import { isDomRfBrowserCapture, mapDomRfBrowserCapture } from './browserCapture.js';
 import { availablePaths, mapRecord, type RegistryRecordType } from './map.js';
 import { RegistryProfileError, buildUrl, parseRegistryProfile } from './profile.js';
 import { buildRegistryDocument, persistRegistryRecord, type IRegistryPersistResult } from './store.js';
@@ -24,6 +28,7 @@ import { buildRegistryDocument, persistRegistryRecord, type IRegistryPersistResu
 export type IRegistryImportResult =
   | ({ kind: 'stored'; type: RegistryRecordType; externalRef: string; name: string; url: string; fields: number } & IRegistryPersistResult)
   | { kind: 'invalid_json'; message: string }
+  | { kind: 'invalid_page'; message: string }
   /** Ответ разобран, но карта полей не совпала: оператору нужны реальные пути. */
   | { kind: 'unmapped'; availablePaths: string[] }
   | { kind: 'config_invalid'; message: string }
@@ -35,6 +40,8 @@ export interface IRegistryImportOptions {
   url?: string;
   sourceRunId?: number | null;
   fetchedAt?: Date;
+  /** Existing portal card for a browser capture. Never creates a card from this ID. */
+  projectId?: number;
 }
 
 /** Идентификатор записи из адреса каталога: последний числовой сегмент пути. */
@@ -63,25 +70,70 @@ export const importRegistryFile = async (
   } catch (err) {
     return { kind: 'config_invalid', message: err instanceof RegistryProfileError ? err.message : String(err) };
   }
-
   const bytes = fs.statSync(filePath).size;
   if (bytes > profile.limits.maxBytes) return { kind: 'too_large', bytes, limit: profile.limits.maxBytes };
-
   let body: unknown;
   try {
     body = JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
   } catch (err) {
     return { kind: 'invalid_json', message: err instanceof Error ? err.message : String(err) };
   }
+  return importRegistryPayload(source, body, options, bytes);
+};
 
-  const type: RegistryRecordType = options.type ?? 'object';
-  const record = mapRecord(body, profile, type);
+/** Тот же импорт для снимка, полученного фоновым браузером без промежуточного файла. */
+export const importRegistryPayload = async (
+  source: ISource,
+  body: unknown,
+  options: IRegistryImportOptions = {},
+  bytes = Buffer.byteLength(JSON.stringify(body), 'utf8'),
+): Promise<IRegistryImportResult> => {
+  let profile;
+  try {
+    profile = parseRegistryProfile(source.config);
+  } catch (err) {
+    return { kind: 'config_invalid', message: err instanceof RegistryProfileError ? err.message : String(err) };
+  }
+
+  if (bytes > profile.limits.maxBytes) return { kind: 'too_large', bytes, limit: profile.limits.maxBytes };
+
+  const browserPage = isDomRfBrowserCapture(body);
+  if (browserPage && options.type === 'developer') return { kind: 'invalid_page', message: 'снимок страницы описывает объект, а не застройщика' };
+  let record;
+  try {
+    record = browserPage ? mapDomRfBrowserCapture(body) : mapRecord(body, profile, options.type ?? 'object');
+  } catch (err) {
+    return { kind: 'invalid_page', message: err instanceof Error ? err.message : String(err) };
+  }
   if (!record) return { kind: 'unmapped', availablePaths: availablePaths(body) };
+  if (options.projectId !== undefined && !browserPage) {
+    return { kind: 'invalid_page', message: '--project-id применяется только к снимку страницы объекта' };
+  }
+  const target = browserPage ? await withTransaction(client => findDomRfTarget(client, record.identity.externalRef)) : null;
+  if (target?.projectId !== null && target?.projectId !== undefined && options.projectId !== undefined && target.projectId !== options.projectId) {
+    return { kind: 'invalid_page', message: `ссылка в админке привязана к объекту портала №${target.projectId}` };
+  }
+  const projectId = options.projectId ?? target?.projectId ?? undefined;
+  if (projectId !== undefined) {
+    try {
+      await withTransaction(client => linkedRegistryProject(client, source.id, record.identity.externalRef, projectId));
+    } catch (err) {
+      return { kind: 'invalid_page', message: err instanceof Error ? err.message : String(err) };
+    }
+  }
 
+  const type = record.type;
   const template = type === 'object' ? profile.endpoints.object : profile.endpoints.developer;
-  const url = options.url ?? (template ? buildUrl(template, { id: record.identity.externalRef }) : `registry:${record.identity.externalRef}`);
+  const url = options.url ?? (browserPage ? (body as { url: string }).url : template ? buildUrl(template, { id: record.identity.externalRef }) : `registry:${record.identity.externalRef}`);
   const doc = buildRegistryDocument(source, record, url, options.sourceRunId ?? null, options.fetchedAt);
-  const persisted = await persistRegistryRecord({ source, record, doc });
+  const persisted = await persistRegistryRecord({ source, record, doc, requestedProjectId: projectId });
+  if (browserPage && !persisted.publishError) {
+    await withTransaction(async client => {
+      if (projectId !== undefined) await attachBrowserCaptureToProject(client, source.id, record.identity.externalRef, projectId);
+      const linked = await linkedRegistryProject(client, source.id, record.identity.externalRef);
+      await markDomRfCaptured(client, record.identity.externalRef, persisted.revisionId, linked);
+    });
+  }
 
   return {
     kind: 'stored',

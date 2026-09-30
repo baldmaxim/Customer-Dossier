@@ -96,6 +96,7 @@ export const parseEnv = (source: EnvSource) => {
     // пересчитываются. Каждый флаг остаётся рубильником: =false выключает.
     // Допуск источника это не отменяет — без него живого запроса не будет.
     INGEST_ENABLED: parseStrictBool('INGEST_ENABLED', source.INGEST_ENABLED, true),
+    DOMRF_BROWSER_ENABLED: parseStrictBool('DOMRF_BROWSER_ENABLED', source.DOMRF_BROWSER_ENABLED, false),
     PIPELINE_ENABLED: parseStrictBool('PIPELINE_ENABLED', source.PIPELINE_ENABLED, true),
     METRICS_AUTO_REFRESH: parseStrictBool('METRICS_AUTO_REFRESH', source.METRICS_AUTO_REFRESH, true),
     BOT_ENABLED: parseStrictBool('BOT_ENABLED', source.BOT_ENABLED, false),

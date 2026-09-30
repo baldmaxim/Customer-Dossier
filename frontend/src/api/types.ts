@@ -108,9 +108,10 @@ export interface IProjectRow {
   city: string | null;
   plannedCompletion: string | null;
   actualCompletion: string | null;
-  role: Role;
-  confidence: number;
-  isCurrent: boolean;
+  role: Role | null;
+  confidence: number | null;
+  isCurrent: boolean | null;
+  basis: 'participation' | 'event';
   counterparties: Array<{ id: number; name: string; role: Role }> | null;
 }
 
@@ -333,6 +334,9 @@ export interface IEventRow {
   counterpartyId: number | null;
   counterpartyName: string | null;
   url: string | null;
+  sourceTitle: string | null;
+  sourceKey: string | null;
+  sourceKind: string | null;
 }
 
 /** Строка списка подрядчиков из снимка сигналов (этап 07). Индекса риска нет. */
@@ -778,7 +782,8 @@ export interface IStatement {
   attribution: Attribution;
   assertionIds: number[];
   evidenceIds: number[];
-  quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string }>;
+  quotes: Array<{ evidenceId: number; quote: string; sourceTitle: string; publishedAt: string | null; stance: string;
+    revisionId?: number; sourceKey?: string; sourceKind?: string; url?: string | null; observedAt?: string; title?: string | null }>;
   /** Применимость к обращению (scope-match@1, этап 12). */
   scope?: { version: string; dimensions: Record<string, 'match' | 'compatible' | 'unknown' | 'conflict'>; missing: string[]; conflicts: string[] };
   priorDecisions?: Array<{ assertionId: number; mergeId: number; decisionId: number; decision: string; reviewer: string; decidedAt: string }>;

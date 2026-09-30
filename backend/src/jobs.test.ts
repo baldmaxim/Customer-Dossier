@@ -9,6 +9,7 @@ const starters = (): IJobStarters & { calls: string[] } => {
   return {
     calls,
     ingest: vi.fn(() => void calls.push('ingest')),
+    domrf: vi.fn(() => void calls.push('domrf')),
     pipeline: vi.fn(() => void calls.push('pipeline')),
     metrics: vi.fn(() => void calls.push('metrics')),
     bot: vi.fn(() => void calls.push('bot')),
@@ -17,6 +18,7 @@ const starters = (): IJobStarters & { calls: string[] } => {
 
 const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   INGEST_ENABLED: false,
+  DOMRF_BROWSER_ENABLED: false,
   PIPELINE_ENABLED: false,
   REPROCESS_AUTO_PUBLISH: false,
   HEADLINE_ENABLED: false,
@@ -77,5 +79,12 @@ describe('startBackgroundJobs', () => {
     );
     expect(s.calls).toEqual(['ingest', 'metrics', 'bot']);
     expect(decision.started).toEqual(['ingest', 'metrics', 'bot']);
+  });
+
+  it('браузерный сбор ДОМ.РФ включается отдельным флагом', () => {
+    const s = starters();
+    const decision = startBackgroundJobs(flags({ DOMRF_BROWSER_ENABLED: true }), s, new AbortController().signal);
+    expect(s.calls).toEqual(['domrf']);
+    expect(decision.started).toEqual(['domrf']);
   });
 });

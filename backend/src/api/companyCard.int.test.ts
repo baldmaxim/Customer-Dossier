@@ -149,21 +149,12 @@ describe('лента публикаций компании', () => {
 });
 
 describe('контрагенты компании', () => {
-  it('совместное участие видно и названо своим основанием, а не договором', async () => {
+  it('совместное участие не создаёт контрагента без прямого основания', async () => {
     const res = await call(`/api/companies/${companyId}/partners`);
     expect(res.status).toBe(200);
 
     const items = res.body.items as Array<{ companyId: number; name: string; links: Array<{ kind: string; role: string | null; ownRole: string | null; projectName: string | null }> }>;
-    const partner = items.find(i => i.companyId === partnerId);
-    expect(partner?.name).toContain('Картасервис');
-
-    const link = partner!.links[0]!;
-    // Обе компании на одном объекте — это не договор между ними (ADR-008).
-    expect(link.kind).toBe('co_participation');
-    expect(link.role).toBe('subcontractor');
-    expect(link.ownRole).toBe('general_contractor');
-    expect(link.projectName).toContain('Картадемо');
-    expect(items.every(i => i.links.every(l => l.kind !== 'contract'))).toBe(true);
+    expect(items.find(i => i.companyId === partnerId)).toBeUndefined();
   });
 
   it('сама компания в свои контрагенты не попадает', async () => {
@@ -185,5 +176,32 @@ describe('состояние обработки на экране админки
     expect(revisions.some(r => r.state === 'unknown')).toBe(false);
     expect(Array.isArray(res.body.failures)).toBe(true);
     expect((res.body.model as { ok: boolean }).ok).toBeDefined();
+  });
+});
+
+describe('объекты компании из событий', () => {
+  it('показывает объект события без утверждения об участии и без роли', async () => {
+    const body = 'Капиталдемо завершила строительство ЖК «Бадаевский-Демо».';
+    await ingest(body, fx.answer({
+      companies: [fx.company('Капиталдемо', body)],
+      projects: [fx.project('Бадаевский-Демо', body)],
+      events: [fx.event({ type: 'construction_start', subject: 'Капиталдемо', project: 'Бадаевский-Демо', quote: body })],
+    }));
+    const company = await getPool().query<{ id: number }>(`SELECT id FROM companies WHERE name = 'Капиталдемо'`);
+    const id = company.rows[0]!.id;
+    const events = await call(`/api/companies/${id}/events`);
+    expect((events.body.items as Array<{ projectName: string; sourceTitle: string; sourceKey: string }>).some(e =>
+      e.projectName === 'Бадаевский-Демо' && e.sourceTitle === 'card_demo' && e.sourceKey === 'card_demo')).toBe(true);
+
+    const projects = await call(`/api/companies/${id}/projects`);
+    expect(projects.status).toBe(200);
+    const rows = projects.body.items as Array<{ id: number; name: string; role: string | null; basis: string }>;
+    expect(rows.filter(p => p.name === 'Бадаевский-Демо')).toEqual([
+      expect.objectContaining({ role: null, basis: 'event' }),
+    ]);
+    const project = rows.find(p => p.name === 'Бадаевский-Демо')!;
+    const dossier = await call(`/api/projects/${project.id}/dossier`);
+    const eventStatements = dossier.body.events as Array<{ quotes: Array<{ sourceTitle: string; sourceKey: string; revisionId: number; observedAt: string }> }>;
+    expect(eventStatements[0]?.quotes[0]).toMatchObject({ sourceTitle: 'card_demo', sourceKey: 'card_demo', revisionId: expect.any(Number), observedAt: expect.any(String) });
   });
 });

@@ -15,6 +15,7 @@ export interface IRegistryPayloadField {
 }
 
 export interface IRegistryPayload {
+  captureMethod?: 'browser_page';
   identity: {
     externalRef: string;
     name: string;

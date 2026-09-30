@@ -32,6 +32,7 @@ export const buildRegistryDocument = (
   fetchedAt: Date = new Date(),
 ): IIncomingDocument => {
   const asOf = record.identity.asOf;
+  const browserPage = record.payload.captureMethod === 'browser_page';
   return {
     sourceId: source.id,
     sourceRunId,
@@ -43,9 +44,9 @@ export const buildRegistryDocument = (
     publishedAtPrecision: asOf ? 'date_only' : null,
     publishedAtRaw: asOf,
     forwardFrom: null,
-    representation: representationOf(record.type),
-    completeness: 'full',
-    completenessReason: `registry_fields:${record.fields.length}`,
+    representation: browserPage ? 'registry_object_browser@1' : representationOf(record.type),
+    completeness: browserPage ? 'excerpt' : 'full',
+    completenessReason: `${browserPage ? 'browser_page_fields' : 'registry_fields'}:${record.fields.length}`,
     attachments: [],
     sourceModifiedAt: null,
     fetchedAt,
@@ -70,6 +71,7 @@ export const persistRegistryRecord = async (input: {
   doc: IIncomingDocument;
   /** Дополнительная запись в той же транзакции (условный кэш сетевого пути). */
   alsoInTransaction?: (client: PoolClient) => Promise<void>;
+  requestedProjectId?: number;
 }): Promise<IRegistryPersistResult> => {
   const { source, record, doc } = input;
   const itemKey = itemIdentity({ externalId: doc.externalId, url: doc.url, body: doc.body }).key;
@@ -103,7 +105,7 @@ export const persistRegistryRecord = async (input: {
   if (!result.newRevision || result.revisionId === null || !env.REGISTRY_PUBLISH_ENABLED) return result;
   try {
     const published = await withTransaction(client =>
-      publishRegistryRecord(client, { revisionId: result.revisionId!, body: doc.body, record }),
+      publishRegistryRecord(client, { revisionId: result.revisionId!, body: doc.body, record, requestedProjectId: input.requestedProjectId }),
     );
     result.assertions = published.assertions;
     result.skipped = published.skipped;

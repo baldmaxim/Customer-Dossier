@@ -1,13 +1,10 @@
-// «Объекты»: где компания названа участником и в какой роли.
+// «Объекты»: участие компании и объекты, по которым есть её события.
 //
 // Одна компания бывает на объекте в нескольких ролях — строка на объект, роли ярлыками рядом,
-// а не повтор объекта на каждую роль. Роль берётся только из положительного сообщения
-// (card_participations_v): план и слух ролью не становятся. «Также на объекте» — соседи по
-// объекту, а не контрагенты по договору.
+// а не повтор объекта на каждую роль. Роль берётся только из card_participations_v;
+// событие без участия оставляет роль неизвестной.
 
 import { FC } from 'react';
-import { Link } from 'react-router-dom';
-
 import type { IProjectRow } from '../api/types';
 import { ASSERTION_ROLE_LABELS, STAGE_LABELS, formatDate } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
@@ -19,6 +16,8 @@ interface ICompanyProjectsProps {
   projects: IProjectRow[];
   isLoading: boolean;
   error: unknown;
+  selectedProjectId: number | null;
+  onSelect: (projectId: number) => void;
 }
 
 interface IProjectGroup {
@@ -26,21 +25,23 @@ interface IProjectGroup {
   roles: Array<{ role: string; isCurrent: boolean }>;
 }
 
-const MAX_COUNTERPARTIES = 3;
-
 const roleText = (role: string): string => ASSERTION_ROLE_LABELS[role] ?? role;
 
 const groupByProject = (rows: IProjectRow[]): IProjectGroup[] => {
   const groups = new Map<number, IProjectGroup>();
   for (const row of rows) {
     const group = groups.get(row.id) ?? { project: row, roles: [] };
-    if (!group.roles.some(r => r.role === row.role)) group.roles.push({ role: row.role, isCurrent: row.isCurrent });
+    if (row.role !== null) {
+      const role = group.roles.find(r => r.role === row.role);
+      if (role) role.isCurrent ||= Boolean(row.isCurrent);
+      else group.roles.push({ role: row.role, isCurrent: Boolean(row.isCurrent) });
+    }
     groups.set(row.id, group);
   }
   return [...groups.values()];
 };
 
-export const CompanyProjects: FC<ICompanyProjectsProps> = ({ projects, isLoading, error }) => {
+export const CompanyProjects: FC<ICompanyProjectsProps> = ({ projects, isLoading, error, selectedProjectId, onSelect }) => {
   const groups = groupByProject(projects);
 
   return (
@@ -49,44 +50,28 @@ export const CompanyProjects: FC<ICompanyProjectsProps> = ({ projects, isLoading
       {isLoading && <p className={styles.muted}>Загрузка…</p>}
       {!isLoading && !error && groups.length === 0 && (
         <EmptyState>
-          Объектов в выборке нет: ни в одной публикации компания не названа участником объекта. Это не значит,
-          что объектов у неё нет.
+          Объектов в выборке нет: компания не названа участником объекта и с ней не связано событий по объектам.
+          Это не значит, что объектов у неё нет.
         </EmptyState>
       )}
 
       <ul className={styles.list}>
         {groups.map(({ project: p, roles }) => {
-          const others = p.counterparties ?? [];
           return (
-            <li key={p.id} className={styles.item}>
-              <div className={styles.head}>
-                <Link className={styles.name} to={`/projects/${p.id}`}>
-                  {p.name}
-                </Link>
-                {p.city && <span className={styles.meta}>{p.city}</span>}
-              </div>
-              <div className={styles.tags}>
-                {roles.map(r => (
-                  <Badge key={r.role} tone="accent">
-                    {roleText(r.role)}
-                    {r.isCurrent ? '' : ' (в прошлом)'}
-                  </Badge>
-                ))}
-                <Badge>{STAGE_LABELS[p.stage] ?? p.stage}</Badge>
-                {p.plannedCompletion && <span className={styles.meta}>план {formatDate(p.plannedCompletion)}</span>}
-              </div>
-              {others.length > 0 && (
-                <p className={styles.others}>
-                  Также на объекте:{' '}
-                  {others.slice(0, MAX_COUNTERPARTIES).map((c, i) => (
-                    <span key={`${c.id}-${c.role}`}>
-                      {i > 0 && ', '}
-                      <Link to={`/company/${c.id}`}>{c.name}</Link> ({roleText(c.role)})
-                    </span>
-                  ))}
-                  {others.length > MAX_COUNTERPARTIES && ` и ещё ${others.length - MAX_COUNTERPARTIES}`}
-                </p>
-              )}
+            <li key={p.id} className={`${styles.item} ${selectedProjectId === p.id ? styles.selected : ''}`}>
+              <button type="button" className={styles.pick} aria-pressed={selectedProjectId === p.id}
+                aria-controls="company-project-detail" onClick={() => onSelect(p.id)}>
+                <span className={styles.head}>
+                  <span className={styles.name}>{p.name}</span>
+                  {p.city && <span className={styles.meta}>{p.city}</span>}
+                </span>
+                <span className={styles.tags}>
+                  {roles.length === 0 && <Badge>{p.basis === 'event' ? 'из событий · роль не установлена' : 'роль не указана'}</Badge>}
+                  {roles.map(r => <Badge key={r.role} tone="accent">{roleText(r.role)}{r.isCurrent ? '' : ' (в прошлом)'}</Badge>)}
+                  <Badge>{STAGE_LABELS[p.stage] ?? p.stage}</Badge>
+                  {p.plannedCompletion && <span className={styles.meta}>план {formatDate(p.plannedCompletion)}</span>}
+                </span>
+              </button>
             </li>
           );
         })}

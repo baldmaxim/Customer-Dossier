@@ -34,7 +34,10 @@ export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Да
     if (registry.developer.ogrn) rows.push({ label: 'ОГРН застройщика', value: registry.developer.ogrn });
   }
   if (registry.groupName) rows.push({ label: 'Группа компаний', value: registry.groupName });
-  rows.push(...registry.fields);
+  // Исполнитель работ нужен рядом с основной информацией, даже если на странице
+  // ДОМ.РФ это поле следует после длинного списка характеристик дома.
+  rows.push(...registry.fields.filter(field => field.label === 'Генподрядчики' || field.label === 'Генподрядчик'));
+  rows.push(...registry.fields.filter(field => field.label !== 'Генподрядчики' && field.label !== 'Генподрядчик'));
 
   return (
     <Section title={title} note={`${registry.source.title} · запись ${registry.externalRef}`}>

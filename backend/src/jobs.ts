@@ -5,6 +5,7 @@
 
 export interface IJobFlags {
   INGEST_ENABLED: boolean;
+  DOMRF_BROWSER_ENABLED: boolean;
   PIPELINE_ENABLED: boolean;
   REPROCESS_AUTO_PUBLISH: boolean;
   HEADLINE_ENABLED: boolean;
@@ -15,6 +16,7 @@ export interface IJobFlags {
 
 export interface IJobStarters {
   ingest: (signal: AbortSignal) => void;
+  domrf: (signal: AbortSignal) => void;
   pipeline: (signal: AbortSignal) => void;
   metrics: (signal: AbortSignal) => void;
   bot: (signal: AbortSignal) => void;
@@ -37,6 +39,13 @@ export const startBackgroundJobs = (
     decision.started.push('ingest');
   } else {
     decision.notes.push('сбор источников выключен (INGEST_ENABLED=false)');
+  }
+
+  if (flags.DOMRF_BROWSER_ENABLED) {
+    starters.domrf(signal);
+    decision.started.push('domrf');
+  } else {
+    decision.notes.push('браузерный сбор ДОМ.РФ выключен (DOMRF_BROWSER_ENABLED=false)');
   }
 
   if (flags.PIPELINE_ENABLED) {

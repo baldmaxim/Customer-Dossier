@@ -20,6 +20,23 @@
   padding-top: 0;
 }
 
+.pick {
+  display: block;
+  width: 100%;
+  padding: var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick:hover { background: var(--surface-2); }
+.pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.selected .pick { background: var(--accent-soft); border-color: var(--accent-border); }
+
 .head {
   display: flex;
   flex-wrap: wrap;
@@ -30,6 +47,7 @@
 .name {
   font-weight: 600;
   font-size: var(--fs-base);
+  color: var(--accent);
   overflow-wrap: anywhere;
 }
 

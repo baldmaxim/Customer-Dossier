@@ -350,6 +350,35 @@ describe('реестр: детерминированная запись в ка�
 });
 
 describe('импорт файла без сети (T20C-02)', () => {
+  it('снимок браузерной страницы сохраняет текст и связывает объект без выдуманного ИНН застройщика', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-browser-demo.test/api/object?id={id}' } }, 'registry-browser-demo.test'), 'registry-browser-demo.test');
+    const file = path.join(os.tmpdir(), `domrf-browser-${Date.now()}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      format: 'domrf-browser@1',
+      url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62087',
+      title: '"Большая Татарская 35", "Татарская 35"',
+      address: 'Москва город, Район Замоскворечье',
+      developer: { name: 'СЗ ПРАКТИКА', group: 'ДОНСТРОЙ' },
+      characteristics: [{ label: 'Количество квартир', value: '472' }],
+    }), 'utf8');
+    try {
+      const result = await importRegistryFile((await getSourceById(s.id))!, file);
+      expect(result.kind).toBe('stored');
+      expect(calls).toHaveLength(0);
+      const rows = await revisions(s.id);
+      expect(rows[0]!.body).toContain('Количество квартир: 472');
+      expect(rows[0]!.body).toContain('Группа компаний: ДОНСТРОЙ');
+      const linked = (await pool().query<{ project_id: number | null; company_id: number | null }>(
+        'SELECT project_id, company_id FROM registry_records WHERE source_id = $1', [s.id],
+      )).rows[0]!;
+      expect(linked.project_id).not.toBeNull();
+      expect(linked.company_id).toBeNull();
+      expect(await canonCount(s.id)).toBe(0);
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+
   it('сохранённый оператором ответ даёт ту же редакцию, снимок и канон, что и сбор', async () => {
     const s = await registry(registryProfile({ endpoints: { object: 'https://registry-j-demo.test/api/object?id={id}' } }, 'registry-j-demo.test'), 'registry-j-demo.test');
     const file = path.join(os.tmpdir(), `registry-import-${Date.now()}.json`);

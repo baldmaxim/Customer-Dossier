@@ -36,3 +36,24 @@
   color: var(--muted);
   font-size: var(--fs-sm);
 }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat strong { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1; }
+.stat span { color: var(--muted); font-size: var(--fs-sm); }

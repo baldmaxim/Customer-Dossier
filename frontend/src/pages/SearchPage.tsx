@@ -1,6 +1,6 @@
-// Главная: компании или публикации — один переключатель и одна строка поиска.
+// Главная: компании, объекты или публикации — один переключатель и одна строка поиска.
 //
-// Поиск меняет смысл вместе с переключателем: в «Компаниях» это название, в «Публикациях» —
+// Поиск меняет смысл вместе с переключателем: в «Компаниях» это названия компаний и объектов, в «Публикациях» —
 // слово из текста, канал или имя компании в посте. Режим и запрос живут в адресе: «Назад»
 // из карточки возвращает туда же, а ссылкой на поиск можно поделиться.
 //
@@ -13,12 +13,12 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client';
-import type { ICompanySearchItem, IContractorRow, ISignalRefreshState, ISummaryResponse } from '../api/types';
+import type { ICompanySearchItem, IContractorRow, IProjectSearchItem, ISignalRefreshState, ISummaryResponse } from '../api/types';
 import { PublicationBrowser, type IPublicationListItem } from '../components/PublicationBrowser';
 import { EmptyState } from '../components/ui/Section';
 import { Segmented } from '../components/ui/Segmented';
 import { TableScroll } from '../components/ui/TableScroll';
-import { ASSERTION_ROLE_LABELS } from '../lib/labels';
+import { ASSERTION_ROLE_LABELS, PROJECT_LEVEL_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import styles from './SearchPage.module.css';
 
@@ -27,12 +27,12 @@ type Role = 'any' | 'customer' | 'general_contractor' | 'contractor' | 'subcontr
 type Sort = 'projects' | 'name';
 
 const MODES: ReadonlyArray<{ value: Mode; label: string; hint?: string }> = [
-  { value: 'companies', label: 'Компании', hint: 'каталог и поиск по названию' },
+  { value: 'companies', label: 'Компании и объекты', hint: 'каталог компаний и общий поиск' },
   { value: 'publications', label: 'Публикации', hint: 'лента и поиск по тексту постов' },
 ];
 
 const PLACEHOLDER: Record<Mode, string> = {
-  companies: 'Название компании',
+  companies: 'Название компании или объекта',
   publications: 'Слово из текста, канал, компания',
 };
 
@@ -138,6 +138,7 @@ const CompanyCatalog: FC = () => {
         <TableScroll minWidth={720}>
           <thead>
             <tr>
+              <th>№</th>
               <th>Компания</th>
               <th>Город</th>
               <th>Выступала в роли</th>
@@ -150,6 +151,7 @@ const CompanyCatalog: FC = () => {
             {rows.map(row => (
               // Строка кликается целиком: ссылка с именем накрывает её собой (index.css).
               <tr key={row.companyId} className="row-link">
+                <td className={styles.companyNumber}>№{row.companyId}</td>
                 <td>
                   <Link className="row-link-target" to={`/company/${row.companyId}`}>
                     {row.name}
@@ -173,22 +175,31 @@ const CompanyCatalog: FC = () => {
   );
 };
 
-/** Поиск компаний по названию: те же колонки, что у каталога, насколько поиск их знает. */
-const CompanyResults: FC<{ query: string }> = ({ query }) => {
-  const search = useQuery({
-    queryKey: ['search', query],
+/** Одна строка ищет компании и объекты; каждый результат ведёт в своё досье. */
+const EntityResults: FC<{ query: string }> = ({ query }) => {
+  const companies = useQuery({
+    queryKey: ['search', 'companies', query],
     queryFn: () => api.get<{ items: ICompanySearchItem[] }>(`/api/companies?q=${encodeURIComponent(query)}&limit=25`),
   });
-  const found = search.data?.items ?? [];
+  const projects = useQuery({
+    queryKey: ['search', 'projects', query],
+    queryFn: () => api.get<{ items: IProjectSearchItem[] }>(`/api/projects/search?q=${encodeURIComponent(query)}&limit=25`),
+  });
+  const found = companies.data?.items ?? [];
+  const foundProjects = projects.data?.items ?? [];
 
-  if (search.isError) return <p role="alert">{describeLoadError(search.error)}</p>;
-  if (search.isLoading) return <p className={styles.muted}>Поиск…</p>;
-  if (found.length === 0) return <EmptyState>Совпадений нет. Проверьте написание или очистите поиск.</EmptyState>;
+  if (companies.isLoading || projects.isLoading) return <p className={styles.muted}>Поиск…</p>;
+  if (companies.isError || projects.isError) return <p role="alert">{describeLoadError(companies.error ?? projects.error)}</p>;
+  if (found.length === 0 && foundProjects.length === 0) return <EmptyState>Компании и объекты не найдены. Проверьте написание или очистите поиск.</EmptyState>;
 
   return (
-    <TableScroll minWidth={480}>
+    <div className={styles.results}>
+    {found.length > 0 && <section aria-label="Найденные компании">
+      <h2 className={styles.resultsTitle}>Компании <span>{found.length}</span></h2>
+      <TableScroll minWidth={480}>
       <thead>
         <tr>
+          <th>№</th>
           <th>Компания</th>
           <th>Город</th>
           <th className={styles.num}>Объектов</th>
@@ -197,6 +208,7 @@ const CompanyResults: FC<{ query: string }> = ({ query }) => {
       <tbody>
         {found.map(item => (
           <tr key={item.id} className="row-link">
+            <td className={styles.companyNumber}>№{item.id}</td>
             <td>
               <Link className="row-link-target" to={`/company/${item.id}`}>
                 {item.name}
@@ -207,7 +219,21 @@ const CompanyResults: FC<{ query: string }> = ({ query }) => {
           </tr>
         ))}
       </tbody>
-    </TableScroll>
+      </TableScroll>
+    </section>}
+    {foundProjects.length > 0 && <section aria-label="Найденные объекты">
+      <h2 className={styles.resultsTitle}>Объекты <span>{foundProjects.length}</span></h2>
+      <TableScroll minWidth={480}>
+        <thead><tr><th>№</th><th>Объект</th><th>Город</th><th>Уровень</th></tr></thead>
+        <tbody>{foundProjects.map(item => <tr key={item.id} className="row-link">
+          <td className={styles.companyNumber}>№{item.id}</td>
+          <td><Link className="row-link-target" to={`/projects/${item.id}`}>{item.name}</Link></td>
+          <td className={styles.muted}>{item.city ?? '—'}</td>
+          <td>{item.levelLabel ? `${PROJECT_LEVEL_LABELS[item.level] ?? item.level} ${item.levelLabel}` : PROJECT_LEVEL_LABELS[item.level] ?? item.level}</td>
+        </tr>)}</tbody>
+      </TableScroll>
+    </section>}
+    </div>
   );
 };
 
@@ -269,7 +295,7 @@ export const SearchPage: FC = () => {
 
   return (
     <>
-      <h1 className="visually-hidden">{mode === 'companies' ? 'Компании' : 'Публикации'}</h1>
+      <h1 className="visually-hidden">{mode === 'companies' ? 'Компании и объекты' : 'Публикации'}</h1>
       <div className={styles.bar}>
         <Segmented label="Что показать" items={MODES} value={mode} onChange={switchMode} size="md" />
         <label className={styles.field}>
@@ -290,7 +316,7 @@ export const SearchPage: FC = () => {
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder={PLACEHOLDER[mode]}
-            aria-label={mode === 'companies' ? 'Поиск компании' : 'Поиск по публикациям'}
+            aria-label={mode === 'companies' ? 'Поиск компании или объекта' : 'Поиск по публикациям'}
             autoComplete="off"
           />
         </label>
@@ -298,7 +324,7 @@ export const SearchPage: FC = () => {
 
       {mode === 'companies' ? (
         searching ? (
-          <CompanyResults query={query} />
+          <EntityResults query={query} />
         ) : (
           <CompanyCatalog />
         )
