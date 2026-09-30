@@ -107,6 +107,16 @@
   min-width: 11rem;
 }
 
+/* Роль в заявке: список — по содержимому, а не во всю ячейку или карточку. */
+.requestRole {
+  align-items: flex-start;
+}
+
+/* На карточке заявки — отступ от кнопок решения под списком. */
+.requestRoleCard {
+  margin-block: var(--sp-1) var(--sp-2);
+}
+
 .matrixRole,
 .matrixCell {
   text-align: center;

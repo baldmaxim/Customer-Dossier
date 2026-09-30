@@ -15,7 +15,7 @@ import { closeDb } from '../db/pool.js';
 import { env } from '../config/env.js';
 import { generatePassword, passwordProblem } from './password.js';
 import { pgAuthStore } from './pgStore.js';
-import { AuthService, normalizeLogin, type IActor } from './service.js';
+import { AuthService, normalizeLogin, type IActor, type IUserView } from './service.js';
 
 const CLI_ACTOR: IActor = { id: null, login: 'cli' };
 const META = { ip: null, userAgent: null };
@@ -36,6 +36,14 @@ const printPassword = (login: string, password: string): void => {
   console.log(`\nЛогин:            ${login}`);
   console.log(`Временный пароль: ${password}`);
   console.log('\nПароль показан один раз. При первом входе портал потребует сменить его.\n');
+};
+
+/** Состояние для --list: заявка и отклонённая заявка — не «выключен», их включает одобрение. */
+const listState = (u: IUserView): string => {
+  if (u.registration === 'pending') return 'заявка';
+  if (u.registration === 'rejected') return 'отклонён';
+  if (!u.isActive) return 'выключен';
+  return u.lockedUntil ? 'заблокирован' : 'активен';
 };
 
 const service = new AuthService(pgAuthStore, {
@@ -79,7 +87,8 @@ const main = async (): Promise<number> => {
       return 1;
     }
     console.log('Пароль сброшен, блокировка снята, все сессии пользователя закрыты.');
-    if (!result.user.isActive) console.log('Внимание: пользователь выключен — включите его в админке.');
+    if (result.user.registration !== 'approved') console.log('Внимание: это заявка на доступ — войти можно после одобрения в админке.');
+    else if (!result.user.isActive) console.log('Внимание: пользователь выключен — включите его в админке.');
     printPassword(login, password);
     return 0;
   }
@@ -91,7 +100,7 @@ const main = async (): Promise<number> => {
       return 0;
     }
     for (const u of users) {
-      const state = u.isActive ? (u.lockedUntil ? 'заблокирован' : 'активен') : 'выключен';
+      const state = listState(u);
       console.log(`${String(u.id).padStart(4)}  ${u.login.padEnd(24)} ${u.role.padEnd(9)} ${state.padEnd(13)} вход: ${u.lastLoginAt ?? '—'}`);
     }
     return 0;

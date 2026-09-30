@@ -6,6 +6,9 @@ import { getPool, withTransaction } from '../db/pool.js';
 import { isRole } from './permissions.js';
 import {
   TOUCH_INTERVAL_MS,
+  isRegistrationState,
+  registrationDecisionProblem,
+  type DecideRegistrationResult,
   type IAuthEventInput,
   type IAuthEventRecord,
   type IAuthStore,
@@ -14,6 +17,7 @@ import {
   type ISessionRecord,
   type IUserPatch,
   type IUserRecord,
+  type RegistrationDecision,
   type RevokeReason,
   type UpdateUserResult,
 } from './store.js';
@@ -23,7 +27,7 @@ const userColumns = (a: string): string => `
   ${a}.must_change_password AS "mustChangePassword", ${a}.is_active AS "isActive",
   ${a}.failed_attempts AS "failedAttempts", ${a}.locked_until AS "lockedUntil", ${a}.last_login_at AS "lastLoginAt",
   ${a}.password_changed_at AS "passwordChangedAt", ${a}.created_at AS "createdAt", ${a}.created_by AS "createdBy",
-  ${a}.updated_at AS "updatedAt", ${a}.version`;
+  ${a}.updated_at AS "updatedAt", ${a}.version, ${a}.registration`;
 
 const SESSION_COLUMNS = `
   id, user_id AS "userId", created_at AS "createdAt", last_seen_at AS "lastSeenAt",
@@ -34,12 +38,13 @@ const LIVE = (a: string, nowParam: number, idleParam: number): string =>
   `${a}.revoked_at IS NULL AND ${a}.expires_at > $${nowParam}::timestamptz
    AND ${a}.last_seen_at > $${nowParam}::timestamptz - ($${idleParam}::double precision * interval '1 millisecond')`;
 
-type UserRow = Omit<IUserRecord, 'role'> & { role: string };
+type UserRow = Omit<IUserRecord, 'role' | 'registration'> & { role: string; registration: string };
 
-/** Роль из базы проверяется: CHECK таблицы и список в коде обязаны совпадать. */
+/** Роль и состояние заявки из базы проверяются: CHECK таблицы и списки в коде обязаны совпадать. */
 const toUser = (row: UserRow): IUserRecord => {
   if (!isRole(row.role)) throw new Error(`users.role: неизвестная роль у пользователя ${row.id}`);
-  return { ...row, role: row.role };
+  if (!isRegistrationState(row.registration)) throw new Error(`users.registration: неизвестное состояние у пользователя ${row.id}`);
+  return { ...row, role: row.role, registration: row.registration };
 };
 
 const rows = async <T extends QueryResultRow>(sql: string, params: unknown[], client?: PoolClient): Promise<T[]> =>
@@ -76,13 +81,24 @@ export const pgAuthStore: IAuthStore = {
   },
 
   async createUser(input: INewUser, now) {
+    // Заявка создаётся выключенной: войти можно только после одобрения (CHECK users_registration_inactive).
     const [row] = await rows<UserRow>(
       `INSERT INTO users (login, display_name, role, password_hash, must_change_password, created_by,
-                          created_at, updated_at, password_changed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
+                          registration, is_active, created_at, updated_at, password_changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
        ON CONFLICT (login) DO NOTHING
        RETURNING ${userColumns('users')}`,
-      [input.login, input.displayName, input.role, input.passwordHash, input.mustChangePassword, input.createdBy, now],
+      [
+        input.login,
+        input.displayName,
+        input.role,
+        input.passwordHash,
+        input.mustChangePassword,
+        input.createdBy,
+        input.registration,
+        input.registration === 'approved',
+        now,
+      ],
     );
     return row ? toUser(row) : 'login_taken';
   },
@@ -97,6 +113,8 @@ export const pgAuthStore: IAuthStore = {
 
       const role = patch.role ?? before.role;
       const isActive = patch.isActive ?? before.isActive;
+      // Вход по заявке включается одобрением, а не переключателем доступа.
+      if (isActive && before.registration !== 'approved') return { ok: false, code: 'not_approved' };
       if (before.role === 'admin' && before.isActive && (role !== 'admin' || !isActive)) {
         const [other] = await rows<{ n: number }>(
           `SELECT count(*)::int AS n FROM users WHERE role = 'admin' AND is_active AND id <> $1`,
@@ -111,6 +129,29 @@ export const pgAuthStore: IAuthStore = {
           WHERE id = $1
           RETURNING ${userColumns('users')}`,
         [id, patch.displayName ?? before.displayName, role, isActive, now],
+        client,
+      );
+      if (!row) return { ok: false, code: 'not_found' };
+      return { ok: true, user: toUser(row), before };
+    });
+  },
+
+  async decideRegistration(id, expectedVersion, decision: RegistrationDecision, now): Promise<DecideRegistrationResult> {
+    return withTransaction(async client => {
+      const [beforeRow] = await rows<UserRow>(`SELECT ${userColumns('u')} FROM users u WHERE u.id = $1 FOR UPDATE`, [id], client);
+      if (!beforeRow) return { ok: false, code: 'not_found' };
+      const before = toUser(beforeRow);
+      const problem = registrationDecisionProblem(before.registration, decision.decision);
+      if (problem) return { ok: false, code: problem };
+      if (before.version !== expectedVersion) return { ok: false, code: 'version_conflict' };
+
+      // Одобрение только добавляет вход: последнего администратора оно не касается, блокировка не нужна.
+      const approved = decision.decision === 'approved';
+      const [row] = await rows<UserRow>(
+        `UPDATE users SET registration = $2, is_active = $3, role = $4, updated_at = $5, version = version + 1
+          WHERE id = $1
+          RETURNING ${userColumns('users')}`,
+        [id, decision.decision, approved, approved ? decision.role : before.role, now],
         client,
       );
       if (!row) return { ok: false, code: 'not_found' };

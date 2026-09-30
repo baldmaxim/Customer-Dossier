@@ -5,9 +5,22 @@
 //   - логин уникален;
 //   - последний активный администратор не теряет роль и не выключается (`last_admin`);
 //   - правка пользователя — только с ожидаемой версией (`version_conflict`);
+//   - заявка на доступ (`pending`) и отклонённая заявка (`rejected`) не бывают активными: включить вход
+//     можно только одобрением (`decideRegistration`), не правкой (`not_approved`);
 //   - живая сессия — не отозвана, не истекла, не простаивала дольше idle и принадлежит активному пользователю.
 
 import type { Role } from './permissions.js';
+
+/**
+ * Состояние учётной записи по заявке (миграция 033). `approved` — обычный пользователь: его создали
+ * администратор или консоль, либо заявку одобрили. `pending` — заявка, поданная самим человеком;
+ * `rejected` — отклонённая. Обе не входят: запись выключена, пока администратор не одобрит.
+ */
+export const REGISTRATION_STATES = ['pending', 'approved', 'rejected'] as const;
+export type RegistrationState = (typeof REGISTRATION_STATES)[number];
+
+export const isRegistrationState = (value: unknown): value is RegistrationState =>
+  typeof value === 'string' && (REGISTRATION_STATES as readonly string[]).includes(value);
 
 export interface IUserRecord {
   id: number;
@@ -25,6 +38,7 @@ export interface IUserRecord {
   createdBy: string;
   updatedAt: Date;
   version: number;
+  registration: RegistrationState;
 }
 
 export interface ISessionRecord {
@@ -51,6 +65,9 @@ export const AUTH_EVENTS = [
   'user_disabled',
   'user_enabled',
   'session_revoked',
+  'registration_requested',
+  'registration_approved',
+  'registration_rejected',
 ] as const;
 export type AuthEventType = (typeof AUTH_EVENTS)[number];
 
@@ -81,6 +98,8 @@ export interface INewUser {
   passwordHash: string;
   mustChangePassword: boolean;
   createdBy: string;
+  /** `pending` — заявка: запись создаётся выключенной. Администратор и консоль создают `approved`. */
+  registration: Extract<RegistrationState, 'pending' | 'approved'>;
 }
 
 export interface IUserPatch {
@@ -91,7 +110,28 @@ export interface IUserPatch {
 
 export type UpdateUserResult =
   | { ok: true; user: IUserRecord; before: IUserRecord }
-  | { ok: false; code: 'not_found' | 'version_conflict' | 'last_admin' };
+  | { ok: false; code: 'not_found' | 'version_conflict' | 'last_admin' | 'not_approved' };
+
+/** Решение администратора по заявке: одобрить с ролью или отклонить. */
+export type RegistrationDecision = { decision: 'approved'; role: Role } | { decision: 'rejected' };
+
+export type DecideRegistrationResult =
+  | { ok: true; user: IUserRecord; before: IUserRecord }
+  | { ok: false; code: 'not_found' | 'version_conflict' | 'already_approved' | 'already_rejected' };
+
+/**
+ * Можно ли принять решение по заявке в её нынешнем состоянии. Одобренную не одобряют и не
+ * отклоняют (доступ выключается в списке пользователей); отклонённую можно одобрить позже —
+ * администратор передумал. Общее для обоих хранилищ: правило одно.
+ */
+export const registrationDecisionProblem = (
+  current: RegistrationState,
+  decision: RegistrationDecision['decision'],
+): 'already_approved' | 'already_rejected' | null => {
+  if (current === 'approved') return 'already_approved';
+  if (current === 'rejected' && decision === 'rejected') return 'already_rejected';
+  return null;
+};
 
 export interface INewSession {
   tokenHash: Buffer;
@@ -110,6 +150,8 @@ export interface IAuthStore {
   countUsers(): Promise<number>;
   createUser(input: INewUser, now: Date): Promise<IUserRecord | 'login_taken'>;
   updateUser(id: number, expectedVersion: number, patch: IUserPatch, now: Date): Promise<UpdateUserResult>;
+  /** Одобрение включает вход с выбранной ролью, отклонение оставляет запись выключенной. Только с ожидаемой версией. */
+  decideRegistration(id: number, expectedVersion: number, decision: RegistrationDecision, now: Date): Promise<DecideRegistrationResult>;
   /** Новый пароль: сбрасывает счётчик неудач и блокировку, поднимает версию. */
   setPassword(id: number, passwordHash: string, mustChangePassword: boolean, now: Date): Promise<IUserRecord | null>;
   /** Неудачный вход: счётчик +1; на пороге — блокировка до now + lockMs. */

@@ -1299,6 +1299,12 @@ export interface ISessionInfo {
   user?: IAuthUser;
 }
 
+/**
+ * Заявка на доступ (самостоятельная регистрация): approved — обычный пользователь, pending — ждёт
+ * решения администратора, rejected — отклонена. Заявка и отклонённая заявка не входят.
+ */
+export type RegistrationState = 'pending' | 'approved' | 'rejected';
+
 export interface IUserRow {
   id: number;
   login: string;
@@ -1314,6 +1320,7 @@ export interface IUserRow {
   createdBy: string;
   updatedAt: string;
   version: number;
+  registration: RegistrationState;
   liveSessions?: number;
 }
 

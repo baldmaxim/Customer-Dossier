@@ -1,5 +1,6 @@
-// Пользователи, сессии и журнал входа — для администратора (право users.manage, auth/routePolicy.ts).
-// Правила (последний администратор, себя не выключить, ожидаемая версия) — в auth/service.ts.
+// Пользователи, сессии, заявки на доступ и журнал входа — для администратора (право users.manage,
+// auth/routePolicy.ts). Правила (последний администратор, себя не выключить, ожидаемая версия,
+// решение по заявке) — в auth/service.ts. Заявку подаёт сам человек: POST /api/auth/register (api/auth.ts).
 
 import type { IRouter, Request, Response } from 'express';
 import { z } from 'zod';
@@ -37,6 +38,11 @@ const updateSchema = z
   .strict();
 
 const passwordSchema = z.object({ password: z.string().min(1).max(1024) }).strict();
+
+// Роль при одобрении — по умолчанию «читатель»: шире права выдаются явно.
+const approveSchema = z.object({ expectedVersion: z.number().int().positive(), role: z.enum(ROLES).default('viewer') }).strict();
+
+const rejectSchema = z.object({ expectedVersion: z.number().int().positive() }).strict();
 
 const eventsQuery = z.object({
   userId: z.coerce.number().int().positive().optional(),
@@ -114,6 +120,36 @@ export const createUsersRouter = (service: AuthService): IRouter => {
       return;
     }
     const result = await service.resetPassword(actorOf(req), id, parsed.data.password, requestMeta(req));
+    if (!result.ok) {
+      sendError(res, result);
+      return;
+    }
+    res.json(result.user);
+  });
+
+  router.post('/users/:id/approve', async (req, res) => {
+    const id = idParam(req.params.id);
+    const parsed = approveSchema.safeParse(req.body);
+    if (id === null || !parsed.success) {
+      res.status(400).json({ error: 'Некорректные параметры', code: 'invalid' });
+      return;
+    }
+    const result = await service.approveRegistration(actorOf(req), id, parsed.data, requestMeta(req));
+    if (!result.ok) {
+      sendError(res, result);
+      return;
+    }
+    res.json(result.user);
+  });
+
+  router.post('/users/:id/reject', async (req, res) => {
+    const id = idParam(req.params.id);
+    const parsed = rejectSchema.safeParse(req.body);
+    if (id === null || !parsed.success) {
+      res.status(400).json({ error: 'Некорректные параметры', code: 'invalid' });
+      return;
+    }
+    const result = await service.rejectRegistration(actorOf(req), id, parsed.data, requestMeta(req));
     if (!result.ok) {
       sendError(res, result);
       return;

@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ASSERTION_ROLE_LABELS,
+  AUTH_EVENT_LABELS,
   CONTEXT_STATE_LABELS,
   HIDDEN_PERMISSIONS,
+  LOGIN_FAILURE_LABELS,
+  LOGIN_REFUSAL_LABELS,
   ROLE_LABELS,
   STAGE_LABELS,
   formatMoney,
@@ -42,6 +45,19 @@ describe('деньги и числа', () => {
 });
 
 describe('словари', () => {
+  it('журнал входа называет каждый вид события сервера и каждую причину отказа, включая заявки', () => {
+    // Список — как AUTH_EVENTS в backend/src/auth/store.ts (и CHECK миграций 031, 033).
+    const events = [
+      'login_succeeded', 'login_failed', 'logout', 'password_changed', 'password_reset', 'user_created', 'user_updated',
+      'user_disabled', 'user_enabled', 'session_revoked', 'registration_requested', 'registration_approved', 'registration_rejected',
+    ];
+    for (const e of events) expect(AUTH_EVENT_LABELS[e], e).toBeTruthy();
+    for (const r of ['unknown_login', 'bad_password', 'locked', 'disabled', 'registration_pending', 'registration_rejected']) {
+      expect(LOGIN_FAILURE_LABELS[r], r).toBeTruthy();
+    }
+    expect(Object.keys(LOGIN_REFUSAL_LABELS).sort()).toEqual(['registration_pending', 'registration_rejected']);
+  });
+
   it('права снятых обращений и снимков на экран не идут, порядок остальных прежний', () => {
     expect(visiblePermissions(['portal.read', 'dossier.view', 'admin.view', 'dossier.manage'])).toEqual(['portal.read', 'admin.view']);
     expect([...HIDDEN_PERMISSIONS].every(p => p.startsWith('dossier.'))).toBe(true);

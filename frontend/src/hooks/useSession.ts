@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { AUTH_REQUIRED_EVENT, SESSION_STALE_EVENT, api, setCsrfToken } from '../api/client';
+import { ApiError, AUTH_REQUIRED_EVENT, SESSION_STALE_EVENT, api, setCsrfToken } from '../api/client';
 import type { IAuthUser, ISessionInfo } from '../api/types';
 import { purgeSensitiveCaches } from '../lib/cachePurge';
 
@@ -20,6 +20,10 @@ export interface IUseSession {
   /** Смена своего пароля: остальные сессии пользователя сервер закрывает. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   loginError: string | null;
+  /** Код отказа сервера: registration_pending / registration_rejected экран входа объясняет своими словами. */
+  loginErrorCode: string | null;
+  /** Убрать прежний отказ: человек ушёл к заявке и вернулся — старое «неверный пароль» не нужно. */
+  clearLoginError: () => void;
   isLoggingIn: boolean;
 }
 
@@ -102,6 +106,8 @@ export const useSession = (): IUseSession => {
     logout,
     changePassword,
     loginError: loginMutation.error ? loginMutation.error.message : null,
+    loginErrorCode: loginMutation.error instanceof ApiError ? loginMutation.error.code : null,
+    clearLoginError: loginMutation.reset,
     isLoggingIn: loginMutation.isPending,
   };
 };

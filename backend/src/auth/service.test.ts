@@ -137,3 +137,105 @@ describe('вход', () => {
     expect(store.events.map(e => e.event)).toEqual(['user_created', 'login_failed', 'login_failed']);
   });
 });
+
+describe('заявка на доступ', () => {
+  const ADMIN: IActor = { id: 1, login: 'alpha' };
+  const request = (login = 'ivanov', password = 'Own-Secret-Pass-9') =>
+    service.register({ login, displayName: '  Иван Иванов ', password }, META);
+
+  it('заявка — выключенный читатель без смены пароля; журнал без пароля; сессии нет', async () => {
+    expect(await service.register({ login: ' IvAnOv ', displayName: '  Иван Иванов ', password: 'Own-Secret-Pass-9' }, META)).toEqual({ ok: true });
+    const user = (await store.findUserByLogin('ivanov'))!;
+    expect(user).toMatchObject({
+      login: 'ivanov',
+      displayName: 'Иван Иванов',
+      role: 'viewer',
+      isActive: false,
+      mustChangePassword: false,
+      registration: 'pending',
+      createdBy: 'ivanov',
+    });
+    expect(store.sessions).toHaveLength(0);
+    expect(store.events.map(e => [e.event, e.actor, e.userId])).toEqual([['registration_requested', 'ivanov', user.id]]);
+    expect(JSON.stringify(store.events)).not.toContain('Own-Secret-Pass-9');
+    // Созданный администратором или консолью — одобрен сразу.
+    const admin = await seed('alpha', 'admin');
+    expect((await store.findUserById(admin))?.registration).toBe('approved');
+  });
+
+  it('те же правила логина, имени и пароля; занятый логин — 409 с понятным текстом', async () => {
+    await seed('alpha', 'admin');
+    expect(await request('alpha')).toMatchObject({ ok: false, status: 409, code: 'login_taken', error: 'Этот логин уже занят' });
+    expect(await request('operator')).toMatchObject({ status: 400, code: 'invalid_login' });
+    expect(await request('Кириллица')).toMatchObject({ status: 400, code: 'invalid_login' });
+    expect(await request('ab')).toMatchObject({ status: 400, code: 'invalid_login' });
+    expect(await service.register({ login: 'petrov', displayName: '   ', password: PASSWORD }, META)).toMatchObject({ status: 400, code: 'invalid_name' });
+    expect(await request('petrov', 'short')).toMatchObject({ status: 400, code: 'weak_password' });
+    expect(await request('petrov', 'petrov-2026-pass')).toMatchObject({ status: 400, code: 'weak_password' });
+    expect(await request('petrov', 'aaaaaaaaaaaa')).toMatchObject({ status: 400, code: 'weak_password' });
+    expect(await store.findUserByLogin('petrov')).toBeNull();
+  });
+
+  it('вход по заявке: неверный пароль — общий отказ, верный — «ещё не одобрена», без сессии', async () => {
+    await request();
+    expect(await service.login('ivanov', 'wrong-pass-value', META)).toEqual({ ok: false, code: 'bad_credentials' });
+    expect(await service.login('nobody-here', 'wrong-pass-value', META)).toEqual({ ok: false, code: 'bad_credentials' });
+    expect(await service.login('ivanov', 'Own-Secret-Pass-9', META)).toEqual({ ok: false, code: 'registration_pending' });
+    expect(store.sessions).toHaveLength(0);
+    const refusal = store.events.at(-1)!;
+    expect(refusal).toMatchObject({ event: 'login_failed', actor: 'anonymous', details: { reason: 'registration_pending' } });
+  });
+
+  it('одобрение открывает вход с выбранной ролью; повтор и устаревшая версия — 409', async () => {
+    await seed('alpha', 'admin');
+    await request();
+    const pending = (await store.findUserByLogin('ivanov'))!;
+    expect(await service.approveRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1, role: 'operator' }, META)).toMatchObject({
+      code: 'version_conflict',
+    });
+
+    const approved = await service.approveRegistration(ADMIN, pending.id, { expectedVersion: pending.version, role: 'operator' }, META);
+    expect(approved).toMatchObject({ ok: true, user: { registration: 'approved', isActive: true, role: 'operator', mustChangePassword: false } });
+    expect(store.events.at(-1)).toMatchObject({ event: 'registration_approved', actor: 'alpha', userId: pending.id, details: { role: 'operator' } });
+
+    const again = await service.approveRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1, role: 'viewer' }, META);
+    expect(again).toMatchObject({ status: 409, code: 'already_approved', error: 'Заявка уже одобрена' });
+    expect(await service.rejectRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1 }, META)).toMatchObject({ code: 'already_approved' });
+
+    const session = await loginOk('ivanov', 'Own-Secret-Pass-9');
+    expect(session.context.user).toMatchObject({ role: 'operator', mustChangePassword: false });
+  });
+
+  it('отклонение: вход — «заявка отклонена», запись не удаляется; передумал — одобрить можно', async () => {
+    await seed('alpha', 'admin');
+    await request();
+    const pending = (await store.findUserByLogin('ivanov'))!;
+    const rejected = await service.rejectRegistration(ADMIN, pending.id, { expectedVersion: pending.version }, META);
+    expect(rejected).toMatchObject({ ok: true, user: { registration: 'rejected', isActive: false, role: 'viewer' } });
+    expect(store.events.at(-1)).toMatchObject({ event: 'registration_rejected', actor: 'alpha', userId: pending.id });
+    expect(await service.rejectRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1 }, META)).toMatchObject({
+      status: 409,
+      code: 'already_rejected',
+    });
+    expect(await service.login('ivanov', 'wrong-pass-value', META)).toEqual({ ok: false, code: 'bad_credentials' });
+    expect(await service.login('ivanov', 'Own-Secret-Pass-9', META)).toEqual({ ok: false, code: 'registration_rejected' });
+    // Логин остаётся занятым: новая заявка под ним — отказ.
+    expect(await request()).toMatchObject({ code: 'login_taken' });
+
+    const later = await service.approveRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1, role: 'viewer' }, META);
+    expect(later).toMatchObject({ ok: true, user: { registration: 'approved', isActive: true } });
+    await loginOk('ivanov', 'Own-Secret-Pass-9');
+  });
+
+  it('переключатель доступа заявку не одобряет; несуществующая заявка — 404', async () => {
+    await seed('alpha', 'admin');
+    await request();
+    const pending = (await store.findUserByLogin('ivanov'))!;
+    expect(await service.updateUser(ADMIN, pending.id, { expectedVersion: pending.version, isActive: true }, META)).toMatchObject({
+      status: 409,
+      code: 'not_approved',
+    });
+    expect((await store.findUserById(pending.id))?.isActive).toBe(false);
+    expect(await service.approveRegistration(ADMIN, 999, { expectedVersion: 1, role: 'viewer' }, META)).toMatchObject({ status: 404 });
+  });
+});

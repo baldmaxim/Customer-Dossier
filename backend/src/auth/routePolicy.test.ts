@@ -64,6 +64,8 @@ const WRITES: Record<string, string> = {
   'POST /users': 'users.manage',
   'PATCH /users/:id': 'users.manage',
   'POST /users/:id/password': 'users.manage',
+  'POST /users/:id/approve': 'users.manage',
+  'POST /users/:id/reject': 'users.manage',
   'POST /users/:id/sessions/:sessionId/revoke': 'users.manage',
   'PUT /admin/llm/key': 'llm.manage',
   'DELETE /admin/llm/key': 'llm.manage',
@@ -103,6 +105,17 @@ describe('таблица прав маршрутов', () => {
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('users.manage'), role).toBe(role === 'admin');
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('llm.manage'), role).toBe(role === 'admin');
     expect(permissionFor('GET', '/admin/llm')).toBe('admin.view');
+  });
+
+  it('заявку на доступ рассматривает только администратор; подаёт её роутер входа, не таблица', () => {
+    for (const path of ['/users/5/approve', '/users/5/reject']) {
+      expect(permissionFor('POST', path), path).toBe('users.manage');
+      for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('users.manage'), `${role} ${path}`).toBe(role === 'admin');
+    }
+    // /api/auth/* смонтирован до проверки входа (app.ts). Попади заявка за проверку — она стала бы
+    // недоступна без входа, а не открыта всем: изменение без правила запрещено.
+    expect(permissionFor('POST', '/auth/register')).toBeNull();
+    expect(allRoutes().some(r => r.path.startsWith('/auth'))).toBe(false);
   });
 
   it('изменение без правила запрещено; чтение без правила — портал', () => {

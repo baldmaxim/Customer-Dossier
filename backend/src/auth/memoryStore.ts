@@ -3,6 +3,7 @@
 
 import {
   TOUCH_INTERVAL_MS,
+  registrationDecisionProblem,
   type IAuthEventInput,
   type IAuthEventRecord,
   type IAuthStore,
@@ -59,7 +60,8 @@ export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession
       const user: IUserRecord = {
         id: userSeq,
         ...input,
-        isActive: true,
+        // Заявка создаётся выключенной: войти можно только после одобрения.
+        isActive: input.registration === 'approved',
         failedAttempts: 0,
         lockedUntil: null,
         lastLoginAt: null,
@@ -79,10 +81,29 @@ export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession
       const before = copy(u);
       const role = patch.role ?? u.role;
       const isActive = patch.isActive ?? u.isActive;
+      if (isActive && u.registration !== 'approved') return { ok: false, code: 'not_approved' };
       if (u.role === 'admin' && u.isActive && (role !== 'admin' || !isActive)) {
         if (!users.some(x => x.id !== id && x.role === 'admin' && x.isActive)) return { ok: false, code: 'last_admin' };
       }
       Object.assign(u, { displayName: patch.displayName ?? u.displayName, role, isActive, updatedAt: now, version: u.version + 1 });
+      return { ok: true, user: copy(u), before };
+    },
+
+    async decideRegistration(id, expectedVersion, decision, now) {
+      const u = users.find(x => x.id === id);
+      if (!u) return { ok: false, code: 'not_found' };
+      const problem = registrationDecisionProblem(u.registration, decision.decision);
+      if (problem) return { ok: false, code: problem };
+      if (u.version !== expectedVersion) return { ok: false, code: 'version_conflict' };
+      const before = copy(u);
+      const approved = decision.decision === 'approved';
+      Object.assign(u, {
+        registration: decision.decision,
+        isActive: approved,
+        role: approved ? decision.role : u.role,
+        updatedAt: now,
+        version: u.version + 1,
+      });
       return { ok: true, user: copy(u), before };
     },
 

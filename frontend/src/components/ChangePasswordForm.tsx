@@ -3,15 +3,13 @@
 
 import { FC, FormEvent, useState } from 'react';
 
+import { PASSWORD_MIN_LENGTH } from '../lib/accountRules';
 import { Button } from './ui/Button';
 import { Callout } from './ui/Callout';
 import { Field } from './ui/Field';
 import { Stack } from './ui/Stack';
 import { TextInput } from './ui/TextInput';
 import styles from './ChangePasswordForm.module.css';
-
-/** Совпадает с PASSWORD_MIN_LENGTH на сервере. */
-export const PASSWORD_MIN_LENGTH = 10;
 
 interface IChangePasswordFormProps {
   onSubmit: (currentPassword: string, newPassword: string) => Promise<void>;

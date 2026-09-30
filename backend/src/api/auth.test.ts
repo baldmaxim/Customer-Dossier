@@ -106,6 +106,9 @@ describe('серверный режим: вход по логину и паро�
 
   const as = (s: { cookie: string; csrf: string }) => ({ cookie: s.cookie, origin: ORIGIN, 'x-csrf-token': s.csrf });
 
+  const register = (body: Record<string, unknown>, ip = nextIp()) =>
+    request('POST', '/api/auth/register', { headers: { origin: ORIGIN, 'x-forwarded-for': ip }, body });
+
   beforeAll(async () => {
     await seedUser('admin', 'admin');
     await seedUser('oper', 'operator');
@@ -186,6 +189,8 @@ describe('серверный режим: вход по логину и паро�
       ['POST', '/api/reprocess/sets/1/publish', { expectedVersion: 0, expectedPreviewToken: 'a'.repeat(64) }],
       ['POST', '/api/manual', { body: 'текст' }],
       ['POST', '/api/users', { login: 'x', displayName: 'x', role: 'admin', password: 'x' }],
+      ['POST', '/api/users/1/approve', { expectedVersion: 1, role: 'admin' }],
+      ['POST', '/api/users/1/reject', { expectedVersion: 1 }],
     ];
     for (const [method, path, body] of cases) {
       const res = await request(method, path, { headers: { origin: ORIGIN }, body });
@@ -429,6 +434,153 @@ describe('серверный режим: вход по логину и паро�
       }
     });
 
+    it('заявка на доступ: 201 без cookie и без эха; верный пароль — «ещё не одобрена», неверный — общий отказ', async () => {
+      const res = await register({ login: ' Petrov ', displayName: 'Пётр Петров', password: 'Petr-Own-Pass-51' });
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual({ status: 'pending' });
+      expect(res.headers['set-cookie']).toBeUndefined();
+      expect(res.headers['cache-control']).toContain('no-store');
+
+      const right = await tryLogin('petrov', 'Petr-Own-Pass-51');
+      expect(right.status).toBe(403);
+      expect(right.body).toEqual({ error: 'Заявка ещё не одобрена администратором', code: 'registration_pending' });
+      expect(right.headers['set-cookie']).toBeUndefined();
+      const wrong = await tryLogin('petrov', 'wrong-password-value');
+      const unknown = await tryLogin('nobody-here', 'wrong-password-value');
+      for (const r of [wrong, unknown]) expect(r.body).toEqual({ error: 'Неверный логин или пароль', code: 'bad_credentials' });
+    });
+
+    it('заявка: занятый логин — 409, неверные логин, имя и слабый пароль — 400 с причиной', async () => {
+      const taken = await register({ login: 'reader', displayName: 'Кто-то', password: 'Good-Enough-Pass-1' });
+      expect(taken.status).toBe(409);
+      expect(taken.body).toEqual({ error: 'Этот логин уже занят', code: 'login_taken' });
+      const cases: Array<[Record<string, unknown>, number, string]> = [
+        [{ login: 'Кириллица', displayName: 'Кто-то', password: 'Good-Enough-Pass-1' }, 400, 'invalid_login'],
+        [{ login: 'system', displayName: 'Кто-то', password: 'Good-Enough-Pass-1' }, 400, 'invalid_login'],
+        [{ login: 'sidorov', displayName: 'Кто-то', password: 'short' }, 400, 'weak_password'],
+        [{ login: 'sidorov', displayName: ' ', password: 'Good-Enough-Pass-1' }, 400, 'invalid_name'],
+        [{ login: 'sidorov', password: 'Good-Enough-Pass-1' }, 400, 'invalid'],
+      ];
+      for (const [body, status, code] of cases) {
+        const res = await register(body);
+        expect(res.status, JSON.stringify(body)).toBe(status);
+        expect(res.body.code, JSON.stringify(body)).toBe(code);
+        expect(JSON.stringify(res.body)).not.toContain('Good-Enough-Pass-1');
+      }
+    });
+
+    it('лишние поля заявки не действуют: роль, состояние и доступ задаёт только администратор', async () => {
+      const res = await register({
+        login: 'orlov',
+        displayName: 'Орлов',
+        password: 'Hawk-Flight-Pass-2',
+        role: 'admin',
+        registration: 'approved',
+        isActive: true,
+        mustChangePassword: true,
+      });
+      expect(res.status).toBe(201);
+      expect(await store.findUserByLogin('orlov')).toMatchObject({
+        role: 'viewer',
+        registration: 'pending',
+        isActive: false,
+        mustChangePassword: false,
+      });
+      expect((await tryLogin('orlov', 'Hawk-Flight-Pass-2')).body.code).toBe('registration_pending');
+    });
+
+    it('заявка с чужой страницы отклоняется до обработчика', async () => {
+      const res = await request('POST', '/api/auth/register', {
+        headers: { origin: 'https://evil.example', 'x-forwarded-for': nextIp() },
+        body: { login: 'mallory', displayName: 'Мэллори', password: 'Good-Enough-Pass-1' },
+      });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('bad_origin');
+      expect(await store.findUserByLogin('mallory')).toBeNull();
+    });
+
+    it('лимит заявок считается по адресу клиента из прокси', async () => {
+      const spammer = '198.51.100.9';
+      const statuses: number[] = [];
+      for (let i = 0; i < 11; i += 1) statuses.push((await register({ login: 'Кириллица', displayName: 'x', password: 'x' }, spammer)).status);
+      expect(statuses.slice(0, 10).every(s => s === 400)).toBe(true);
+      expect(statuses[10]).toBe(429);
+      // Другой адрес за тем же прокси перебором не заблокирован.
+      expect((await register({ login: 'Кириллица', displayName: 'x', password: 'x' })).status).toBe(400);
+    });
+
+    it('администратор видит заявку и одобряет с ролью; вход открывается сразу; повтор — 409', async () => {
+      expect((await register({ login: 'kozlov', displayName: 'Козлов', password: 'Quiet-River-Pass-7' })).status).toBe(201);
+      const admin = await login('admin');
+      const list = await request('GET', '/api/users', { headers: { cookie: admin.cookie } });
+      const item = (list.body.items as Array<{ id: number; login: string; registration: string; isActive: boolean; version: number }>).find(
+        u => u.login === 'kozlov',
+      )!;
+      expect(item).toMatchObject({ registration: 'pending', isActive: false });
+      expect(list.body.items as Array<{ login: string; registration: string }>).toEqual(
+        expect.arrayContaining([expect.objectContaining({ login: 'admin', registration: 'approved' })]),
+      );
+
+      // Переключатель доступа заявку не одобряет.
+      const toggle = await request('PATCH', `/api/users/${item.id}`, { headers: as(admin), body: { expectedVersion: item.version, isActive: true } });
+      expect(toggle.status).toBe(409);
+      expect(toggle.body.code).toBe('not_approved');
+
+      const noCsrf = await request('POST', `/api/users/${item.id}/approve`, { headers: { cookie: admin.cookie, origin: ORIGIN }, body: { expectedVersion: item.version } });
+      expect(noCsrf.status).toBe(403);
+      const approved = await request('POST', `/api/users/${item.id}/approve`, { headers: as(admin), body: { expectedVersion: item.version, role: 'operator' } });
+      expect(approved.status).toBe(200);
+      expect(approved.body).toMatchObject({ login: 'kozlov', registration: 'approved', isActive: true, role: 'operator' });
+
+      const s = await login('kozlov', 'Quiet-River-Pass-7');
+      expect(s.body.user).toMatchObject({ role: 'operator', mustChangePassword: false });
+      expect((await request('GET', '/api/admin/sources/1/health', { headers: { cookie: s.cookie } })).status).not.toBe(403);
+
+      const again = await request('POST', `/api/users/${item.id}/approve`, { headers: as(admin), body: { expectedVersion: approved.body.version } });
+      expect(again.status).toBe(409);
+      expect(again.body).toEqual({ error: 'Заявка уже одобрена', code: 'already_approved' });
+    });
+
+    it('роль при одобрении по умолчанию — читатель', async () => {
+      expect((await register({ login: 'novikov', displayName: 'Новиков', password: 'Calm-Forest-Pass-3' })).status).toBe(201);
+      const admin = await login('admin');
+      const id = (await store.findUserByLogin('novikov'))!.id;
+      const res = await request('POST', `/api/users/${id}/approve`, { headers: as(admin), body: { expectedVersion: 1 } });
+      expect(res.status).toBe(200);
+      expect(res.body.role).toBe('viewer');
+    });
+
+    it('отклонение: вход — «заявка отклонена», повтор — 409; оператор и читатель заявки не рассматривают', async () => {
+      expect((await register({ login: 'lebedev', displayName: 'Лебедев', password: 'Stone-Bridge-Pass-4' })).status).toBe(201);
+      const id = (await store.findUserByLogin('lebedev'))!.id;
+      for (const who of ['oper', 'reader']) {
+        const s = await login(who);
+        const res = await request('POST', `/api/users/${id}/reject`, { headers: as(s), body: { expectedVersion: 1 } });
+        expect(res.status, who).toBe(403);
+        expect(res.body.code, who).toBe('forbidden');
+      }
+
+      const admin = await login('admin');
+      const rejected = await request('POST', `/api/users/${id}/reject`, { headers: as(admin), body: { expectedVersion: 1 } });
+      expect(rejected.status).toBe(200);
+      expect(rejected.body).toMatchObject({ registration: 'rejected', isActive: false });
+      const refused = await tryLogin('lebedev', 'Stone-Bridge-Pass-4');
+      expect(refused.status).toBe(403);
+      expect(refused.body).toEqual({ error: 'Заявка отклонена администратором', code: 'registration_rejected' });
+      const again = await request('POST', `/api/users/${id}/reject`, { headers: as(admin), body: { expectedVersion: rejected.body.version } });
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('already_rejected');
+
+      const events = await request('GET', `/api/users/events?userId=${id}`, { headers: { cookie: admin.cookie } });
+      const kinds = (events.body.items as Array<{ event: string; actor: string; details: { reason?: string } }>).map(e => [e.event, e.actor, e.details.reason ?? null]);
+      expect(kinds).toEqual([
+        ['login_failed', 'anonymous', 'registration_rejected'],
+        ['registration_rejected', 'admin', null],
+        ['registration_requested', 'lebedev', null],
+      ]);
+      expect(JSON.stringify(events.body)).not.toContain('Stone-Bridge-Pass-4');
+    });
+
     it('роли и права отдаются для таблицы на экране', async () => {
       const admin = await login('admin');
       const res = await request('GET', '/api/users/roles', { headers: { cookie: admin.cookie } });
@@ -461,6 +613,15 @@ describe('локальный режим: без входа', () => {
     const res = await request('POST', '/api/auth/login', { headers: { origin: 'http://127.0.0.1:5173' }, body: { login: 'admin', password: PASSWORD } });
     expect(res.status).toBe(403);
     expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('заявок на доступ нет: /api/auth/register — 404, учётная запись не создаётся', async () => {
+    const res = await request('POST', '/api/auth/register', {
+      headers: { origin: 'http://127.0.0.1:5173' },
+      body: { login: 'petrov', displayName: 'Пётр', password: 'Petr-Own-Pass-51' },
+    });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('not_found');
   });
 
   it('изменение без правила в таблице прав запрещено и локально', async () => {

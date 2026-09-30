@@ -8,6 +8,10 @@
 // (auth/permissions.ts) и таблице маршрутов (auth/routePolicy.ts), проверяются на каждом запросе:
 // смена роли или выключение действуют сразу, без повторного входа.
 //
+// Заявка на доступ (POST /register) — тоже здесь, до проверки входа: её подаёт человек без
+// учётной записи. Создаёт выключенного читателя; войти он сможет, когда администратор одобрит
+// заявку в «Пользователях». Локально (AUTH_MODE=none) входа нет — и заявок тоже: 404.
+//
 // Почему не просто CORS: CORS решает, может ли чужая страница ПРОЧИТАТЬ ответ,
 // но не запрещает ей ОТПРАВИТЬ запрос. Поэтому отдельно: Host, Origin/Sec-Fetch-Site
 // (api/guards.ts) и CSRF-токен.
@@ -166,6 +170,18 @@ const passwordSchema = z.object({
   newPassword: z.string().min(1).max(1024),
 });
 
+const registerSchema = z.object({
+  login: z.string().min(1).max(128),
+  displayName: z.string().min(1).max(200),
+  password: z.string().min(1).max(1024),
+});
+
+/** Ответ на верный пароль к заявке, которую ещё не одобрили или отклонили. */
+const REGISTRATION_REFUSALS = {
+  registration_pending: 'Заявка ещё не одобрена администратором',
+  registration_rejected: 'Заявка отклонена администратором',
+} as const;
+
 const wrap =
   (handler: (req: Request, res: Response) => Promise<void>): RequestHandler =>
   (req: Request, res: Response, next: NextFunction) => {
@@ -187,7 +203,11 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
     res.json(sessionBody(ctx, options.mode !== 'none'));
   });
 
-  if (options.mode === 'none') return router;
+  if (options.mode === 'none') {
+    // Без входа нет и заявок на доступ: адреса нет, а не «запрещено».
+    router.post('/register', (_req, res) => deny(res, 404, 'Не найдено', 'not_found'));
+    return router;
+  }
 
   // Портал открыт в интернет: перебор упирается сначала в лимит nginx, затем сюда,
   // затем в блокировку учётной записи (auth/service.ts).
@@ -215,6 +235,8 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
       if (!result.ok) {
         if (result.code === 'locked') {
           deny(res, 429, 'Слишком много неудачных попыток. Вход временно закрыт — попробуйте позже', 'locked');
+        } else if (result.code === 'registration_pending' || result.code === 'registration_rejected') {
+          deny(res, 403, REGISTRATION_REFUSALS[result.code], result.code);
         } else {
           deny(res, 401, 'Неверный логин или пароль', 'bad_credentials');
         }
@@ -222,6 +244,27 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
       }
       res.setHeader('Set-Cookie', cookieHeader(options, result.token, options.maxAgeSec));
       res.json(sessionBody(result.context, true));
+    }),
+  );
+
+  // Заявка: по адресу — свой лимит (тот же механизм, что у входа, адрес — с учётом TRUST_PROXY),
+  // Host и Origin проверены до роутера. Сессии не создаёт, пароль не возвращает и не пишет в журнал.
+  router.post(
+    '/register',
+    limiter(10),
+    wrap(async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        deny(res, 400, 'Укажите логин, имя и пароль', 'invalid');
+        return;
+      }
+      const result = await options.service.register(parsed.data, requestMeta(req));
+      if (!result.ok) {
+        deny(res, result.status, result.error, result.code);
+        return;
+      }
+      res.status(201).json({ status: 'pending' });
     }),
   );
 

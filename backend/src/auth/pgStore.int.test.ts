@@ -1,6 +1,7 @@
-// Пользователи и сессии на настоящей базе (миграция 031, ADR-014): те же правила, что проверяет
+// Пользователи и сессии на настоящей базе (миграции 031, 033, ADR-014): те же правила, что проверяет
 // auth.test.ts на хранилище в памяти, плюс то, что держит сама база — уникальность логина,
-// CHECK роли, неизменяемость журнала и гонка двух администраторов за «последнего».
+// CHECK роли, неизменяемость журнала, гонка двух администраторов за «последнего», заявка на доступ,
+// которую нельзя включить мимо одобрения, и два одновременных решения по одной заявке.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -114,5 +115,76 @@ describe('pgAuthStore', () => {
     const all = JSON.stringify(await service.listEvents({ limit: 200 }));
     expect(all).not.toContain(PASSWORD);
     expect(all).not.toContain('wrong-pass-value');
+  });
+});
+
+describe('pgAuthStore: заявка на доступ (миграция 033)', () => {
+  const ADMIN: IActor = { id: null, login: 'alpha' };
+  const OWN = 'Quiet-River-Pass-7';
+
+  it('созданные администратором и консолью — одобрены; колонка по умолчанию — approved', async () => {
+    const id = await seed('foxtrot', 'viewer');
+    expect((await pgAuthStore.findUserById(id))?.registration).toBe('approved');
+    const raw = await getPool().query<{ registration: string }>(
+      `INSERT INTO users (login, display_name, role, password_hash, created_by) VALUES ('golf', 'g', 'viewer', 'x', 'test') RETURNING registration`,
+    );
+    expect(raw.rows[0]?.registration).toBe('approved');
+  });
+
+  it('заявка — выключенный читатель; база не даёт включить её мимо одобрения', async () => {
+    expect(await service.register({ login: 'hotel', displayName: 'Отель', password: OWN }, META)).toEqual({ ok: true });
+    const row = await getPool().query<{ registration: string; is_active: boolean; role: string; must_change_password: boolean }>(
+      'SELECT registration, is_active, role, must_change_password FROM users WHERE login = $1',
+      ['hotel'],
+    );
+    expect(row.rows[0]).toEqual({ registration: 'pending', is_active: false, role: 'viewer', must_change_password: false });
+    expect(await service.register({ login: 'HOTEL', displayName: 'Другой', password: OWN }, META)).toMatchObject({ code: 'login_taken' });
+
+    await expect(getPool().query(`UPDATE users SET is_active = true WHERE login = 'hotel'`)).rejects.toThrow(/users_registration_inactive/);
+    await expect(getPool().query(`UPDATE users SET registration = 'maybe' WHERE login = 'hotel'`)).rejects.toThrow(/users_registration_known/);
+    const user = (await pgAuthStore.findUserByLogin('hotel'))!;
+    expect(await service.updateUser(ADMIN, user.id, { expectedVersion: user.version, isActive: true }, META)).toMatchObject({ code: 'not_approved' });
+
+    expect(await service.login('hotel', 'wrong-pass-value', META)).toEqual({ ok: false, code: 'bad_credentials' });
+    expect(await service.login('hotel', OWN, META)).toEqual({ ok: false, code: 'registration_pending' });
+    const sessions = await getPool().query<{ n: number }>('SELECT count(*)::int AS n FROM user_sessions WHERE user_id = $1', [user.id]);
+    expect(sessions.rows[0]?.n).toBe(0);
+  });
+
+  it('два одновременных решения по одной заявке: проходит одно', async () => {
+    const user = (await pgAuthStore.findUserByLogin('hotel'))!;
+    const results = await Promise.all([
+      service.approveRegistration(ADMIN, user.id, { expectedVersion: user.version, role: 'operator' }, META),
+      service.rejectRegistration(ADMIN, user.id, { expectedVersion: user.version }, META),
+    ]);
+    expect(results.filter(r => r.ok)).toHaveLength(1);
+    const after = (await pgAuthStore.findUserById(user.id))!;
+    expect(after.version).toBe(user.version + 1);
+    expect(after.isActive).toBe(after.registration === 'approved');
+  });
+
+  it('отклонение, вход с отказом, одобрение после отклонения; журнал принимает новые виды', async () => {
+    expect((await service.register({ login: 'india', displayName: 'Индия', password: OWN }, META)).ok).toBe(true);
+    const pending = (await pgAuthStore.findUserByLogin('india'))!;
+    const rejected = await service.rejectRegistration(ADMIN, pending.id, { expectedVersion: pending.version }, META);
+    expect(rejected).toMatchObject({ ok: true, user: { registration: 'rejected', isActive: false } });
+    expect(await service.login('india', OWN, META)).toEqual({ ok: false, code: 'registration_rejected' });
+
+    const approved = await service.approveRegistration(ADMIN, pending.id, { expectedVersion: pending.version + 1, role: 'viewer' }, META);
+    expect(approved).toMatchObject({ ok: true, user: { registration: 'approved', isActive: true } });
+    const r = await service.login('india', OWN, META);
+    if (!r.ok) throw new Error(r.code);
+    expect((await service.resolve(r.token))?.user.login).toBe('india');
+
+    const events = await getPool().query<{ event: string }>('SELECT event FROM auth_events WHERE user_id = $1 ORDER BY id', [pending.id]);
+    expect(events.rows.map(e => e.event)).toEqual([
+      'registration_requested',
+      'registration_rejected',
+      'login_failed',
+      'registration_approved',
+      'login_succeeded',
+    ]);
+    const text = await getPool().query<{ t: string }>(`SELECT string_agg(details::text, ' ') AS t FROM auth_events`);
+    expect(text.rows[0]?.t ?? '').not.toContain(OWN);
   });
 });

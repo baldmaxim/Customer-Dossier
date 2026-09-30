@@ -8,13 +8,15 @@
 //   - после `lockThreshold` неудач подряд вход блокируется на `lockMs`; выключенный пользователь
 //     узнаёт об этом только после верного пароля — и получает тот же отказ;
 //   - смена пароля отзывает остальные сессии пользователя, сброс и выключение — все;
-//   - администратор не снимает роль и не выключает сам себя; последний администратор остаётся.
+//   - администратор не снимает роль и не выключает сам себя; последний администратор остаётся;
+//   - заявка на доступ (самостоятельная регистрация) — выключенный читатель: войти можно только после
+//     одобрения администратором. О состоянии заявки человек узнаёт только после верного пароля.
 
 import crypto from 'node:crypto';
 
 import { PERMISSIONS, permissionsOf, type Permission, type Role } from './permissions.js';
 import { dummyHash, hashPassword, needsRehash, passwordProblem, verifyPassword } from './password.js';
-import type { IAuthEventRecord, IAuthStore, ISessionRecord, IUserRecord } from './store.js';
+import type { IAuthEventRecord, IAuthStore, ISessionRecord, IUserRecord, RegistrationDecision, RegistrationState } from './store.js';
 
 export interface IAuthUser {
   id: number;
@@ -109,6 +111,8 @@ export interface IUserView {
   createdBy: string;
   updatedAt: string;
   version: number;
+  /** pending — заявка ждёт решения, rejected — отклонена; обе не входят. */
+  registration: RegistrationState;
   liveSessions?: number;
 }
 
@@ -139,6 +143,7 @@ export const toUserView = (u: IUserRecord & { liveSessions?: number }, now: Date
   createdBy: u.createdBy,
   updatedAt: u.updatedAt.toISOString(),
   version: u.version,
+  registration: u.registration,
   ...(u.liveSessions === undefined ? {} : { liveSessions: u.liveSessions }),
 });
 
@@ -172,7 +177,16 @@ const fail = (status: IServiceError['status'], code: string, error: string): ISe
 export type LoginResult =
   | { ok: true; token: string; context: IAuthContext }
   | { ok: false; code: 'bad_credentials' }
-  | { ok: false; code: 'locked'; retryAt: Date };
+  | { ok: false; code: 'locked'; retryAt: Date }
+  /** Только после верного пароля: подбором состояние заявки не узнать. */
+  | { ok: false; code: 'registration_pending' | 'registration_rejected' };
+
+/** Заявка на доступ, поданная самим человеком. */
+export interface IRegistrationInput {
+  login: string;
+  displayName: string;
+  password: string;
+}
 
 export interface IAuthServiceOptions {
   idleMs: number;
@@ -224,6 +238,14 @@ export class AuthService {
         now,
       );
       return { ok: false, code: 'bad_credentials' };
+    }
+
+    // Заявка выключена, как и выключенный пользователь, но её владелец узнаёт, почему не входит:
+    // пароль он задал сам и уже ввёл верно — ничего нового об учётной записи ответ ему не сообщает.
+    if (user.registration !== 'approved') {
+      const reason = user.registration === 'pending' ? 'registration_pending' : 'registration_rejected';
+      await this.store.logEvent({ event: 'login_failed', userId: user.id, actor: 'anonymous', ip: meta.ip, details: { reason } }, now);
+      return { ok: false, code: reason };
     }
 
     if (!user.isActive) {
@@ -310,7 +332,15 @@ export class AuthService {
     if (problem) return fail(400, 'invalid', problem);
 
     const created = await this.store.createUser(
-      { login, displayName, role: input.role, passwordHash: await hashPassword(input.password), mustChangePassword: true, createdBy: actor.login },
+      {
+        login,
+        displayName,
+        role: input.role,
+        passwordHash: await hashPassword(input.password),
+        mustChangePassword: true,
+        createdBy: actor.login,
+        registration: 'approved',
+      },
       now,
     );
     if (created === 'login_taken') return fail(409, 'login_taken', 'Пользователь с таким логином уже есть');
@@ -338,6 +368,7 @@ export class AuthService {
     if (!result.ok) {
       if (result.code === 'not_found') return fail(404, 'not_found', 'Пользователь не найден');
       if (result.code === 'version_conflict') return fail(409, 'version_conflict', 'Пользователя уже изменили — обновите страницу');
+      if (result.code === 'not_approved') return fail(409, 'not_approved', 'Это заявка на доступ: вход открывает «Одобрить»');
       return fail(409, 'last_admin', 'Это последний администратор: сначала назначьте другого');
     }
 
@@ -355,6 +386,94 @@ export class AuthService {
       await this.store.logEvent({ event: 'user_updated', userId: id, actor: actor.login, ip: meta.ip, details }, now);
     }
     return { ok: true, user: toUserView(user, now) };
+  }
+
+  // ─── Заявки на доступ ─────────────────────────────────────────────────────────
+
+  /**
+   * Заявка от самого человека: те же правила логина, имени и пароля, что у администратора и при смене
+   * пароля. Создаётся выключенный читатель в состоянии «заявка»; сессии нет. Пароль придуман самим
+   * человеком — менять его при первом входе не нужно.
+   */
+  async register(input: IRegistrationInput, meta: IRequestMeta): Promise<{ ok: true } | IServiceError> {
+    const now = this.date();
+    const login = normalizeLogin(input.login);
+    const displayName = input.displayName.trim();
+    const badLogin = loginProblem(login);
+    if (badLogin) return fail(400, 'invalid_login', badLogin);
+    const badName = displayNameProblem(displayName);
+    if (badName) return fail(400, 'invalid_name', badName);
+    const weak = passwordProblem(input.password, login);
+    if (weak) return fail(400, 'weak_password', weak);
+
+    const created = await this.store.createUser(
+      {
+        login,
+        displayName,
+        role: 'viewer',
+        passwordHash: await hashPassword(input.password),
+        mustChangePassword: false,
+        createdBy: login,
+        registration: 'pending',
+      },
+      now,
+    );
+    if (created === 'login_taken') return fail(409, 'login_taken', 'Этот логин уже занят');
+    await this.store.logEvent({ event: 'registration_requested', userId: created.id, actor: login, ip: meta.ip }, now);
+    return { ok: true };
+  }
+
+  /** Одобрить заявку: вход открывается сразу, с выбранной ролью. Отклонённую тоже можно одобрить. */
+  async approveRegistration(
+    actor: IActor,
+    id: number,
+    input: { expectedVersion: number; role: Role },
+    meta: IRequestMeta,
+  ): Promise<{ ok: true; user: IUserView } | IServiceError> {
+    return this.decideRegistration(actor, id, input.expectedVersion, { decision: 'approved', role: input.role }, meta);
+  }
+
+  /** Отклонить заявку: запись остаётся выключенной и не удаляется — логин в журнале, решение можно пересмотреть. */
+  async rejectRegistration(
+    actor: IActor,
+    id: number,
+    input: { expectedVersion: number },
+    meta: IRequestMeta,
+  ): Promise<{ ok: true; user: IUserView } | IServiceError> {
+    return this.decideRegistration(actor, id, input.expectedVersion, { decision: 'rejected' }, meta);
+  }
+
+  private async decideRegistration(
+    actor: IActor,
+    id: number,
+    expectedVersion: number,
+    decision: RegistrationDecision,
+    meta: IRequestMeta,
+  ): Promise<{ ok: true; user: IUserView } | IServiceError> {
+    const now = this.date();
+    const result = await this.store.decideRegistration(id, expectedVersion, decision, now);
+    if (!result.ok) {
+      if (result.code === 'not_found') return fail(404, 'not_found', 'Заявка не найдена');
+      if (result.code === 'already_rejected') return fail(409, 'already_rejected', 'Заявка уже отклонена');
+      if (result.code === 'already_approved') {
+        return decision.decision === 'approved'
+          ? fail(409, 'already_approved', 'Заявка уже одобрена')
+          : fail(409, 'already_approved', 'Заявка уже одобрена: доступ выключается в списке пользователей');
+      }
+      return fail(409, 'version_conflict', 'Заявку уже изменили — обновите страницу');
+    }
+    const approved = decision.decision === 'approved';
+    await this.store.logEvent(
+      {
+        event: approved ? 'registration_approved' : 'registration_rejected',
+        userId: id,
+        actor: actor.login,
+        ip: meta.ip,
+        details: approved ? { role: result.user.role } : {},
+      },
+      now,
+    );
+    return { ok: true, user: toUserView(result.user, now) };
   }
 
   /** Новый пароль от администратора или консоли: разблокирует, требует смены при входе, отзывает все сессии. */
