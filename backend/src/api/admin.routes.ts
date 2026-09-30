@@ -29,6 +29,7 @@ import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
 import { classifySourceHealth } from '../ingest/sourceHealth.js';
 import { DomRfTargetError, listDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
+import { actorOf } from './auth.js';
 
 export const adminRouter = asyncRouter();
 
@@ -274,7 +275,7 @@ adminRouter.post('/sources/:id/enabled', async (req, res) => {
     return;
   }
   try {
-    const source = await setSourceEnabled(id, parsed.data.enabled, 'operator');
+    const source = await setSourceEnabled(id, parsed.data.enabled, actorOf(req));
     if (!source) {
       res.status(404).json({ error: 'Источник не найден' });
       return;
@@ -335,7 +336,7 @@ adminRouter.patch('/sources/:id/policy', async (req, res) => {
     return;
   }
   try {
-    const source = await updateSourcePolicy(id, parsed.data, 'operator');
+    const source = await updateSourcePolicy(id, parsed.data, actorOf(req));
     if (!source) {
       res.status(404).json({ error: 'Источник не найден' });
       return;
@@ -427,17 +428,15 @@ adminRouter.get('/merges', async (_req, res) => {
   res.json({ items: await listPendingMerges() });
 });
 
-const decisionSchema = z.object({ decidedBy: z.string().min(1).max(100).default('operator') });
-
+// Кто отклонил — вошедший пользователь, а не поле тела: подпись решения не выбирают.
 adminRouter.post('/merges/:id/reject', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);
-  const parsed = decisionSchema.safeParse(req.body ?? {});
-  if (!Number.isFinite(id) || !parsed.success) {
+  if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'Некорректные параметры' });
     return;
   }
   try {
-    await rejectMerge(id, parsed.data.decidedBy);
+    await rejectMerge(id, actorOf(req));
     res.json({ ok: true });
   } catch (err) {
     res.status(409).json({ error: err instanceof Error ? err.message : String(err) });

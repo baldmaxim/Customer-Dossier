@@ -144,7 +144,7 @@ export const MergeQueuePanel: FC<{ onNotice: (message: string) => void }> = ({ o
   });
 
   const reject = useMutation({
-    mutationFn: (id: number) => api.post(`/api/admin/merges/${id}/reject`, { decidedBy: 'operator' }),
+    mutationFn: (id: number) => api.post(`/api/admin/merges/${id}/reject`),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['merges'] }),
     onError: (err: Error) => onNotice(err.message),
   });

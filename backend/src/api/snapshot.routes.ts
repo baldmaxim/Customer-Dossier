@@ -11,6 +11,7 @@ import { snapshotToHtml, snapshotToJson, snapshotToMarkdown } from '../snapshot/
 import { SnapshotKeyConflictError } from '../snapshot/requestIdentity.js';
 import { createSnapshot, listSnapshots, readSnapshot, redactSnapshotEvidence, SnapshotNotFoundError } from '../snapshot/repository.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { actorOf } from './auth.js';
 
 export const snapshotRouter = asyncRouter();
 
@@ -48,7 +49,7 @@ snapshotRouter.post('/cases/:id/snapshots', async (req, res) => {
     return;
   }
   try {
-    const result = await createSnapshot({ caseId, ...parsed.data, actor: 'operator' });
+    const result = await createSnapshot({ caseId, ...parsed.data, actor: actorOf(req) });
     res.status(result.replayed ? 200 : 201).json(result);
   } catch (err) {
     if (err instanceof HistoricalCutoffError) {
@@ -130,7 +131,7 @@ snapshotRouter.post('/snapshots/:id/redactions', async (req, res) => {
     return;
   }
   try {
-    const result = await redactSnapshotEvidence({ snapshotId: id, ...parsed.data, actor: 'operator' });
+    const result = await redactSnapshotEvidence({ snapshotId: id, ...parsed.data, actor: actorOf(req) });
     res.status(result.replayed ? 200 : 201).json(result);
   } catch (err) {
     if (err instanceof SnapshotNotFoundError) {

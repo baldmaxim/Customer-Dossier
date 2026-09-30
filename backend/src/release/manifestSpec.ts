@@ -3,8 +3,8 @@
 // таблица из перечня, которой нет в базе, — MISSING_TABLE (не то же, что пустая).
 //
 // Все строки всех перечисленных таблиц хешируются целиком. Исключение колонки допускается только
-// с причиной в `excludedColumns`; сейчас исключений нет. Секретов (паролей, токенов, сессий) в базе нет:
-// сессии оператора живут в памяти процесса (api/auth.ts), токен — в backend/.local или .env.
+// с причиной в `excludedColumns`; сейчас исключений нет. Секретов в открытом виде в базе нет (ADR-014):
+// пароль — только хеш scrypt, идентификатор сессии — только sha256; в fingerprint входит хеш от хеша.
 
 export const MANIFEST_VERSION = 'content-manifest@1';
 export const ROW_SERIALIZATION = 'pg-text-row@1';
@@ -72,6 +72,10 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'dossier_snapshot_redactions', class: 'history', why: 'журнал вымарываний с hash до/после' },
   { table: 'registry_records', class: 'domain', why: 'снимки записей реестра: типизированные поля редакции (этап 20A)' },
   { table: 'domrf_targets', class: 'domain', why: 'добавленные оператором ссылки ДОМ.РФ и состояние браузерного разбора' },
+  // Пользователи и вход (ADR-014)
+  { table: 'users', class: 'domain', why: 'пользователи портала, роли, хеши паролей; логины стоят в атрибуции решений' },
+  { table: 'user_sessions', class: 'operational', why: 'серверные сессии входа (sha256 идентификатора), отзыв и простой' },
+  { table: 'auth_events', class: 'history', why: 'неизменяемый журнал входа и действий с пользователями' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];

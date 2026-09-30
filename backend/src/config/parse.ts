@@ -50,7 +50,7 @@ export const isLoopbackHost = (host: string): boolean => {
 /**
  * Адрес, на котором слушает API. Без входа (AUTH_MODE=none) — только loopback: портал
  * рассчитан на одного оператора на этой же машине. Адрес в сети разрешён только вместе
- * со входом оператора (серверная выкладка, ADR-013): «сеть без входа» конфигурацией
+ * со входом (серверная выкладка, ADR-013/014): «сеть без входа» конфигурацией
  * не собирается.
  */
 export const parseListenHost = (raw: string | undefined, allowNetwork = false): string => {
@@ -58,8 +58,8 @@ export const parseListenHost = (raw: string | undefined, allowNetwork = false): 
   if (isLoopbackHost(host)) return host;
   if (!allowNetwork) {
     throw new EnvValueError(
-      'HOST: без входа оператора (AUTH_MODE=none) разрешён только loopback (127.0.0.1, ::1, localhost). ' +
-        'Адрес в сети — только с AUTH_MODE=token.',
+      'HOST: без входа (AUTH_MODE=none) разрешён только loopback (127.0.0.1, ::1, localhost). ' +
+        'Адрес в сети — только с AUTH_MODE=password.',
     );
   }
   if (net.isIP(host) === 0) {
@@ -86,31 +86,30 @@ export const parseLlmBaseUrl = (raw: string | undefined): string => {
   return value.replace(/\/+$/, '');
 };
 
-export type AuthMode = 'none' | 'token';
+export type AuthMode = 'none' | 'password';
 
-/** Вход оператора: none (по умолчанию, локальная работа) или token (серверная выкладка). */
+/**
+ * Вход: none (по умолчанию, локальная работа) или password (сервер: пользователи с логином и паролем,
+ * ADR-014). Прежний token (ADR-013) снят: общий токен одного оператора не различал людей и права.
+ */
 export const parseAuthMode = (raw: string | undefined): AuthMode => {
   const value = raw === undefined || raw.trim() === '' ? 'none' : raw.trim().toLowerCase();
-  if (value !== 'none' && value !== 'token') {
-    throw new EnvValueError('AUTH_MODE: допустимо none (по умолчанию) или token');
+  if (value === 'token') {
+    throw new EnvValueError(
+      'AUTH_MODE=token снят (ADR-014): задайте AUTH_MODE=password и создайте администратора ' +
+        'командой `npm run users -- --create-admin <логин>` (в контейнере: node dist/auth/cli.js)',
+    );
+  }
+  if (value !== 'none' && value !== 'password') {
+    throw new EnvValueError('AUTH_MODE: допустимо none (по умолчанию) или password');
   }
   return value;
-};
-
-/** Токен оператора читается только при AUTH_MODE=token: обязателен и не короче 32 символов. */
-export const parseOperatorToken = (mode: AuthMode, raw: string | undefined): string | null => {
-  if (mode === 'none') return null;
-  const token = raw?.trim() ?? '';
-  if (token.length < 32) {
-    throw new EnvValueError('OPERATOR_TOKEN: при AUTH_MODE=token обязателен и не короче 32 символов');
-  }
-  return token;
 };
 
 /**
  * Публичный адрес портала за обратным прокси: только схема, хост и порт. Его хост
  * становится допустимым Host, а сам адрес — допустимым Origin. Вне loopback — только
- * https (cookie сессии уходит с флагом Secure) и только со входом оператора.
+ * https (cookie сессии уходит с флагом Secure) и только со входом.
  */
 export const parsePublicOrigin = (raw: string | undefined, mode: AuthMode): string | null => {
   if (raw === undefined || raw.trim() === '') return null;
@@ -128,8 +127,8 @@ export const parsePublicOrigin = (raw: string | undefined, mode: AuthMode): stri
     throw new EnvValueError('PUBLIC_ORIGIN: только схема, хост и порт — без пути, логина и параметров');
   }
   if (!isLoopbackHost(url.hostname)) {
-    if (mode !== 'token') {
-      throw new EnvValueError('PUBLIC_ORIGIN вне loopback требует AUTH_MODE=token: без входа портал наружу не выставляется');
+    if (mode === 'none') {
+      throw new EnvValueError('PUBLIC_ORIGIN вне loopback требует AUTH_MODE=password: без входа портал наружу не выставляется');
     }
     if (url.protocol !== 'https:') {
       throw new EnvValueError('PUBLIC_ORIGIN вне loopback — только https');

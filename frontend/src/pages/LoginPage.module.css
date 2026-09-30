@@ -89,3 +89,8 @@
     transition: none;
   }
 }
+
+.title {
+  margin: 0;
+  font-size: var(--fs-xl);
+}

@@ -20,6 +20,7 @@ import { loadCaseDossier } from '../dossier/load.js';
 import { loadProjectDossier } from '../dossier/projectDossier.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { actorOf } from './auth.js';
 
 export const dossierRouter = asyncRouter();
 
@@ -64,7 +65,7 @@ dossierRouter.post('/cases', async (req, res) => {
     return;
   }
   try {
-    const result = await createCase(parsed.data, 'operator');
+    const result = await createCase(parsed.data, actorOf(req));
     res.status(result.replayed ? 200 : 201).json({ case: result.row, replayed: result.replayed });
   } catch (err) {
     if (!sendCaseError(res, err)) throw err;
@@ -94,7 +95,7 @@ dossierRouter.put('/cases/:id', async (req, res) => {
     return;
   }
   try {
-    const row = await updateCase(id, parsed.data, 'operator');
+    const row = await updateCase(id, parsed.data, actorOf(req));
     res.setHeader('ETag', `"v${row.version}"`);
     res.json({ case: row });
   } catch (err) {

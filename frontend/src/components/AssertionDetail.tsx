@@ -19,6 +19,7 @@ import {
   formatDate,
   formatDateTime,
 } from '../lib/labels';
+import { useCan } from '../hooks/useAuth';
 import styles from './AssertionReviewPanel.module.css';
 
 interface IDetailResponse {
@@ -43,6 +44,8 @@ const newKey = (): string =>
  */
 export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) => {
   const queryClient = useQueryClient();
+  // Читатель видит доказательства и историю решений, но не принимает их: сервер ответил бы 403.
+  const canDecide = useCan('review.decide');
   const [decision, setDecision] = useState<AssertionStatus>('reviewed_supported');
   const [scope, setScope] = useState<'reflects_source' | 'fact_confirmed'>('reflects_source');
   const [reason, setReason] = useState('');
@@ -149,17 +152,19 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
               отозвано{e.statusReason ? `: ${e.statusReason}` : ''}
             </span>
           ) : (
-            <button
-              type="button"
-              className={styles.linkButton}
-              disabled={withdraw.isPending}
-              onClick={() => {
-                const why = window.prompt('Причина отзыва доказательства');
-                if (why && why.trim().length >= 3) withdraw.mutate({ evidenceId: e.id, why: why.trim(), version: a.version });
-              }}
-            >
-              отозвать
-            </button>
+            canDecide && (
+              <button
+                type="button"
+                className={styles.linkButton}
+                disabled={withdraw.isPending}
+                onClick={() => {
+                  const why = window.prompt('Причина отзыва доказательства');
+                  if (why && why.trim().length >= 3) withdraw.mutate({ evidenceId: e.id, why: why.trim(), version: a.version });
+                }}
+              >
+                отозвать
+              </button>
+            )
           )}
         </div>
       </li>
@@ -216,34 +221,36 @@ export const AssertionDetail: FC<{ assertionId: number }> = ({ assertionId }) =>
         </section>
       )}
 
-      <form className={styles.form} onSubmit={submit}>
-        <div className={styles.formRow}>
+      {canDecide && (
+        <form className={styles.form} onSubmit={submit}>
+          <div className={styles.formRow}>
+            <label className={styles.field}>
+              <span>Решение</span>
+              <select value={decision} onChange={e => setDecision(e.target.value as AssertionStatus)}>
+                {DECISIONS.map(d => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Что именно проверено</span>
+              <select value={scope} onChange={e => setScope(e.target.value as 'reflects_source' | 'fact_confirmed')}>
+                <option value="reflects_source">{REVIEW_SCOPE_LABELS.reflects_source}</option>
+                <option value="fact_confirmed">{REVIEW_SCOPE_LABELS.fact_confirmed}</option>
+              </select>
+            </label>
+          </div>
           <label className={styles.field}>
-            <span>Решение</span>
-            <select value={decision} onChange={e => setDecision(e.target.value as AssertionStatus)}>
-              {DECISIONS.map(d => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
+            <span>{reasonRequired ? 'Причина (обязательна для этого решения)' : 'Причина'}</span>
+            <textarea rows={2} value={reason} required={reasonRequired} minLength={reasonRequired ? 3 : undefined} onChange={e => setReason(e.target.value)} />
           </label>
-          <label className={styles.field}>
-            <span>Что именно проверено</span>
-            <select value={scope} onChange={e => setScope(e.target.value as 'reflects_source' | 'fact_confirmed')}>
-              <option value="reflects_source">{REVIEW_SCOPE_LABELS.reflects_source}</option>
-              <option value="fact_confirmed">{REVIEW_SCOPE_LABELS.fact_confirmed}</option>
-            </select>
-          </label>
-        </div>
-        <label className={styles.field}>
-          <span>{reasonRequired ? 'Причина (обязательна для этого решения)' : 'Причина'}</span>
-          <textarea rows={2} value={reason} required={reasonRequired} minLength={reasonRequired ? 3 : undefined} onChange={e => setReason(e.target.value)} />
-        </label>
-        <button type="submit" className={styles.primary} disabled={review.isPending || (reasonRequired && reason.trim().length < 3)}>
-          {review.isPending ? 'Записываю…' : 'Записать решение'}
-        </button>
-      </form>
+          <button type="submit" className={styles.primary} disabled={review.isPending || (reasonRequired && reason.trim().length < 3)}>
+            {review.isPending ? 'Записываю…' : 'Записать решение'}
+          </button>
+        </form>
+      )}
 
       <section>
         <h4>История решений ({reviews.length})</h4>

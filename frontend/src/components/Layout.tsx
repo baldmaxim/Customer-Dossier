@@ -1,6 +1,8 @@
 import { FC, ReactNode } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 
+import type { AccessPermission } from '../api/types';
+import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import styles from './Layout.module.css';
 
@@ -10,6 +12,8 @@ interface INavItem {
   end: boolean;
   /** Контур иконки для нижней панели на смартфоне. */
   icon: string;
+  /** Пункт видит только тот, у кого есть это право. */
+  permission: AccessPermission;
 }
 
 // «Подрядчики» отсюда убраны: экран показывал тот же /api/contractors с теми же
@@ -19,18 +23,21 @@ const NAV: INavItem[] = [
     to: '/',
     label: 'Компании',
     end: true,
+    permission: 'portal.read',
     icon: 'M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5',
   },
   {
     to: '/links',
     label: 'Связи',
     end: false,
+    permission: 'portal.read',
     icon: 'M7 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM17 13.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM17 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM9.3 9.2l5.4 3.1M9.5 8.5 14.5 7',
   },
   {
     to: '/admin',
     label: 'Админка',
     end: false,
+    permission: 'admin.view',
     icon: 'M3.5 7.5h9M16.5 7.5h4M3.5 16.5h4M11.5 16.5h9M14.5 5v5M9.5 14v5',
   },
 ];
@@ -39,6 +46,7 @@ const SUN =
   'M12 4.5v-2M12 21.5v-2M4.5 12h-2M21.5 12h-2M6.7 6.7 5.3 5.3M18.7 18.7l-1.4-1.4M6.7 17.3l-1.4 1.4M18.7 5.3l-1.4 1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z';
 const MOON = 'M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z';
 const EXIT = 'M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M10 16.5 14.5 12 10 7.5M14.5 12H4';
+const PERSON = 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM4.5 20a7.5 7.5 0 0 1 15 0';
 
 const Glyph: FC<{ d: string; className?: string }> = ({ d, className }) => (
   <svg
@@ -58,8 +66,6 @@ const Glyph: FC<{ d: string; className?: string }> = ({ d, className }) => (
 
 interface ILayoutProps {
   children: ReactNode;
-  /** Выход оператора — только на сервере (AUTH_MODE=token). */
-  onLogout?: () => void;
 }
 
 /**
@@ -87,9 +93,11 @@ const BackBar: FC = () => {
   );
 };
 
-export const Layout: FC<ILayoutProps> = ({ children, onLogout }) => {
+export const Layout: FC<ILayoutProps> = ({ children }) => {
   const { theme, toggle } = useTheme();
+  const { user, can, logout } = useAuth();
   const themeLabel = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+  const nav = NAV.filter(item => can(item.permission));
 
   return (
     <div className={styles.shell}>
@@ -103,7 +111,7 @@ export const Layout: FC<ILayoutProps> = ({ children, onLogout }) => {
           </Link>
 
           <nav className={styles.nav} aria-label="Основная навигация">
-            {NAV.map(item => (
+            {nav.map(item => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -127,8 +135,13 @@ export const Layout: FC<ILayoutProps> = ({ children, onLogout }) => {
             <Glyph d={theme === 'dark' ? SUN : MOON} className={styles.themeIcon} />
           </button>
 
-          {onLogout && (
-            <button type="button" className={styles.themeButton} onClick={onLogout} aria-label="Выйти" title="Выйти">
+          <Link to="/account" className={styles.account} aria-label={`Мой профиль: ${user.displayName}`} title="Мой профиль">
+            <Glyph d={PERSON} className={styles.themeIcon} />
+            <span className={styles.accountName}>{user.displayName}</span>
+          </Link>
+
+          {logout && (
+            <button type="button" className={styles.themeButton} onClick={logout} aria-label="Выйти" title="Выйти">
               <Glyph d={EXIT} className={styles.themeIcon} />
             </button>
           )}
@@ -143,7 +156,7 @@ export const Layout: FC<ILayoutProps> = ({ children, onLogout }) => {
       {/* Нижняя панель — только на смартфоне: до неё дотягивается большой палец,
           а шапку на объекте держат одной рукой. */}
       <nav className={styles.tabbar} aria-label="Навигация">
-        {NAV.map(item => (
+        {nav.map(item => (
           <NavLink
             key={item.to}
             to={item.to}

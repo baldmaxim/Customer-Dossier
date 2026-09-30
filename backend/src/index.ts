@@ -2,6 +2,7 @@
 // пересчёт метрик, приём форвардов) запускаются только явными флагами.
 
 import { createApp } from './app.js';
+import { pgAuthStore } from './auth/pgStore.js';
 import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
@@ -113,11 +114,21 @@ const main = async (): Promise<void> => {
   const server = app.listen(env.PORT, env.HOST, () => {
     console.log(`[api] слушает http://${env.HOST.includes(':') ? `[${env.HOST}]` : env.HOST}:${env.PORT}`);
     console.log(
-      env.AUTH_MODE === 'token'
-        ? `[api] вход оператора по токену; адрес портала: ${env.PUBLIC_ORIGIN ?? 'только loopback'}`
+      env.AUTH_MODE === 'password'
+        ? `[api] вход по логину и паролю; адрес портала: ${env.PUBLIC_ORIGIN ?? 'только loopback'}`
         : '[api] вход не требуется: портал открыт для локальных запросов',
     );
   });
+  if (env.OPERATOR_TOKEN_LEFTOVER) {
+    console.warn('[auth] OPERATOR_TOKEN больше не используется (ADR-014) — уберите его из .env');
+  }
+  if (env.AUTH_MODE === 'password') {
+    // Подсказка, а не условие старта: без миграции 031 вход всё равно не заработает, но портал
+    // и фоновые задания не должны падать из-за строки в логе.
+    const users = await pgAuthStore.countUsers().catch(() => null);
+    if (users === null) console.warn('[auth] таблицы пользователей нет — примените миграции (031)');
+    else if (users === 0) console.warn('[auth] пользователей нет — войти некому. Первый администратор: node dist/auth/cli.js --create-admin <логин>');
+  }
 
   const decision = startBackgroundJobs(
     env,

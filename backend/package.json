@@ -12,6 +12,7 @@
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/db/migrate.ts",
+    "users": "tsx src/auth/cli.ts",
     "ingest:once": "tsx src/ingest/cli.ts",
     "registry:preview": "tsx src/ingest/registry/browserPreview.ts",
     "domrf:once": "tsx src/ingest/registry/browserCli.ts",

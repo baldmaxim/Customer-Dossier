@@ -16,6 +16,8 @@ import { ProjectPage } from './pages/ProjectPage';
 import { RunPage } from './pages/admin/RunPage';
 import { RunsPage } from './pages/admin/RunsPage';
 import { ReviewQueuePage } from './pages/admin/ReviewQueuePage';
+import { UsersPage } from './pages/admin/UsersPage';
+import { AccountPage } from './pages/AccountPage';
 import { SearchPage } from './pages/SearchPage';
 
 const queryClient = new QueryClient({
@@ -36,19 +38,15 @@ const RunsRedirect: FC = () => {
   return <Navigate to={`/admin/process/${id ?? ''}`} replace />;
 };
 
-interface IPortalProps {
-  /** Есть только на сервере (AUTH_MODE=token): локально выходить некуда. */
-  onLogout?: () => void;
-}
-
-const Portal: FC<IPortalProps> = ({ onLogout }) => (
-  <Layout onLogout={onLogout}>
+const Portal: FC = () => (
+  <Layout>
     <Routes>
       <Route path="/" element={<SearchPage />} />
       <Route path="/company/:id" element={<CompanyPage />} />
       <Route path="/links" element={<LinksPage />} />
       <Route path="/documents/:id" element={<DocumentPage />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
+      <Route path="/account" element={<AccountPage />} />
 
       {/* Админка — конвейер: сбор → обработка → результат. Вложенный роут один,
           и только здесь: подшапка ступеней рисуется один раз. */}
@@ -59,6 +57,7 @@ const Portal: FC<IPortalProps> = ({ onLogout }) => (
         <Route path="process/:id" element={<RunPage />} />
         <Route path="result" element={<ResultPage />} />
         <Route path="review" element={<ReviewQueuePage />} />
+        <Route path="users" element={<UsersPage />} />
       </Route>
 
       {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов.
@@ -80,7 +79,9 @@ const Portal: FC<IPortalProps> = ({ onLogout }) => (
 export const App: FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AuthGate renderPortal={onLogout => <Portal onLogout={onLogout} />} />
+      <AuthGate>
+        <Portal />
+      </AuthGate>
       <UpdatePrompt />
     </BrowserRouter>
   </QueryClientProvider>

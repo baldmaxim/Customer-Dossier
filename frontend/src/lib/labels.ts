@@ -3,11 +3,13 @@
 // экране и в «Генеральный подрядчик» на другом.
 
 import type {
+  AccessPermission,
   AssertionStatus,
   PermissionStatus,
   Role,
   Sentiment,
   TextCompleteness,
+  UserRole,
 } from '../api/types';
 
 /** Полнота текста: «полный» — только при положительном признаке, не по длине. */
@@ -667,4 +669,58 @@ export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   extracted: 'разобраны',
   failed: 'разбор не удался',
   skipped: 'признаны нерелевантными',
+};
+
+// ─── Пользователи и права (ADR-014) ──────────────────────────────────────────
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'администратор',
+  operator: 'оператор',
+  viewer: 'читатель',
+};
+
+export const USER_ROLE_HINTS: Record<UserRole, string> = {
+  admin: 'всё, что может оператор, плюс пользователи, их права и журнал входа',
+  operator: 'портал и админка: источники, разбор, решения по утверждениям и слияния',
+  viewer: 'только поиск, карточки компаний и объектов, публикации и связи',
+};
+
+export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
+  'portal.read': 'Поиск, карточки, публикации, связи',
+  'admin.view': 'Админка: смотреть сбор, разбор и очередь проверки',
+  'sources.manage': 'Источники: добавить, включить, срок сбора, ручная вставка',
+  'pipeline.manage': 'Разбор: запуски, публикация набора, пересчёт сигналов',
+  'review.decide': 'Решения по утверждениям, реквизитам и связям компаний',
+  'entities.merge': 'Слияние компаний и его отмена',
+  'dossier.view': 'Обращения и снимки досье: смотреть',
+  'dossier.manage': 'Обращения и снимки досье: изменять',
+  'users.manage': 'Пользователи, права и журнал входа',
+};
+
+export const AUTH_EVENT_LABELS: Record<string, string> = {
+  login_succeeded: 'вход',
+  login_failed: 'неудачный вход',
+  logout: 'выход',
+  password_changed: 'сменил пароль',
+  password_reset: 'пароль сброшен',
+  user_created: 'пользователь создан',
+  user_updated: 'изменён',
+  user_disabled: 'доступ выключен',
+  user_enabled: 'доступ включён',
+  session_revoked: 'сессия закрыта',
+};
+
+/** Почему вход не удался — видно только администратору; пользователь всегда слышит одно и то же. */
+export const LOGIN_FAILURE_LABELS: Record<string, string> = {
+  unknown_login: 'нет такого логина',
+  bad_password: 'неверный пароль',
+  locked: 'вход временно закрыт',
+  disabled: 'доступ выключен',
+};
+
+/** Кто действовал, если не пользователь портала. */
+export const AUTH_ACTOR_LABELS: Record<string, string> = {
+  cli: 'консоль сервера',
+  anonymous: '—',
+  operator: 'локальный оператор',
 };

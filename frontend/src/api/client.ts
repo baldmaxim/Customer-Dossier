@@ -1,7 +1,7 @@
 // HTTP-клиент. Base URL из VITE_API_URL; в dev пусто — работает vite-прокси.
 //
 // Доступ: локально входа нет (API на loopback, проверка Host и Origin). На сервере
-// (AUTH_MODE=token, ADR-013) — серверная сессия в HttpOnly-cookie (браузер отправляет
+// (AUTH_MODE=password, ADR-014) — серверная сессия в HttpOnly-cookie (браузер отправляет
 // её сам) и CSRF-токен, который живёт только в памяти страницы — не в localStorage и
 // не в URL. После перезагрузки токен заново берётся из /api/auth/session.
 
@@ -29,6 +29,9 @@ export const setCsrfToken = (token: string | null): void => {
 /** Событие для экрана входа: сессии нет или она истекла. */
 export const AUTH_REQUIRED_EVENT = 'tgi:auth-required';
 
+/** Права изменились на сервере (роль сменили, пароль сбросили): сведения о сессии перечитываются. */
+export const SESSION_STALE_EVENT = 'tgi:session-stale';
+
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
@@ -50,6 +53,9 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
     if (response.status === 401 && !path.startsWith('/api/auth/')) {
       setCsrfToken(null);
       window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+    }
+    if (response.status === 403 && (body?.code === 'forbidden' || body?.code === 'password_change_required')) {
+      window.dispatchEvent(new Event(SESSION_STALE_EVENT));
     }
     throw new ApiError(body?.error ?? `Ошибка ${response.status}`, response.status, body?.code ?? null, body);
   }

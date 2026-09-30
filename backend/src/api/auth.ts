@@ -1,100 +1,41 @@
-// Вход оператора на серверной выкладке (ADR-013). Локально (AUTH_MODE=none) не действует.
+// Вход пользователей портала (ADR-014; прежний вход по токену оператора — ADR-013).
 //
-// Механизм: токен оператора из OPERATOR_TOKEN обменивается на серверную сессию.
-// Браузер хранит только идентификатор сессии в HttpOnly SameSite=Strict cookie;
-// CSRF-токен живёт в памяти страницы и приходит заголовком на каждую изменяющую
-// операцию. Сессии — в памяти процесса: перезапуск API означает повторный вход,
-// для одного оператора это дешевле таблицы сессий.
+// AUTH_MODE=none — локальная работа: loopback, входа нет, каждый запрос идёт от локального
+// оператора со всеми правами (auth/service.ts::LOCAL_CONTEXT).
+// AUTH_MODE=password — сервер: логин и пароль меняются на серверную сессию в базе. Браузер хранит
+// только идентификатор сессии в HttpOnly SameSite=Strict cookie; CSRF-токен живёт в памяти страницы
+// и приходит заголовком на каждую изменяющую операцию. Права — по роли пользователя
+// (auth/permissions.ts) и таблице маршрутов (auth/routePolicy.ts), проверяются на каждом запросе:
+// смена роли или выключение действуют сразу, без повторного входа.
 //
 // Почему не просто CORS: CORS решает, может ли чужая страница ПРОЧИТАТЬ ответ,
-// но не запрещает ей ОТПРАВИТЬ запрос. Простой POST с чужой вкладки дошёл бы
-// до слияния компаний. Поэтому отдельно: Host, Origin/Sec-Fetch-Site (api/guards.ts)
-// и CSRF-токен.
-
-import crypto from 'node:crypto';
+// но не запрещает ей ОТПРАВИТЬ запрос. Поэтому отдельно: Host, Origin/Sec-Fetch-Site
+// (api/guards.ts) и CSRF-токен.
 
 import rateLimit from 'express-rate-limit';
 import { Router, type NextFunction, type Request, type RequestHandler, type Response } from 'express';
 import { z } from 'zod';
 
 import type { AuthMode } from '../config/parse.js';
+import { permissionFor } from '../auth/routePolicy.js';
+import { LOCAL_CONTEXT, safeEqual, type AuthService, type IAuthContext, type IAuthUser, type IRequestMeta } from '../auth/service.js';
+
+export { safeEqual };
 
 export const CSRF_HEADER = 'x-csrf-token';
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    /** Кто делает запрос. Ставит createAttachAuth; до него — undefined. */
+    auth?: IAuthContext;
+  }
+}
 
 /**
  * Имя cookie. Префикс `__Host-` браузер принимает только с Secure, Path=/ и без Domain:
  * такую cookie не подменить с соседнего поддомена зоны.
  */
 export const sessionCookieName = (secure: boolean): string => (secure ? '__Host-tgi_session' : 'tgi_session');
-
-interface ISession {
-  csrfToken: string;
-  createdAt: number;
-  lastSeenAt: number;
-}
-
-export interface ISessionStoreOptions {
-  idleMs: number;
-  maxMs: number;
-  now?: () => number;
-}
-
-export class SessionStore {
-  private readonly sessions = new Map<string, ISession>();
-  private readonly now: () => number;
-
-  constructor(private readonly options: ISessionStoreOptions) {
-    this.now = options.now ?? Date.now;
-  }
-
-  create(): { id: string; csrfToken: string; expiresAt: number } {
-    this.prune();
-    const id = crypto.randomBytes(32).toString('base64url');
-    const csrfToken = crypto.randomBytes(32).toString('base64url');
-    const at = this.now();
-    this.sessions.set(id, { csrfToken, createdAt: at, lastSeenAt: at });
-    return { id, csrfToken, expiresAt: at + this.options.maxMs };
-  }
-
-  /** Живая сессия или null. Истёкшая удаляется при обращении. */
-  get(id: string | undefined): (ISession & { expiresAt: number }) | null {
-    if (!id) return null;
-    const session = this.sessions.get(id);
-    if (!session) return null;
-    const at = this.now();
-    if (this.isExpired(session, at)) {
-      this.sessions.delete(id);
-      return null;
-    }
-    session.lastSeenAt = at;
-    return { ...session, expiresAt: session.createdAt + this.options.maxMs };
-  }
-
-  destroy(id: string | undefined): void {
-    if (id) this.sessions.delete(id);
-  }
-
-  get size(): number {
-    return this.sessions.size;
-  }
-
-  private isExpired(session: ISession, at: number): boolean {
-    return at - session.lastSeenAt > this.options.idleMs || at - session.createdAt > this.options.maxMs;
-  }
-
-  /** Брошенные сессии не копятся: каждый вход чистит истёкшие. */
-  private prune(): void {
-    const at = this.now();
-    for (const [id, session] of this.sessions) {
-      if (this.isExpired(session, at)) this.sessions.delete(id);
-    }
-  }
-}
-
-const sha256 = (value: string): Buffer => crypto.createHash('sha256').update(value, 'utf8').digest();
-
-/** Сравнение без утечки по времени; длины выравнены хэшированием. */
-export const safeEqual = (a: string, b: string): boolean => crypto.timingSafeEqual(sha256(a), sha256(b));
 
 export const parseCookies = (header: string | undefined): Record<string, string> => {
   const out: Record<string, string> = {};
@@ -118,9 +59,7 @@ const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export interface IAuthOptions {
   mode: AuthMode;
-  /** Обязателен при mode = token. */
-  operatorToken: string | null;
-  store: SessionStore;
+  service: AuthService;
   /** Cookie с флагом Secure и префиксом `__Host-` — портал открыт по https. */
   secureCookie: boolean;
   maxAgeSec: number;
@@ -130,99 +69,199 @@ const deny = (res: Response, status: number, error: string, code: string): void 
   res.status(status).json({ error, code });
 };
 
-const sessionIdOf = (req: Request, cookieName: string): string | undefined => parseCookies(req.headers.cookie)[cookieName];
+const sessionTokenOf = (req: Request, options: IAuthOptions): string | undefined =>
+  parseCookies(req.headers.cookie)[sessionCookieName(options.secureCookie)];
 
 const cookieHeader = (options: IAuthOptions, value: string, maxAgeSec: number): string =>
   `${sessionCookieName(options.secureCookie)}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSec}` +
   (options.secureCookie ? '; Secure' : '');
 
-const passThrough: RequestHandler = (_req, _res, next) => next();
+/** Адрес и браузер для журнала входа. Адрес — из X-Forwarded-For только при TRUST_PROXY. */
+export const requestMeta = (req: Request): IRequestMeta => ({
+  ip: req.ip ?? null,
+  userAgent: req.headers['user-agent']?.slice(0, 300) ?? null,
+});
 
-/** Сессия обязательна; для изменяющих методов — ещё и CSRF-токен. Без входа — пропускает всё. */
-export const createRequireOperator = (options: IAuthOptions): RequestHandler => {
-  if (options.mode === 'none') return passThrough;
-  const cookieName = sessionCookieName(options.secureCookie);
-  return (req: Request, res: Response, next: NextFunction) => {
-    const session = options.store.get(sessionIdOf(req, cookieName));
-    if (!session) {
-      deny(res, 401, 'Нужен вход оператора', 'auth_required');
-      return;
-    }
-    if (UNSAFE_METHODS.has(req.method)) {
-      const header = req.headers[CSRF_HEADER];
-      const provided = Array.isArray(header) ? header[0] : header;
-      if (!provided || !safeEqual(provided, session.csrfToken)) {
-        deny(res, 403, 'Нет или неверный CSRF-токен', 'csrf');
-        return;
-      }
-    }
-    next();
+/** Логин того, кто делает запрос, — для атрибуции решений и журналов. Локально — 'operator'. */
+export const actorOf = (req: Request): string => req.auth?.user.login ?? LOCAL_CONTEXT.user.login;
+
+const hasValidCsrf = (req: Request, ctx: IAuthContext): boolean => {
+  const header = req.headers[CSRF_HEADER];
+  const provided = Array.isArray(header) ? header[0] : header;
+  return provided !== undefined && ctx.csrfToken !== null && safeEqual(provided, ctx.csrfToken);
+};
+
+/** Ставит req.auth: локально — всегда локальный оператор, на сервере — по cookie сессии или никто. */
+export const createAttachAuth = (options: IAuthOptions): RequestHandler => {
+  if (options.mode === 'none') {
+    return (req, _res, next) => {
+      req.auth = LOCAL_CONTEXT;
+      next();
+    };
+  }
+  return (req, _res, next) => {
+    options.service
+      .resolve(sessionTokenOf(req, options))
+      .then(ctx => {
+        if (ctx) req.auth = ctx;
+        next();
+      })
+      .catch(next);
   };
 };
 
-const loginSchema = z.object({ token: z.string().min(1).max(512) });
+/**
+ * Вход обязателен; изменяющий запрос — ещё и с CSRF-токеном; выданный администратором пароль
+ * сначала меняется; право на маршрут — по таблице auth/routePolicy.ts.
+ */
+export const createRequireAccess = (options: IAuthOptions): RequestHandler => (req, res, next) => {
+  const ctx = req.auth;
+  if (!ctx) {
+    deny(res, 401, 'Нужен вход', 'auth_required');
+    return;
+  }
+  if (options.mode !== 'none') {
+    if (UNSAFE_METHODS.has(req.method) && !hasValidCsrf(req, ctx)) {
+      deny(res, 403, 'Нет или неверный CSRF-токен', 'csrf');
+      return;
+    }
+    if (ctx.user.mustChangePassword) {
+      deny(res, 403, 'Сначала смените выданный пароль', 'password_change_required');
+      return;
+    }
+  }
+  const permission = permissionFor(req.method, req.path);
+  if (permission === null || !ctx.user.permissions.includes(permission)) {
+    deny(res, 403, 'Недостаточно прав', 'forbidden');
+    return;
+  }
+  next();
+};
+
+const sessionBody = (ctx: IAuthContext, authRequired: boolean) => {
+  const user: IAuthUser = ctx.user;
+  return {
+    authRequired,
+    authenticated: true,
+    ...(ctx.csrfToken === null ? {} : { csrfToken: ctx.csrfToken }),
+    ...(ctx.expiresAt === null ? {} : { expiresAt: ctx.expiresAt.toISOString() }),
+    user: {
+      id: user.id,
+      login: user.login,
+      displayName: user.displayName,
+      role: user.role,
+      permissions: user.permissions,
+      mustChangePassword: user.mustChangePassword,
+    },
+  };
+};
+
+const loginSchema = z.object({
+  login: z.string().min(1).max(128),
+  password: z.string().min(1).max(1024),
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1).max(1024),
+  newPassword: z.string().min(1).max(1024),
+});
+
+const wrap =
+  (handler: (req: Request, res: Response) => Promise<void>): RequestHandler =>
+  (req: Request, res: Response, next: NextFunction) => {
+    handler(req, res).catch(next);
+  };
 
 export const createAuthRouter = (options: IAuthOptions): Router => {
   const router = Router();
-  const cookieName = sessionCookieName(options.secureCookie);
+  const attach = createAttachAuth(options);
 
-  router.get('/session', (req, res) => {
+  router.get('/session', attach, (req, res) => {
     // no-store: ответ с CSRF-токеном не должен оседать ни в каком кэше.
     res.setHeader('Cache-Control', 'no-store');
-    if (options.mode === 'none') {
-      res.json({ authRequired: false, authenticated: true });
-      return;
-    }
-    const session = options.store.get(sessionIdOf(req, cookieName));
-    if (!session) {
+    const ctx = req.auth;
+    if (!ctx) {
       res.json({ authRequired: true, authenticated: false });
       return;
     }
-    res.json({
-      authRequired: true,
-      authenticated: true,
-      csrfToken: session.csrfToken,
-      expiresAt: new Date(session.expiresAt).toISOString(),
-    });
+    res.json(sessionBody(ctx, options.mode !== 'none'));
   });
 
   if (options.mode === 'none') return router;
-  const operatorToken = options.operatorToken;
-  if (operatorToken === null) throw new Error('AUTH_MODE=token без OPERATOR_TOKEN');
 
-  // Портал открыт в интернет: перебор токена упирается сначала в лимит nginx, затем сюда.
-  const loginLimiter = rateLimit({
-    windowMs: 15 * 60_000,
-    limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Слишком много попыток входа, подождите', code: 'rate_limited' },
-  });
-
-  router.post('/login', loginLimiter, (req, res) => {
-    const parsed = loginSchema.safeParse(req.body);
-    // Ни токен, ни его длина в ответ и лог не попадают.
-    if (!parsed.success || !safeEqual(parsed.data.token, operatorToken)) {
-      deny(res, 401, 'Неверный токен оператора', 'bad_token');
-      return;
-    }
-    options.store.destroy(sessionIdOf(req, cookieName));
-    const session = options.store.create();
-    res.setHeader('Set-Cookie', cookieHeader(options, session.id, options.maxAgeSec));
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({
-      authRequired: true,
-      authenticated: true,
-      csrfToken: session.csrfToken,
-      expiresAt: new Date(session.expiresAt).toISOString(),
+  // Портал открыт в интернет: перебор упирается сначала в лимит nginx, затем сюда,
+  // затем в блокировку учётной записи (auth/service.ts).
+  const limiter = (limit: number) =>
+    rateLimit({
+      windowMs: 15 * 60_000,
+      limit,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Слишком много попыток, подождите', code: 'rate_limited' },
     });
-  });
 
-  router.post('/logout', (req, res) => {
-    options.store.destroy(sessionIdOf(req, cookieName));
-    res.setHeader('Set-Cookie', cookieHeader(options, '', 0));
-    res.json({ authRequired: true, authenticated: false });
-  });
+  router.post(
+    '/login',
+    limiter(20),
+    wrap(async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      const parsed = loginSchema.safeParse(req.body);
+      // Ни пароль, ни его длина в ответ и лог не попадают.
+      if (!parsed.success) {
+        deny(res, 401, 'Неверный логин или пароль', 'bad_credentials');
+        return;
+      }
+      const result = await options.service.login(parsed.data.login, parsed.data.password, requestMeta(req), sessionTokenOf(req, options));
+      if (!result.ok) {
+        if (result.code === 'locked') {
+          deny(res, 429, 'Слишком много неудачных попыток. Вход временно закрыт — попробуйте позже', 'locked');
+        } else {
+          deny(res, 401, 'Неверный логин или пароль', 'bad_credentials');
+        }
+        return;
+      }
+      res.setHeader('Set-Cookie', cookieHeader(options, result.token, options.maxAgeSec));
+      res.json(sessionBody(result.context, true));
+    }),
+  );
+
+  router.post(
+    '/logout',
+    wrap(async (req, res) => {
+      await options.service.logout(sessionTokenOf(req, options), requestMeta(req));
+      res.setHeader('Set-Cookie', cookieHeader(options, '', 0));
+      res.json({ authRequired: true, authenticated: false });
+    }),
+  );
+
+  router.post(
+    '/password',
+    limiter(20),
+    attach,
+    wrap(async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      const ctx = req.auth;
+      if (!ctx) {
+        deny(res, 401, 'Нужен вход', 'auth_required');
+        return;
+      }
+      if (!hasValidCsrf(req, ctx)) {
+        deny(res, 403, 'Нет или неверный CSRF-токен', 'csrf');
+        return;
+      }
+      const parsed = passwordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        deny(res, 400, 'Укажите текущий и новый пароль', 'invalid');
+        return;
+      }
+      const result = await options.service.changePassword(ctx, parsed.data.currentPassword, parsed.data.newPassword, requestMeta(req));
+      if (!result.ok) {
+        deny(res, result.status, result.error, result.code);
+        return;
+      }
+      res.json(sessionBody(result.context, true));
+    }),
+  );
 
   return router;
 };

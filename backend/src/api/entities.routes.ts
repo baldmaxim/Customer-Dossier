@@ -31,6 +31,7 @@ import {
 import { addIdentifier, classifyTaxId } from '../resolve/identifiers.js';
 import { applyQueuedMerge, listMergeHistory, previewQueuedMerge, undoMerge } from '../resolve/merge.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { actorOf } from './auth.js';
 
 export const entitiesRouter = asyncRouter();
 
@@ -97,7 +98,7 @@ entitiesRouter.post('/entities/merge', async (req, res) => {
       res.status(400).json({ error: 'Некорректный запрос слияния' });
       return;
     }
-    const result = await applyEntityMerge({ ...parsed.data, reason: parsed.data.reason ?? null, actor: 'operator' });
+    const result = await applyEntityMerge({ ...parsed.data, reason: parsed.data.reason ?? null, actor: actorOf(req) });
     res.status(result.replayed ? 200 : 201).json(result);
   } catch (err) {
     if (!sendMergeError(res, err)) throw err;
@@ -127,7 +128,7 @@ entitiesRouter.post('/admin/merges/:id/merge', async (req, res) => {
       res.status(400).json({ error: 'Нужны версии и токен из предпросмотра и ключ идемпотентности' });
       return;
     }
-    const result = await applyQueuedMerge({ queueId: id, actor: 'operator', ...parsed.data, reason: parsed.data.reason ?? null });
+    const result = await applyQueuedMerge({ queueId: id, actor: actorOf(req), ...parsed.data, reason: parsed.data.reason ?? null });
     res.status(result.replayed ? 200 : 201).json(result);
   } catch (err) {
     if (!sendMergeError(res, err)) throw err;
@@ -147,7 +148,7 @@ entitiesRouter.post('/entities/merges/:id/undo', async (req, res) => {
       res.status(400).json({ error: 'Нужен ключ идемпотентности' });
       return;
     }
-    res.json(await undoMerge(id, 'operator', parsed.data.idempotencyKey));
+    res.json(await undoMerge(id, actorOf(req), parsed.data.idempotencyKey));
   } catch (err) {
     if (!sendMergeError(res, err)) throw err;
   }
@@ -203,7 +204,7 @@ entitiesRouter.post('/entities/companies/:id/identifiers', async (req, res) => {
       )
     ).rows[0];
     if (sameType && sameType.value !== typed.value) return { sameTypeConflict: sameType.value };
-    await addIdentifier(client, { ...typed, companyId: id, origin: 'manual', createdBy: 'operator' });
+    await addIdentifier(client, { ...typed, companyId: id, origin: 'manual', createdBy: actorOf(req) });
     return { ok: true };
   });
   if ('conflict' in outcome) {
@@ -232,11 +233,11 @@ entitiesRouter.post('/entities/relations', async (req, res) => {
   const d = parsed.data;
   const rows = await query<{ id: number }>(
     `INSERT INTO company_relations (from_company_id, to_company_id, relation_type, status, note, created_by, decided_by, decided_at)
-     VALUES ($1, $2, $3, $4, $5, 'operator', 'operator', now())
+     VALUES ($1, $2, $3, $4, $5, $6, $6, now())
      ON CONFLICT (from_company_id, to_company_id, relation_type)
-     DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, decided_by = 'operator', decided_at = now()
+     DO UPDATE SET status = EXCLUDED.status, note = EXCLUDED.note, decided_by = EXCLUDED.decided_by, decided_at = now()
      RETURNING id`,
-    [d.fromCompanyId, d.toCompanyId, d.relationType, d.status, d.note ?? null],
+    [d.fromCompanyId, d.toCompanyId, d.relationType, d.status, d.note ?? null, actorOf(req)],
   );
   res.status(201).json({ id: rows[0]?.id });
 });
@@ -308,7 +309,7 @@ entitiesRouter.post('/entities/ambiguities/:id/decisions', async (req, res) => {
     return;
   }
   try {
-    const result = await decideAmbiguity({ ...parsed.data, entityId: parsed.data.entityId ?? null, ambiguityId: id, actor: 'operator' });
+    const result = await decideAmbiguity({ ...parsed.data, entityId: parsed.data.entityId ?? null, ambiguityId: id, actor: actorOf(req) });
     res.status(result.replayed ? 200 : 201).json(result);
   } catch (err) {
     if (!sendAmbiguityError(res, err)) throw err;

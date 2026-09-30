@@ -7,7 +7,6 @@ import {
   parseAuthMode,
   parseListenHost,
   parseLlmBaseUrl,
-  parseOperatorToken,
   parsePositiveInt,
   parsePublicOrigin,
   parseStrictBool,
@@ -128,14 +127,15 @@ export const parseEnv = (source: EnvSource) => {
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.
     GRAPH_EXPORT_ENABLED: parseStrictBool('GRAPH_EXPORT_ENABLED', source.GRAPH_EXPORT_ENABLED, true),
 
-    HOST: parseListenHost(source.HOST, authMode === 'token'),
+    HOST: parseListenHost(source.HOST, authMode !== 'none'),
     PORT: parsePositiveInt('PORT', source.PORT, 4100),
     CORS_ORIGINS: optional(source, 'CORS_ORIGINS', 'http://127.0.0.1:5173,http://localhost:5173'),
 
-    // Вход оператора (ADR-013). none — локальная работа: loopback, без входа, как раньше.
-    // token — серверная выкладка: токен меняется на серверную сессию в HttpOnly-cookie.
+    // Вход (ADR-014). none — локальная работа: loopback, без входа, как раньше.
+    // password — серверная выкладка: пользователи с логином, паролем и ролью; сессии в базе.
     AUTH_MODE: authMode,
-    OPERATOR_TOKEN: parseOperatorToken(authMode, source.OPERATOR_TOKEN),
+    // OPERATOR_TOKEN прежнего режима token больше не читается: если он остался в .env, старт это скажет.
+    OPERATOR_TOKEN_LEFTOVER: (source.OPERATOR_TOKEN?.trim() ?? '') !== '',
     SESSION_IDLE_MINUTES: parsePositiveInt('SESSION_IDLE_MINUTES', source.SESSION_IDLE_MINUTES, 120),
     SESSION_MAX_HOURS: parsePositiveInt('SESSION_MAX_HOURS', source.SESSION_MAX_HOURS, 12),
     // Адрес портала за обратным прокси (https://…): его хост — допустимый Host, сам адрес — Origin.

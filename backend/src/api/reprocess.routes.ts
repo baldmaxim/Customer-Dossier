@@ -26,6 +26,7 @@ import {
   retryRunOnce,
 } from '../reprocess/workbench.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { actorOf } from './auth.js';
 
 export const reprocessRouter = asyncRouter();
 
@@ -125,7 +126,7 @@ reprocessRouter.post('/reprocess/revisions/:id/runs', async (req, res) => {
     return;
   }
   // Постановка не вызывает модель: выполнит worker (PIPELINE_ENABLED) или `pipeline:once`.
-  const result = await enqueueRevision(id, lmStudioProvider(), 'operator');
+  const result = await enqueueRevision(id, lmStudioProvider(), actorOf(req));
   sendEnqueue(res, result);
 });
 
@@ -135,7 +136,7 @@ reprocessRouter.post('/reprocess/runs/:id/retry', async (req, res) => {
     res.status(400).json({ error: 'Некорректный запуск' });
     return;
   }
-  const result = await retryRunOnce(id, lmStudioProvider(), 'operator');
+  const result = await retryRunOnce(id, lmStudioProvider(), actorOf(req));
   sendEnqueue(res, result);
 });
 
@@ -145,7 +146,7 @@ reprocessRouter.post('/reprocess/runs/:id/cancel', async (req, res) => {
     res.status(400).json({ error: 'Некорректный запуск' });
     return;
   }
-  const result = await cancelRun(id, 'operator');
+  const result = await cancelRun(id, actorOf(req));
   if (result.outcome === 'not_found') {
     res.status(404).json({ error: `Запуск #${id} не найден` });
   } else if (result.outcome === 'not_cancellable') {
@@ -192,7 +193,7 @@ reprocessRouter.post('/reprocess/sets/:id/publish', async (req, res) => {
     return;
   }
   try {
-    const result = await publishCandidateSet({ setId: id, actor: 'operator', ...parsed.data });
+    const result = await publishCandidateSet({ setId: id, actor: actorOf(req), ...parsed.data });
     // Отказ политики или устаревший разбор — не ошибка запроса, а решение: 200 с outcome.
     res.json(result);
   } catch (err) {

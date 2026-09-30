@@ -14,6 +14,7 @@ import {
   withdrawEvidence,
 } from '../assertions/repository.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { actorOf } from './auth.js';
 
 export const assertionsRouter = asyncRouter();
 
@@ -245,7 +246,7 @@ assertionsRouter.post('/assertions/:id/reviews', async (req, res) => {
   }
   try {
     const result = await withTransaction(client =>
-      recordReviewDecision(client, { assertionId: id, reviewer: 'operator', ...parsed.data }),
+      recordReviewDecision(client, { assertionId: id, reviewer: actorOf(req), ...parsed.data }),
     );
     res.setHeader('ETag', `"v${result.assertion.version}"`);
     res.status(result.replayed ? 200 : 201).json(result);

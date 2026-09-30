@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, { type NextFunction, type Request, type Response } from 'express';
+import express, { type IRouter, type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
@@ -9,7 +9,10 @@ import { adminRouter } from './api/admin.routes.js';
 import { assertionsRouter } from './api/assertions.routes.js';
 import { dossierRouter } from './api/dossier.routes.js';
 import { snapshotRouter } from './api/snapshot.routes.js';
-import { SessionStore, createAuthRouter, createRequireOperator, type IAuthOptions } from './api/auth.js';
+import { createAttachAuth, createAuthRouter, createRequireAccess, type IAuthOptions } from './api/auth.js';
+import { createUsersRouter } from './api/users.routes.js';
+import { pgAuthStore } from './auth/pgStore.js';
+import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
@@ -23,7 +26,7 @@ export interface ICreateAppOptions {
   allowedOrigins?: readonly string[];
   /** Имена, кроме loopback, которые допустимы в Host: публичный адрес портала за прокси. */
   allowedHostnames?: readonly string[];
-  /** Для тестов: режим входа, токен и хранилище с подменённым временем. */
+  /** Для тестов: режим входа и сервис на хранилище в памяти с подменённым временем. */
   auth?: Partial<IAuthOptions>;
   trustProxy?: boolean;
 }
@@ -41,14 +44,32 @@ const defaultAllowedHostnames = (): string[] =>
 
 const defaultAuthOptions = (): IAuthOptions => ({
   mode: env.AUTH_MODE,
-  operatorToken: env.OPERATOR_TOKEN,
-  store: new SessionStore({
+  service: new AuthService(pgAuthStore, {
     idleMs: env.SESSION_IDLE_MINUTES * 60_000,
     maxMs: env.SESSION_MAX_HOURS * 3_600_000,
   }),
   secureCookie: env.PUBLIC_ORIGIN?.startsWith('https:') ?? false,
   maxAgeSec: env.SESSION_MAX_HOURS * 3600,
 });
+
+/**
+ * Роутеры данных под /api и их префиксы. Право каждого маршрута — auth/routePolicy.ts;
+ * routePolicy.test.ts обходит этот список и требует правило для каждого изменяющего маршрута.
+ */
+export const dataRouters = (service: AuthService): ReadonlyArray<readonly [string, IRouter]> => [
+  ['/manual', manualRouter],
+  ['/companies', companiesRouter],
+  ['/contractors', contractorsRouter],
+  ['', entitiesRouter],
+  ['/admin', adminRouter],
+  ['', revisionsRouter],
+  ['', assertionsRouter],
+  ['', reprocessRouter],
+  ['', dossierRouter],
+  ['', graphRouter],
+  ['', snapshotRouter],
+  ['', createUsersRouter(service)],
+];
 
 /**
  * Параметры строки запроса API — только плоские значения: ключ без скобок и без повторов. Вложенный объект (`a[b]=1`)
@@ -113,20 +134,11 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  // Всё остальное, включая «не найдено», — только после входа (AUTH_MODE=token).
-  // Локально (AUTH_MODE=none) пропускает всё: защита — loopback, Host и Origin.
-  app.use('/api', createRequireOperator(auth));
-  app.use('/api/manual', manualRouter);
-  app.use('/api/companies', companiesRouter);
-  app.use('/api/contractors', contractorsRouter);
-  app.use('/api', entitiesRouter);
-  app.use('/api/admin', adminRouter);
-  app.use('/api', revisionsRouter);
-  app.use('/api', assertionsRouter);
-  app.use('/api', reprocessRouter);
-  app.use('/api', dossierRouter);
-  app.use('/api', graphRouter);
-  app.use('/api', snapshotRouter);
+  // Всё остальное, включая «не найдено», — только после входа (AUTH_MODE=password) и по праву роли.
+  // Локально (AUTH_MODE=none) запрос идёт от локального оператора со всеми правами: защита —
+  // loopback, Host и Origin; изменение без правила в таблице прав запрещено и здесь.
+  app.use('/api', createAttachAuth(auth), createRequireAccess(auth));
+  for (const [prefix, router] of dataRouters(auth.service)) app.use(`/api${prefix}`, router);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });

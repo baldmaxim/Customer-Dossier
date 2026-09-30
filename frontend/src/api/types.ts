@@ -1263,3 +1263,82 @@ export interface IEnqueueResult {
   /** false — поставленное выполнит только `npm run pipeline:once`. */
   pipelineEnabled?: boolean;
 }
+
+// ─── Пользователи и права (ADR-014) ──────────────────────────────────────────
+
+/** Роль пользователя портала. Не путать с `Role` — ролью компании на объекте. */
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
+export type AccessPermission =
+  | 'portal.read'
+  | 'admin.view'
+  | 'sources.manage'
+  | 'pipeline.manage'
+  | 'review.decide'
+  | 'entities.merge'
+  | 'dossier.view'
+  | 'dossier.manage'
+  | 'users.manage';
+
+export interface IAuthUser {
+  id: number;
+  login: string;
+  displayName: string;
+  role: UserRole;
+  permissions: AccessPermission[];
+  mustChangePassword: boolean;
+}
+
+export interface ISessionInfo {
+  /** Нужен ли вход вообще: локально (AUTH_MODE=none) — нет, на сервере — да. */
+  authRequired: boolean;
+  authenticated: boolean;
+  csrfToken?: string;
+  expiresAt?: string;
+  user?: IAuthUser;
+}
+
+export interface IUserRow {
+  id: number;
+  login: string;
+  displayName: string;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  failedAttempts: number;
+  lockedUntil: string | null;
+  lastLoginAt: string | null;
+  passwordChangedAt: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  version: number;
+  liveSessions?: number;
+}
+
+export interface IUserSessionRow {
+  id: number;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  /** Сессия, из которой смотрит сам администратор. */
+  current: boolean;
+}
+
+export interface IAuthEventRow {
+  id: number;
+  at: string;
+  event: string;
+  userId: number | null;
+  userLogin: string | null;
+  actor: string;
+  ip: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface IRolesInfo {
+  permissions: AccessPermission[];
+  roles: Array<{ role: UserRole; permissions: AccessPermission[] }>;
+}

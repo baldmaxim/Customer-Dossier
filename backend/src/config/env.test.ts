@@ -118,31 +118,37 @@ describe('адрес локальной модели (TC-007)', () => {
   });
 });
 
-describe('вход оператора и серверная выкладка (ADR-013)', () => {
-  const TOKEN = 'x'.repeat(32);
-  const server = { ...base, AUTH_MODE: 'token', OPERATOR_TOKEN: TOKEN, HOST: '0.0.0.0', PUBLIC_ORIGIN: 'https://radar.example.ru' };
+describe('вход и серверная выкладка (ADR-013, ADR-014)', () => {
+  const server = { ...base, AUTH_MODE: 'password', HOST: '0.0.0.0', PUBLIC_ORIGIN: 'https://radar.example.ru' };
 
-  it('по умолчанию входа нет и токен не читается', () => {
-    const env = parseEnv({ ...base, OPERATOR_TOKEN: 'short' });
+  it('по умолчанию входа нет', () => {
+    const env = parseEnv(base);
     expect(env.AUTH_MODE).toBe('none');
-    expect(env.OPERATOR_TOKEN).toBeNull();
     expect(env.PUBLIC_ORIGIN).toBeNull();
     expect(env.TRUST_PROXY).toBe(false);
+    expect(env.OPERATOR_TOKEN_LEFTOVER).toBe(false);
   });
 
   it('неизвестный режим входа — ошибка старта', () => {
-    expect(() => parseEnv({ ...base, AUTH_MODE: 'password' })).toThrow(EnvValueError);
+    expect(() => parseEnv({ ...base, AUTH_MODE: 'basic' })).toThrow(EnvValueError);
   });
 
-  it('AUTH_MODE=token требует токен не короче 32 символов, текст ошибки без значения', () => {
-    expect(() => parseEnv({ ...server, OPERATOR_TOKEN: '' })).toThrow(EnvValueError);
+  it('снятый режим token — ошибка старта с подсказкой, значение токена в текст не попадает', () => {
     try {
-      parseEnv({ ...server, OPERATOR_TOKEN: 'short-secret-value' });
+      parseEnv({ ...server, AUTH_MODE: 'token', OPERATOR_TOKEN: 'leftover-secret-value-0123456789abcdef' });
       expect.unreachable();
     } catch (err) {
-      expect(String((err as Error).message)).not.toContain('short-secret-value');
+      expect(err).toBeInstanceOf(EnvValueError);
+      expect(String((err as Error).message)).toContain('AUTH_MODE=password');
+      expect(String((err as Error).message)).not.toContain('leftover-secret-value');
     }
-    expect(parseEnv(server).OPERATOR_TOKEN).toBe(TOKEN);
+  });
+
+  it('оставшийся OPERATOR_TOKEN не читается, только отмечается', () => {
+    const env = parseEnv({ ...server, OPERATOR_TOKEN: 'leftover-secret-value-0123456789abcdef' });
+    expect(env.AUTH_MODE).toBe('password');
+    expect(env.OPERATOR_TOKEN_LEFTOVER).toBe(true);
+    expect(JSON.stringify(env)).not.toContain('leftover-secret-value');
   });
 
   it('адрес в сети — только со входом: сеть без входа конфигурацией не собирается', () => {
@@ -158,12 +164,12 @@ describe('вход оператора и серверная выкладка (AD
     expect(parseEnv({ ...server, PUBLIC_ORIGIN: 'https://radar.example.ru/' }).PUBLIC_ORIGIN).toBe('https://radar.example.ru');
     expect(parsePublicOrigin('http://127.0.0.1:8080', 'none')).toBe('http://127.0.0.1:8080');
     // Регистр имени — не ошибка: Host сравнивается без учёта регистра.
-    expect(parsePublicOrigin('https://Radar.Example.ru', 'token')).toBe('https://radar.example.ru');
+    expect(parsePublicOrigin('https://Radar.Example.ru', 'password')).toBe('https://radar.example.ru');
   });
 
   it('публичный адрес — без пути, логина и параметров', () => {
     for (const bad of ['https://radar.example.ru/app', 'https://u:p@radar.example.ru', 'https://radar.example.ru?x=1', 'https://radar.example.ru#x', 'ftp://radar.example.ru', 'не адрес']) {
-      expect(() => parsePublicOrigin(bad, 'token'), bad).toThrow(EnvValueError);
+      expect(() => parsePublicOrigin(bad, 'password'), bad).toThrow(EnvValueError);
     }
   });
 });

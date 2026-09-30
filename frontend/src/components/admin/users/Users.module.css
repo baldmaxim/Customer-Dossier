@@ -1,0 +1,134 @@
+.createForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  max-width: 880px;
+}
+
+@media (min-width: 768px) {
+  .createForm {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.createActions {
+  grid-column: 1 / -1;
+}
+
+.roleHint {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.passwordRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.passwordRow input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+}
+
+.badges:empty {
+  display: none;
+}
+
+.current {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.panelNote {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-text);
+  max-width: var(--prose);
+}
+
+.sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.session:first-child {
+  border-top: 0;
+}
+
+.sessionMain {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sessionMeta {
+  flex: 1 1 240px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.matrixRole,
+.matrixCell {
+  text-align: center;
+}
+
+.eventDetails {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Дата и время в журнале — одной строкой: перенос посреди «30.09.2026, 10:15» читается хуже. */
+.nowrap {
+  white-space: nowrap;
+}
+
+.more {
+  margin-top: var(--sp-3);
+}

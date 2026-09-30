@@ -37,8 +37,9 @@ tginfo-api ─► сети Telegram ─awg0 (AmneziaWG)─► nl3 ─► t.me, a
 | Туннель модели | пользователь `llmtunnel`, `/etc/ssh/sshd_config.d/tginfo-llmtunnel.conf`, ufw на `br-tginfo` | ключ — с домашнего ПК |
 | Домашний ПК | `C:\ProgramData\tginfo\` (ключ, `known_hosts`, `llm-tunnel.ps1`), задача «TG_Info LLM tunnel» | держит туннель к LM Studio |
 
-Режим входа (`AUTH_MODE=token`), `HOST=0.0.0.0`, `TRUST_PROXY` и строка подключения к базе зашиты в
-`docker-compose.yml`, в `.env` их нет. Вход — токен `OPERATOR_TOKEN` из `.env`.
+Режим входа (`AUTH_MODE=password`), `HOST=0.0.0.0`, `TRUST_PROXY` и строка подключения к базе зашиты в
+`docker-compose.yml`, в `.env` их нет. Вход — логин и пароль пользователя (ADR-014); пользователи, роли
+и журнал входа — в админке, «Пользователи».
 
 ## Обновление портала
 
@@ -83,7 +84,7 @@ deploy/release.sh           # выпустить текущий HEAD
 `dist/ingest/cli.js`, `pipeline:once` → `dist/pipeline/cli.js`, `metrics:refresh` → `dist/metrics/cli.js`,
 `release:check` → `dist/release/cli.js`, `release:manifest` → `dist/release/manifestCli.js`.
 
-**Изменить настройку** (флаг, токен, модель): владелец правит `.env` → `./update.sh` без аргумента
+**Изменить настройку** (флаг, модель, время сессии): владелец правит `.env` → `./update.sh` без аргумента
 (пересоздаёт контейнеры с новым окружением на том же выпуске).
 
 **Фоновые задания** включаются по одному, после каждого — логи, `docker stats`, `free -m`:
@@ -95,8 +96,18 @@ deploy/release.sh           # выпустить текущий HEAD
 
 `DOMRF_BROWSER_ENABLED` на сервере не включать: в образе нет Chromium (см. «Грабли»).
 
-**Сменить токен входа**: новый `OPERATOR_TOKEN` в `.env` (`openssl rand -base64 36`) → `./update.sh`.
-Сессии в памяти API — после перезапуска все входят заново.
+**Пользователи** — админка → «Пользователи»: создать, роль (читатель / оператор / администратор),
+выключить доступ, сбросить пароль, закрыть открытый вход, журнал входа. Сессии в базе: перезапуск API
+никого не выкидывает. Из консоли — только первый администратор и восстановление, когда войти некому:
+
+```bash
+./compose.sh exec api node dist/auth/cli.js --create-admin <логин> [--name "Имя"]   # пароль печатается один раз
+./compose.sh exec api node dist/auth/cli.js --reset-password <логин>   # новый пароль, блокировка снята, входы закрыты
+./compose.sh exec api node dist/auth/cli.js --list
+```
+
+Выданный пароль пользователь меняет при первом входе — до смены портал данных не отдаёт. Пароль в чат
+не присылать. После 10 неудач подряд вход в учётную запись закрыт на 15 минут (сброс пароля снимает).
 
 **Резервная копия вручную**: `./backup.sh` (то же, что cron). Проверка копии:
 `docker exec -i tginfo-db pg_restore --list < backups/<файл> | grep -vc '^;'` — число элементов, не 0.
@@ -231,8 +242,6 @@ scp deploy/docker-compose.yml deploy/update.sh deploy/compose.sh deploy/backup.s
 ```bash
 cd /opt/portals/tg-info && cp tginfo.env.example .env && chmod 600 .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
-sed -i "s|^OPERATOR_TOKEN=.*|OPERATOR_TOKEN=$(openssl rand -base64 36 | tr -d '\n')|" .env
-grep '^OPERATOR_TOKEN=' .env    # пароль входа — сохранить у себя, в чат не присылать
 ```
 Модель, промпт и параметры разбора — **как у переносимой базы** (раздел `config` в `before-manifest.json`;
 образец уже совпадает с базой на 30.09.2026). Фоновые флаги — `false`.
@@ -254,6 +263,11 @@ IMAGE_TAG=$TAG docker compose -p tginfo up -d db
 IMAGE_TAG=$TAG docker compose -p tginfo --profile tools run --rm migrate node dist/db/migrate.js --allow-destructive
 ./update.sh $TAG
 ```
+Первый администратор (владелец; пароль печатается один раз в терминал, при первом входе его нужно сменить):
+```bash
+./compose.sh exec api node dist/auth/cli.js --create-admin <логин> --name "Имя Фамилия"
+```
+Если в перенесённой базе пользователи уже есть (`--list`), шаг не нужен.
 
 ### 5. Имя, сертификат, вход снаружи
 DNS: A-запись `pulse.meridianai.ru` → адрес quantor (владелец), проверка `dig +short pulse.meridianai.ru`.
@@ -302,7 +316,8 @@ Start-ScheduledTask -TaskName 'TG_Info LLM tunnel'
 ### 8. Фон по одному — раздел «Обслуживание».
 
 ### Проверка «после»
-- `https://pulse.meridianai.ru` — экран входа; `/api/companies` без входа — 401; вход по токену работает.
+- `https://pulse.meridianai.ru` — экран входа; `/api/companies` без входа — 401; вход администратора
+  работает, выданный пароль просит сменить; читатель не видит «Админку».
 - `https://quantor.meridianai.ru/health/ready` — 200: Quantor не задет.
 - `ss -tlnp` — наружу только 22, 80, 443; `free -m` — доступно ≥ 500 МБ.
 - Перезагрузка сервера — всё поднимается само.
@@ -342,7 +357,7 @@ Start-ScheduledTask -TaskName 'TG_Info LLM tunnel'
     не поправить `.env`/`docker-compose.yml` тем же выпуском. `update.sh` ловит это до замены контейнеров;
     правка `deploy/` — в том же коммите, что и код.
 14. **Секреты в чат не присылать**: экспорт Amnezia, `.env`, закрытые ключи. Случилось — перевыпустить
-    (клиент Amnezia, токен оператора).
+    (клиент Amnezia; пароль пользователя — `--reset-password`).
 15. **Агенту в авто-режиме** выпуск сертификата и удаление базы требуют явного «разрешаю» владельца.
 
 ## Полный откат
