@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { actorOfContext, LOCAL_CONTEXT } from '../auth/service.js';
 import { env } from '../config/env.js';
 import { OPENROUTER_BASE_URL } from '../config/llm.js';
-import { checkLlmConnection } from '../llm/client.js';
+import { checkLlmConnection, modelProbeTimeoutMs } from '../llm/client.js';
 import { checkOpenRouterKey } from '../llm/endpoint.js';
 import { clearLlmKey, loadStoredLlmKey, normalizeLlmKey, saveLlmKey } from '../settings/llmKey.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
@@ -18,7 +18,7 @@ const keySchema = z.object({ key: z.string().max(1024) }).strict();
 
 const actorOf = (req: Request): string => actorOfContext(req.auth ?? LOCAL_CONTEXT).login;
 
-/** Проверки на экране — короткие: страница не должна висеть на недоступном OpenRouter. */
+/** Проверка ключа при сохранении — короткая: форма не должна висеть на недоступном OpenRouter. */
 const CHECK_TIMEOUT_MS = 5000;
 
 const SAVE_ERRORS = {
@@ -39,7 +39,7 @@ export const llmRouter = asyncRouter();
 
 llmRouter.get('/llm', async (_req, res) => {
   const key = await loadStoredLlmKey();
-  const connection = await checkLlmConnection(CHECK_TIMEOUT_MS);
+  const connection = await checkLlmConnection(modelProbeTimeoutMs());
   res.json({
     provider: env.LLM_PROVIDER,
     model: env.LMSTUDIO_MODEL,

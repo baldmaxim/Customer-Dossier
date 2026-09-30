@@ -21,7 +21,7 @@ import {
   updateSourcePolicy,
 } from '../ingest/sources.js';
 import { PERMISSION_STATUSES, approvedPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
-import { checkLlmConnection } from '../llm/client.js';
+import { checkLlmConnection, modelProbeTimeoutMs } from '../llm/client.js';
 import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
 import { parseSourceProfile } from '../ingest/crawl.js';
 import { refreshCompanyMetrics } from '../metrics/refresh.js';
@@ -512,7 +512,7 @@ adminRouter.get('/pipeline', async (_req, res) => {
      GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
   );
   // Доступность локальной модели: без неё разбор не идёт, и это не поломка данных.
-  const llm = await checkLlmConnection(3000);
+  const llm = await checkLlmConnection(modelProbeTimeoutMs());
   const extractions = await query(
     `SELECT prompt_version AS "promptVersion", model, status, count(*)::int AS n
      FROM extractions GROUP BY prompt_version, model, status

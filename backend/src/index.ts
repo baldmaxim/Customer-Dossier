@@ -6,7 +6,7 @@ import { pgAuthStore } from './auth/pgStore.js';
 import { env } from './config/env.js';
 import { closeDb, checkDbConnection } from './db/pool.js';
 import { runIngestPass } from './ingest/scheduler.js';
-import { checkLlmConnection } from './llm/client.js';
+import { checkLlmConnection, modelProbeTimeoutMs } from './llm/client.js';
 import { runBotLoop } from './ingest/telegramBot.js';
 import { startBackgroundJobs } from './jobs.js';
 import { startMetricsScheduler } from './metrics/refresh.js';
@@ -49,8 +49,6 @@ const startIngestScheduler = (signal: AbortSignal): void => {
   void tick();
 };
 
-/** Проверка модели перед проходом: короткая, это loopback-адрес, а не источник. */
-const MODEL_PROBE_TIMEOUT_MS = 3000;
 
 const startPipelineWorker = (signal: AbortSignal): void => {
   let running = false;
@@ -66,7 +64,7 @@ const startPipelineWorker = (signal: AbortSignal): void => {
       const pass = await runReprocessPass(provider, {
         autoPublish: env.REPROCESS_AUTO_PUBLISH,
         enqueueLimit: env.EXTRACT_BATCH_SIZE,
-        probeModel: () => checkLlmConnection(MODEL_PROBE_TIMEOUT_MS),
+        probeModel: () => checkLlmConnection(modelProbeTimeoutMs()),
         retry: env.REPROCESS_RETRY_ENABLED
           ? { max: env.REPROCESS_RETRY_MAX, backoffMinutes: env.REPROCESS_RETRY_BACKOFF_MIN }
           : null,

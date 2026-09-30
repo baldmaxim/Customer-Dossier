@@ -275,6 +275,13 @@ export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IH
   extractWith(options, HEADLINE_SPEC);
 
 /**
+ * Сколько ждать проверку перед проходом и на экране. LM Studio — локальный адрес, 3 с хватает с запасом;
+ * OpenRouter — три запроса через туннель до nl3, и 3 с на сервере то и дело не хватало: проход пропускался
+ * при живой модели.
+ */
+export const modelProbeTimeoutMs = (): number => (env.LLM_PROVIDER === 'openrouter' ? 15_000 : 3_000);
+
+/**
  * Проверка, что модель доступна. Для CLI, экрана и пропуска прохода конвейера.
  * LM Studio — сервер поднят, `models` — загруженные модели; OpenRouter — ключ, средства и хостинг
  * со строгой схемой, `models` — только выбранная модель (каталог OpenRouter — сотни моделей).
