@@ -97,17 +97,18 @@ nano .env                 # фоновые флаги на первом запу
 
 База — перенос рабочей или чистая.
 
-**Перенос с домашнего ПК.** Там фон выключен (флаги `false`, API перезапущен), затем:
+**Перенос с домашнего ПК.** Порядок — `docs/development/LOCAL_RUNBOOK.md`, раздел 5: писатели
+остановлены → baseline → `pg_dump -Fc` в файл (`-f`, не `>`: PowerShell 5.1 портит бинарный поток) →
+источник не изменился → перенос. Файлы — в `/opt/portals/tg-info/transfer/` (chmod 700). Major-версия
+PostgreSQL источника не выше 17 (образ `postgres:17-alpine`): иначе сначала поднять образ, до создания тома.
 
 ```bash
-# домашний ПК, backend/:
-npm run release:check -- --out before-check.json
-npm run release:manifest -- --out before-manifest.json
-pg_dump -Fc --no-owner -d <база> -f tg_info.dump
-# перенос дампа и baseline на сервер, затем на сервере:
 cd /opt/portals/tg-info
 IMAGE_TAG=<TAG> docker compose -p tginfo up -d db
-docker exec -i tginfo-db pg_restore -U tg_info -d tg_info --no-owner --exit-on-error --single-transaction < tg_info.dump
+docker cp transfer/tg_info.dump tginfo-db:/tmp/tg_info.dump
+docker exec tginfo-db pg_restore -U tg_info -d tg_info --no-owner --no-privileges \
+  --exit-on-error --single-transaction /tmp/tg_info.dump
+docker exec tginfo-db rm /tmp/tg_info.dump
 ./update.sh <TAG>
 ```
 
