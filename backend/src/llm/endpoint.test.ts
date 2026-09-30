@@ -68,6 +68,12 @@ describe('настройки модели (config/llm.ts)', () => {
     expect(errorText(() => parseEnv({ ...or, OPENROUTER_PROVIDERS: 'deepinfra,deepinfra' }))).toMatch(/дважды/);
   });
 
+  it('предел ответа: LM Studio — 2048, OpenRouter — 4096, EXTRACT_MAX_TOKENS перекрывает оба', () => {
+    expect(parseEnv(base).EXTRACT_MAX_TOKENS).toBe(2048);
+    expect(parseEnv({ ...base, LLM_PROVIDER: 'openrouter' }).EXTRACT_MAX_TOKENS).toBe(4096);
+    expect(parseEnv({ ...base, LLM_PROVIDER: 'openrouter', EXTRACT_MAX_TOKENS: '3000' }).EXTRACT_MAX_TOKENS).toBe(3000);
+  });
+
   it('ключ и маршрут, оставленные в .env при возврате на LM Studio, ни на что не влияют: ключ не уходит в LM Studio', () => {
     const env = parseEnv({ ...base, LLM_API_KEY: SECRET, OPENROUTER_PROVIDERS: 'deep infra' });
     expect(env.OPENROUTER_PROVIDERS).toEqual([]);
@@ -118,6 +124,8 @@ describe('идентичность исполнения', () => {
     expect(cloud.provider.provider).toBe('openrouter');
     expect(cloud.provider.model).toBe(lmStudioProvider().model);
     expect(cloud.provider.params.routing).toEqual(openRouterRouting([]));
+    // Облаку — предел ответа 4096: длинные тексты не обрываются посреди JSON. У LM Studio — прежние 2048.
+    expect(cloud.provider.params.maxTokens).toBe(4096);
     expect(cloud.fp.modelIdentityHash).not.toBe(local.modelIdentityHash);
     expect(pinned.modelIdentityHash).not.toBe(cloud.fp.modelIdentityHash);
     const json = JSON.stringify(cloud.fp.json);

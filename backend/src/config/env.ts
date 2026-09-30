@@ -80,6 +80,10 @@ export const parseEnv = (source: EnvSource) => {
     // на длинных статьях, 3500/6 их убрали.
     EXTRACT_CHUNK_SIZE: parsePositiveInt('EXTRACT_CHUNK_SIZE', source.EXTRACT_CHUNK_SIZE, 3500),
     EXTRACT_MAX_CHUNKS: parsePositiveInt('EXTRACT_MAX_CHUNKS', source.EXTRACT_MAX_CHUNKS, 6),
+    // Предел ответа модели на чанк; входит в идентичность запуска. LM Studio — 2048, как всегда (8 ГБ VRAM).
+    // OpenRouter — 4096: на длинных текстах Qwen3-30B не укладывался в 2048, JSON обрывался, и повтор на
+    // урезанном тексте давал неполный разбор. Памяти видеокарты у облака это не стоит, выход — копейки.
+    EXTRACT_MAX_TOKENS: parsePositiveInt('EXTRACT_MAX_TOKENS', source.EXTRACT_MAX_TOKENS, llmProvider === 'openrouter' ? 4096 : 2048),
 
     // Тема публикации локальной моделью (headline@1). Отдельный короткий вызов после разбора:
     // у telegram-постов заголовка нет, и лента показывала «без заголовка» подряд.

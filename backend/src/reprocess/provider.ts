@@ -85,7 +85,7 @@ export const lmStudioProvider = (options: { promptVariant?: string | null } = {}
     // размер чанка в символах — приближение к токенам с запасом, не точный лимит.
     params: {
       temperature: 0.1,
-      maxTokens: 2048,
+      maxTokens: env.EXTRACT_MAX_TOKENS,
       contextNote: routing
         ? 'ctx — у хостинга модели; чанк в символах — приближение'
         : 'ctx задаётся в LM Studio; чанк в символах — приближение',

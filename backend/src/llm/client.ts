@@ -142,7 +142,7 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
       body: JSON.stringify({
         model: env.LMSTUDIO_MODEL,
         temperature: options.temperature ?? 0.1,
-        max_tokens: options.maxTokens ?? 2048,
+        max_tokens: options.maxTokens ?? env.EXTRACT_MAX_TOKENS,
         messages: [
           { role: 'system', content: spec.system() },
           { role: 'user', content: spec.user(options.body, options.publishedAt) },
