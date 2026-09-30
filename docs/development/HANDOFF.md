@@ -102,5 +102,5 @@ LOCAL_MODEL_VALIDATED и LIVE_SOURCE_VALIDATED от этого не меняют
 не редактировать `.env`; не запускать Docker в среде агента.
 
 ## Что прочитать новой сессии
-`09_USER_ACCEPTANCE.md`, `prompts/TG_Info_Next_Stages_2026-09-16/README_START_HERE.md` и `COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `evidence/09/CLOSURE_MATRIX.md`, `evidence/09/USER_RUN_CLOSURE.md`, `CONTENT_MANIFEST.md`, `LOCAL_RUNBOOK.md`, `FIRST_REAL_DOSSIER.md`, `RELEASE_READINESS.md`, ADR-011,
+`evidence/09/09_USER_ACCEPTANCE.md`, `prompts/TG_Info_Next_Stages_2026-09-16/README_START_HERE.md` и `COMMON_RULES.md`, `docs/development/STATE.md`, этот HANDOFF, `stages/09_REPORT.md`, `evidence/09/CLOSURE_MATRIX.md`, `evidence/09/USER_RUN_CLOSURE.md`, `CONTENT_MANIFEST.md`, `LOCAL_RUNBOOK.md`, `FIRST_REAL_DOSSIER.md`, `RELEASE_READINESS.md`, ADR-011,
 `TESTING_LOCAL.md`; ключевые файлы: `backend/src/snapshot/*.ts`, `backend/src/graph/*.ts`, `docs/migrations/020_dossier_snapshots.sql`, `frontend/src/pages/SnapshotPage.tsx`.
