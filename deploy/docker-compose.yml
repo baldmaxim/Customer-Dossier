@@ -16,7 +16,8 @@ name: tginfo
 
 services:
   db:
-    image: postgres:17-alpine
+    # Та же major-версия, что у рабочей базы на домашнем ПК (18): дамп 18 не восстанавливается в 17.
+    image: postgres:18-alpine
     container_name: tginfo-db
     restart: unless-stopped
     environment:
@@ -26,7 +27,9 @@ services:
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=ru-RU'
     command: ['postgres', '-c', 'shared_buffers=96MB', '-c', 'max_connections=30', '-c', 'work_mem=8MB']
     volumes:
-      - db_data:/var/lib/postgresql/data
+      # С 18-й версии образ хранит данные в /var/lib/postgresql/18/docker и монтирует том
+      # на /var/lib/postgresql; прежняя точка /var/lib/postgresql/data не подходит.
+      - db_data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tg_info -d tg_info']
       interval: 10s

@@ -100,7 +100,7 @@ nano .env                 # фоновые флаги на первом запу
 **Перенос с домашнего ПК.** Порядок — `docs/development/LOCAL_RUNBOOK.md`, раздел 5: писатели
 остановлены → baseline → `pg_dump -Fc` в файл (`-f`, не `>`: PowerShell 5.1 портит бинарный поток) →
 источник не изменился → перенос. Файлы — в `/opt/portals/tg-info/transfer/` (chmod 700). Major-версия
-PostgreSQL источника не выше 17 (образ `postgres:17-alpine`): иначе сначала поднять образ, до создания тома.
+PostgreSQL сервера совпадает с рабочей базой (18, `postgres:18-alpine`): дамп 18 не восстанавливается в 17.
 
 ```bash
 cd /opt/portals/tg-info
