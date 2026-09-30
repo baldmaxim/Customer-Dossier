@@ -3,9 +3,14 @@
 // Для канала «только новые» — прежнее поведение: первый запуск истории не берёт. Для сайта
 // без срока пагинация листает весь архив, а срок останавливает её на дате. RSS-лента
 // истории не даёт вовсе — в ней только последние записи, срок там ничего не добавит.
+//
+// Компактно, для строки таблицы: один список высотой sm. Сохранённый нестандартный срок —
+// отдельным пунктом («45 дней»), поле для числа появляется рядом, только пока его вводят:
+// постоянное поле расширяло бы колонку «Срок» у всех строк ради одной.
 
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 
+import { formatCountWord, type PluralForms } from '../../lib/format';
 import { Select } from '../ui/Select';
 import { TextInput } from '../ui/TextInput';
 import styles from './HistoryDepthPicker.module.css';
@@ -18,6 +23,11 @@ const PRESETS: ReadonlyArray<{ days: number; label: string }> = [
   { days: 730, label: '2 года' },
 ];
 
+const DAY_FORMS: PluralForms = ['день', 'дня', 'дней'];
+const MAX_DAYS = 3650;
+
+const isPreset = (days: number): boolean => PRESETS.some(p => p.days === days);
+
 interface IHistoryDepthPickerProps {
   value: number | null;
   kind: 'telegram' | 'website';
@@ -28,33 +38,44 @@ interface IHistoryDepthPickerProps {
 }
 
 export const HistoryDepthPicker: FC<IHistoryDepthPickerProps> = ({ value, kind, disabled = false, label, onChange }) => {
-  const preset = value === null ? 'none' : PRESETS.some(p => p.days === value) ? String(value) : 'custom';
-  const [mode, setMode] = useState(preset);
-  const [custom, setCustom] = useState(value !== null && preset === 'custom' ? String(value) : '');
+  // Что сохранено: без срока, пункт списка или своё число дней.
+  const saved = value === null ? 'none' : isPreset(value) ? String(value) : 'saved';
+  const [mode, setMode] = useState(saved);
+  const [draft, setDraft] = useState('');
+  // Esc убирает поле; если браузер при этом пришлёт blur, введённое не должно сохраниться.
+  const cancelled = useRef(false);
 
-  // Сервер мог вернуть другое значение (другая вкладка, повтор): показываем его.
+  // Сервер вернул значение (сохранение, другая вкладка): показываем его, поле ввода закрывается.
   useEffect(() => {
-    setMode(preset);
-    if (preset === 'custom' && value !== null) setCustom(String(value));
-  }, [preset, value]);
+    setMode(saved);
+  }, [saved, value]);
 
-  const applyCustom = (): void => {
-    const days = Number.parseInt(custom, 10);
-    if (Number.isInteger(days) && days >= 1 && days <= 3650 && days !== value) onChange(days);
+  const applyDraft = (): void => {
+    const days = Number.parseInt(draft, 10);
+    if (Number.isInteger(days) && days >= 1 && days <= MAX_DAYS && days !== value) onChange(days);
+    // Пусто, не число или то же самое — поле просто закрывается.
+    else setMode(saved);
   };
 
   return (
     <span className={styles.picker}>
       <Select
         aria-label={label}
+        className={styles.control}
         value={mode}
         disabled={disabled}
         block={false}
         onChange={e => {
           const next = e.target.value;
+          if (next === 'custom') {
+            cancelled.current = false;
+            setDraft(value !== null && !isPreset(value) ? String(value) : '');
+            setMode('custom');
+            return;
+          }
           setMode(next);
           if (next === 'none') onChange(null);
-          else if (next !== 'custom') onChange(Number(next));
+          else if (next !== 'saved') onChange(Number(next));
         }}
       >
         <option value="none">{kind === 'telegram' ? 'только новые' : 'весь архив'}</option>
@@ -63,26 +84,42 @@ export const HistoryDepthPicker: FC<IHistoryDepthPickerProps> = ({ value, kind, 
             {p.label}
           </option>
         ))}
-        <option value="custom">своё число дней…</option>
+        {value !== null && !isPreset(value) && <option value="saved">{formatCountWord(value, DAY_FORMS)}</option>}
+        <option value="custom">свой срок…</option>
       </Select>
       {mode === 'custom' && (
-        <TextInput
-          className={styles.days}
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={3650}
-          placeholder="дней"
-          aria-label={`${label}: число дней`}
-          value={custom}
-          disabled={disabled}
-          block={false}
-          onChange={e => setCustom(e.target.value)}
-          onBlur={applyCustom}
-          onKeyDown={e => {
-            if (e.key === 'Enter') applyCustom();
-          }}
-        />
+        <span className={styles.custom}>
+          <TextInput
+            className={`${styles.control} ${styles.days}`}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_DAYS}
+            placeholder="дней"
+            aria-label={`${label}: число дней`}
+            value={draft}
+            disabled={disabled}
+            block={false}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={() => {
+              if (cancelled.current) cancelled.current = false;
+              else applyDraft();
+            }}
+            onKeyDown={e => {
+              // Enter сохраняет через blur: иначе Enter и следующий blur отправили бы срок дважды.
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') {
+                // Esc отменяет ввод, а не закрывает окно вокруг.
+                e.preventDefault();
+                cancelled.current = true;
+                setMode(saved);
+              }
+            }}
+          />
+          <span className={styles.unit} aria-hidden="true">
+            дн.
+          </span>
+        </span>
       )}
     </span>
   );

@@ -1,26 +1,29 @@
-// Содержимое одной вкладки «Источников». Порядок — как идёт работа оператора:
-// что сломалось («Не собираются») → список → добавить новый. На «Вручную» наоборот:
-// там главное действие — вставить текст, список способов вторичен.
+// Содержимое одной вкладки «Источников». Шапка списка — одна строка: «Каналы · включено 4 из 6»,
+// фильтр «Не собираются: N» и форма добавления справа; под ней — сам список. Прежде «Не собираются»
+// было большой плашкой над списком, а форма добавления — отдельной карточкой под ним.
+//
+// На «Вручную» сначала вставка текста — там это главное действие, список способов вторичен;
+// на «Сайтах» под списком — карточки ДОМ.РФ.
 
-import { FC, ReactNode } from 'react';
+import { FC } from 'react';
 
 import type { ISourceRow } from '../../api/types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { flagParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
 import { MQ } from '../../lib/media';
-import { Callout } from '../ui/Callout';
-import { Disclosure } from '../ui/Disclosure';
+import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
+import { Hint } from '../ui/Hint';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
-import { AddChannelForm } from './AddChannelForm';
-import { AddSiteForm } from './AddSiteForm';
 import { DomRfTargets } from './DomRfTargets';
-import { ManualPaste } from './ManualPaste';
+import { MANUAL_HINT, ManualPaste } from './ManualPaste';
+import { SourceAdd } from './SourceAdd';
 import { SourceCards } from './SourceCards';
 import { SourcesTable } from './SourcesTable';
-import { isSourceEnabled, type ISourceActions } from './useSourceActions';
-import styles from './Forms.module.css';
+import { isSourceBroken, isSourceEnabled, type ISourceActions } from './useSourceActions';
+import styles from './Sources.module.css';
 
 type Kind = ISourceRow['kind'];
 
@@ -31,20 +34,9 @@ const LIST_TITLES: Record<Kind, string> = {
 };
 
 const EMPTY: Record<Kind, string> = {
-  telegram: 'Каналов пока нет — добавьте первый ниже.',
-  website: 'Сайтов пока нет — добавьте первый ниже.',
+  telegram: 'Каналов пока нет — добавьте первый.',
+  website: 'Сайтов пока нет — добавьте первый.',
   manual: 'Способов ручной передачи нет.',
-};
-
-const ADD_TITLES: Record<Exclude<Kind, 'manual'>, string> = {
-  telegram: 'Добавить канал',
-  website: 'Добавить сайт',
-};
-
-const ADD_HINTS: Record<Exclude<Kind, 'manual'>, string> = {
-  telegram:
-    'Только публичные каналы: страница t.me/s/имя должна открываться без входа. Закрытые каналы читаются пересылкой боту — он во вкладке «Вручную».',
-  website: 'Сайт читается через RSS или список статей. У RSS нет архива — только последние записи, срок сбора его не углубит.',
 };
 
 interface ISourcesPanelProps {
@@ -56,56 +48,71 @@ interface ISourcesPanelProps {
 
 export const SourcesPanel: FC<ISourcesPanelProps> = ({ kind, sources, actions, label }) => {
   const wide = useMediaQuery(MQ.md);
-  const phone = !useMediaQuery(MQ.sm);
+  // Фильтр в адресе (?problems=1): ссылкой можно поделиться, «Назад» его не перебирает.
+  const [problems, setProblems] = useUrlState('problems', flagParam());
   const ofKind = sources.filter(s => s.kind === kind);
   const on = ofKind.filter(isSourceEnabled).length;
-  const broken = ofKind.filter(s => s.status === 'broken' && isSourceEnabled(s));
+  const broken = ofKind.filter(isSourceBroken);
+  // Фильтр действует, пока есть кого показать: иначе список пуст, а снять фильтр нечем.
+  const onlyBroken = problems && broken.length > 0;
+  const shown = onlyBroken ? broken : ofKind;
 
-  const addForm = (addKind: Exclude<Kind, 'manual'>): ReactNode => {
-    const body = (
-      <Stack gap={3}>
-        <p className={styles.hint}>{ADD_HINTS[addKind]}</p>
-        {addKind === 'telegram' ? <AddChannelForm /> : <AddSiteForm />}
-      </Stack>
-    );
-    // На телефоне форма не занимает экран под списком: раскрывается по нажатию.
-    return phone ? (
-      <Disclosure variant="card" summary={ADD_TITLES[addKind]}>
-        {body}
-      </Disclosure>
-    ) : (
-      <Section title={ADD_TITLES[addKind]}>{body}</Section>
-    );
-  };
+  const note = ofKind.length > 0 && (
+    <span className={styles.headNote}>
+      <span>
+        включено {formatCount(on)} из {formatCount(ofKind.length)}
+      </span>
+      {broken.length > 0 && (
+        <Button
+          size="sm"
+          icon="warning"
+          iconEnd={onlyBroken ? 'close' : undefined}
+          aria-pressed={onlyBroken}
+          className={styles.problems}
+          hint={onlyBroken ? 'Показать все' : 'Показать только их'}
+          onClick={() => setProblems(!onlyBroken)}
+        >
+          Не собираются: {formatCount(broken.length)}
+        </Button>
+      )}
+    </span>
+  );
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       {kind === 'manual' && (
-        <Section title="Вставить текст вручную">
+        <Section
+          title="Вставить текст вручную"
+          note={
+            // Строкой, а не рядом блоков: на телефоне «?» остаётся в конце текста, а не уходит вниз.
+            <>
+              закрытые каналы и статьи, которые портал не собирает сам{' '}
+              <span className={styles.hintSlot}>
+                <Hint label="Вставить текст вручную" text={MANUAL_HINT} />
+              </span>
+            </>
+          }
+        >
           <ManualPaste />
         </Section>
       )}
 
-      {broken.length > 0 && (
-        <Callout tone="warning" title={`Не собираются: ${formatCount(broken.length)}`}>
-          Обычная причина — изменилась вёрстка страницы или канал стал закрытым. Что именно — в строке источника, «Подробнее».
-        </Callout>
-      )}
-
+      {/* Таблице нужна поверхность; карточки — сами поверхности, рамка вокруг них — лишняя. */}
       <Section
         title={LIST_TITLES[kind]}
-        note={ofKind.length > 0 ? `включено ${formatCount(on)} из ${formatCount(ofKind.length)}` : undefined}
+        note={note}
+        actions={kind === 'manual' ? undefined : <SourceAdd kind={kind} />}
+        variant={wide ? 'card' : 'plain'}
       >
         {ofKind.length === 0 ? (
           <EmptyState size="sm">{EMPTY[kind]}</EmptyState>
         ) : wide ? (
-          <SourcesTable kind={kind} sources={ofKind} actions={actions} label={label} />
+          <SourcesTable kind={kind} sources={shown} actions={actions} label={label} />
         ) : (
-          <SourceCards kind={kind} sources={ofKind} actions={actions} label={label} />
+          <SourceCards kind={kind} sources={shown} actions={actions} label={label} />
         )}
       </Section>
 
-      {kind !== 'manual' && addForm(kind)}
       {kind === 'website' && <DomRfTargets />}
     </Stack>
   );

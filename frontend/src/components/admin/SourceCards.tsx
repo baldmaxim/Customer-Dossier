@@ -1,29 +1,41 @@
-// Источники карточками — на телефоне и планшете. В таблице на 360px были видны только название
-// и переключатель: срок сбора обрезан, состояние и действия — за краем. В карточке всё
-// одной колонкой, действия — внизу отдельными целями нажатия.
+// Источники карточками — на телефоне и планшете (< 900px). Те же части, что в таблице, в три
+// строки: название и переключатель · состояние · срок и действия. Подписей над контролами нет:
+// что это за контрол, говорят его место и доступное имя. На телефоне из действий в строке —
+// одно «Подробнее» (окно несёт все): пять кнопок переносились бы на вторую строку.
 
 import { FC } from 'react';
 
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { MQ } from '../../lib/media';
 import { CardList } from '../ui/CardList';
-import { CardListItem } from '../ui/CardListItem';
-import { Grid } from '../ui/Grid';
-import { SourceCollectControls } from './SourceCollectControls';
+import { SourceDepth, SourceToggle } from './SourceCollectControls';
 import { SourceName } from './SourceName';
 import { SourceRowActions } from './SourceRowActions';
 import { SourceStatus } from './SourceStatus';
 import type { ISourcesListProps } from './SourcesTable';
-import { isSourceEnabled } from './useSourceActions';
+import styles from './Sources.module.css';
 
-export const SourceCards: FC<ISourcesListProps> = ({ sources, actions, label }) => (
-  <CardList label={label}>
-    {sources.map(s => (
-      <CardListItem key={s.id} title={<SourceName source={s} />} actions={<SourceRowActions source={s} actions={actions} />}>
-        {/* На планшете — две колонки (сбор | состояние), на телефоне — одна. */}
-        <Grid min="16rem" gap={3}>
-          <SourceCollectControls source={s} actions={actions} />
-          <SourceStatus source={s} enabled={isSourceEnabled(s)} />
-        </Grid>
-      </CardListItem>
-    ))}
-  </CardList>
-);
+export const SourceCards: FC<ISourcesListProps> = ({ sources, actions, label }) => {
+  const roomy = useMediaQuery(MQ.sm);
+  return (
+    <CardList label={label}>
+      {sources.map(s => (
+        <li key={s.id} className={styles.card}>
+          <div className={styles.cardName}>
+            <SourceName source={s} />
+          </div>
+          <div className={styles.cardToggle}>
+            <SourceToggle source={s} actions={actions} />
+          </div>
+          <div className={styles.cardStatus}>
+            <SourceStatus source={s} />
+          </div>
+          <div className={styles.cardControls}>
+            <SourceDepth source={s} actions={actions} />
+            <SourceRowActions source={s} actions={actions} place={roomy ? 'row' : 'compact'} />
+          </div>
+        </li>
+      ))}
+    </CardList>
+  );
+};

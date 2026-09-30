@@ -1,5 +1,5 @@
 // Действия с источником — одни и те же в таблице (широкий экран) и в карточках (телефон):
-// включить или выключить, срок сбора, проверка сайта, удаление.
+// включить или выключить, срок сбора, проверка сайта, удаление, подробности состояния.
 //
 // Допуск упрощён до «включить / выключить» (решение владельца 23.09.2026): одна кнопка
 // разрешает сбор и ИИ-обработку вместе и ставит источник в расписание. Журнал допуска пишется
@@ -21,6 +21,12 @@ import { actionError } from './actionError';
 /** Включён — значит собирается и разбирается: оба допуска действуют, опрос не на паузе. */
 export const isSourceEnabled = (s: ISourceRow): boolean =>
   s.collectBlockedReason === null && s.aiBlockedReason === null && (s.kind === 'manual' || s.status !== 'paused');
+
+/**
+ * «Не собирается»: включён, но сбор сломан (изменилась вёрстка, канал закрыт). Выключенный
+ * источник сюда не входит — это решение оператора, а не поломка.
+ */
+export const isSourceBroken = (s: ISourceRow): boolean => s.status === 'broken' && isSourceEnabled(s);
 
 /** Название для людей: у канала без имени — «@ключ», а не голый технический ключ. */
 export const sourceName = (s: ISourceRow): string => sourceLabel({ sourceTitle: s.title, sourceKey: s.key, sourceKind: s.kind });
@@ -47,6 +53,10 @@ export interface ISourceActions {
   isRemoving: (s: ISourceRow) => boolean;
   probeResult: IProbeResult | null;
   closeProbe: () => void;
+  /** Подробности состояния — окном, а не раскрывашкой в строке: id источника, у которого оно открыто. */
+  detailsId: number | null;
+  openDetails: (s: ISourceRow) => void;
+  closeDetails: () => void;
 }
 
 export const useSourceActions = (): ISourceActions => {
@@ -54,6 +64,7 @@ export const useSourceActions = (): ISourceActions => {
   const toast = useToast();
   const confirm = useConfirm();
   const [probeResult, setProbeResult] = useState<IProbeResult | null>(null);
+  const [detailsId, setDetailsId] = useState<number | null>(null);
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['sources'] });
@@ -103,6 +114,9 @@ export const useSourceActions = (): ISourceActions => {
   const removal = useMutation({
     mutationFn: (source: ISourceRow) => api.delete(`/api/admin/sources/${source.id}`),
     onSuccess: (_result, source) => {
+      // Удалили из окна подробностей — окно закрывается сразу, а не когда список перезагрузится:
+      // иначе тост об удалении оказался бы под его подложкой.
+      setDetailsId(open => (open === source.id ? null : open));
       toast.show({ tone: 'success', text: `Источник «${sourceName(source)}» удалён.` });
       invalidate();
     },
@@ -136,5 +150,8 @@ export const useSourceActions = (): ISourceActions => {
     isRemoving: pendingFor(removal),
     probeResult,
     closeProbe: () => setProbeResult(null),
+    detailsId,
+    openDetails: source => setDetailsId(source.id),
+    closeDetails: () => setDetailsId(null),
   };
 };

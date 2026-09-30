@@ -1,11 +1,13 @@
 // «Источники» (бывший «Сбор»): вкладки по виду источника в адресе, переключатель вместо
 // редактора допуска, срок сбора, ссылки на публикации и разборы источника, удаление пустого
-// источника — только с подтверждением.
+// источника — только с подтверждением. Плотная таблица: подробности — окном, фильтр
+// «Не собираются» — в адресе, форма добавления — строкой в шапке списка.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { channelKey } from '../../components/admin/channelKey';
-import { fakeApi, renderWithProviders } from '../../test/render';
+import { fakeApi, renderWithProviders, renderWithRouter } from '../../test/render';
+import { stubViewport } from '../../test/viewport';
 import { SourcesPage } from './SourcesPage';
 
 const source = (over: Record<string, unknown>) => ({
@@ -59,8 +61,25 @@ const sources = [
   source({ id: 3, kind: 'website', key: 'erzrf.ru', title: 'ЕРЗ.РФ', historyDays: 365 }),
 ];
 
-const routes = () => [
-  { match: 'GET /api/admin/sources', respond: () => ({ status: 200, body: { items: sources } }) },
+/** Включённый канал, сбор которого сломан: «не собирается». */
+const broken = source({
+  id: 4,
+  key: 'infra_russia',
+  title: 'Инфраструктура России',
+  status: 'broken',
+  items: 2210,
+  health: 'blocked',
+  healthReason: 't.me/s/infra_russia отвечает 403',
+  healthState: {
+    state: 'degraded',
+    reason: 'канал стал закрытым: страница t.me/s/ не открывается без входа',
+    aiAllowed: true,
+    coverage: { gaps: [] },
+  },
+});
+
+const routes = (items: unknown[] = sources) => [
+  { match: 'GET /api/admin/sources', respond: () => ({ status: 200, body: { items } }) },
   {
     match: 'GET /api/admin/domrf-targets',
     respond: () => ({
@@ -242,6 +261,150 @@ describe('Админка: источники', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/Сбой сервера \(500\)/);
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeTruthy();
     expect(screen.queryByText(/Каналов пока нет/)).toBeNull();
+  });
+});
+
+describe('Админка: источники — плотный вид', () => {
+  const page = (url: string) => renderWithRouter([{ path: '/admin/sources', element: <SourcesPage /> }], [url]);
+
+  it('строка — одной линией: имя, адрес, «N публ. · дата · +новых»; причина сбоя — только у сломанного', async () => {
+    fakeApi(routes([...sources, broken]));
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    await screen.findByText('Недвижимость изнутри');
+    expect(screen.getByText('t.me/propertyinsider')).toBeTruthy();
+    expect(screen.getByText(/^120 публ\. · .+ · \+3 новые$/)).toBeTruthy();
+    expect(screen.getByText('канал стал закрытым: страница t.me/s/ не открывается без входа')).toBeTruthy();
+    // У работающего канала причины нет: «последний проход прошёл» ярлык «работает» уже сказал.
+    expect(screen.queryByText('последний проход прошёл')).toBeNull();
+    // Переключатель — без слова состояния рядом: состояние в aria-checked.
+    expect(screen.queryByText('включён')).toBeNull();
+    // Прежней плашки «Не собираются» с абзацем нет — вместо неё фильтр в шапке списка.
+    expect(screen.queryByText(/Обычная причина/)).toBeNull();
+  });
+
+  it('«Не собираются: N» — фильтр в адресе: только сломанные, повторное нажатие снимает', async () => {
+    fakeApi(routes([...sources, broken]));
+    const { router } = page('/admin/sources');
+
+    const filter = await screen.findByRole('button', { name: 'Не собираются: 1' });
+    expect(filter.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(filter);
+
+    await waitFor(() => expect(router.state.location.search).toBe('?problems=1'));
+    expect(screen.queryByText('Недвижимость изнутри')).toBeNull();
+    expect(screen.getByText('Инфраструктура России')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Не собираются: 1' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Не собираются: 1' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+    expect(screen.getByText('Недвижимость изнутри')).toBeTruthy();
+  });
+
+  it('фильтр берётся из адреса; смена вкладки его снимает; без сломанных — список целиком', async () => {
+    fakeApi(routes([...sources, broken]));
+    const { router } = page('/admin/sources?problems=1');
+
+    expect(await screen.findByText('Инфраструктура России')).toBeTruthy();
+    expect(screen.queryByText('Недвижимость изнутри')).toBeNull();
+
+    fireEvent.click(within(screen.getByRole('tablist', { name: 'Вид источника' })).getByRole('tab', { name: /^Сайты/ }));
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=website'));
+    expect(await screen.findByText('ЕРЗ.РФ')).toBeTruthy();
+
+    // Флаг в адресе при исправном списке ничего не прячет: снять его было бы нечем.
+    await router.navigate('/admin/sources?tab=website&problems=1');
+    expect(await screen.findByText('ЕРЗ.РФ')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Не собираются/ })).toBeNull();
+  });
+
+  it('«Подробнее» — окном: состояние словами и все действия с источником', async () => {
+    fakeApi(routes([...sources, broken]));
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Подробнее «Инфраструктура России»' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Инфраструктура России' });
+    expect(within(dialog).getByText('Telegram-канал · t.me/infra_russia')).toBeTruthy();
+    expect(within(dialog).getByText('сбор работает с ошибками')).toBeTruthy();
+    expect(within(dialog).getByText('t.me/s/infra_russia отвечает 403')).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Публикации' }).getAttribute('href')).toBe(
+      `/?view=publications&q=${encodeURIComponent('Инфраструктура России')}`,
+    );
+    expect(within(dialog).getByRole('link', { name: 'Разборы' }).getAttribute('href')).toBe('/admin/process?source=4');
+    // 2210 публикаций — удалять нечего предлагать.
+    expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('на телефоне в строке — одно «Подробнее», остальные действия — в его окне', async () => {
+    stubViewport(390);
+    const api = fakeApi(routes());
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    await screen.findByText('Недвижимость изнутри');
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Публикации «Недвижимость изнутри»' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Удалить «@stroykanal»' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подробнее «@stroykanal»' }));
+    const dialog = await screen.findByRole('dialog', { name: '@stroykanal' });
+    expect(within(dialog).getByRole('link', { name: 'Разборы' }).getAttribute('href')).toBe('/admin/process?source=2');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Удалить «@stroykanal»?' })).getByRole('button', { name: 'Удалить' }));
+    await waitFor(() => expect(api.calls).toContainEqual({ method: 'DELETE', url: '/api/admin/sources/2', body: null }));
+  });
+
+  it('добавить канал — строкой в шапке списка; пустое название не отправляется', async () => {
+    const api = fakeApi(routes());
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Канал' }), { target: { value: 'https://t.me/s/newchannel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить канал' }));
+    await waitFor(() =>
+      expect(api.calls).toContainEqual({ method: 'POST', url: '/api/admin/sources/telegram', body: { channel: 'newchannel' } }),
+    );
+    expect(await screen.findByText(/Канал добавлен выключенным/)).toBeTruthy();
+  });
+
+  it('на телефоне форма добавления — в окне, после добавления окно закрывается', async () => {
+    stubViewport(390);
+    const api = fakeApi(routes());
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить канал' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Добавить канал' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Канал' }), { target: { value: '@newchannel' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Название (необязательно)' }), { target: { value: 'Новый канал' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Добавить канал' }));
+    await waitFor(() =>
+      expect(api.calls).toContainEqual({
+        method: 'POST',
+        url: '/api/admin/sources/telegram',
+        body: { channel: 'newchannel', title: 'Новый канал' },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('свой срок хранится пунктом «45 дней»; поле числа — только пока вводят, Esc его закрывает', async () => {
+    const api = fakeApi(routes([source({ historyDays: 45 })]));
+    renderWithProviders(<SourcesPage />, '/admin/sources');
+
+    const picker = (await screen.findByRole('combobox', { name: 'Срок сбора: Недвижимость изнутри' })) as HTMLSelectElement;
+    // Между числом и словом — неразрывный пробел (formatCountWord).
+    expect(picker.selectedOptions[0]?.textContent).toBe('45\u00a0дней');
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+
+    fireEvent.change(picker, { target: { value: 'custom' } });
+    const days = screen.getByRole('spinbutton', { name: 'Срок сбора: Недвижимость изнутри: число дней' }) as HTMLInputElement;
+    expect(days.value).toBe('45');
+    fireEvent.change(days, { target: { value: '60' } });
+    fireEvent.keyDown(days, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('spinbutton')).toBeNull());
+    expect(picker.value).toBe('saved');
+    expect(api.calls.some(c => c.method === 'PUT')).toBe(false);
   });
 });
 

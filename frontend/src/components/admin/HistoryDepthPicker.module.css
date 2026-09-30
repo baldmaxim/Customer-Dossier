@@ -1,11 +1,38 @@
 .picker {
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-1) var(--sp-2);
+  gap: var(--sp-2);
   max-width: 100%;
 }
 
-.days {
-  width: 6.5rem; /* пять цифр и стрелки поля числа */
+/* Список и поле «свой срок» не ужимаются. */
+.picker > * {
+  flex: none;
+}
+
+/* Список и поле — высотой sm (32px под мышью, 44 под пальцем): строка таблицы не растёт
+   от контрола. Шрифт — 16px, как у всех полей: мельче телефон зумит форму при фокусе.
+   Два класса перебивают .control из Input.module.css.
+   min-width/max-width — вместо 0 и 100% из base.css: с ними список не давал ячейке таблицы
+   минимума, и поле «свой срок» вылезало в соседнюю колонку. */
+.picker .control {
+  min-width: auto;
+  max-width: none;
+  min-height: var(--ctl-h-sm);
+  padding-block: var(--sp-1);
+}
+
+.custom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.picker .days {
+  width: 4.75rem; /* четыре цифры (до 3650) и стрелки поля числа */
+}
+
+.unit {
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }

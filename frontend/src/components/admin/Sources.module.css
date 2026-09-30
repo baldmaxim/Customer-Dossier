@@ -1,82 +1,411 @@
-/* Источники: название, сбор, состояние — общие для таблицы (≥ 900) и карточек (< 900). */
+/* «Источники»: плотная таблица (≥ 900) и плотные карточки (< 900) из одних частей — название,
+   переключатель, срок, состояние, действия. Экран администратора: рабочая таблица, а не
+   пояснение на каждом шаге. Пояснения — в подсказках и в «Подробнее». */
+
+/* ── Шапка списка: «Каналы · включено 4 из 6 · Не собираются: 1» и форма добавления ── */
+
+.headNote {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+/* «Не собираются: N» — фильтр-переключатель тоном предупреждения. Два класса перебивают вид
+   варианта кнопки (Button.module.css) — как плитки-фильтры в «Обработке». */
+.problems.problems {
+  border-color: var(--warning-border);
+  background: var(--surface);
+  color: var(--warning);
+}
+
+.problems.problems[aria-pressed='true'] {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  box-shadow: inset 0 0 0 1px var(--warning);
+}
+
+@media (hover: hover) {
+  .problems.problems:hover:not(:disabled) {
+    background: var(--warning-bg);
+    color: var(--warning);
+  }
+}
+
+/* Форма добавления в строку: поля без видимых подписей (подпись — у диктора, пример — в
+   placeholder), кнопка и значок пояснения. На телефоне форма — в окне (SourceAdd). */
+.addForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Ширина поля задана и шириной, и основой: иначе форма в шапке меряется по размеру поля
+   по умолчанию, и значок «?» уезжает на вторую строку. Уже 8rem поле не сжимается. */
+.addKey,
+.addTitle,
+.addUrl,
+.addNumber {
+  flex: 0 1 14rem;
+  width: 14rem;
+  min-width: 8rem;
+}
+
+/* «Название — необязательно» целиком: 14rem обрезали последнюю букву подсказки. */
+.addTitle {
+  flex-basis: 15rem;
+  width: 15rem;
+}
+
+/* Ссылка ДОМ.РФ длинная — поле шире; номер объекта — несколько цифр. */
+.addUrl {
+  flex-basis: 20rem;
+  width: 20rem;
+}
+
+.addNumber {
+  flex-basis: 9rem;
+  width: 9rem;
+  min-width: 7rem;
+}
+
+/* Значок «?» — кружок 18px при цели 44px: поля цели сняты отрицательными отступами и выходили
+   бы за край формы. Гнездо шириной в цель держит её внутри (как в строке состояния админки). */
+.hintSlot {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--tap-min);
+  vertical-align: middle;
+}
+
+/* Форма в окне на телефоне: поля столбиком, кнопка во всю ширину. */
+.addStacked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* Поле или список в строке — высотой sm: 32px под мышью, 44 под пальцем. Шрифт остаётся 16px,
+   как у всех полей: мельче — телефон зумит форму при фокусе. Два класса перебивают .control. */
+.compact.compact {
+  min-height: var(--ctl-h-sm);
+  padding-block: var(--sp-1);
+}
+
+/* Сведения о вставленном тексте: столбиком на телефоне, по два с 600px, в одну строку с 1280px. */
+.pasteGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+
+@media (min-width: 600px) {
+  .pasteGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .pasteGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ── Название: имя в одну строку, адрес моноширинным, внешняя ссылка — значком ── */
 
 .name {
   display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  /* Ширина — от колонки или карточки, а не от текста: длинное имя режется многоточием,
+     а не распирает таблицу. */
+  contain: inline-size;
+}
+
+.nameText {
+  display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }
 
 .title {
+  overflow: hidden;
   color: var(--text);
   font-weight: var(--fw-semibold);
-  overflow-wrap: break-word;
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Адрес источника: мелко и моноширинно, но цель нажатия — высотой контрола (44px на тач-экране). */
-.key {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  align-self: flex-start;
-  max-width: 100%;
-  min-height: var(--ctl-h-sm);
+.address {
+  overflow: hidden;
   color: var(--muted);
   font-family: var(--mono);
   font-size: var(--fs-xs);
-  font-weight: var(--fw-regular);
-  overflow-wrap: anywhere; /* ключ канала — одно «слово» до 60 знаков: без этого он распирает колонку */
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (hover: hover) {
-  .key:hover {
-    color: var(--accent);
-  }
+.external {
+  flex: none;
 }
 
-.depth {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  min-width: 0;
+/* ── Сбор: переключатель без слова состояния ──
+   Состояние — в aria-checked, глазами — положение и цвет дорожки. Switch класс не принимает,
+   поэтому правим снаружи: без промежутка под пустую подпись и высотой sm. */
+.toggle {
+  display: inline-flex;
 }
 
-.caption {
-  color: var(--muted);
-  font-size: var(--fs-xs);
+.toggle [role='switch'] {
+  gap: 0;
+  min-height: var(--ctl-h-sm);
 }
+
+/* ── Состояние: ярлык (+ пометка), строка сведений, причина сбоя ── */
 
 .status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
+}
+
+.statusHead {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.badge {
+  flex: none;
+}
+
+/* Пометка к ярлыку и причина сбоя — одной строкой с многоточием; полностью — в подсказке
+   и в «Подробнее». Ширину колонки они не задают (contain): её задаёт строка сведений. */
+.note,
+.reason {
+  overflow: hidden;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  contain: inline-size;
+}
+
+.note {
+  flex: 1 1 auto;
+  color: var(--muted);
 }
 
 .reason {
-  margin: 0;
-  color: var(--warning);
-  font-size: var(--fs-sm);
-  overflow-wrap: break-word;
+  align-self: stretch;
+  color: var(--muted);
 }
 
-.meta {
-  margin: 0;
+.toneWarning {
+  color: var(--warning);
+}
+
+.toneDanger {
+  color: var(--danger);
+}
+
+.stats {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--muted);
   font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Колонки таблицы: название не уже 14rem, состояние — до 22rem, действия переносятся в две строки. */
+/* ── Действия строки ── */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* ДОМ.РФ: «Убрать» есть у каждой ссылки — у правого края, «Обновить» встаёт перед ним. */
+.actionsEnd {
+  justify-content: flex-end;
+}
+
+/* В окне подробностей «Удалить» — отдельно от переходов, у правого края. */
+.actions .danger {
+  margin-inline-start: auto;
+}
+
+/* ── Ячейки ДОМ.РФ: ссылка на карточку в одну строку, высотой контрола sm ── */
+
+.cellLink {
+  display: block;
+  overflow: hidden;
+  min-width: 11rem;
+  color: var(--accent);
+  line-height: var(--ctl-h-sm); /* цель нажатия — высотой sm (44 под пальцем), строка текста по центру */
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  contain: inline-size;
+}
+
+.cellMuted {
+  color: var(--muted);
+}
+
+/* ── Таблица (≥ 900) ── */
+
+/* Ячейки плотнее общих (--sp-2 --sp-3): 4px по вертикали и 8px по бокам — строка обычного
+   источника ≈ 48px вместо прежних 130–200. Содержимое по центру строки: в ячейках то две
+   строки текста, то один контрол. */
+.table table :is(th, td) {
+  padding: var(--sp-1) var(--sp-2);
+  vertical-align: middle;
+}
+
+.table table thead th {
+  padding-block: var(--sp-2);
+}
+
+/* Строка подсвечивается под мышью: в широкой строке глаз теряет, чей это переключатель. */
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* Название забирает остаток ширины (и режется многоточием), остальные колонки — по содержимому. */
 .nameCol {
-  min-width: 14rem;
+  width: 100%;
 }
 
-.statusCol {
-  min-width: 14rem;
-  max-width: 22rem;
+.fitCol {
+  width: 1%;
+  white-space: nowrap;
 }
 
-.actionsCol {
-  width: 12rem;
+.table .name {
+  min-width: 11rem;
 }
 
-/* Ссылки строки («Публикации», «Разборы») — видом ссылки: это переход, а не действие. */
-.link {
-  font-size: var(--fs-sm);
+/* Причина сбоя режется по ширине колонки: и в отфильтрованном списке (строки сведений там
+   короткие) ей остаётся место на полфразы. */
+.table .status {
+  min-width: 16rem;
+}
+
+.table .actions {
+  flex-wrap: nowrap;
+}
+
+/* Мелкие строки состояния в таблице — плотным интервалом: ярлык и строка сведений укладываются
+   в высоту имени с адресом, строка ≈ 47px, и на первом экране 1280×800 помещается девять. */
+.table .stats,
+.table .reason {
+  line-height: var(--lh-tight);
+}
+
+/* ── Карточки (< 900) ──
+   Первая строка — название и переключатель, вторая — состояние, третья — срок и действия. */
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name toggle'
+    'status status'
+    'controls controls';
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.cardName {
+  grid-area: name;
+  min-width: 0;
+}
+
+.cardToggle {
+  grid-area: toggle;
+}
+
+.cardStatus {
+  grid-area: status;
+  min-width: 0;
+}
+
+/* Срок слева, действия справа — нижняя строка карточки читается как её подвал. У ручного
+   способа срока нет — действия всё равно справа. */
+.cardControls {
+  display: flex;
+  grid-area: controls;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+.cardControls > :last-child {
+  margin-inline-start: auto;
+}
+
+/* Имя в карточке — до двух строк: на телефоне одна строка съела бы половину названия. */
+.card .title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Состояние в карточке — в строку: ярлык и сведения рядом, причина сбоя — ниже, до двух строк. */
+.card .status {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+}
+
+.card .statusHead {
+  align-self: auto;
+  flex-wrap: wrap;
+  row-gap: var(--sp-1);
+}
+
+.card .note {
+  white-space: normal;
+  contain: none;
+}
+
+.card .reason {
+  display: -webkit-box;
+  flex-basis: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  contain: none;
 }

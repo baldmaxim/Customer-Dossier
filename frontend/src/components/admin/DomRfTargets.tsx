@@ -1,11 +1,17 @@
 // Карточки ДОМ.РФ: ссылки на объекты, которые портал открывает в браузере сам (наш.дом.рф
 // отвечает браузеру и не отвечает программе). Список обновляется раз в 15 с: сбор идёт в фоне.
+//
+// Компактно, как список источников выше: форма — строкой в шапке (на телефоне — окном),
+// пояснение — значком «?», строка таблицы — одна линия; причина ошибки полностью — в подсказке
+// и в карточке на телефоне.
 
 import { FC, FormEvent, ReactNode, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { formatCountWord } from '../../lib/format';
 import { formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { MQ } from '../../lib/media';
@@ -15,10 +21,10 @@ import { ButtonLink } from '../ui/ButtonLink';
 import { Callout } from '../ui/Callout';
 import { CardList } from '../ui/CardList';
 import { CardListItem } from '../ui/CardListItem';
-import { Cluster } from '../ui/Cluster';
 import { useConfirm } from '../ui/confirm';
 import { EmptyState } from '../ui/EmptyState';
 import { Field } from '../ui/Field';
+import { Hint } from '../ui/Hint';
 import { Loading } from '../ui/Loading';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
@@ -27,7 +33,9 @@ import { TextInput } from '../ui/TextInput';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
 import { actionError } from './actionError';
-import styles from './Forms.module.css';
+import { AddControl, type AddLayout } from './SourceAdd';
+import forms from './Forms.module.css';
+import styles from './Sources.module.css';
 
 interface IDomRfTarget {
   id: number;
@@ -42,53 +50,115 @@ interface IDomRfTarget {
   nextAttemptAt?: string | null;
 }
 
-/** Состояние ссылки словами: получено, ждёт сбора или ошибка с причиной. */
-const targetState = (target: IDomRfTarget): ReactNode =>
+const QUERY_KEY = ['domrf-targets'];
+
+const DOMRF_HINT =
+  'Портал откроет страницу объекта сам и сохранит сведения. Номер объекта в портале — если объект уже есть под другим названием: число из адреса его страницы (/projects/…).';
+
+/** Ярлык состояния ссылки: получено, ждёт сбора или ошибка. */
+const stateBadge = (target: IDomRfTarget): ReactNode =>
   target.status === 'captured' ? (
-    // Ярлык — в строчной обёртке: в колонке карточки он иначе растягивался на всю ширину.
-    <span>
-      <Badge tone="success">Сведения получены{target.capturedAt ? ` ${formatDateTime(target.capturedAt)}` : ''}</Badge>
-    </span>
+    <Badge tone="success" className={styles.badge}>
+      Сведения получены{target.capturedAt ? ` ${formatDateTime(target.capturedAt)}` : ''}
+    </Badge>
   ) : target.lastError ? (
-    <Stack gap={1}>
-      <span>
-        <Badge tone="warning">Ошибка сбора</Badge>
-      </span>
-      <span className={styles.hint}>{target.lastError}</span>
-    </Stack>
+    <Badge tone="warning" className={styles.badge}>
+      Ошибка сбора
+    </Badge>
   ) : (
-    <span>
-      <Badge tone="neutral">Ждёт сбора</Badge>
-    </span>
+    <Badge tone="neutral" className={styles.badge}>
+      Ждёт сбора
+    </Badge>
   );
 
-export const DomRfTargets: FC = () => {
+/** Форма добавления: строкой в шапке раздела или столбиком в окне на телефоне. */
+const DomRfForm: FC<{ layout: AddLayout; onAdded?: () => void }> = ({ layout, onAdded }) => {
   const client = useQueryClient();
   const toast = useToast();
-  const confirm = useConfirm();
-  const wide = useMediaQuery(MQ.sm);
   const [url, setUrl] = useState('');
   const [projectId, setProjectId] = useState('');
-  const targets = useQuery({
-    queryKey: ['domrf-targets'],
-    queryFn: () => api.get<{ items: IDomRfTarget[] }>('/api/admin/domrf-targets'),
-    refetchInterval: 15_000,
-  });
-  const refresh = (): void => void client.invalidateQueries({ queryKey: ['domrf-targets'] });
-  const fail = (err: Error): void => {
-    toast.show({ tone: 'danger', text: actionError(err) });
-  };
+  const inline = layout === 'inline';
 
   const add = useMutation({
     mutationFn: (input: { url: string; projectId: number | null }) => api.post('/api/admin/domrf-targets', input),
     onSuccess: () => {
       setUrl('');
       setProjectId('');
+      onAdded?.();
       toast.show({ tone: 'success', text: 'Ссылка сохранена — портал откроет страницу сам.' });
-      refresh();
+      void client.invalidateQueries({ queryKey: QUERY_KEY });
     },
-    onError: fail,
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
+
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    if (url.trim()) add.mutate({ url: url.trim(), projectId: projectId.trim() ? Number(projectId) : null });
+  };
+
+  return (
+    <form className={inline ? styles.addForm : styles.addStacked} onSubmit={submit}>
+      <Field label="Ссылка на объект ДОМ.РФ" labelHidden={inline} className={inline ? styles.addUrl : undefined}>
+        {control => (
+          <TextInput
+            {...control}
+            className={inline ? styles.compact : undefined}
+            type="url"
+            required
+            placeholder="https://наш.дом.рф/…/объект/62087"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+          />
+        )}
+      </Field>
+      <Field label="Номер объекта в портале (необязательно)" labelHidden={inline} className={inline ? styles.addNumber : undefined}>
+        {control => (
+          <TextInput
+            {...control}
+            className={inline ? styles.compact : undefined}
+            type="number"
+            min={1}
+            step={1}
+            placeholder={inline ? '№ в портале' : undefined}
+            value={projectId}
+            onChange={e => setProjectId(e.target.value)}
+          />
+        )}
+      </Field>
+      <Button type="submit" variant="primary" size={inline ? 'sm' : 'md'} block={!inline} loading={add.isPending} disabled={url.trim() === ''}>
+        {inline ? (
+          <>
+            Добавить<VisuallyHidden> ссылку</VisuallyHidden>
+          </>
+        ) : (
+          'Добавить ссылку'
+        )}
+      </Button>
+      {inline && (
+        <span className={styles.hintSlot}>
+          <Hint label="Карточки ДОМ.РФ" text={DOMRF_HINT} />
+        </span>
+      )}
+    </form>
+  );
+};
+
+export const DomRfTargets: FC = () => {
+  const client = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
+  // Таблица — с 900px, как список источников выше: на планшете её колонки в одну строку не входили.
+  const wide = useMediaQuery(MQ.md);
+  const targets = useQuery({
+    queryKey: QUERY_KEY,
+    queryFn: () => api.get<{ items: IDomRfTarget[] }>('/api/admin/domrf-targets'),
+    refetchInterval: 15_000,
+  });
+  const refresh = (): void => void client.invalidateQueries({ queryKey: QUERY_KEY });
+  const fail = (err: Error): void => {
+    toast.show({ tone: 'danger', text: actionError(err) });
+  };
+
   const rescan = useMutation({
     mutationFn: (id: number) => api.post(`/api/admin/domrf-targets/${id}/rescan`),
     onSuccess: () => {
@@ -106,11 +176,6 @@ export const DomRfTargets: FC = () => {
     onError: fail,
   });
 
-  const submit = (event: FormEvent): void => {
-    event.preventDefault();
-    if (url.trim()) add.mutate({ url: url.trim(), projectId: projectId.trim() ? Number(projectId) : null });
-  };
-
   const askRemove = async (target: IDomRfTarget): Promise<void> => {
     const ok = await confirm({
       title: `Убрать объект №${target.externalRef} из списка?`,
@@ -122,7 +187,7 @@ export const DomRfTargets: FC = () => {
   };
 
   const actionsFor = (target: IDomRfTarget): ReactNode => (
-    <Cluster gap={1}>
+    <div className={`${styles.actions} ${styles.actionsEnd}`}>
       {(target.status === 'captured' || target.lastError) && (
         <Button
           size="sm"
@@ -131,24 +196,15 @@ export const DomRfTargets: FC = () => {
           loading={rescan.isPending && rescan.variables === target.id}
           onClick={() => rescan.mutate(target.id)}
         >
-          {target.lastError ? 'Повторить сейчас' : 'Обновить'}
+          {target.lastError ? 'Повторить' : 'Обновить'}
           <VisuallyHidden> №{target.externalRef}</VisuallyHidden>
         </Button>
       )}
       <Button size="sm" variant="ghost" icon="trash" onClick={() => void askRemove(target)}>
         Убрать<VisuallyHidden> №{target.externalRef}</VisuallyHidden>
       </Button>
-    </Cluster>
+    </div>
   );
-
-  const projectLink = (target: IDomRfTarget): ReactNode =>
-    target.projectId ? (
-      <ButtonLink to={`/projects/${target.projectId}`} variant="link" size="sm" className={styles.linkText}>
-        {target.projectName ?? 'Объект портала'}
-      </ButtonLink>
-    ) : (
-      'найдётся после сбора'
-    );
 
   const externalLink = (target: IDomRfTarget): ReactNode => (
     <a href={target.url} target="_blank" rel="noreferrer noopener" className={buttonClass({ variant: 'link', size: 'sm' })}>
@@ -160,35 +216,13 @@ export const DomRfTargets: FC = () => {
   const items = targets.data?.items ?? [];
 
   return (
-    <Section title="Карточки ДОМ.РФ">
-      <Stack gap={4}>
-        <p className={styles.hint}>
-          Добавьте ссылку на объект — портал откроет страницу сам и сохранит сведения. Номер объекта в портале укажите, если объект уже есть
-          под другим названием: это число из адреса его страницы (/projects/…).
-        </p>
-        <form className={styles.inline} onSubmit={submit}>
-          <Field label="Ссылка на объект ДОМ.РФ" className={styles.grow}>
-            {control => (
-              <TextInput
-                {...control}
-                type="url"
-                required
-                placeholder="https://наш.дом.рф/…/объект/62087"
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="Номер объекта в портале (необязательно)" className={styles.narrow}>
-            {control => (
-              <TextInput {...control} type="number" min={1} step={1} value={projectId} onChange={e => setProjectId(e.target.value)} />
-            )}
-          </Field>
-          <Button type="submit" variant="primary" loading={add.isPending} disabled={url.trim() === ''}>
-            Добавить ссылку
-          </Button>
-        </form>
-
+    <Section
+      title="Карточки ДОМ.РФ"
+      note={items.length > 0 ? formatCountWord(items.length, ['ссылка', 'ссылки', 'ссылок']) : undefined}
+      actions={<AddControl title="Добавить ссылку" hint={DOMRF_HINT} form={(layout, onAdded) => <DomRfForm layout={layout} onAdded={onAdded} />} />}
+      variant={wide ? 'card' : 'plain'}
+    >
+      <Stack gap={3}>
         {targets.isLoading && <Loading label="Загружаю ссылки ДОМ.РФ…" />}
         {targets.isError && (
           <Callout
@@ -202,13 +236,13 @@ export const DomRfTargets: FC = () => {
         {targets.isSuccess && items.length === 0 && <EmptyState size="sm">Ссылок пока нет.</EmptyState>}
         {items.length > 0 &&
           (wide ? (
-            <TableScroll label="Карточки ДОМ.РФ" minWidth={640}>
+            <TableScroll label="Карточки ДОМ.РФ" minWidth={0} className={styles.table}>
               <thead>
                 <tr>
-                  <th>Объект ДОМ.РФ</th>
-                  <th>Карточка портала</th>
-                  <th>Состояние</th>
-                  <th>
+                  <th className={styles.fitCol}>Объект ДОМ.РФ</th>
+                  <th className={styles.nameCol}>Карточка портала</th>
+                  <th className={styles.fitCol}>Состояние</th>
+                  <th className={styles.fitCol}>
                     <VisuallyHidden>Действия</VisuallyHidden>
                   </th>
                 </tr>
@@ -216,10 +250,27 @@ export const DomRfTargets: FC = () => {
               <tbody>
                 {items.map(target => (
                   <tr key={target.id}>
-                    <td className="nowrap">{externalLink(target)}</td>
-                    <td>{projectLink(target)}</td>
-                    <td>{targetState(target)}</td>
-                    <td>{actionsFor(target)}</td>
+                    <td className={styles.fitCol}>{externalLink(target)}</td>
+                    <td className={styles.nameCol}>
+                      {target.projectId ? (
+                        <Link to={`/projects/${target.projectId}`} viewTransition className={styles.cellLink} title={target.projectName ?? undefined}>
+                          {target.projectName ?? 'Объект портала'}
+                        </Link>
+                      ) : (
+                        <span className={styles.cellMuted}>найдётся после сбора</span>
+                      )}
+                    </td>
+                    <td className={styles.fitCol}>
+                      <div className={styles.status}>
+                        {stateBadge(target)}
+                        {target.lastError && target.status !== 'captured' && (
+                          <span className={`${styles.reason} ${styles.toneWarning}`} title={target.lastError}>
+                            {target.lastError}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className={styles.fitCol}>{actionsFor(target)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -227,8 +278,23 @@ export const DomRfTargets: FC = () => {
           ) : (
             <CardList label="Карточки ДОМ.РФ">
               {items.map(target => (
-                <CardListItem key={target.id} title={externalLink(target)} meta={projectLink(target)} actions={actionsFor(target)}>
-                  {targetState(target)}
+                <CardListItem
+                  key={target.id}
+                  title={externalLink(target)}
+                  // Ярлык состояния — справа от номера, а не отдельной строкой.
+                  aside={stateBadge(target)}
+                  meta={
+                    target.projectId ? (
+                      <ButtonLink to={`/projects/${target.projectId}`} variant="link" size="sm" className={forms.linkText}>
+                        {target.projectName ?? 'Объект портала'}
+                      </ButtonLink>
+                    ) : (
+                      'найдётся после сбора'
+                    )
+                  }
+                  actions={actionsFor(target)}
+                >
+                  {target.lastError && target.status !== 'captured' && <span className={forms.hint}>{target.lastError}</span>}
                 </CardListItem>
               ))}
             </CardList>
