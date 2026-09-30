@@ -1,6 +1,15 @@
 /* Движение: общие кадры, смена страницы (View Transitions), prefers-reduced-motion.
    Длительности и кривые — токены --dur-* / --ease-* в src/index.css. */
 
+/* Смена темы — без переходов: атрибут стоит один пересчёт стилей (hooks/useTheme.ts).
+   Иначе цвета с transition доплывали за 150 мс, а поля ввода без перехода перекрашивались
+   сразу — тема менялась «ступенькой». !important — перебить transition любого модуля. */
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after {
+  transition: none !important;
+}
+
 /* Кадры общие для всех модулей. В CSS-модуле имя пишется через global(), иначе
    модуль сделает его локальным: animation: global(enter-up) var(--dur-base) var(--ease-out). */
 

@@ -30,14 +30,24 @@ export const useTheme = (): { theme: Theme; toggle: () => void } => {
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    // Тема меняется мгновенно и сразу у всего экрана. У кнопок, карточек и ссылок есть
+    // transition цвета и фона, у полей ввода — нет: без этого поля перекрашивались сразу,
+    // а остальное доплывало за 150 мс, и тема менялась «ступенькой». На время смены переходы
+    // выключены (motion.css, [data-theme-switching]); чтение offsetHeight заставляет браузер
+    // пересчитать стили всего документа, пока они выключены, — после снятия атрибута цвета
+    // уже конечные, и переходу нечего анимировать.
+    root.setAttribute('data-theme-switching', '');
+    root.setAttribute('data-theme', theme);
+    void document.body.offsetHeight;
+    root.removeAttribute('data-theme-switching');
     // Шапка PWA красится этим мета-тегом; без синхронизации она останется
     // от предыдущей темы. Цвет — токен --chrome из index.css (им же красятся шапка и нижняя
     // панель): читаем его после смены атрибута, а не держим здесь вторую копию значений.
     // Инлайн-скрипт index.html и manifest.json повторяют те же значения литералом —
     // совпадение проверяет src/test/themeColor.test.ts.
     const meta = document.querySelector('meta[name="theme-color"]');
-    const chrome = getComputedStyle(document.documentElement).getPropertyValue('--chrome').trim();
+    const chrome = getComputedStyle(root).getPropertyValue('--chrome').trim();
     if (meta && chrome) meta.setAttribute('content', chrome);
     try {
       localStorage.setItem(STORAGE_KEY, theme);

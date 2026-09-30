@@ -19,7 +19,8 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     // Глобальные стили отдаются тестам как есть (?raw): themeColor.test.ts сверяет theme-color
-    // с токеном --chrome. Модули компонентов по-прежнему не обрабатываются.
-    css: { include: [/src\/index\.css/] },
+    // с токеном --chrome, useTheme.test.tsx — правило смены темы без переходов (styles/motion.css).
+    // Модули компонентов по-прежнему не обрабатываются.
+    css: { include: [/src\/index\.css/, /src\/styles\/[^/]+\.css/] },
   },
 });
