@@ -2,12 +2,12 @@
 
 Решение и границы — [ADR-013](../docs/development/ADR-013-server-deployment.md). Сервер общий с Quantor
 (SSH-алиас `quantor`, 2 vCPU / 4 ГБ / 50 ГБ, Ubuntu 24.04); ingress и сертификаты — его `infra-nginx`.
-Адреса серверов в репозитории не хранятся. Имя портала ниже — `__DOMAIN__` (например
-`radar.meridianai.ru`): оно подставляется в `nginx/tginfo.conf` и `.env` на шаге 5.
+Адреса серверов в репозитории не хранятся. Имя портала — `pulse.meridianai.ru` (A-запись на quantor
+заведена 30.09.2026): оно же в `nginx/tginfo.conf` и `PUBLIC_ORIGIN`.
 
 ```
 браузер ─HTTPS─► infra-nginx (/opt/infra/nginx, общий с Quantor)
-  __DOMAIN__ → tginfo-web:8080 (статика + /api → tginfo-api:4100)
+  pulse.meridianai.ru → tginfo-web:8080 (статика + /api → tginfo-api:4100)
 tginfo-api ─► tginfo-db                          (сеть tginfo 172.30.0.0/24)
 tginfo-api ─► 172.30.0.1:1234 ─обратный SSH─► домашний ПК, LM Studio 127.0.0.1:1234
 tginfo-api ─► сети Telegram ─awg0 (AmneziaWG)─► nl3 ─► t.me, api.telegram.org
@@ -86,7 +86,7 @@ ssh quantor
 cd /opt/portals/tg-info && cp tginfo.env.example .env && chmod 600 .env
 openssl rand -hex 24      # POSTGRES_PASSWORD
 openssl rand -base64 36   # OPERATOR_TOKEN — его же владелец вводит на экране входа
-nano .env                 # PUBLIC_ORIGIN=https://<имя>; фоновые флаги на первом запуске — false
+nano .env                 # фоновые флаги на первом запуске — false
 ```
 
 Режим входа (`AUTH_MODE=token`), `HOST=0.0.0.0`, `TRUST_PROXY` и строка подключения к базе зашиты в
@@ -127,17 +127,16 @@ IMAGE_TAG=<TAG> docker compose -p tginfo --profile tools run --rm migrate node d
 
 ### 5. Вход снаружи
 
-DNS: A-запись `__DOMAIN__` → адрес quantor (владелец). Проверка: `dig +short __DOMAIN__`.
+DNS: A-запись `pulse.meridianai.ru` → адрес quantor (заведена). Проверка: `dig +short pulse.meridianai.ru`.
 
 ```bash
 # сертификат: сначала пробный запуск
 ssh quantor 'cd /opt/infra/nginx && docker compose run --rm --entrypoint certbot certbot \
   certonly --webroot -w /var/www/certbot --agree-tos --register-unsafely-without-email \
-  --dry-run -d __DOMAIN__'
+  --dry-run -d pulse.meridianai.ru'
 # прошёл — тот же вызов без --dry-run
 
-sed 's/__DOMAIN__/<имя>/g' deploy/nginx/tginfo.conf > /tmp/tginfo.conf
-scp /tmp/tginfo.conf quantor:/opt/infra/nginx/conf.d/tginfo.conf
+scp deploy/nginx/tginfo.conf quantor:/opt/infra/nginx/conf.d/tginfo.conf
 ssh quantor 'docker exec infra-nginx nginx -t && docker exec infra-nginx nginx -s reload'
 ```
 
@@ -189,7 +188,7 @@ Quantor копируется в 03:17 — по времени не пересе�
 ## Проверка
 
 ```bash
-curl -sS -o /dev/null -w '%{http_code}\n' https://<имя>/api/companies        # 401 без входа
+curl -sS -o /dev/null -w '%{http_code}\n' https://pulse.meridianai.ru/api/companies        # 401 без входа
 curl -sS https://quantor.meridianai.ru/health/ready                           # Quantor жив, 200
 ssh quantor 'ss -tlnp; ufw status; free -m'   # новых 0.0.0.0 нет; доступно ≥ 500 МБ
 ```
