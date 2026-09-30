@@ -1,8 +1,8 @@
-// Клиент LM Studio (OpenAI-совместимый /v1).
+// Клиент модели: LM Studio или OpenRouter (OpenAI-совместимый /v1 у обоих).
 //
 // Изолирован намеренно: переезд с локальной RTX на отдельную машину с RTX 6000
-// или на облачный эндпоинт — это смена LMSTUDIO_BASE_URL и LMSTUDIO_MODEL,
-// без правок в пайплайне.
+// — смена LMSTUDIO_BASE_URL и LMSTUDIO_MODEL, в облако — ещё LLM_PROVIDER и
+// LLM_API_KEY (llm/endpoint.ts), без правок в пайплайне.
 
 import { env } from '../config/env.js';
 import type { ZodType, ZodTypeDef } from 'zod';
@@ -13,6 +13,7 @@ import { SEMANTIC_JSON_SCHEMA, semanticExtractionSchema, type ISemanticExtractio
 import { buildSemanticSystemMessage, buildSemanticUserMessage } from './semantic/prompt.js';
 import { HEADLINE_JSON_SCHEMA, headlineSchema, type IHeadline } from './headline/schema.js';
 import { buildHeadlineSystemMessage, buildHeadlineUserMessage } from './headline/prompt.js';
+import { checkOpenRouter, requestHeaders, requestRouting, type ILlmConnection, type ILlmTarget } from './endpoint.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
 
@@ -36,7 +37,18 @@ export type ILlmResult<T = IExtraction> =
 interface IChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
+  /** OpenRouter: сбой хостинга приходит телом ответа, а не только статусом. */
+  error?: { message?: string; code?: number | string };
 }
+
+/** Куда идёт запрос — из env; ключ живёт только здесь и в заголовке. */
+export const llmTarget = (): ILlmTarget => ({
+  provider: env.LLM_PROVIDER,
+  baseUrl: env.LMSTUDIO_BASE_URL,
+  model: env.LMSTUDIO_MODEL,
+  apiKey: env.LLM_API_KEY,
+  routeProviders: env.OPENROUTER_PROVIDERS,
+});
 
 /**
  * Модель иногда оборачивает JSON в ```json ... ``` вопреки инструкции.
@@ -110,11 +122,13 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
     latencyMs: Date.now() - startedAt,
   });
 
+  const target = llmTarget();
+  const routing = requestRouting(target);
   let response: Response;
   try {
-    response = await fetch(`${env.LMSTUDIO_BASE_URL}/chat/completions`, {
+    response = await fetch(`${target.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: requestHeaders(target),
       body: JSON.stringify({
         model: env.LMSTUDIO_MODEL,
         temperature: options.temperature ?? 0.1,
@@ -128,6 +142,7 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
           type: 'json_schema',
           json_schema: { name: spec.schemaName, strict: true, schema: spec.jsonSchema },
         },
+        ...(routing ? { provider: routing } : {}),
       }),
       signal: options.signal
         ? AbortSignal.any([options.signal, AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS)])
@@ -150,12 +165,17 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
   }
 
   const payload = (await response.json()) as IChatCompletionResponse;
-  const content = payload.choices?.[0]?.message?.content ?? '';
   const usage: ILlmUsage = {
     tokensIn: payload.usage?.prompt_tokens ?? null,
     tokensOut: payload.usage?.completion_tokens ?? null,
     latencyMs: Date.now() - startedAt,
   };
+  if (payload.error) {
+    // Сбой хостинга, а не ответ модели: повтор с урезанным текстом тут не поможет.
+    const code = payload.error.code === undefined ? '' : ` ${payload.error.code}`;
+    return { ok: false, failure: 'llm_error', message: `ошибка провайдера${code}: ${(payload.error.message ?? '').slice(0, 500)}`, usage, rawResponse: null };
+  }
+  const content = payload.choices?.[0]?.message?.content ?? '';
 
   if (content.trim() === '') {
     // Классический симптом: Qwen3 ушёл в режим рассуждения и сжёг max_tokens.
@@ -244,12 +264,17 @@ export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<IS
 export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>
   extractWith(options, HEADLINE_SPEC);
 
-/** Проверка, что LM Studio поднят и модель загружена. Для CLI и health-check. */
-export const checkLlmConnection = async (
-  timeoutMs = 10_000,
-): Promise<{ ok: boolean; models: string[]; error?: string }> => {
+/**
+ * Проверка, что модель доступна. Для CLI, экрана и пропуска прохода конвейера.
+ * LM Studio — сервер поднят, `models` — загруженные модели; OpenRouter — ключ, средства и хостинг
+ * со строгой схемой, `models` — только выбранная модель (каталог OpenRouter — сотни моделей).
+ */
+export const checkLlmConnection = async (timeoutMs = 10_000): Promise<ILlmConnection> => {
+  const target = llmTarget();
+  if (target.provider === 'openrouter') return checkOpenRouter(target, timeoutMs);
   try {
-    const response = await fetch(`${env.LMSTUDIO_BASE_URL}/models`, {
+    const response = await fetch(`${target.baseUrl}/models`, {
+      headers: requestHeaders(target),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return { ok: false, models: [], error: `HTTP ${response.status}` };

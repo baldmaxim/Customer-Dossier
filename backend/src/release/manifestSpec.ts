@@ -104,6 +104,7 @@ export const CONFIG_KEYS = [
   'GRAPH_EXPORT_ENABLED',
   'EXTRACT_SCHEMA_VERSION',
   'PROMPT_VERSION',
+  'LLM_PROVIDER',
   'LMSTUDIO_MODEL',
   'EXTRACT_CHUNK_SIZE',
   'EXTRACT_MAX_CHUNKS',
@@ -121,6 +122,8 @@ export const CONFIG_DENYLIST = [
   'TG_BOT_TOKEN',
   'TG_BOT_ALLOWED_USER_IDS',
   'LMSTUDIO_BASE_URL',
+  // Ключ OpenRouter (LLM_PROVIDER=openrouter): ни значением, ни хешем.
+  'LLM_API_KEY',
   'DATABASE_SSL_CA_PATH',
 ] as const;
 

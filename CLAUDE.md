@@ -425,6 +425,18 @@ OpenAI-совместимый `/v1`, адрес в `LMSTUDIO_BASE_URL`. Моде
 
 Переезд на RTX 6000 — только смена `LMSTUDIO_BASE_URL` и `LMSTUDIO_MODEL`, код не трогаем.
 
+**OpenRouter вместо LM Studio (30.09.2026: код есть, включение — решение владельца).** `LLM_PROVIDER=openrouter`,
+`LLM_API_KEY` (секрет: не в идентичности, не в manifest, не в логах), `LMSTUDIO_MODEL` — id модели OpenRouter,
+адрес — только https (`config/llm.ts`). Маршрут (`llm/endpoint.ts`): `require_parameters` — только хостинги со
+строгой JSON-схемой, `data_collection: deny`; `OPENROUTER_PROVIDERS` — хостинги по порядку без фолбэка на чужие
+(`deepinfra/fp8` фиксирует и квантизацию), пусто — самый дешёвый подходящий. Провайдер и маршрут входят в
+execution-identity: `qwen/qwen3-8b` локально и в облаке — разные конфигурации; у LM Studio отпечаток прежний.
+Проверка перед проходом (`checkOpenRouter`): ключ принят, лимит ключа и средства счёта не исчерпаны, у модели есть
+хостинг со строгой схемой в пределах маршрута — иначе прохода нет, и 401/402 не выжигают `REPROCESS_RETRY_MAX`.
+`qwen/qwen3-8b` в OpenRouter не брать: один хостинг, без строгой схемы, с рассуждением. Тексты уходят внешнему
+сервису — `pilot-manifest@1` это запрещает (`externalTransfer`). Модель выбирать `benchmark:model`, а не по цене.
+Доступность openrouter.ai с Selectel не проверена: не открывается — как Telegram, через `awg0`.
+
 Размер чанка — `EXTRACT_CHUNK_SIZE` / `EXTRACT_MAX_CHUNKS` (по умолчанию 3500/6,
 подобрано на живой нагрузке: 6000/4 давали таймауты). Подбирать под модель
 и видеокарту через env, не правкой кода.

@@ -79,7 +79,7 @@ const runModel = async (): Promise<void> => {
   experimentForRun(argValue('--experiment') ?? 'baseline-semantic@1');
   const connection = await checkLlmConnection();
   if (!connection.ok) {
-    console.error(`[eval] LM Studio недоступен: ${connection.error}. Оценка NOT_RUN.`);
+    console.error(`[eval] модель (${env.LLM_PROVIDER}) недоступна: ${connection.error}. Оценка NOT_RUN.`);
     process.exitCode = 1;
     return;
   }
@@ -111,7 +111,7 @@ const runModel = async (): Promise<void> => {
     meta: {
       takenAt: new Date().toISOString(),
       mode: 'model',
-      modelReported: { ...(buildModelIdentity(provider).serverReported as Record<string, string>), model: env.LMSTUDIO_MODEL, loadedModels: connection.models.join(','), experiment: experiment.id, proposedCases: `${PROPOSED_CASES_VERSION}: ${PROPOSED_CASES.length} не оцениваются (разметка не сопоставлена со схемой)` },
+      modelReported: { ...(buildModelIdentity(provider).serverReported as Record<string, string>), provider: provider.provider, ...(provider.params.routing ? { routing: JSON.stringify(provider.params.routing) } : {}), model: env.LMSTUDIO_MODEL, loadedModels: connection.models.join(','), experiment: experiment.id, proposedCases: `${PROPOSED_CASES_VERSION}: ${PROPOSED_CASES.length} не оцениваются (разметка не сопоставлена со схемой)` },
       code: null,
     },
     cases: evaluated,

@@ -85,12 +85,16 @@ const has = (flag: string): boolean => process.argv.includes(flag);
 const checkModel = async (): Promise<void> => {
   const llm = await checkLlmConnection();
   if (!llm.ok) {
-    console.error(`[llm] недоступен по ${env.LMSTUDIO_BASE_URL}: ${llm.error}`);
-    console.error('[llm] запустите LM Studio и включите локальный сервер.');
+    console.error(`[llm] ${env.LLM_PROVIDER} недоступен по ${env.LMSTUDIO_BASE_URL}: ${llm.error}`);
+    console.error(
+      env.LLM_PROVIDER === 'openrouter'
+        ? '[llm] проверьте LLM_API_KEY, средства на счёте OpenRouter, LMSTUDIO_MODEL и OPENROUTER_PROVIDERS.'
+        : '[llm] запустите LM Studio и включите локальный сервер.',
+    );
     process.exitCode = 1;
     return;
   }
-  console.log(`[llm] доступен, моделей загружено: ${llm.models.length}`);
+  console.log(`[llm] ${env.LLM_PROVIDER} доступен, моделей: ${llm.models.length}`);
   for (const m of llm.models) {
     console.log(`  ${m}${m === env.LMSTUDIO_MODEL ? '  <-- LMSTUDIO_MODEL' : ''}`);
   }

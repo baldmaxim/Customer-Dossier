@@ -102,8 +102,8 @@ export const PipelinePage: FC = () => {
             tone={model?.ok ? 'positive' : 'warn'}
             hint={
               model?.ok
-                ? 'LM Studio отвечает по адресу LMSTUDIO_BASE_URL'
-                : `локальная модель не отвечает: ${model?.error ?? 'причина неизвестна'}. Пока её нет, разбор не ставится и ничего не теряется`
+                ? 'модель отвечает по адресу LMSTUDIO_BASE_URL (LM Studio или OpenRouter — LLM_PROVIDER)'
+                : `модель не отвечает: ${model?.error ?? 'причина неизвестна'}. Пока её нет, разбор не ставится и ничего не теряется`
             }
           >
             Модель: {model?.ok ? 'отвечает' : 'не отвечает'}

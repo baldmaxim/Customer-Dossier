@@ -7,12 +7,15 @@
 // Идентичность исполнения (execution-identity@1) — всё, что влияет на ответ и на то, как он превращается в кандидатов:
 // провайдер и модель, эффективные сообщения (включая /no_think) и шаблон пользовательского сообщения, схема, параметры
 // генерации и политика повторов, версия сборки и проверки кандидатов, нарезка. Адрес сервера и секреты не входят.
+// У OpenRouter в параметры входит маршрут (хостинги, политика данных): одна и та же модель у разных хостингов
+// квантована по-разному, и `qwen/qwen3-8b` локально и в облаке — разные конфигурации.
 // Сведения, которые сервер не сообщает (квантизация, окно контекста, версия рантайма), — 'unknown', не догадка.
 
 import { createHash } from 'node:crypto';
 
 import { env } from '../config/env.js';
-import { LEGACY_SPEC, SEMANTIC_SPEC, extractFromText, extractSemantic, RETRY_POLICY_VERSION, type ILlmResult } from '../llm/client.js';
+import { LEGACY_SPEC, SEMANTIC_SPEC, extractFromText, extractSemantic, llmTarget, RETRY_POLICY_VERSION, type ILlmResult } from '../llm/client.js';
+import { requestRouting } from '../llm/endpoint.js';
 import { SYSTEM_PROMPT } from '../llm/prompt.js';
 import { EXTRACT_JSON_SCHEMA, SCHEMA_VERSION, type IExtraction } from '../llm/schema.js';
 import { SEMANTIC_PROMPT_VERSION, SEMANTIC_SYSTEM_PROMPT, buildSemanticSystemMessage } from '../llm/semantic/prompt.js';
@@ -67,26 +70,36 @@ export const UNKNOWN_SERVER_METADATA: Readonly<Record<string, string>> = {
   runtimeVersion: 'unknown',
 };
 
-/** `promptVariant` — только для оценки (этап 14B): рабочий конвейер создаёт провайдер без варианта. */
-export const lmStudioProvider = (options: { promptVariant?: string | null } = {}): IModelProvider => ({
-  provider: 'lmstudio',
-  model: env.LMSTUDIO_MODEL,
-  schemaVersion: env.EXTRACT_SCHEMA_VERSION,
-  // Совпадает с llm/client.ts. Окно контекста задаётся в LM Studio, а не здесь;
-  // размер чанка в символах — приближение к токенам с запасом, не точный лимит.
-  params: {
-    temperature: 0.1,
-    maxTokens: 2048,
-    contextNote: 'ctx задаётся в LM Studio; чанк в символах — приближение',
-    ...(options.promptVariant ? { promptVariant: options.promptVariant } : {}),
-  },
-  // LM Studio по OpenAI-совместимому API не сообщает квантизацию и окно контекста загруженной модели.
-  serverReported: { ...UNKNOWN_SERVER_METADATA },
-  extract: (text, publishedAt, ctx) =>
-    env.EXTRACT_SCHEMA_VERSION === SEMANTIC_SCHEMA_VERSION
-      ? extractSemantic({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt, promptVariant: options.promptVariant ?? null })
-      : extractFromText({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt }),
-});
+/**
+ * Провайдер модели из env: LM Studio или OpenRouter (имя функции историческое).
+ * `promptVariant` — только для оценки (этап 14B): рабочий конвейер создаёт провайдер без варианта.
+ */
+export const lmStudioProvider = (options: { promptVariant?: string | null } = {}): IModelProvider => {
+  // Тот же маршрут, что уходит в запросе (llm/client.ts). У LM Studio его нет — идентичность прежняя.
+  const routing = requestRouting(llmTarget());
+  return {
+    provider: env.LLM_PROVIDER,
+    model: env.LMSTUDIO_MODEL,
+    schemaVersion: env.EXTRACT_SCHEMA_VERSION,
+    // Совпадает с llm/client.ts. Окно контекста задаётся в LM Studio (у OpenRouter — хостингом), а не здесь;
+    // размер чанка в символах — приближение к токенам с запасом, не точный лимит.
+    params: {
+      temperature: 0.1,
+      maxTokens: 2048,
+      contextNote: routing
+        ? 'ctx — у хостинга модели; чанк в символах — приближение'
+        : 'ctx задаётся в LM Studio; чанк в символах — приближение',
+      ...(routing ? { routing } : {}),
+      ...(options.promptVariant ? { promptVariant: options.promptVariant } : {}),
+    },
+    // Ни LM Studio, ни OpenRouter по OpenAI-совместимому API не сообщают квантизацию и окно контекста.
+    serverReported: { ...UNKNOWN_SERVER_METADATA },
+    extract: (text, publishedAt, ctx) =>
+      env.EXTRACT_SCHEMA_VERSION === SEMANTIC_SCHEMA_VERSION
+        ? extractSemantic({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt, promptVariant: options.promptVariant ?? null })
+        : extractFromText({ body: text, publishedAt, signal: ctx?.signal, beforeAttempt: ctx?.beforeAttempt }),
+  };
+};
 
 const sha256 = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex');
 

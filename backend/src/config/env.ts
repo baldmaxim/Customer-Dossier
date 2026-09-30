@@ -11,6 +11,7 @@ import {
   parsePublicOrigin,
   parseStrictBool,
 } from './parse.js';
+import { llmBaseUrlInput, parseLlmAccess, parseLlmProvider } from './llm.js';
 
 type EnvSource = Readonly<Record<string, string | undefined>>;
 
@@ -33,6 +34,9 @@ export const parseEnv = (source: EnvSource) => {
     throw new EnvValueError('Не задана обязательная переменная окружения DATABASE_URL (см. backend/.env.example)');
   }
   const authMode = parseAuthMode(source.AUTH_MODE);
+  const llmProvider = parseLlmProvider(source.LLM_PROVIDER);
+  const llmBaseUrl = parseLlmBaseUrl(llmBaseUrlInput(llmProvider, source.LMSTUDIO_BASE_URL));
+  const llmAccess = parseLlmAccess(llmProvider, llmBaseUrl, source.LLM_API_KEY, source.OPENROUTER_PROVIDERS);
 
   return {
     DATABASE_URL: databaseUrl,
@@ -50,9 +54,15 @@ export const parseEnv = (source: EnvSource) => {
       30_000,
     ),
 
-    // Доверенный фиксированный адрес локальной модели. Сетевая политика
+    // Где модель: lmstudio (локально) или openrouter (облако, config/llm.ts). Провайдер и маршрут
+    // входят в идентичность запуска; ключ — нет.
+    LLM_PROVIDER: llmProvider,
+    // Доверенный фиксированный адрес модели. Сетевая политика
     // источников к нему не применяется, и адрес не берётся из публикаций.
-    LMSTUDIO_BASE_URL: parseLlmBaseUrl(source.LMSTUDIO_BASE_URL),
+    LMSTUDIO_BASE_URL: llmBaseUrl,
+    // Секрет: не логируется, не входит в идентичность запуска и в manifest.
+    LLM_API_KEY: llmAccess.apiKey,
+    OPENROUTER_PROVIDERS: llmAccess.routeProviders,
     LMSTUDIO_MODEL: optional(source, 'LMSTUDIO_MODEL', 'qwen3-8b'),
     LMSTUDIO_TIMEOUT_MS: parsePositiveInt('LMSTUDIO_TIMEOUT_MS', source.LMSTUDIO_TIMEOUT_MS, 120_000),
 
