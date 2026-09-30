@@ -281,6 +281,8 @@ ssh quantor 'ufw allow in on br-tginfo from 172.30.0.0/24 to 172.30.0.1 port 123
 New-Item -ItemType Directory -Force C:\ProgramData\tginfo | Out-Null
 ssh-keygen -t ed25519 -f C:\ProgramData\tginfo\llmtunnel_ed25519 -N '""' -C tginfo-llm-tunnel
 icacls C:\ProgramData\tginfo\llmtunnel_ed25519 /inheritance:r /grant:r "*S-1-5-18:F" "*S-1-5-32-544:F"
+# владелец — SYSTEM: иначе ssh от SYSTEM отвергает ключ как слишком открытый (на русской Windows — «NT AUTHORITY\СИСТЕМА»)
+icacls C:\ProgramData\tginfo\llmtunnel_ed25519 /setowner "NT AUTHORITY\SYSTEM"
 ssh-keyscan -t ed25519 <адрес quantor> 2>$null | Out-File -Encoding ascii C:\ProgramData\tginfo\known_hosts
 ssh-keygen -lf C:\ProgramData\tginfo\known_hosts   # сверить с ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub на сервере
 ```
@@ -330,11 +332,13 @@ Start-ScheduledTask -TaskName 'TG_Info LLM tunnel'
 9. **`nginx -t` перед каждым reload**: `infra-nginx` общий, ошибка в одном файле роняет вход обоим порталам.
 10. **Chromium нет в образе** (Alpine): браузерный сбор ДОМ.РФ (`DOMRF_BROWSER_ENABLED`) на сервере не
     работает — остаётся на домашнем ПК или ручным импортом.
-11. **Блок `Match` в `sshd_config.d`** закрывается `Match all`: файл подключается в начале `sshd_config`, и
+11. **Ключ туннеля для задачи от SYSTEM**: владелец файла ключа — SYSTEM, доступ — только SYSTEM и
+    администраторы. Иначе OpenSSH на Windows пишет «too open» и туннель молча не поднимается.
+12. **Блок `Match` в `sshd_config.d`** закрывается `Match all`: файл подключается в начале `sshd_config`, и
     без сброса блок забрал бы основные настройки. Перед reload — `sshd -t`.
-12. **Секреты в чат не присылать**: экспорт Amnezia, `.env`, закрытые ключи. Случилось — перевыпустить
+13. **Секреты в чат не присылать**: экспорт Amnezia, `.env`, закрытые ключи. Случилось — перевыпустить
     (клиент Amnezia, токен оператора).
-13. **Агенту в авто-режиме** выпуск сертификата и удаление базы требуют явного «разрешаю» владельца.
+14. **Агенту в авто-режиме** выпуск сертификата и удаление базы требуют явного «разрешаю» владельца.
 
 ## Полный откат
 
