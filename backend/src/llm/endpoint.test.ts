@@ -67,8 +67,10 @@ describe('настройки модели (config/llm.ts)', () => {
     expect(errorText(() => parseEnv({ ...or, OPENROUTER_PROVIDERS: 'deepinfra,deepinfra' }))).toMatch(/дважды/);
   });
 
-  it('маршрут, оставленный в .env при возврате на LM Studio, ни на что не влияет', () => {
-    expect(parseEnv({ ...base, OPENROUTER_PROVIDERS: 'deep infra' }).OPENROUTER_PROVIDERS).toEqual([]);
+  it('ключ и маршрут, оставленные в .env при возврате на LM Studio, ни на что не влияют: ключ не уходит в LM Studio', () => {
+    const env = parseEnv({ ...base, LLM_API_KEY: SECRET, OPENROUTER_PROVIDERS: 'deep infra' });
+    expect(env.OPENROUTER_PROVIDERS).toEqual([]);
+    expect(env.LLM_API_KEY).toBe('');
   });
 });
 

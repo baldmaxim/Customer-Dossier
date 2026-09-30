@@ -25,7 +25,7 @@ export const llmBaseUrlInput = (provider: LlmProvider, raw: string | undefined):
   provider === 'openrouter' && (raw === undefined || raw.trim() === '') ? OPENROUTER_BASE_URL : raw;
 
 export interface ILlmAccess {
-  /** Пусто — запрос без заголовка Authorization. */
+  /** Только OpenRouter; пусто — запрос без заголовка Authorization. */
   apiKey: string;
   /** Только OpenRouter: хостинги по порядку, других не брать. Пусто — самый дешёвый подходящий. */
   routeProviders: readonly string[];
@@ -37,9 +37,10 @@ export const parseLlmAccess = (
   rawKey: string | undefined,
   rawRoute: string | undefined,
 ): ILlmAccess => {
+  // Ключ и маршрут относятся только к OpenRouter: оставленные в .env при возврате на LM Studio ни на что
+  // не влияют, и ключ OpenRouter не уходит заголовком чужому серверу.
+  if (provider === 'lmstudio') return { apiKey: '', routeProviders: [] };
   const apiKey = rawKey?.trim() ?? '';
-  // Маршрут относится только к OpenRouter: оставленный в .env при возврате на LM Studio ни на что не влияет.
-  if (provider === 'lmstudio') return { apiKey, routeProviders: [] };
   if (!baseUrl.startsWith('https://')) {
     throw new EnvValueError(
       `LMSTUDIO_BASE_URL: для openrouter — только https (${OPENROUTER_BASE_URL} или пусто), иначе ключ уйдёт открытым текстом`,
