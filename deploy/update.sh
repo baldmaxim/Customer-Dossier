@@ -8,8 +8,8 @@
 # Образы собираются на машине разработки и приходят через `docker load` (deploy/README.md):
 # на сервере ничего не собирается. Тег выпуска — в RELEASE, .env скрипт не меняет.
 #
-# Порядок: образы на месте → база → план миграций → миграции (destructive — отказ) →
-# перезапуск → проверка, что оба контейнера из одной сборки и API отвечает.
+# Порядок: образы на месте → новая сборка принимает настройки сервера → база → план миграций →
+# миграции (destructive — отказ) → перезапуск → оба контейнера из одной сборки и API отвечает.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -24,6 +24,25 @@ echo "→ выкатывается ${TAG}"
 for image in tginfo-api tginfo-web; do
   docker image inspect "${image}:${TAG}" >/dev/null 2>&1 || { echo "нет образа ${image}:${TAG} — сначала docker load"; exit 1; }
 done
+
+echo -n "→ настройки сервера для новой сборки: "
+# Новый код разбирает .env и зашитые в compose значения ДО миграций и замены контейнеров:
+# несовместимая настройка (снятый режим входа, новый обязательный ключ) останавливает выкладку
+# здесь, а не роняет работающий портал. Базе и сети проверка не нужна (--no-deps).
+preflight_log="$(mktemp)"
+if "${COMPOSE[@]}" run --rm --no-deps api node --input-type=module \
+     -e 'await import("./dist/config/env.js")' >"$preflight_log" 2>&1; then
+  echo "приняты"
+  rm -f "$preflight_log"
+else
+  echo "НЕ приняты"
+  # Сообщения EnvValueError составлены без значений: секреты из .env сюда не попадают.
+  grep -m 3 -E '^[A-Za-z]*Error' "$preflight_log" || tail -n 3 "$preflight_log"
+  rm -f "$preflight_log"
+  echo "ВЫКЛАДКА ОСТАНОВЛЕНА до изменений: портал работает на прежнем выпуске. Поправьте .env или"
+  echo "docker-compose.yml под новую сборку (deploy/README.md) и повторите."
+  exit 1
+fi
 
 "${COMPOSE[@]}" up -d db
 
