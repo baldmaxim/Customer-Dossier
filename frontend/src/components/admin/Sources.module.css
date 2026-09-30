@@ -1,0 +1,82 @@
+/* Источники: название, сбор, состояние — общие для таблицы (≥ 900) и карточек (< 900). */
+
+.name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
+}
+
+/* Адрес источника: мелко и моноширинно, но цель нажатия — высотой контрола (44px на тач-экране). */
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: var(--ctl-h-sm);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+  overflow-wrap: anywhere; /* ключ канала — одно «слово» до 60 знаков: без этого он распирает колонку */
+}
+
+@media (hover: hover) {
+  .key:hover {
+    color: var(--accent);
+  }
+}
+
+.depth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.caption {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.status {
+  min-width: 0;
+}
+
+.reason {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Колонки таблицы: название не уже 14rem, состояние — до 22rem, действия переносятся в две строки. */
+.nameCol {
+  min-width: 14rem;
+}
+
+.statusCol {
+  min-width: 14rem;
+  max-width: 22rem;
+}
+
+.actionsCol {
+  width: 12rem;
+}
+
+/* Ссылки строки («Публикации», «Разборы») — видом ссылки: это переход, а не действие. */
+.link {
+  font-size: var(--fs-sm);
+}

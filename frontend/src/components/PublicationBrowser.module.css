@@ -1,9 +1,15 @@
-/* Список публикаций и панель чтения. Mobile-first: одна колонка, с 900px — две. */
+/* Список публикаций и панель чтения. Mobile-first: одна колонка; в окне читалки (MQ.reader:
+   от 900px в ширину и 600px в высоту) — две колонки «в один экран». */
 
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* Загрузка, ошибка, пусто: блок сверху, без растягивания на весь экран. */
+.state {
   min-width: 0;
 }
 
@@ -21,6 +27,13 @@
   display: block;
 }
 
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
 .items {
   display: flex;
   flex-direction: column;
@@ -34,10 +47,10 @@
 .item {
   display: flex;
   flex-direction: column;
-  gap: 2px; /* строки карточки — одна запись, а не четыре абзаца */
+  gap: var(--sp-1);
   width: 100%;
   min-width: 0;
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -47,67 +60,79 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.item:active {
+  transform: scale(0.985);
 }
 
 /* Только для мыши: на тач-экране :hover «залипает» после нажатия. */
 @media (hover: hover) {
-  .item:hover {
+  .item:hover:not(.itemActive) {
+    border-color: var(--border-strong);
     background: var(--surface-2);
   }
 }
 
-/* Внутрь карточки: снаружи рамку фокуса обрезал бы край прокручиваемой колонки. */
+/* Внутрь карточки: снаружи контур обрезал бы край прокручиваемой колонки. */
 .item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline-offset: calc(var(--focus-ring-width) * -1);
 }
 
-.itemActive,
-.itemActive:hover {
+/* Выбранная: рамка и полоса акцента — различимо не только оттенком фона. */
+.itemActive {
   border-color: var(--accent-border);
-  background: var(--accent-soft);
+  background: var(--selected-bg);
+  box-shadow: inset 3px 0 0 var(--selected-indicator);
 }
 
 .itemHead {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-1) var(--sp-2);
+  gap: var(--sp-2);
   min-width: 0;
 }
 
 /* Дата крупнее всего в карточке: ленту читают по времени. */
 .itemDate {
   font-size: var(--fs-base);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
 }
 
 .itemTime {
   color: var(--muted);
   font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
+/* Канал — одной строкой с многоточием: длинное имя не сдвигает остальное. */
 .itemSource {
-  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: var(--fs-sm);
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .itemTitle {
-  font-weight: 500;
-  overflow-wrap: anywhere;
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
 }
 
 .itemMark {
   color: var(--muted);
   font-size: var(--fs-xs);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
-.itemSnippet,
-.itemFacts {
+.itemSnippet {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -117,22 +142,29 @@
   overflow-wrap: anywhere;
 }
 
+/* Сведения о компании — по строке на сведение, остальное числом («и ещё 3 сведения»). */
 .itemFacts {
-  -webkit-line-clamp: 1;
-  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* строки одного блока — теснее, чем блоки карточки */
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
 }
 
-.more {
-  margin-top: var(--sp-3);
+.itemFact {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.muted {
-  margin: 0;
+.itemMore {
   color: var(--muted);
-  font-size: var(--fs-md);
 }
 
-@media (min-width: 900px) {
+@media (min-width: 900px) and (min-height: 600px) {
   /* Страница ровно в окно: колонки занимают остаток высоты и прокручиваются сами. */
   .layout {
     /* 320–400px: в карточку помещаются дата, канал и две строки текста без переносов слов. */
@@ -145,11 +177,13 @@
 
   .list,
   .detailOpen .list {
-    display: block;
+    display: flex;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-right: var(--sp-1); /* место под полосу прокрутки, чтобы она не легла на карточки */
+    /* Место под полосу прокрутки и под контур фокуса у края карточек. */
+    padding: var(--sp-1);
+    margin: calc(var(--sp-1) * -1);
   }
 
   .detail,
@@ -159,9 +193,4 @@
     /* Прокручивается текст поста, а шапка с каналом и датой стоит на месте (TelegramPost). */
     overflow: hidden;
   }
-}
-
-/* Фокус переводится на панель программно (телефон): рамку от этого не рисуем. */
-.detail:focus {
-  outline: none;
 }

@@ -13,49 +13,73 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
   overflow-wrap: anywhere;
-  /* Пузырь не перехватывает указатель: иначе наведение на него самого
-     считалось бы уходом с триггера и он мигал бы. */
-  pointer-events: none;
-  animation: hintIn var(--t-fast) var(--ease);
+  animation: global(fade-in) var(--dur-fast) var(--ease-out);
 }
 
-@keyframes hintIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Значок «?» рядом с подписью. */
+/* Значок «?» рядом с подписью. Кружок 18px, а цель нажатия — 44px: прозрачные поля
+   вокруг значка съедаются отрицательными отступами, строка по высоте не растёт. */
 .mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-inline-start: var(--sp-1);
+  --mark: 18px;
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin-block: calc((var(--mark) - var(--tap-min)) / 2);
+  margin-inline: calc((var(--mark) - var(--tap-min)) / 2 + var(--sp-1)) calc((var(--mark) - var(--tap-min)) / 2);
   padding: 0;
-  border: 1px solid var(--border-strong);
+  border: none;
   border-radius: var(--radius-full);
-  background: var(--surface-2);
+  background: none;
   color: var(--muted);
   font-size: var(--fs-xs);
   line-height: 1;
   vertical-align: middle;
 }
 
-.mark:hover {
-  border-color: var(--accent-border);
+.markDot {
+  display: inline-grid;
+  place-items: center;
+  width: var(--mark);
+  height: var(--mark);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .mark:hover .markDot {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+
+/* Контур — вокруг кружка, а не вокруг невидимой 44px-цели; значок заодно окрашивается. */
+.mark:focus-visible {
+  outline: none;
   color: var(--accent);
 }
 
-/* Значение с пояснением: точечное подчёркивание — видимый признак,
-   что подсказка есть. Без него «подсказки по наведению» не существует. */
+.mark:focus-visible .markDot {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Термин с пояснением: точечное подчёркивание — видимый признак, что подсказка есть.
+   Это кнопка (её можно нажать и сфокусировать), но выглядит как текст строки. */
 .term {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
-  text-decoration-color: var(--border-strong);
+  text-decoration-color: var(--border-control);
   cursor: help;
 }

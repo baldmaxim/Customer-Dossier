@@ -1,19 +1,19 @@
+// Контекст объекта для участия компании: её роли на объекте и события объекта с пересечением
+// периодов. Событие объекта — контекст участия, а не вина компании: вывода здесь нет.
+
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IProjectContext } from '../api/types';
-import {
-  ASSERTION_ROLE_LABELS,
-  CONTEXT_STATE_LABELS,
-  EVENT_LABELS,
-  MODALITY_LABELS,
-  OVERLAP_LABELS,
-  PRECISION_LABELS,
-  REVIEW_LEVEL_LABELS,
-  formatDate,
-} from '../lib/labels';
-import styles from './CompanySignals.module.css';
+import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, EVENT_LABELS, MODALITY_LABELS, OVERLAP_LABELS, REVIEW_LEVEL_LABELS, formatDate } from '../lib/labels';
+import { describeLoadError } from '../lib/loadError';
+import { formatPeriod } from '../lib/period';
+import { Button } from './ui/Button';
+import { Callout } from './ui/Callout';
+import { Heading } from './ui/Heading';
+import { Loading } from './ui/Loading';
+import styles from './ProjectContextPanel.module.css';
 
 interface IProjectContextPanelProps {
   companyId: number;
@@ -21,65 +21,75 @@ interface IProjectContextPanelProps {
   projectName: string;
 }
 
-const period = (from: string | null, to: string | null, precision: string): string => {
-  if (!from && !to) return 'период неизвестен';
-  const text = `${from ? `с ${formatDate(from)}` : ''}${to ? ` по ${formatDate(to)}` : ''}`.trim();
-  return precision !== 'day' ? `${text} (${PRECISION_LABELS[precision] ?? precision})` : text;
-};
+const periodText = (from: string | null, to: string | null, precision: string): string => formatPeriod(from, to, precision) || 'период неизвестен';
 
-/** Контекст объекта: участие компании и события объекта с пересечением периодов — без вывода о вине. */
 export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, projectId, projectName }) => {
   const contextQuery = useQuery({
     queryKey: ['company', companyId, 'context', projectId],
     queryFn: () => api.get<IProjectContext>(`/api/companies/${companyId}/context?projectId=${projectId}`),
   });
-  if (contextQuery.isLoading) return <p className={styles.muted}>Загрузка контекста…</p>;
-  if (contextQuery.isError || !contextQuery.data) return <p className={styles.muted}>Контекст недоступен.</p>;
+  if (contextQuery.isLoading) return <Loading label="Загружаю контекст объекта…" />;
+  if (contextQuery.isError || !contextQuery.data) {
+    return (
+      <Callout
+        tone="danger"
+        title="Контекст объекта не загрузился"
+        action={
+          <Button size="sm" onClick={() => void contextQuery.refetch()}>
+            Повторить
+          </Button>
+        }
+      >
+        {describeLoadError(contextQuery.error)}
+      </Callout>
+    );
+  }
   const ctx = contextQuery.data;
 
   return (
     <div className={styles.context}>
-      <h4 className={styles.contextTitle}>
-        Контекст объекта «{projectName}» на {formatDate(ctx.cutoff)}
-      </h4>
+      <Heading className={styles.title}>
+        Объект «{projectName}» на {formatDate(ctx.cutoff)}
+      </Heading>
       {ctx.currentState.length > 0 && (
-        <p className={styles.muted}>
-          Состояние по действительной дате:{' '}
+        <p className={styles.line}>
+          Состояние (по дате события):{' '}
           {ctx.currentState
-            .map(s => `${s.building ? `${s.building}: ` : ''}${CONTEXT_STATE_LABELS[s.state] ?? s.state} с ${formatDate(s.validFrom)}`)
+            .map(s => `${s.building ? `${s.building}: ` : ''}${CONTEXT_STATE_LABELS[s.state] ?? 'состояние не названо'} с ${formatDate(s.validFrom)}`)
             .join('; ')}
         </p>
       )}
-      <ul className={styles.list}>
-        {ctx.participations.map(p => (
-          <li key={p.assertionId}>
-            {p.polarity === 'negative' ? 'не ' : ''}
-            {ASSERTION_ROLE_LABELS[p.role ?? ''] ?? p.role}
-            {p.building && `, ${p.building}`}
-            {p.workPackage && `, ${p.workPackage}`} — {period(p.validFrom, p.validTo, p.periodPrecision)}
-            <span className={styles.meta}>
-              {' '}
-              · {MODALITY_LABELS[p.modality] ?? p.modality} · {REVIEW_LEVEL_LABELS[p.review]}
-              {!p.counted && ' · не учитывается как участие'}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {ctx.participations.length > 0 && (
+        <ul className={styles.list}>
+          {ctx.participations.map(p => (
+            <li key={p.assertionId}>
+              {p.polarity === 'negative' ? 'не ' : ''}
+              {ASSERTION_ROLE_LABELS[p.role ?? ''] ?? 'роль не названа'}
+              {p.building && `, ${p.building}`}
+              {p.workPackage && `, ${p.workPackage}`} — {periodText(p.validFrom, p.validTo, p.periodPrecision)}
+              <span className={styles.meta}>
+                {' · '}
+                {MODALITY_LABELS[p.modality] ?? MODALITY_LABELS.unknown} · {REVIEW_LEVEL_LABELS[p.review] ?? ''}
+                {!p.counted && ' · не учитывается как участие'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {ctx.projectEvents.length === 0 ? (
-        <p className={styles.muted}>Событий объекта в собранной выборке не найдено.</p>
+        <p className={styles.line}>Событий объекта в собранных публикациях не найдено.</p>
       ) : (
         <ul className={styles.list}>
           {ctx.projectEvents.map(e => (
             <li key={e.assertionId}>
-              По сообщению источника: {EVENT_LABELS[e.type ?? ''] ?? e.type}
-              {e.building && `, ${e.building}`} — {period(e.validFrom, e.validTo, e.periodPrecision)}
+              По сообщению источника: {EVENT_LABELS[e.type ?? ''] ?? EVENT_LABELS.other}
+              {e.building && `, ${e.building}`} — {periodText(e.validFrom, e.validTo, e.periodPrecision)}
               <span className={styles.meta}>
-                {' '}
-                · {OVERLAP_LABELS[e.overlap]}
+                {' · '}
+                {OVERLAP_LABELS[e.overlap] ?? ''}
                 {e.sameBuilding === false && ' · другой корпус'}
                 {e.sameBuilding === true && ' · тот же корпус'}
-                {e.namesCompany ? ' · компания названа в сообщении' : ' · компания в сообщении не названа'} ·{' '}
-                {REVIEW_LEVEL_LABELS[e.review]}
+                {e.namesCompany ? ' · компания названа в сообщении' : ' · компания в сообщении не названа'} · {REVIEW_LEVEL_LABELS[e.review] ?? ''}
               </span>
             </li>
           ))}

@@ -5,18 +5,20 @@ import { FC } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { api } from '../../../api/client';
-import type { IAuthEventRow, UserRole } from '../../../api/types';
-import {
-  AUTH_ACTOR_LABELS,
-  AUTH_EVENT_LABELS,
-  LOGIN_FAILURE_LABELS,
-  USER_ROLE_LABELS,
-  formatDateTime,
-} from '../../../lib/labels';
+import type { IAuthEventRow } from '../../../api/types';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { AUTH_ACTOR_LABELS, AUTH_EVENT_LABELS, formatDateTime } from '../../../lib/labels';
 import { describeLoadError } from '../../../lib/loadError';
+import { MQ } from '../../../lib/media';
 import { Button } from '../../ui/Button';
-import { EmptyState } from '../../ui/Section';
+import { Callout } from '../../ui/Callout';
+import { CardList } from '../../ui/CardList';
+import { CardListItem } from '../../ui/CardListItem';
+import { EmptyState } from '../../ui/EmptyState';
+import { Loading } from '../../ui/Loading';
+import { Stack } from '../../ui/Stack';
 import { TableScroll } from '../../ui/TableScroll';
+import { describeEventDetails } from './describeEventDetails';
 import styles from './Users.module.css';
 
 interface IPage {
@@ -24,71 +26,79 @@ interface IPage {
   nextBefore: number | null;
 }
 
-const isRole = (v: unknown): v is UserRole => v === 'admin' || v === 'operator' || v === 'viewer';
-
-/** Подробности события словами: причина отказа, смена роли, сколько входов закрыто. */
-export const describeEventDetails = (e: IAuthEventRow): string => {
-  const d = e.details;
-  const parts: string[] = [];
-  if (typeof d.reason === 'string') parts.push(LOGIN_FAILURE_LABELS[d.reason] ?? 'другая причина');
-  if (d.locked === true) parts.push('вход закрыт на время');
-  const role = d.role as { from?: unknown; to?: unknown } | string | undefined;
-  if (typeof role === 'object' && role !== null && isRole(role.from) && isRole(role.to)) {
-    parts.push(`роль: ${USER_ROLE_LABELS[role.from]} → ${USER_ROLE_LABELS[role.to]}`);
-  } else if (isRole(role)) {
-    parts.push(`роль: ${USER_ROLE_LABELS[role]}`);
-  }
-  if (d.displayName === true) parts.push('имя изменено');
-  if (typeof d.revokedSessions === 'number' && d.revokedSessions > 0) parts.push(`закрыто входов: ${d.revokedSessions}`);
-  return parts.join(' · ');
-};
-
 export const AuthEventLog: FC = () => {
+  const wide = useMediaQuery(MQ.sm);
   const eventsQuery = useInfiniteQuery({
     queryKey: ['auth-events'],
-    queryFn: ({ pageParam }) => api.get<IPage>(`/api/users/events?limit=50${pageParam === null ? '' : `&before=${pageParam}`}`),
+    // По 20: журнал — справка, а не главное на экране; дальше — «Показать ещё».
+    queryFn: ({ pageParam }) => api.get<IPage>(`/api/users/events?limit=20${pageParam === null ? '' : `&before=${pageParam}`}`),
     initialPageParam: null as number | null,
     getNextPageParam: last => last.nextBefore,
   });
 
-  if (eventsQuery.isError) return <p role="alert">{describeLoadError(eventsQuery.error)}</p>;
+  if (eventsQuery.isLoading) return <Loading label="Загружаю журнал входа…" />;
+  if (eventsQuery.isError) {
+    return (
+      <Callout tone="danger" title="Журнал не загрузился" action={<Button onClick={() => void eventsQuery.refetch()}>Повторить</Button>}>
+        {describeLoadError(eventsQuery.error)}
+      </Callout>
+    );
+  }
   const items = eventsQuery.data?.pages.flatMap(p => p.items) ?? [];
-  if (eventsQuery.isSuccess && items.length === 0) return <EmptyState>Событий пока нет.</EmptyState>;
+  if (items.length === 0) return <EmptyState size="sm">Событий пока нет.</EmptyState>;
+
+  const what = (e: IAuthEventRow): string => AUTH_EVENT_LABELS[e.event] ?? 'другое событие';
+  const actor = (e: IAuthEventRow): string => AUTH_ACTOR_LABELS[e.actor] ?? e.actor;
 
   return (
-    <>
-      <TableScroll minWidth={720}>
-        <thead>
-          <tr>
-            <th>Когда</th>
-            <th>Что</th>
-            <th>Кто</th>
-            <th>Кем</th>
-            <th>Адрес</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(e => (
-            <tr key={e.id}>
-              <td className={styles.nowrap}>{formatDateTime(e.at)}</td>
-              <td>
-                {AUTH_EVENT_LABELS[e.event] ?? 'другое событие'}
-                {describeEventDetails(e) && <span className={styles.eventDetails}>{describeEventDetails(e)}</span>}
-              </td>
-              <td>{e.userLogin ?? '—'}</td>
-              <td>{AUTH_ACTOR_LABELS[e.actor] ?? e.actor}</td>
-              <td className={styles.mono}>{e.ip ?? '—'}</td>
+    <Stack gap={3}>
+      {wide ? (
+        <TableScroll label="Журнал входа" minWidth={720}>
+          <thead>
+            <tr>
+              <th>Когда</th>
+              <th>Что</th>
+              <th>Кто</th>
+              <th>Кем</th>
+              <th>Адрес</th>
             </tr>
+          </thead>
+          <tbody>
+            {items.map(e => (
+              <tr key={e.id}>
+                <td className="nowrap">{formatDateTime(e.at)}</td>
+                <td>
+                  {what(e)}
+                  {describeEventDetails(e) && <span className={styles.meta}>{describeEventDetails(e)}</span>}
+                </td>
+                <td className={styles.breakable}>{e.userLogin ?? '—'}</td>
+                <td>{actor(e)}</td>
+                <td className={`${styles.mono} ${styles.breakable}`}>{e.ip ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </TableScroll>
+      ) : (
+        <CardList label="Журнал входа">
+          {items.map(e => (
+            <CardListItem
+              key={e.id}
+              title={what(e)}
+              meta={[e.userLogin ?? '—', actor(e) !== '—' ? `кем: ${actor(e)}` : null, e.ip].filter(Boolean).join(' · ')}
+              aside={formatDateTime(e.at)}
+            >
+              {describeEventDetails(e) && <span className={styles.meta}>{describeEventDetails(e)}</span>}
+            </CardListItem>
           ))}
-        </tbody>
-      </TableScroll>
+        </CardList>
+      )}
       {eventsQuery.hasNextPage && (
-        <div className={styles.more}>
-          <Button disabled={eventsQuery.isFetchingNextPage} onClick={() => void eventsQuery.fetchNextPage()}>
+        <div>
+          <Button loading={eventsQuery.isFetchingNextPage} onClick={() => void eventsQuery.fetchNextPage()}>
             Показать ещё
           </Button>
         </div>
       )}
-    </>
+    </Stack>
   );
 };

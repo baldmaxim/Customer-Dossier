@@ -1,0 +1,39 @@
+.mono {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere; /* отпечаток — 64 знака без пробелов */
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.warn {
+  color: var(--warning);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.subhead {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding-left: var(--sp-5);
+  font-size: var(--fs-md);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* строки одной части — одна запись */
+  min-width: 0;
+}

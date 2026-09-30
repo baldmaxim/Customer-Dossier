@@ -1,91 +1,149 @@
-// «С кем работает»: контрагенты компании с основанием связи.
+// «С кем связана»: контрагенты компании с видом связи и цитатой-основанием.
 //
-// Совместное участие показывается у объектов: оно не доказывает отношения фирм.
+// Договор, корпоративная связь и совместное участие на объекте — разные вещи: две фирмы на
+// одном объекте могут не иметь отношений между собой. Сервер отдаёт первые 12 контрагентов —
+// если их ровно столько, список честно называет себя неполным и ведёт в «Связи».
 
-import { FC, useState } from 'react';
+import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { IPartnerLink, IPartnerRow } from '../api/types';
+import { formatCount } from '../lib/format';
 import { ASSERTION_ROLE_LABELS, PARTNER_KIND_HINTS, PARTNER_KIND_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
-import { Badge } from './ui/Badge';
-import { EmptyState, Section } from './ui/Section';
 import { AssertionDetail } from './AssertionDetail';
+import { LazyDisclosure } from './company/LazyDisclosure';
+import { LoadingSkeleton } from './LoadingSkeleton';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { ButtonLink } from './ui/ButtonLink';
+import { Callout } from './ui/Callout';
+import { EmptyState } from './ui/EmptyState';
+import { Section } from './ui/Section';
 import styles from './CompanyPartners.module.css';
 
-const roleText = (role: string | null): string | null => (role ? (ASSERTION_ROLE_LABELS[role] ?? role) : null);
-
-const linkText = (link: IPartnerLink): string => {
-  const role = roleText(link.role);
-  const own = roleText(link.ownRole);
-  return role ?? own ?? 'вид связи не назван';
-};
+/** Сколько контрагентов просим у сервера: ровно столько вернулось — значит, список усечён. */
+const PARTNERS_LIMIT = 12;
+/** Связей одного контрагента на обзоре; остальные — числом. */
+const LINKS_SHOWN = 4;
 
 const KIND_ORDER: Record<string, number> = { contract: 0, corporate: 1 };
 
+const linkText = (link: IPartnerLink): string => {
+  const role = link.role ? (ASSERTION_ROLE_LABELS[link.role] ?? link.role) : null;
+  const own = link.ownRole ? (ASSERTION_ROLE_LABELS[link.ownRole] ?? link.ownRole) : null;
+  return role ?? own ?? 'вид связи не назван';
+};
+
+const linkKey = (partnerId: number, link: IPartnerLink, i: number): string =>
+  `${partnerId}-${link.kind}-${link.assertionId ?? `n${i}`}-${link.projectId ?? 0}`;
+
 export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
-  const [openAssertion, setOpenAssertion] = useState<number | null>(null);
   const partners = useQuery({
     queryKey: ['company', companyId, 'partners'],
-    queryFn: () => api.get<{ items: IPartnerRow[] }>(`/api/companies/${companyId}/partners?limit=12`),
+    queryFn: () => api.get<{ items: IPartnerRow[] }>(`/api/companies/${companyId}/partners?limit=${PARTNERS_LIMIT}`),
   });
-
   const items = partners.data?.items ?? [];
+  const truncated = items.length >= PARTNERS_LIMIT;
+  // Виды связей, которые есть в показанных строках, — в пояснение под списком.
+  const kinds = [...new Set(items.flatMap(p => p.links.slice(0, LINKS_SHOWN).map(l => l.kind)))]
+    .filter(kind => PARTNER_KIND_HINTS[kind])
+    .sort((a, b) => (KIND_ORDER[a] ?? 9) - (KIND_ORDER[b] ?? 9));
 
   return (
-    <Section title="С кем связан" note="договоры и корпоративные связи из публикаций">
-      {partners.isError && <p role="alert">{describeLoadError(partners.error)}</p>}
-      {partners.isLoading && <p className={styles.muted}>Загрузка…</p>}
+    <Section title="С кем связана" note={truncated ? `первые ${formatCount(PARTNERS_LIMIT)}` : undefined}>
+      {partners.isLoading && (
+        <LoadingSkeleton label="Загружаю контрагентов…" lines={4} height="40px" />
+      )}
+      {partners.isError && (
+        <Callout
+          tone="danger"
+          title="Контрагенты не загрузились"
+          action={
+            <Button size="sm" onClick={() => void partners.refetch()}>
+              Повторить
+            </Button>
+          }
+        >
+          {describeLoadError(partners.error)}
+        </Callout>
+      )}
       {partners.isSuccess && items.length === 0 && (
-        <EmptyState>
-          Прямых связей с организациями в выборке нет. Участников тех же объектов смотрите в списке объектов.
+        <EmptyState size="sm">
+          Договоров и корпоративных связей не найдено. Кто работал на тех же объектах — на странице объекта.
         </EmptyState>
       )}
 
-      <ul className={styles.list}>
-        {items.map(partner => {
-          const links = [...partner.links].sort(
-            (a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9),
-          );
-          return (
-            <li key={partner.companyId} className={styles.item}>
-              <div className={styles.head}>
-                <Link className={styles.name} to={`/company/${partner.companyId}`}>
-                  {partner.name}
-                </Link>
-                {partner.city && <span className={styles.city}>{partner.city}</span>}
-              </div>
-              <ul className={styles.links}>
-                {links.slice(0, 4).map((link, i) => (
-                  <li key={`${link.kind}-${link.assertionId ?? i}-${link.projectId ?? 0}`} className={styles.link}>
-                    <Badge tone="accent" hint={PARTNER_KIND_HINTS[link.kind]}>
-                      {PARTNER_KIND_LABELS[link.kind] ?? link.kind}
-                    </Badge>
-                    <span className={styles.linkText}>{linkText(link)}</span>
-                    {/* Объект подписан словом: ссылкой того же вида, что имя контрагента, он читался как ещё одна компания. */}
-                    {link.projectId !== null && link.projectName && (
-                      <span className={styles.project}>
-                        объект <Link to={`/projects/${link.projectId}`}>«{link.projectName}»</Link>
-                      </span>
-                    )}
-                    {link.assertionId !== null && (
-                      <button type="button" className={styles.evidence} onClick={() => setOpenAssertion(openAssertion === link.assertionId ? null : link.assertionId)}>
-                        {openAssertion === link.assertionId ? 'Скрыть основание' : 'Проверить основание'}
-                      </button>
-                    )}
-                    {link.assertionId !== null && openAssertion === link.assertionId && <AssertionDetail assertionId={link.assertionId} />}
-                  </li>
-                ))}
-                {links.length > 4 && <li className={styles.more}>и ещё связей: {links.length - 4}</li>}
-              </ul>
-            </li>
-          );
-        })}
-      </ul>
+      {items.length > 0 && (
+        <ul className={styles.list}>
+          {items.map(partner => {
+            const links = [...partner.links].sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9));
+            return (
+              <li key={partner.companyId} className={styles.item}>
+                <div className={styles.head}>
+                  <Link className={styles.name} to={`/company/${partner.companyId}`} viewTransition>
+                    {partner.name}
+                  </Link>
+                  {partner.city && <span className={styles.city}>{partner.city}</span>}
+                </div>
+                <ul className={styles.links}>
+                  {links.slice(0, LINKS_SHOWN).map((link, i) => {
+                    const key = linkKey(partner.companyId, link, i);
+                    return (
+                      <li key={key} className={styles.link}>
+                        <span className={styles.linkLine}>
+                          {/* Ярлык без подсказки-кнопки: пояснение видам связи — одно, под списком
+                              (у каждой связи своя кнопка «?» давала лишние остановки Tab и мелкие цели). */}
+                          <Badge tone="accent">{PARTNER_KIND_LABELS[link.kind] ?? 'связь'}</Badge>
+                          <span className={styles.linkText}>{linkText(link)}</span>
+                          {/* Объект подписан словом: ссылкой того же вида, что имя контрагента, он читался как ещё одна компания. */}
+                          {link.projectId !== null && link.projectName && (
+                            <span className={styles.project}>
+                              объект{' '}
+                              <Link className={styles.projectLink} to={`/projects/${link.projectId}`} viewTransition>
+                                «{link.projectName}»
+                              </Link>
+                            </span>
+                          )}
+                        </span>
+                        {/* Цитата грузится только при раскрытии, а не для всех связей сразу. */}
+                        {link.assertionId !== null && (
+                          <LazyDisclosure summary="Откуда известно">
+                            <AssertionDetail assertionId={link.assertionId} showSummary={false} />
+                          </LazyDisclosure>
+                        )}
+                      </li>
+                    );
+                  })}
+                  {links.length > LINKS_SHOWN && (
+                    <li className={styles.more}>и ещё связей: {formatCount(links.length - LINKS_SHOWN)}</li>
+                  )}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-      {items.length > 0 && <p className={styles.note}>Связи приведены по сообщениям источников. Основание каждой связи можно открыть и проверить.</p>}
+      {truncated && (
+        <p className={styles.note}>
+          Показаны первые {formatCount(PARTNERS_LIMIT)} контрагентов.{' '}
+          <ButtonLink to={`/links?company=${companyId}`} variant="link" size="sm">
+            Все связи — в «Связях»
+          </ButtonLink>
+        </p>
+      )}
+      {kinds.length > 0 && (
+        <ul className={styles.legend} aria-label="Виды связей">
+          {kinds.map(kind => (
+            <li key={kind}>
+              <span className={styles.legendTerm}>{PARTNER_KIND_LABELS[kind] ?? 'связь'}</span> — {PARTNER_KIND_HINTS[kind]}.
+            </li>
+          ))}
+        </ul>
+      )}
     </Section>
   );
 };

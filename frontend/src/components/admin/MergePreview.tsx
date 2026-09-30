@@ -1,0 +1,129 @@
+// Сравнение двух карточек перед объединением: что с чем объединится, что переедет, что мешает.
+// Объединяется ровно то, что сравнили: сервер примет только токен этого сравнения, а если
+// карточки успели измениться — откажет, и сравнение обновится.
+
+import { FC, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { ApiError, api } from '../../api/client';
+import type { IMergePreview, IPendingMerge } from '../../api/types';
+import { newKey } from '../../lib/idempotency';
+import { MERGE_COUNT_LABELS } from '../../lib/labels';
+import { describeLoadError } from '../../lib/loadError';
+import { formatCount } from '../../lib/format';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
+import { useConfirm } from '../ui/confirm';
+import { Loading } from '../ui/Loading';
+import { Stack } from '../ui/Stack';
+import { useToast } from '../ui/toast';
+import { MergeEntityCard } from './MergeEntityCard';
+import styles from './Merge.module.css';
+
+interface IMergePreviewProps {
+  pair: IPendingMerge;
+  onDone: () => void;
+}
+
+const failureText = (err: unknown): string => {
+  if (err instanceof ApiError && (err.code === 'version_conflict' || err.code === 'merge_preview_stale')) {
+    return 'Данные изменились после сравнения — оно обновлено. Проверьте ещё раз.';
+  }
+  if (err instanceof ApiError && err.code === 'blocked') {
+    return 'Объединение сейчас выключено в настройках сервера: сравнить можно, объединить нельзя.';
+  }
+  return err instanceof ApiError && err.status < 500 ? err.message : describeLoadError(err);
+};
+
+export const MergePreview: FC<IMergePreviewProps> = ({ pair, onDone }) => {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
+  // Один ключ на открытое сравнение: повторное нажатие не объединяет дважды.
+  const [key] = useState(() => newKey('merge'));
+  const [error, setError] = useState<string | null>(null);
+
+  const previewQuery = useQuery({
+    queryKey: ['merge-preview', pair.id],
+    queryFn: () => api.get<IMergePreview>(`/api/admin/merges/${pair.id}/preview`),
+    // Сравнение не подменяется молча фоновым обновлением: объединяется ровно то, что видели.
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+
+  const apply = useMutation({
+    mutationFn: (preview: IMergePreview) =>
+      api.post<{ mergeId: number; replayed: boolean }>(`/api/admin/merges/${pair.id}/merge`, {
+        expectedSourceVersion: preview.source.version,
+        expectedTargetVersion: preview.target.version,
+        idempotencyKey: key,
+        expectedPreviewToken: preview.previewToken,
+      }),
+    onSuccess: result => {
+      void queryClient.invalidateQueries({ queryKey: ['merges'] });
+      void queryClient.invalidateQueries({ queryKey: ['merge-history'] });
+      toast.show({
+        tone: 'success',
+        text: result.replayed ? 'Эти карточки уже объединены.' : 'Карточки объединены. Отменить можно в «Истории объединений» ниже.',
+      });
+      onDone();
+    },
+    onError: (err: Error) => {
+      setError(failureText(err));
+      if (err instanceof ApiError && (err.code === 'version_conflict' || err.code === 'merge_preview_stale')) void previewQuery.refetch();
+    },
+  });
+
+  if (previewQuery.isLoading) return <Loading label="Сравниваю карточки…" />;
+  if (previewQuery.isError || !previewQuery.data) {
+    return (
+      <Callout tone="danger" title="Сравнить не удалось" action={<Button onClick={() => void previewQuery.refetch()}>Повторить</Button>}>
+        {describeLoadError(previewQuery.error)}
+      </Callout>
+    );
+  }
+  const preview = previewQuery.data;
+  const counts = Object.entries(preview.counts).filter(([, v]) => v > 0);
+
+  const ask = async (): Promise<void> => {
+    const ok = await confirm({
+      title: 'Объединить карточки?',
+      body: `«${preview.source.name}» войдёт в «${preview.target.name}». Объединить легко, разделить почти невозможно: отменить можно, только пока у карточек не появилось новых связей.`,
+      confirmLabel: 'Объединить',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setError(null);
+    apply.mutate(preview);
+  };
+
+  return (
+    <Stack gap={3} className={styles.preview}>
+      <div className={styles.entities}>
+        <MergeEntityCard role="Эта карточка" entity={preview.source} kind={preview.kind} />
+        <MergeEntityCard role="войдёт в" entity={preview.target} kind={preview.kind} />
+      </div>
+      {counts.length > 0 && (
+        <p className={styles.muted}>
+          Переедет: {counts.map(([k, v]) => `${formatCount(v)} ${MERGE_COUNT_LABELS[k] ?? 'записей'}`).join(', ')}.
+        </p>
+      )}
+      {preview.conflicts.map(c => (
+        <p key={`${c.code}-${c.message}`} className={styles.conflict}>
+          Нельзя: {c.message}
+        </p>
+      ))}
+      {preview.warnings.map(w => (
+        <p key={w} className={styles.warn}>
+          {w}
+        </p>
+      ))}
+      {error && <Callout tone="danger">{error}</Callout>}
+      <div>
+        <Button variant="primary" disabled={!preview.canApply} loading={apply.isPending} onClick={() => void ask()}>
+          Объединить
+        </Button>
+      </div>
+    </Stack>
+  );
+};

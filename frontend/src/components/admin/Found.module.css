@@ -1,0 +1,37 @@
+/* Найденное в тексте: вид сведения, стороны, цитаты — на странице разбора (RunCandidates) и в панели «Что попало в карточки» (CandidateSetPanel). */
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.kind {
+  font-weight: var(--fw-semibold);
+}
+
+.quote {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--border-strong); /* полоса цитаты: тоньше теряется, толще спорит с текстом */
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-2);
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}

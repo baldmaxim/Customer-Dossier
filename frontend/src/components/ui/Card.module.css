@@ -1,0 +1,61 @@
+.card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.pad-none {
+  padding: 0;
+}
+
+.pad-sm {
+  padding: var(--sp-3);
+}
+
+.pad-md {
+  padding: var(--sp-4);
+}
+
+.pad-lg {
+  padding: var(--sp-5);
+}
+
+.muted {
+  background: var(--surface-2);
+}
+
+.accent {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.elevated {
+  box-shadow: var(--shadow);
+}
+
+.interactive {
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.interactive:active {
+  transform: scale(0.985);
+}
+
+@media (hover: hover) {
+  .interactive:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow);
+  }
+}
+
+/* Выбранная: рамка акцента и полоса слева — различимо и без цвета фона. */
+.selected {
+  border-color: var(--accent-border);
+  background: var(--selected-bg);
+  box-shadow: inset 3px 0 0 var(--selected-indicator);
+}

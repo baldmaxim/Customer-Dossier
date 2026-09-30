@@ -1,15 +1,31 @@
-/* Публикация в духе Telegram: шапка канала, «чат» с пузырём, кнопка открыть оригинал. */
+/* Публикация в духе Telegram: шапка канала, «чат» с пузырём. */
 
 .post {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* В читалке панель ограничена по высоте: шапка стоит, прокручивается .chat. */
-  height: 100%;
   background: var(--surface);
+}
+
+/* Отдельной карточкой. В читалке панель ограничена по высоте: шапка стоит, прокручивается .chat. */
+.card {
+  height: 100%;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   overflow: hidden;
+}
+
+/* Внутри диалога: рамку и прокрутку даёт сам диалог. */
+.plain {
+  border: none;
+}
+
+/* Заголовок поста для глаз скрыт; когда на нём фокус (пост открыт вместо списка),
+   контур рисуется вокруг всего поста — иначе фокус был бы невидим. */
+.post:has([data-post-heading]:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
 }
 
 .head {
@@ -22,67 +38,61 @@
   border-bottom: 1px solid var(--border);
 }
 
-.close {
+/* «К списку» — отдельной строкой над каналом: это возврат, а не часть шапки поста.
+   Два класса: правило должно перебить выравнивание по центру у самой кнопки. */
+.head .close {
   flex-basis: 100%;
-  min-height: var(--ctl-h);
-  margin-left: calc(var(--sp-2) * -1);
-  padding: 0 var(--sp-2);
-  border: none;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  font-size: var(--fs-md);
-  text-align: left;
-  cursor: pointer;
+  justify-content: flex-start;
+  margin-inline-start: calc(var(--sp-2) * -1);
 }
 
+/* 16rem — порог, ниже которого дата уходит строкой ниже: иначе на телефоне длинное имя канала
+   сжималось в узкий столбец в четыре строки рядом с датой. */
 .channel {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  flex: 1 1 auto;
+  flex: 1 1 16rem;
   min-width: 0;
 }
 
 /* Аватар канала — первая буква имени: картинок каналов портал не хранит.
    32px — как аватар в списке чатов Telegram: крупнее съедает высоту шапки. */
 .avatar {
-  display: inline-flex;
+  display: inline-grid;
+  place-items: center;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: 32px;
   height: 32px;
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 600;
   font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
 }
 
-/* Шапка канала — ссылка на оригинал: вся зона кликабельна, стрелка ↗ говорит, что уходим наружу. */
+/* Шапка канала — ссылка на оригинал: вся зона кликабельна, значок говорит, что уходим наружу. */
 .channelLink {
+  min-height: var(--tap-min);
   margin: calc(var(--sp-1) * -1) calc(var(--sp-2) * -1);
   padding: var(--sp-1) var(--sp-2);
   border-radius: var(--radius-sm);
   color: var(--text);
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 
 @media (hover: hover) {
   .channelLink:hover {
     background: var(--surface-2);
+    color: var(--text);
+    text-decoration: none;
   }
 
   .channelLink:hover .channelName {
     color: var(--accent);
   }
-}
-
-.channelLink:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .channelText {
@@ -92,13 +102,20 @@
 }
 
 .channelName {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
   overflow-wrap: anywhere;
+}
+
+.external {
+  color: var(--muted);
+  vertical-align: -2px; /* значок по средней линии строки текста */
 }
 
 .channelMeta {
   color: var(--muted);
   font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
 }
 
 /* Дата — крупно: в ленте новостей это первое, что ищут глазами. */
@@ -107,35 +124,46 @@
   align-items: baseline;
   gap: var(--sp-2);
   font-size: var(--fs-base);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
 
 .time {
   color: var(--muted);
   font-size: var(--fs-md);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 /* Фон «чата»: пузырь читается как сообщение, а не как карточка отчёта. */
 .chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--sp-3);
-  background: var(--surface-2);
+  background: var(--bg);
 }
 
+.chat:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.plain .chat {
+  overflow: visible;
+}
+
+/* Пузырь светлее фона чата в обеих темах: глубина не перевёрнута. */
 .bubble {
   position: relative;
   width: 100%;
-  max-width: 76ch;
+  max-width: var(--prose);
   margin-inline: auto;
   padding: var(--sp-2) var(--sp-3) var(--sp-5);
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
-  /* Рамка, а не только тень: в тёмной теме пузырь темнее фона чата, и тень там не видна. */
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -144,7 +172,7 @@
   margin: calc(var(--sp-2) * -1) calc(var(--sp-3) * -1) var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: var(--surface-3);
+  background: var(--surface-2);
   color: var(--muted);
   font-size: var(--fs-sm);
   text-align: center;
@@ -152,16 +180,12 @@
 
 .title {
   margin: 0 0 var(--sp-2);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .text {
-  margin: 0;
   font-size: var(--fs-base);
   line-height: var(--lh-text);
-  /* Переносы строк поста сохраняются, длинные ссылки не распирают пузырь на 360px. */
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .stamp {

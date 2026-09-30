@@ -1,0 +1,64 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  text-align: center;
+  animation: global(fade-in) var(--dur-base) var(--ease-out);
+}
+
+.sm {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  text-align: left;
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px; /* кружок под иконку 20px: ×2 — читается как значок, а не как точка */
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--faint);
+}
+
+.sm .icon {
+  width: auto;
+  height: auto;
+  background: none;
+  padding-top: 2px; /* иконка по первой строке текста */
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: var(--sp-1);
+  min-width: 0;
+  max-width: var(--prose);
+}
+
+.title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.text {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+}
+
+.action {
+  margin-top: var(--sp-2);
+}

@@ -1,0 +1,189 @@
+.dialog {
+  --dialog-w: 560px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+}
+
+.dialog[data-size='sm'] {
+  --dialog-w: 400px;
+}
+
+.dialog[data-size='lg'] {
+  --dialog-w: 760px;
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+  animation: global(fade-in) var(--dur-base) var(--ease-out);
+}
+
+.dialog[data-closing]::backdrop {
+  animation: global(fade-out) var(--dur-exit) var(--ease-in) both;
+}
+
+.dialog:focus-visible {
+  outline: none;
+}
+
+/* Лист снизу: телефон (auto) или всегда (sheet). Mobile-first — это база. */
+.dialog[data-variant='sheet'],
+.dialog[data-variant='auto'] {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - var(--safe-top) - var(--sp-6));
+  margin: auto 0 0;
+  border-width: 1px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  animation: global(sheet-in) var(--dur-slow) var(--ease-out);
+}
+
+.dialog[data-variant='sheet'][data-closing],
+.dialog[data-variant='auto'][data-closing] {
+  animation: global(sheet-out) var(--dur-exit) var(--ease-in) both;
+}
+
+/* Окно по центру. */
+.dialog[data-variant='modal'] {
+  width: min(var(--dialog-w), calc(100% - 2 * var(--gutter)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--sp-5) - var(--safe-top) - var(--safe-bottom));
+  margin: auto;
+  border-radius: var(--radius-lg);
+  animation: global(enter-up) var(--dur-base) var(--ease-out);
+}
+
+.dialog[data-variant='modal'][data-closing] {
+  animation: global(fade-out) var(--dur-exit) var(--ease-in) both;
+}
+
+@media (min-width: 600px) {
+  .dialog[data-variant='auto'] {
+    width: min(var(--dialog-w), calc(100% - 2 * var(--gutter)));
+    max-height: calc(100dvh - 2 * var(--sp-5) - var(--safe-top) - var(--safe-bottom));
+    margin: auto;
+    border-width: 1px;
+    border-radius: var(--radius-lg);
+    animation: global(enter-up) var(--dur-base) var(--ease-out);
+  }
+
+  .dialog[data-variant='auto'][data-closing] {
+    animation: global(fade-out) var(--dur-exit) var(--ease-in) both;
+  }
+}
+
+.frame {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  min-height: 0;
+}
+
+/* Лист у нижнего края: содержимое не уходит под домашнюю полоску iPhone. */
+.dialog[data-variant='sheet'] .frame,
+.dialog[data-variant='auto'] .frame {
+  padding-bottom: var(--safe-bottom);
+}
+
+@media (min-width: 600px) {
+  .dialog[data-variant='auto'] .frame {
+    padding-bottom: 0;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-2) 0 var(--sp-5);
+}
+
+/* Ручка листа: видно, что это лист, который можно закрыть. Только украшение. */
+.dialog[data-variant='sheet'] .head::before,
+.dialog[data-variant='auto'] .head::before {
+  content: '';
+  position: absolute;
+  top: var(--sp-2);
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  translate: -50% 0;
+}
+
+@media (min-width: 600px) {
+  .dialog[data-variant='auto'] .head::before {
+    content: none;
+  }
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  padding-top: calc((var(--tap-min) - 1lh) / 2); /* заголовок по центру кнопки закрытия */
+  font-size: var(--fs-h2);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--muted);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .close:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+.description {
+  margin: var(--sp-1) 0 0;
+  padding: 0 var(--sp-5);
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--sp-4) var(--sp-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-5) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+/* На телефоне кнопки листа — во всю ширину столбиком: основное действие сверху, «Отмена» —
+   последней, у края экрана, как в системных листах iOS и Android. */
+.dialog[data-variant='sheet'] .footer,
+.dialog[data-variant='auto'] .footer {
+  flex-direction: column-reverse;
+  align-items: stretch;
+}
+
+@media (min-width: 600px) {
+  .dialog[data-variant='auto'] .footer {
+    flex-direction: row;
+    align-items: center;
+  }
+}

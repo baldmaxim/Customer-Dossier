@@ -1,0 +1,69 @@
+// Единый набор иконок: контурные пути 24×24, толщина и цвет — от текста (currentColor).
+// Раньше лупа жила в двух местах, а стрелки были текстовыми глифами ←/→/↗/×, которые
+// диктор читал вслух («стрелка влево, назад»).
+//
+// Иконка без label — декоративная (aria-hidden): смысл несёт подпись рядом. С label —
+// самостоятельное изображение с именем; для кнопки-иконки имя ставится на кнопку (aria-label),
+// а не сюда.
+
+import { FC } from 'react';
+
+import styles from './Icon.module.css';
+
+const PATHS = {
+  search: 'M10.75 3.75a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM15.9 15.9 20.5 20.5',
+  links:
+    'M7 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM17 13.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM17 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM9.3 9.2l5.4 3.1M9.5 8.5 14.5 7',
+  admin: 'M3.5 7.5h9M16.5 7.5h4M3.5 16.5h4M11.5 16.5h9M14.5 5v5M9.5 14v5',
+  person: 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM4.5 20a7.5 7.5 0 0 1 15 0',
+  sun: 'M12 4.5v-2M12 21.5v-2M4.5 12h-2M21.5 12h-2M6.7 6.7 5.3 5.3M18.7 18.7l-1.4-1.4M6.7 17.3l-1.4 1.4M18.7 5.3l-1.4 1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z',
+  moon: 'M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z',
+  exit: 'M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M10 16.5 14.5 12 10 7.5M14.5 12H4',
+  back: 'M19 12H5M11 18l-6-6 6-6',
+  forward: 'M5 12h14M13 6l6 6-6 6',
+  external: 'M14 4.5h5.5V10M19.5 4.5 11 13M17.5 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8A1.5 1.5 0 0 1 6 6.5h4.5',
+  close: 'M6 6l12 12M18 6 6 18',
+  chevron: 'm6 9 6 6 6-6',
+  check: 'M4.5 12.5l5 5 10-11',
+  plus: 'M12 5v14M5 12h14',
+  filter: 'M4 7h16M7 12h10M10 17h4',
+  info: 'M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17ZM12 11v5.5M12 7.75v.5',
+  warning: 'M10.3 4.2 2.9 17.5a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0ZM12 9.5V14M12 17.25v.5',
+  danger: 'M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17ZM12 7.5V13M12 16.25v.5',
+  success: 'M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17ZM8.25 12.25l2.5 2.5 5-5.5',
+  inbox: 'M3.5 13.5 6 5.5h12l2.5 8M3.5 13.5V18A1.5 1.5 0 0 0 5 19.5h14a1.5 1.5 0 0 0 1.5-1.5v-4.5M3.5 13.5h5l1 2.5h5l1-2.5h5',
+  document: 'M7 3.5h7l4.5 4.5v12.5H7ZM14 3.5V8h4.5M9.5 12.5h6M9.5 16h6',
+  building: 'M4.5 20.5h15M6.5 20.5v-15h8v15M14.5 9.5h3v11M9 8.5h3M9 12h3M9 15.5h3',
+  refresh: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4',
+  more: 'M6 10.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 10.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM18 10.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z',
+  trash: 'M4.5 6.5h15M9.5 6.5v-2h5v2M6.5 6.5l1 13h9l1-13M10 10.5V16M14 10.5V16',
+  spinner: 'M12 3.5a8.5 8.5 0 1 1-8.5 8.5',
+} as const;
+
+export type IconName = keyof typeof PATHS;
+export type IconSize = 'sm' | 'md' | 'lg';
+
+export interface IIconProps {
+  name: IconName;
+  /** 16 / 20 / 24px — токены --icon-sm/-md/-lg. */
+  size?: IconSize;
+  /** Имя для диктора, если иконка несёт смысл сама по себе. Без него — декоративная. */
+  label?: string;
+  className?: string;
+}
+
+export const Icon: FC<IIconProps> = ({ name, size = 'md', label, className }) => (
+  <svg
+    className={[styles.icon, styles[size], className ?? ''].filter(Boolean).join(' ')}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    focusable="false"
+    {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
+  >
+    <path d={PATHS[name]} />
+  </svg>
+);

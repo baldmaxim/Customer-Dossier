@@ -1,55 +1,29 @@
 .raw {
   margin: 0;
   white-space: pre-wrap;
+  /* Адреса и хэштеги без пробелов переносятся где угодно — иначе пост шире экрана. */
   overflow-wrap: anywhere;
   line-height: var(--lh-text);
 }
 
-.wrap h3 {
-  margin: 0 0 var(--sp-2);
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.heading {
+  margin: 0;
   font-size: var(--fs-md);
 }
 
-.fields {
-  display: grid;
-  gap: var(--sp-1);
-  margin: 0;
-}
-
-.field {
-  display: grid;
-  grid-template-columns: minmax(8rem, 40%) minmax(0, 1fr);
-  gap: var(--sp-2);
-  padding: var(--sp-1) 0;
-  border-bottom: 1px solid var(--border);
-  overflow-wrap: anywhere;
-}
-
-.field dt {
-  color: var(--muted);
-}
-
-.field dd {
-  margin: 0;
-  font-weight: 600;
-}
-
 .source {
-  margin-top: var(--sp-3);
+  margin: 0;
   color: var(--muted);
+  font: inherit;
   font-size: var(--fs-sm);
-}
-
-.source summary {
-  cursor: pointer;
-}
-
-.source pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: inherit;
-}
-
-@media (max-width: 520px) {
-  .field { grid-template-columns: 1fr; gap: 0; }
 }

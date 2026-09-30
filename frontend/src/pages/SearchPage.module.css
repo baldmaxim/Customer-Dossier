@@ -1,121 +1,28 @@
-/* Главная: переключатель и поиск одной строкой, дальше — список. */
+/* Главная: поиск первым, под ним (с 600px — рядом) переключатель «Компании / Публикации». */
 
-/* Раньше здесь были заголовок в 30px, абзац и поле в 56px: первый экран уходил на шапку. */
 .bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2) var(--sp-3);
-  margin-bottom: var(--sp-3);
+  flex-direction: column;
+  gap: var(--sp-3);
+  /* margin, а не gap родителя: родитель — main оболочки, в режиме читалки он flex-колонка,
+     и следующий блок (читалка) должен быть его прямым потомком. */
+  margin-bottom: var(--sp-4);
+  min-width: 0;
 }
 
-.field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1 1 220px;
+.search {
+  min-width: 0;
 }
 
-.fieldIcon {
-  position: absolute;
-  left: var(--sp-3);
-  width: 16px;
-  height: 16px;
-  color: var(--faint);
-  pointer-events: none;
-}
+@media (min-width: 600px) {
+  .bar {
+    flex-direction: row;
+    align-items: center;
+  }
 
-.input {
-  width: 100%;
-  min-height: var(--ctl-h);
-  padding: var(--sp-1) var(--sp-3) var(--sp-1) 34px; /* 34 = иконка 16 + отступы */
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  color: var(--text);
-  /* 16px и не меньше: иначе Safari и Chrome на Android зумят страницу при фокусе. */
-  font-size: 16px;
-  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-
-.input::placeholder {
-  color: var(--faint);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.input::-webkit-search-cancel-button {
-  filter: grayscale(1) opacity(0.55);
-}
-
-/* Фильтры каталога: на телефоне переносятся, тап-цели остаются полными. */
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2) var(--sp-3);
-  margin-bottom: var(--sp-3);
-}
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-height: var(--ctl-h);
-  color: var(--muted);
-  font-size: var(--fs-md);
-}
-
-/* Нативный чекбокс — 13px: палец в него не попадает. 20 — видимый квадрат, вся строка — цель. */
-.check input {
-  width: 20px;
-  height: 20px;
-}
-
-.total {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.companyNumber {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.results {
-  display: grid;
-  gap: var(--sp-4);
-}
-
-.resultsTitle {
-  margin: 0 0 var(--sp-2);
-  font-size: var(--fs-lg);
-}
-
-.resultsTitle span {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  font-weight: 400;
-}
-
-/* На телефоне поле во всю строку, с 640px — короткое: оно для одного-двух слов. */
-@media (min-width: 640px) {
-  .field {
-    max-width: 320px;
+  /* Поле — для одного-двух слов: шире 36rem оно только отодвигает переключатель. */
+  .search {
+    flex: 1 1 20rem;
+    max-width: 36rem;
   }
 }

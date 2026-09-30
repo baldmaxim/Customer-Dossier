@@ -1,0 +1,70 @@
+/* Раскладочные примитивы: Stack, Cluster, Grid (общий модуль). Промежутки — только из шкалы --sp-*. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--grid-min)), 1fr));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nowrap {
+  flex-wrap: nowrap;
+}
+
+.gap0 { gap: 0; }
+.gap1 { gap: var(--sp-1); }
+.gap2 { gap: var(--sp-2); }
+.gap3 { gap: var(--sp-3); }
+.gap4 { gap: var(--sp-4); }
+.gap5 { gap: var(--sp-5); }
+.gap6 { gap: var(--sp-6); }
+.gap7 { gap: var(--sp-7); }
+
+.rowGap0 { row-gap: 0; }
+.rowGap1 { row-gap: var(--sp-1); }
+.rowGap2 { row-gap: var(--sp-2); }
+.rowGap3 { row-gap: var(--sp-3); }
+.rowGap4 { row-gap: var(--sp-4); }
+.rowGap5 { row-gap: var(--sp-5); }
+.rowGap6 { row-gap: var(--sp-6); }
+.rowGap7 { row-gap: var(--sp-7); }
+
+.colGap0 { column-gap: 0; }
+.colGap1 { column-gap: var(--sp-1); }
+.colGap2 { column-gap: var(--sp-2); }
+.colGap3 { column-gap: var(--sp-3); }
+.colGap4 { column-gap: var(--sp-4); }
+.colGap5 { column-gap: var(--sp-5); }
+.colGap6 { column-gap: var(--sp-6); }
+.colGap7 { column-gap: var(--sp-7); }
+
+.align-start { align-items: flex-start; }
+.align-center { align-items: center; }
+.align-end { align-items: flex-end; }
+.align-baseline { align-items: baseline; }
+.align-stretch { align-items: stretch; }
+
+.justify-start { justify-content: flex-start; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }

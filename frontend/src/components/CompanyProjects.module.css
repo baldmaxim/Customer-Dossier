@@ -1,77 +1,51 @@
-/* Объекты компании на вкладке «Обзор»: строка на объект, роли ярлыками. */
+/* Объекты компании на «Обзоре»: строка на объект — ссылка на его страницу, роли ярлыками. */
 
 .list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  margin: 0 calc(var(--sp-2) * -1);
+  padding: 0;
+  list-style: none;
 }
 
+/* Строка целиком — цель нажатия (.row-link): поля внутри, а рамка между строк — снаружи. */
 .item {
-  border-top: 1px solid var(--border);
-  padding-top: var(--sp-3);
-  min-width: 0;
-}
-
-.item:first-child {
-  border-top: none;
-  padding-top: 0;
-}
-
-.pick {
-  display: block;
-  width: 100%;
-  padding: var(--sp-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pick:hover { background: var(--surface-2); }
-.pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.selected .pick { background: var(--accent-soft); border-color: var(--accent-border); }
-
-.head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-2);
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-2);
+  border-radius: var(--radius-sm);
+}
+
+.item + .item {
+  box-shadow: 0 -1px 0 var(--border);
 }
 
 .name {
-  font-weight: 600;
-  font-size: var(--fs-base);
-  color: var(--accent);
-  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .item:hover .name {
+    color: var(--accent);
+    text-decoration: none;
+  }
+}
+
+.meta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
 }
 
 .tags {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-top: var(--sp-1);
-}
-
-.meta,
-.muted,
-.others {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-
-.others {
-  margin: var(--sp-2) 0 0;
-  overflow-wrap: anywhere;
-}
-
-.muted {
-  margin: 0;
-  font-size: var(--fs-md);
+  gap: var(--sp-1);
+  min-width: 0;
 }

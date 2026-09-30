@@ -1,19 +1,27 @@
-// Ручная вставка текста: для закрытых каналов и статей, до которых парсер не добирается.
-// Вырезано из AdminPage дословно — на текстах, подписях полей и плейсхолдере держатся тесты.
+// Ручная вставка текста: для закрытых каналов и статей, которые портал не может собрать сам.
 //
-// Оператор только сохраняет текст. Разбор портал ставит сам по новым редакциям
-// допущенных источников: кнопки «поставить на разбор» здесь нет и не должно быть.
+// Оператор только сохраняет текст. Разбор портал ставит сам по новым версиям текстов
+// включённых источников: кнопки «поставить на разбор» здесь нет и не должно быть.
 
-import { FC, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { FC, FormEvent, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, api } from '../../api/client';
 import type { IManualPasteResult } from '../../api/types';
-import { Button } from '../ui/Button';
 import { MANUAL_OUTCOME_LABELS } from '../../lib/labels';
-import { describeLoadError } from '../../lib/loadError';
-import styles from '../../pages/AdminPage.module.css';
+import { Button } from '../ui/Button';
+import { ButtonLink } from '../ui/ButtonLink';
+import { Callout } from '../ui/Callout';
+import { Field } from '../ui/Field';
+import { Stack } from '../ui/Stack';
+import { TextInput } from '../ui/TextInput';
+import { Textarea } from '../ui/Textarea';
+import { useToast } from '../ui/toast';
+import { actionError } from './actionError';
+import styles from './Forms.module.css';
+
+/** Короче этого сервер текст не сохранит — кнопка не зовёт его зря. */
+const MIN_CHARS = 40;
 
 interface IManualInput {
   body: string;
@@ -41,138 +49,116 @@ const offsetLabel = (at: Date): string => {
   return `UTC${sign}${String(Math.trunc(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
 };
 
-export interface IManualPasteProps {
-  onNotice: (text: string | null) => void;
-}
+const orNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
-export const ManualPaste: FC<IManualPasteProps> = ({ onNotice }) => {
+export const ManualPaste: FC = () => {
   const queryClient = useQueryClient();
-  const [pasteText, setPasteText] = useState('');
-  const [pasteTitle, setPasteTitle] = useState('');
-  const [pasteUrl, setPasteUrl] = useState('');
-  const [pasteOrigin, setPasteOrigin] = useState('');
-  const [pasteAt, setPasteAt] = useState('');
-  const [pasteResult, setPasteResult] = useState<IManualPasteResult | null>(null);
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
+  const [origin, setOrigin] = useState('');
+  const [at, setAt] = useState('');
+  const [result, setResult] = useState<IManualPasteResult | null>(null);
 
   // /api/manual только сохраняет публикацию: модель в этот момент не вызывается.
   const paste = useMutation({
     mutationFn: (input: IManualInput) => api.post<IManualPasteResult>('/api/manual', input),
-    onSuccess: result => {
-      onNotice(null);
-      setPasteResult(result);
+    onSuccess: saved => {
+      setResult(saved);
       // Поля очищаем только когда текст действительно сохранён: иначе оператор потеряет введённое.
-      if (result.documentId !== null) {
-        setPasteText('');
-        setPasteTitle('');
-        setPasteUrl('');
-        setPasteOrigin('');
-        setPasteAt('');
+      if (saved.documentId !== null) {
+        setText('');
+        setTitle('');
+        setUrl('');
+        setOrigin('');
+        setAt('');
       }
       void queryClient.invalidateQueries({ queryKey: ['sources'] });
       void queryClient.invalidateQueries({ queryKey: ['summary'] });
     },
     onError: (err: Error) => {
-      setPasteResult(null);
-      onNotice(
-        err instanceof ApiError && err.code === 'source_policy'
-          ? `${err.message}. Допуск источнику «Ручная вставка текста» выдаёт оператор в разделе «Источники»: вставка вручную новых прав на материал не даёт.`
-          : describeLoadError(err),
-      );
+      setResult(null);
+      toast.show({
+        tone: 'danger',
+        text:
+          err instanceof ApiError && err.code === 'source_policy'
+            ? `${err.message}. Включите «Ручную вставку текста» переключателем в списке ниже: вставка вручную новых прав на материал не даёт.`
+            : actionError(err),
+      });
     },
   });
 
-  return (
-    <>
-      <p className={styles.hint}>
-        Для закрытых каналов и статей, до которых парсер не добирается. Текст идёт тем же путём, что и всё
-        остальное: сохраняется публикация, а разбор портал выполняет сам. Вставка вручную не обходит
-        ограничения Telegram или первоисточника — источнику нужен тот же допуск.
-      </p>
-      <textarea
-        className={styles.textarea}
-        rows={6}
-        placeholder="Вставьте текст сообщения или статьи"
-        value={pasteText}
-        onChange={e => setPasteText(e.target.value)}
-      />
+  const publishedAt = toPublishedAt(at);
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    if (text.trim().length < MIN_CHARS) return;
+    paste.mutate({ body: text.trim(), title: orNull(title), url: orNull(url), origin: orNull(origin), publishedAt });
+  };
 
-      <div className={styles.fields}>
-        <label className={styles.field}>
-          <span className={styles.label}>Заголовок</span>
-          <input className={styles.input} value={pasteTitle} onChange={e => setPasteTitle(e.target.value)} />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.label}>Ссылка на первоисточник</span>
-          <input
-            className={styles.input}
-            type="url"
-            placeholder="https://example.ru/news/1"
-            value={pasteUrl}
-            onChange={e => setPasteUrl(e.target.value)}
+  return (
+    <Stack as="form" gap={4} onSubmit={submit}>
+      <p className={styles.hint}>
+        Текст идёт тем же путём, что и собранный: сохраняется публикация, разбирает её портал сам. Вставка не обходит ограничения Telegram
+        или первоисточника — «Ручная вставка» должна быть включена, как любой источник.
+      </p>
+      <Field label="Текст" hint={`Сообщение или статья целиком, не короче ${MIN_CHARS} знаков.`}>
+        {control => (
+          <Textarea
+            {...control}
+            rows={6}
+            placeholder="Вставьте текст сообщения или статьи"
+            value={text}
+            onChange={e => setText(e.target.value)}
           />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.label}>Откуда взято</span>
-          <input
-            className={styles.input}
-            placeholder="канал, издание, ФИО коллеги"
-            value={pasteOrigin}
-            onChange={e => setPasteOrigin(e.target.value)}
-          />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.label}>Дата и время публикации</span>
-          <input
-            className={styles.input}
-            type="datetime-local"
-            value={pasteAt}
-            onChange={e => setPasteAt(e.target.value)}
-          />
-        </label>
+        )}
+      </Field>
+
+      <div className={styles.grid}>
+        <Field label="Заголовок">{control => <TextInput {...control} value={title} onChange={e => setTitle(e.target.value)} />}</Field>
+        <Field label="Ссылка на первоисточник">
+          {control => (
+            <TextInput {...control} type="url" placeholder="https://example.ru/news/1" value={url} onChange={e => setUrl(e.target.value)} />
+          )}
+        </Field>
+        <Field label="Откуда взято">
+          {control => (
+            <TextInput {...control} placeholder="канал, издание, ФИО коллеги" value={origin} onChange={e => setOrigin(e.target.value)} />
+          )}
+        </Field>
+        <Field label="Дата и время публикации">
+          {control => <TextInput {...control} type="datetime-local" value={at} onChange={e => setAt(e.target.value)} />}
+        </Field>
       </div>
       <p className={styles.hint}>
-        {toPublishedAt(pasteAt) === null
-          ? 'Дата публикации неизвестна — так и запишем (пусто). Момент вставки датой публикации не считается.'
-          : `Будет отправлено: ${toPublishedAt(pasteAt)} (введено как ${offsetLabel(new Date(pasteAt))}).`}{' '}
+        {publishedAt === null
+          ? 'Дата публикации неизвестна — так и запишем. Момент вставки датой публикации не считается.'
+          : `Будет отправлено: ${publishedAt} (введено как ${offsetLabel(new Date(at))}).`}{' '}
         Пустые поля уходят как «неизвестно», а не как догадка.
       </p>
 
-      <Button
-        variant="primary"
-        disabled={paste.isPending || pasteText.trim().length < 40}
-        hint="сохранить публикацию; разбор портал выполнит сам, если у источника есть ИИ-допуск"
-        onClick={() =>
-          paste.mutate({
-            body: pasteText.trim(),
-            title: pasteTitle.trim() === '' ? null : pasteTitle.trim(),
-            url: pasteUrl.trim() === '' ? null : pasteUrl.trim(),
-            origin: pasteOrigin.trim() === '' ? null : pasteOrigin.trim(),
-            publishedAt: toPublishedAt(pasteAt),
-          })
-        }
-      >
-        {paste.isPending ? 'Сохраняю…' : 'Сохранить текст'}
-      </Button>
+      <div>
+        <Button type="submit" variant="primary" loading={paste.isPending} disabled={text.trim().length < MIN_CHARS}>
+          Сохранить текст
+        </Button>
+      </div>
 
-      {pasteResult && (
-        <div className={styles.result} role="status">
-          <p className={styles.resultTitle}>{MANUAL_OUTCOME_LABELS[pasteResult.outcome] ?? pasteResult.outcome}.</p>
-          {pasteResult.documentId !== null && (
-            <p>
-              <Link to={`/documents/${pasteResult.documentId}`}>Документ #{pasteResult.documentId}</Link>
-              {pasteResult.revisionNo !== null && ` · редакция №${pasteResult.revisionNo}`}
-            </p>
-          )}
-          {pasteResult.revisionId === null ? (
-            <p className={styles.hint}>Сохранённой редакции нет — разбирать нечего.</p>
-          ) : (
-            <p className={styles.hint}>
-              Сохранение — ещё не разбор. Портал разберёт эту редакцию сам, если у источника есть
-              ИИ-допуск; в карточках сведения появятся после полного разбора.
-            </p>
-          )}
-        </div>
+      {result && (
+        <Callout
+          tone={result.documentId === null ? 'warning' : 'success'}
+          live="polite"
+          title={`${MANUAL_OUTCOME_LABELS[result.outcome] ?? result.outcome}.`}
+          action={
+            result.documentId !== null ? (
+              <ButtonLink to={`/documents/${result.documentId}`} variant="link" size="sm">
+                Открыть публикацию
+              </ButtonLink>
+            ) : undefined
+          }
+        >
+          {result.revisionId === null ? 'Текст не сохранён.' : 'Портал разберёт текст сам; сведения появятся в карточках после разбора.'}
+        </Callout>
       )}
-    </>
+    </Stack>
   );
 };

@@ -12,18 +12,37 @@
   font-weight: var(--ctl-fw);
   line-height: var(--lh-tight);
   text-align: center;
+  text-decoration: none;
   overflow-wrap: break-word;
   min-width: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
-    background-color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+/* Нажатие: короткое «проседание», только transform — без перерасчёта раскладки. */
+.button:active:not(:disabled, [aria-disabled='true']) {
+  transform: scale(0.97);
 }
 
 /* Одно поведение на весь портал: одна прозрачность и один курсор. */
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true']:not([aria-busy='true']) {
   opacity: var(--ctl-disabled-opacity);
   cursor: not-allowed;
+}
+
+.button[aria-busy='true'] {
+  cursor: progress;
+}
+
+.spinner {
+  animation: global(spin) 0.8s linear infinite;
 }
 
 .sm {
@@ -47,6 +66,10 @@
   width: var(--ctl-h-sm);
 }
 
+.lg.iconOnly {
+  width: var(--ctl-h-lg);
+}
+
 .block {
   width: 100%;
 }
@@ -57,19 +80,10 @@
   color: var(--accent-contrast);
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
 .secondary {
   background: var(--surface);
-  border-color: var(--border-strong);
+  border-color: var(--border-control);
   color: var(--text);
-}
-
-.secondary:hover:not(:disabled) {
-  background: var(--surface-2);
 }
 
 .ghost {
@@ -78,19 +92,17 @@
   color: var(--muted);
 }
 
-.ghost:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
 .danger {
   background: var(--surface);
-  border-color: var(--risk-red-border);
+  border-color: var(--danger-border);
   color: var(--danger);
 }
 
-.danger:hover:not(:disabled) {
-  background: var(--risk-red-bg);
+/* Подтверждение необратимого действия (удалить, сбросить пароль) — в диалоге. */
+.danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-contrast);
 }
 
 /* Ссылка-кнопка: выглядит ссылкой, но тап-цель сохраняет. */
@@ -100,11 +112,49 @@
   background: none;
   border-color: transparent;
   color: var(--accent);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 0.18em;
 }
 
-.link:hover:not(:disabled) {
-  color: var(--accent-hover);
+.link:active:not(:disabled, [aria-disabled='true']) {
+  transform: none;
+}
+
+@media (hover: hover) {
+  /* ButtonLink — это <a>: глобальное a:hover подчеркнуло бы кнопку. */
+  .button:hover {
+    text-decoration: none;
+  }
+
+  .primary:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--accent-contrast);
+  }
+
+  .secondary:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .ghost:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .danger:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  .danger-solid:hover:not(:disabled, [aria-disabled='true']) {
+    filter: brightness(0.94);
+    color: var(--danger-contrast);
+  }
+
+  .link:hover:not(:disabled, [aria-disabled='true']) {
+    color: var(--accent-hover);
+    text-decoration: underline;
+  }
 }

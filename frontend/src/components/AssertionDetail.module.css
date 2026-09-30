@@ -1,0 +1,217 @@
+/* «Откуда известно»: сведение, цитаты, решение оператора. Блок встаёт и в узкую колонку контрагентов,
+   и во всю ширину «Проверки», поэтому колонки цитат — по ширине самого блока (container query),
+   а не окна. */
+
+/* Контейнер для запросов по своей ширине; рамка — у .body и только в широком блоке: в узкой
+   карточке (участник на телефоне, колонка контрагентов) рамка в рамке съедала полэкрана. */
+.detail {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+@container (min-width: 600px) {
+  .body {
+    padding: var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.facts {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-md);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+
+@container (min-width: 600px) {
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.quotes,
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quoteItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  /* Рамка — чтобы цитата не сливалась с подсвеченной строкой списка (row-link:focus-within). */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.quote {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-text);
+  overflow-wrap: break-word;
+}
+
+.context {
+  color: var(--faint);
+}
+
+.mark {
+  /* 2px — подсветка чуть шире букв, но не раздвигает строку, как --sp-1. */
+  padding: 0 2px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Исключённая цитата — приглушённый текст полного контраста и слово «исключена» рядом. */
+.inactive .quote,
+.inactive .mark {
+  color: var(--muted);
+}
+
+.inactive .mark {
+  background: none;
+}
+
+.source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--sp-3);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.metaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  /* Цель нажатия: 44px на тач-экране, 32px под мышь (было 17–19px — axe target-size).
+     Ширина тоже: короткое слово («разбор») давало цель 42px. */
+  min-height: var(--ctl-h-sm);
+  min-width: var(--ctl-h-sm);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.operator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--sp-3);
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.historyItem:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.warn {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--fs-sm);
+}
+
+.reason {
+  margin: 0;
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}
+
+.dialogQuote {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}

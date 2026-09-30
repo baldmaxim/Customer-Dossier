@@ -1,0 +1,276 @@
+/* Основа: элементы, поля, фокус, заголовки, утилиты. Токены — src/index.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scrollbar-color: var(--border-strong) transparent;
+  /* Цель якоря и фокуса не уходит под липкую шапку и нижнюю панель (WCAG 2.4.11). */
+  scroll-padding-top: calc(var(--sticky-top) + var(--sp-2));
+  scroll-padding-bottom: calc(var(--bottom-ui) + var(--sp-2));
+}
+
+body {
+  /* dvh, не vh: адресная строка мобильного Chrome съедает vh и обрезает низ. */
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: var(--lh-text);
+  letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+}
+
+/* Страховка от горизонтального переполнения: clip, а не hidden — hidden делает элемент
+   скролл-контейнером и ломает sticky у шапки. Не на html: там clip становится hidden
+   у окна, и программная прокрутка (поиск по странице, фокус) сдвигает страницу вбок, а на
+   телефоне расширяется layout-viewport и уезжает нижняя панель. Причины переполнения
+   чинятся на месте — это только сетка под ними. */
+#root {
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+/* Ссылка внутри текста подчёркнута всегда: цветом одним её не отличить (axe link-in-text-block).
+   Ссылки-компоненты (меню, кнопки-ссылки, строки таблиц) ставят свой класс и решают сами. */
+a:not([class]) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Все :hover — только для мыши: на тач-экране он «залипает» после нажатия. */
+@media (hover: hover) {
+  a:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  a:not([class]):hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-family: var(--font);
+  color: inherit;
+  letter-spacing: inherit;
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: var(--fs-input);
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Базовый вид полей — один на весь портал: TextInput, Select и Textarea опираются на него. */
+input,
+select,
+textarea {
+  min-height: var(--ctl-h);
+  padding: var(--sp-2) var(--ctl-px-sm);
+  border: 1px solid var(--border-control);
+  border-radius: var(--ctl-radius);
+  background: var(--surface);
+  color: var(--text);
+  /* Поле внутри сетки: без этого его inline-size распирает колонку. */
+  min-width: 0;
+  max-width: 100%;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 0;
+  padding: 0;
+}
+
+textarea {
+  line-height: var(--lh-text);
+  resize: vertical;
+}
+
+::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+
+/* Фокус — только контур на токенах. Форму элемента не трогаем: браузер ведёт контур
+   по его border-radius, пилюля остаётся пилюлей. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Поле: контур вплотную к рамке. У текстового поля :focus-visible срабатывает и от мыши —
+   так и задумано: видно, куда пойдёт ввод. Контур, а не бледная тень: в forced-colors
+   тень пропадает. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+  border-color: var(--focus-ring);
+}
+
+/* Программный фокус после перехода по маршруту: заголовок и main не интерактивны,
+   рамка вокруг них только мешает. Диктор их всё равно прочитает. */
+h1[tabindex='-1']:focus,
+main[tabindex='-1']:focus {
+  outline: none;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: var(--lh-tight);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--fs-h1);
+}
+
+h2 {
+  font-size: var(--fs-h2);
+}
+
+h3 {
+  font-size: var(--fs-h3);
+}
+
+/* Цифры сравнивают глазами по колонкам — только табличные. */
+table,
+output,
+time,
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Число, дата, сумма не рвутся посреди: «2481/7» читается как два числа.
+   В ячейках TableScroll .num ещё и выравнивает по правому краю. */
+.num,
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Текст для дикторов, которого не видно глазами. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Строка таблицы или карточка списка целиком открывает карточку.
+
+   Ссылка остаётся настоящей ссылкой (средний клик, Ctrl+клик, фокус с клавиатуры),
+   а накрывает строку растянутый псевдоэлемент — без onClick на <tr>. Соседние
+   ссылки и подсказки внутри строки поднимаются над накладкой классом
+   `row-link-above`, иначе они перестали бы быть отдельными целями. */
+.row-link {
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .row-link:hover {
+    background: var(--surface-2);
+  }
+}
+
+.row-link:focus-within {
+  background: var(--surface-2);
+}
+
+/* Нажатие: строка шире кнопки, и .97 от 360px — прыжок на 11px; строке хватает .985.
+   <tr> не масштабируем: трансформация строки таблицы рвёт рамки ячеек. */
+.row-link:not(tr):active {
+  transform: scale(0.985);
+}
+
+.row-link-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.row-link-above {
+  position: relative;
+  z-index: var(--z-raised);
+}
+
+/* Догруженные элементы списка («Показать ещё») входят лесенкой: style={{ '--i': номер
+   в догруженной порции }}. Потолок — 8 шагов (160 мс): длиннее лесенка читается как тормоз. */
+.appear {
+  animation: enter-up var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 20ms);
+}
+
+/* Висит тост — внизу страницы есть место под него: прокрутка до конца не прячет последнюю
+   строку таблицы под «Доступна новая версия». */
+:root:has([data-toast-region] > *) {
+  --toast-space: 72px; /* высота тоста с отступом: строка 44px + поля + зазор */
+}
+
+/* Открыт модальный диалог — страница под ним не прокручивается; место полосы прокрутки
+   сохраняется, чтобы страница не прыгала вбок. */
+:root:has(dialog:modal) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}

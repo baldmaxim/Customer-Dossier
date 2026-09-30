@@ -1,5 +1,6 @@
-// Экран «Пользователи» (ADR-014): список, создание, смена роли с ожидаемой версией, свою строку
-// администратор не меняет, без права users.manage — ни одного запроса.
+// «Пользователи» (ADR-014): список, создание, смена роли — только после подтверждения и с
+// ожидаемой версией, свою строку администратор не меняет, выданный пароль — в окне, а не
+// баннером; без права users.manage — ни одного запроса.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -29,16 +30,18 @@ const row = (id: number, login: string, role: IUserRow['role'], extra: Partial<I
 });
 
 const ROLES = {
-  permissions: ['portal.read', 'admin.view', 'users.manage'],
+  permissions: ['portal.read', 'admin.view', 'dossier.view', 'users.manage'],
   roles: [
-    { role: 'admin', permissions: ['portal.read', 'admin.view', 'users.manage'] },
-    { role: 'operator', permissions: ['portal.read', 'admin.view'] },
+    { role: 'admin', permissions: ['portal.read', 'admin.view', 'dossier.view', 'users.manage'] },
+    { role: 'operator', permissions: ['portal.read', 'admin.view', 'dossier.view'] },
     { role: 'viewer', permissions: ['portal.read'] },
   ],
 };
 
 const asAdmin = (ui: ReactElement) => (
-  <AuthContext.Provider value={{ ...LOCAL_AUTH, authRequired: true, user: { ...LOCAL_AUTH.user, id: 1, login: 'boss' } }}>{ui}</AuthContext.Provider>
+  <AuthContext.Provider value={{ ...LOCAL_AUTH, authRequired: true, user: { ...LOCAL_AUTH.user, id: 1, login: 'boss' } }}>
+    {ui}
+  </AuthContext.Provider>
 );
 
 const standardRoutes = (users: IUserRow[]) => [
@@ -48,7 +51,7 @@ const standardRoutes = (users: IUserRow[]) => [
 ];
 
 describe('экран «Пользователи»', () => {
-  it('список с ролями; свою роль и доступ администратор не меняет', async () => {
+  it('список с ролями; свою роль и доступ администратор не меняет; снятые права в таблице не видны', async () => {
     fakeApi(standardRoutes([row(1, 'boss', 'admin'), row(2, 'ivanov', 'viewer', { mustChangePassword: true })]));
     renderWithProviders(asAdmin(<UsersPage />));
 
@@ -58,12 +61,15 @@ describe('экран «Пользователи»', () => {
     const other = screen.getByLabelText('Роль: Иван Иванов') as HTMLSelectElement;
     expect(other.disabled).toBe(false);
     expect(other.value).toBe('viewer');
-    expect(screen.getByText('сменит пароль')).not.toBeNull();
-    // Таблица ролей: у читателя — только портал.
+    expect(screen.getByText('сменит пароль при входе')).not.toBeNull();
+    // Таблица ролей: у читателя — только портал; права обращений и снимков не показываются.
     expect(await screen.findByRole('columnheader', { name: 'читатель' })).not.toBeNull();
+    expect(screen.queryByText(/Обращения и снимки/)).toBeNull();
+    // У колонки действий есть заголовок для диктора, а не пустой <th/>.
+    expect(screen.getAllByRole('columnheader', { name: 'Действия' }).length).toBeGreaterThan(0);
   });
 
-  it('смена роли уходит с ожидаемой версией', async () => {
+  it('смена роли — только после подтверждения; отказ ничего не отправляет', async () => {
     const api = fakeApi([
       { match: 'PATCH /api/users/2', respond: () => ({ status: 200, body: row(2, 'ivanov', 'operator', { version: 4 }) }) },
       ...standardRoutes([row(1, 'boss', 'admin'), row(2, 'ivanov', 'viewer')]),
@@ -71,11 +77,36 @@ describe('экран «Пользователи»', () => {
     renderWithProviders(asAdmin(<UsersPage />));
 
     fireEvent.change(await screen.findByLabelText('Роль: Иван Иванов'), { target: { value: 'operator' } });
+    const dialog = await screen.findByRole('dialog', { name: 'Сменить роль: Иван Иванов?' });
+    expect(dialog.textContent).toMatch(/оператор/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.calls.some(c => c.method === 'PATCH')).toBe(false);
+    expect((screen.getByLabelText('Роль: Иван Иванов') as HTMLSelectElement).value).toBe('viewer');
+
+    fireEvent.change(screen.getByLabelText('Роль: Иван Иванов'), { target: { value: 'operator' } });
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Сменить роль' }));
     await waitFor(() => expect(api.calls.find(c => c.method === 'PATCH')?.body).toEqual({ expectedVersion: 3, role: 'operator' }));
-    expect((await screen.findByRole('status')).textContent).toContain('оператор');
+    expect(await screen.findByText(/Иван Иванов: роль — оператор/)).not.toBeNull();
   });
 
-  it('новый пользователь: логин в нижнем регистре, выданный пароль показан один раз', async () => {
+  it('выключение доступа тоже спрашивает подтверждение', async () => {
+    const api = fakeApi([
+      { match: 'PATCH /api/users/2', respond: () => ({ status: 200, body: row(2, 'ivanov', 'viewer', { isActive: false, version: 4 }) }) },
+      ...standardRoutes([row(1, 'boss', 'admin'), row(2, 'ivanov', 'viewer')]),
+    ]);
+    renderWithProviders(asAdmin(<UsersPage />));
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'Доступ: Иван Иванов' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Выключить доступ: Иван Иванов?' })).getByRole('button', {
+        name: 'Выключить доступ',
+      }),
+    );
+    await waitFor(() => expect(api.calls.find(c => c.method === 'PATCH')?.body).toEqual({ expectedVersion: 3, isActive: false }));
+  });
+
+  it('новый пользователь: логин в нижнем регистре, выданный пароль — в окне, один раз', async () => {
     const api = fakeApi([
       { match: 'POST /api/users', respond: () => ({ status: 201, body: row(3, 'petrov', 'operator', { mustChangePassword: true }) }) },
       ...standardRoutes([row(1, 'boss', 'admin')]),
@@ -99,7 +130,29 @@ describe('экран «Пользователи»', () => {
         password,
       }),
     );
-    expect((await screen.findByRole('status')).textContent).toContain(password);
+    const dialog = await screen.findByRole('dialog', { name: 'Пользователь создан' });
+    expect(dialog.textContent).toContain(password);
+    expect(dialog.textContent).toContain('petrov');
+  });
+
+  it('сброс пароля — в окне: сначала пароль и «Сбросить», затем он же для передачи', async () => {
+    const api = fakeApi([
+      {
+        match: 'POST /api/users/2/password',
+        respond: () => ({ status: 200, body: row(2, 'ivanov', 'viewer', { mustChangePassword: true }) }),
+      },
+      ...standardRoutes([row(1, 'boss', 'admin'), row(2, 'ivanov', 'viewer')]),
+    ]);
+    renderWithProviders(asAdmin(<UsersPage />));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Сбросить пароль «Иван Иванов»' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Сбросить пароль: Иван Иванов' });
+    const password = (within(dialog).getByLabelText('Новый пароль: ivanov') as HTMLInputElement).value;
+    expect(password.length).toBeGreaterThan(9);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Сбросить пароль' }));
+    await waitFor(() => expect(api.calls.find(c => c.url === '/api/users/2/password')?.body).toEqual({ password }));
+    expect(await within(dialog).findByText(password)).not.toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Готово' })).not.toBeNull();
   });
 
   it('без права users.manage — отказ словами и ни одного запроса', async () => {

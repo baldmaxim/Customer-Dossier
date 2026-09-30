@@ -1,0 +1,100 @@
+/* Неясное упоминание: цитата, варианты, решение и история — одной колонкой. Раньше разбор
+   наследовал сетку формы на две колонки, и абзацы, цитата и варианты разъезжались с пустотами. */
+
+.detail {
+  max-width: 60rem; /* строка варианта с реквизитами не шире, чем читается глазом */
+}
+
+.muted {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.text,
+.note {
+  max-width: var(--prose);
+  margin: 0;
+  line-height: var(--lh-text);
+}
+
+.note {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.label {
+  font-weight: var(--fw-semibold);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+}
+
+.quote {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--border-strong); /* полоса цитаты — как в разборе текста */
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-2);
+  overflow-wrap: break-word;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+/* Выбранный вариант — рамкой и полосой акцента, не только оттенком. */
+.chosen {
+  border-color: var(--selected-indicator);
+  background: var(--selected-bg);
+  box-shadow: inset 3px 0 0 var(--selected-indicator);
+}
+
+.candidateName {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--ctl-h-sm); /* ссылка отдельной строкой — цель нажатия высотой контрола */
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
+}
+
+.conflict {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  overflow-wrap: break-word;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding-left: var(--sp-5);
+  font-size: var(--fs-md);
+}
+
+.history .muted {
+  display: block;
+}

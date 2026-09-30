@@ -1,0 +1,200 @@
+/* Схема связей рисунком. Тип связи — штрих линии и подпись; цвет не кодирует надёжность (ADR-009):
+   акцент — только выбранное и наведённое. */
+
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-inline-start: auto;
+}
+
+.zoomValue {
+  min-width: 5ch;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.scroll {
+  overflow: auto;
+  /* Только по горизонтали: вертикальная прокрутка у края схемы переходит странице. */
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  max-height: 60dvh;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.tall {
+  max-height: 72dvh;
+}
+
+.busy {
+  opacity: 0.55;
+}
+
+.svg {
+  display: block;
+  /* Схема уже окна — по центру, а не прижата влево с пустотой справа. */
+  margin-inline: auto;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    stroke var(--dur-fast) var(--ease-out);
+}
+
+.edge_contract {
+  stroke-dasharray: none;
+}
+
+.edge_participation {
+  stroke-dasharray: 8 4;
+}
+
+.edge_corporate {
+  stroke-dasharray: 2 3;
+}
+
+.edge_hierarchy {
+  stroke-dasharray: 12 3 2 3;
+}
+
+.edge_co_mentioned {
+  stroke: var(--muted);
+  stroke-dasharray: 1 5;
+}
+
+.edgeOn {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+/* Невидимая широкая полоса поверх линии — цель нажатия; у концов она не заходит в узлы:
+   линии входят в узел горизонтально, а срез у полосы прямой. */
+.edgeHit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Свой индикатор фокуса вместо контура: контур у пути SVG рисуется рамкой вокруг всей кривой. */
+.edgeHit:focus-visible {
+  stroke: color-mix(in srgb, var(--focus-ring) 45%, transparent);
+}
+
+@media (hover: hover) {
+  .edgeHit:hover {
+    stroke: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+}
+
+.node {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.dim {
+  opacity: 0.3;
+}
+
+.nodeBox {
+  fill: var(--surface);
+  stroke: var(--border-control);
+  stroke-width: 1;
+  transition: stroke var(--dur-fast) var(--ease-out);
+}
+
+.seedBox {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.active .nodeBox {
+  stroke: var(--accent);
+}
+
+.nodeLabel {
+  fill: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.nodeSub {
+  fill: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.nodeTarget {
+  cursor: pointer;
+}
+
+/* Фокус узла — общий контур портала вокруг узла плюс рамка самого прямоугольника цветом фокуса. */
+.nodeTarget:focus-visible rect {
+  stroke: var(--focus-ring);
+  stroke-width: 2;
+}
+
+@media (hover: hover) {
+  .nodeTarget:hover .nodeBox {
+    stroke: var(--accent);
+  }
+}
+
+.arrow {
+  fill: var(--text);
+}
+
+/* Образец линии в подписи типа связи (легенда). */
+.sample {
+  flex: none;
+  overflow: visible;
+}
+
+.arrowOn {
+  fill: var(--accent);
+}
+
+@media print {
+  .zoom {
+    display: none;
+  }
+
+  .scroll {
+    max-height: none;
+    overflow: visible;
+  }
+}

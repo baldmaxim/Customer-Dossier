@@ -1,11 +1,12 @@
-// Панель реестра (этап 20B): дата сведений, атрибуция и изменения между снимками.
+// Панель реестра (этап 20B): дата сведений, атрибуция и изменения между обновлениями.
 // Данные синтетические; сеть и сервер не участвуют.
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { IRegistryView } from '../api/types';
 import { renderWithProviders } from '../test/render';
 import { RegistryPanel } from './RegistryPanel';
+import { RegistryPublicationBody } from './RegistryPublicationBody';
 
 const view = (over: Partial<IRegistryView> = {}): IRegistryView => ({
   source: { key: 'registry-demo.test', title: 'Демо-реестр' },
@@ -51,8 +52,21 @@ describe('панель реестра', () => {
   });
 
   it('дата сведений стоит рядом с данными, а её отсутствие названо словами', () => {
+    renderWithProviders(<RegistryPanel registry={view()} />);
+    expect(screen.getByText('Сведения на 21.09.2026 (получены 21.09.2026)')).toBeTruthy();
+  });
+
+  it('без даты сведений — так и сказано', () => {
     renderWithProviders(<RegistryPanel registry={view({ asOf: null })} />);
-    expect(screen.getByText(/дата сведений в реестре не указана/)).toBeTruthy();
+    expect(screen.getByText(/Дата сведений в реестре не указана \(получены 21\.09\.2026\)/)).toBeTruthy();
+  });
+
+  it('форма собственности не дублируется: «ООО» перед полным названием не ставится', () => {
+    renderWithProviders(
+      <RegistryPanel registry={view({ developer: { name: 'Общество с ограниченной ответственностью «Демо»', legalForm: 'ООО', inn: null, ogrn: null } })} />,
+    );
+    expect(screen.getByText('Общество с ограниченной ответственностью «Демо»')).toBeTruthy();
+    expect(screen.queryByText(/^ООО Общество/)).toBeNull();
   });
 
   it('перенос срока показан как изменение, а не как новое значение молча', () => {
@@ -76,8 +90,52 @@ describe('панель реестра', () => {
     expect(screen.getByText('31.03.2029')).toBeTruthy();
   });
 
-  it('неизменность за несколько снимков — это тоже сведение, и оно сказано', () => {
+  it('неизменность за несколько обновлений — это тоже сведение, и оно сказано', () => {
     renderWithProviders(<RegistryPanel registry={view({ coverage: { loaded: 5, truncated: false } })} />);
-    expect(screen.getByText(/За 5 последних снимков значения не менялись/)).toBeTruthy();
+    expect(screen.getByText(/За последние 5\sобновлений реестра значения не менялись/)).toBeTruthy();
+  });
+
+  it('кратко: шесть главных полей, остальное — «Все сведения реестра»', () => {
+    const { container } = renderWithProviders(
+      <RegistryPanel
+        variant="brief"
+        registry={view({
+          fields: [
+            { label: 'Количество этажей', value: '26' },
+            { label: 'Статус строительства', value: 'Строится' },
+            { label: 'Сдача дома', value: 'IV квартал 2026' },
+            { label: 'Количество квартир', value: '1024' },
+            { label: 'Генподрядчики', value: 'ООО СУ-10' },
+          ],
+        })}
+      />,
+    );
+    const brief = [...container.querySelectorAll('dt')].filter(dt => !dt.closest('details')).map(dt => dt.textContent);
+    expect(brief).toEqual(['Адрес', 'Застройщик', 'Генподрядчики', 'Статус строительства', 'Сдача дома', 'Количество квартир']);
+    const all = screen.getByText('Все сведения реестра').closest('details')!;
+    expect(all.open).toBe(false);
+    expect(within(all).getByText('Количество этажей')).toBeTruthy();
+    expect(within(all).getByText('ИНН застройщика')).toBeTruthy();
+  });
+
+  it('адреса в значениях — ссылки в новой вкладке без передачи адреса портала', () => {
+    renderWithProviders(<RegistryPanel registry={view({ fields: [{ label: 'Проектная декларация', value: 'см. https://наш.дом.рф/объект/62087.' }] })} />);
+    const link = screen.getByRole('link', { name: 'https://наш.дом.рф/объект/62087' });
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+});
+
+describe('текст записи реестра в посте', () => {
+  it('поля — списком, главные первыми, исходный текст — под раскрытием', () => {
+    const body = ['Объект: ЖК Демо', 'Количество этажей: 26', 'Адрес: Москва, участок 5', 'Застройщик: ООО «Демо»'].join('\n');
+    const { container } = renderWithProviders(<RegistryPublicationBody body={body} representation="registry_object@1" />);
+    expect([...container.querySelectorAll('dt')].map(dt => dt.textContent)).toEqual(['Адрес', 'Застройщик', 'Количество этажей']);
+    expect(screen.getByText('Исходный текст записи реестра').closest('details')?.open).toBe(false);
+  });
+
+  it('обычный пост — текстом, ссылки кликабельны', () => {
+    renderWithProviders(<RegistryPublicationBody body="Подробности: https://example.test/news/1, фото в канале." representation="telegram_web_text@1" />);
+    expect(screen.getByRole('link', { name: 'https://example.test/news/1' }).getAttribute('href')).toBe('https://example.test/news/1');
   });
 });

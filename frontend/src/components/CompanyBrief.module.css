@@ -1,59 +1,65 @@
-/* Краткая сводка (этап 22): пары «что — значение», читаются сверху вниз. */
+/* «Коротко о компании»: плитки с числами и пары «что — значение». */
 
-.lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-1);
-  min-width: 0;
-}
-
-@media (min-width: 640px) {
-  .line {
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: var(--sp-3);
-    align-items: baseline;
-  }
-}
-
-.label {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-
-.value {
-  font-size: var(--fs-base);
-  overflow-wrap: anywhere;
-}
-
-.note {
-  margin: var(--sp-4) 0 0;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-
+/* Телефон: два числа рядом, дата — строкой ниже во всю ширину (в трети экрана 360px она
+   не помещалась). С 600px — три плитки в ряд. */
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sp-2);
-  margin-bottom: var(--sp-4);
+  margin: 0 0 var(--sp-4);
 }
 
 .stat {
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse; /* число над подписью, но в разметке подпись первой: диктор читает «объектов 7» */
+  justify-content: flex-end;
   gap: var(--sp-1);
+  min-width: 0;
   padding: var(--sp-3);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
-  font-variant-numeric: tabular-nums;
 }
 
-.stat strong { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1; }
-.stat span { color: var(--muted); font-size: var(--fs-sm); }
+.statWide {
+  grid-column: 1 / -1;
+}
+
+.statLabel {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+/* Число не рвётся («2481/7» читалось как два числа): разделитель тысяч неразрывный. */
+.statValue {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+.note {
+  margin: var(--sp-4) 0 0;
+  max-width: var(--prose);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 600px) {
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .statWide {
+    grid-column: auto;
+  }
+}
+
+/* Крупнее — только там, где плитка точно шире даты «30.09.2026»: на 900px колонка обзора узкая. */
+@media (min-width: 1280px) {
+  .statValue {
+    font-size: var(--fs-2xl);
+  }
+}

@@ -1,29 +1,38 @@
 .badge {
+  --badge-h: 22px;
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   /* min-height, а не height: счётчик из четырёх цифр не должен переполнять пилюлю. */
-  min-height: 22px;
+  min-height: var(--badge-h);
   max-width: 100%;
-  padding: 2px var(--sp-2);
-  border: 1px solid var(--border);
+  padding: 2px var(--sp-2); /* 2px: пилюля 22px при строке 12px — ярлык, а не кнопка */
+  border: 1px solid var(--neutral-border);
   border-radius: var(--radius-full);
-  background: var(--surface-2);
-  color: var(--muted);
+  background: var(--neutral-bg);
+  color: var(--neutral);
   font-size: var(--fs-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   line-height: var(--lh-snug);
+  letter-spacing: 0;
   /* Ярлык не переносится, но и не вылезает за ячейку: обрезается многоточием,
      полное значение — в подсказке. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .neutral {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--muted);
+  background: var(--neutral-bg);
+  border-color: var(--neutral-border);
+  color: var(--neutral);
+}
+
+.info {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info);
 }
 
 .accent {
@@ -32,20 +41,49 @@
   color: var(--accent);
 }
 
-.positive {
-  background: var(--risk-green-bg);
-  border-color: var(--risk-green-border);
-  color: var(--risk-green);
+.success {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success);
 }
 
-.warn {
-  background: var(--risk-yellow-bg);
-  border-color: var(--risk-yellow-border);
-  color: var(--risk-yellow);
+.warning {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning);
 }
 
 .danger {
-  background: var(--risk-red-bg);
-  border-color: var(--risk-red-border);
-  color: var(--risk-red);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+/* Ярлык с пояснением — кнопка вокруг пилюли. Цель — 24px по высоте (WCAG 2.5.8), а не 44:
+   ярлыки стоят плотно (имя компании, «Проверить основание», соседние ярлыки), и 44px-цель
+   перекрывала бы соседние цели — нажатие между строк попадало бы не туда. Где пояснение
+   важно на телефоне — выносите его в текст или Disclosure, а не только в подсказку. */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  margin-block: -1px; /* 24px цели при 22px пилюли: строка не растёт */
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  vertical-align: middle;
+  cursor: help;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Точечное подчёркивание — видимый признак, что у ярлыка есть пояснение. */
+.hinted {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }

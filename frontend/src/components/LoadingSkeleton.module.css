@@ -1,0 +1,6 @@
+/* Колонка: скелет остаётся во всю ширину и тогда, когда родитель — flex-строка. */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

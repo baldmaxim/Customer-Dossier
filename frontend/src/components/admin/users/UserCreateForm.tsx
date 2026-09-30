@@ -1,7 +1,7 @@
 // Новый пользователь: логин, имя, роль, выданный пароль. Пароль пользователь сменит при
 // первом входе — до этого сервер не отдаёт ему данных.
 
-import { FC, FormEvent, useId, useState } from 'react';
+import { FC, FormEvent, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
 import { api } from '../../../api/client';
@@ -9,22 +9,25 @@ import type { IUserRow, UserRole } from '../../../api/types';
 import { generatePassword } from '../../../lib/generatePassword';
 import { USER_ROLE_HINTS, USER_ROLE_LABELS } from '../../../lib/labels';
 import { Button } from '../../ui/Button';
-import adminStyles from '../../../pages/AdminPage.module.css';
-import styles from './Users.module.css';
+import { Field } from '../../ui/Field';
+import { Select } from '../../ui/Select';
+import { TextInput } from '../../ui/TextInput';
+import { useToast } from '../../ui/toast';
+import { actionError } from '../actionError';
+import formStyles from '../Forms.module.css';
 
 const ROLES: UserRole[] = ['viewer', 'operator', 'admin'];
 
 interface IUserCreateFormProps {
   onCreated: (user: IUserRow, password: string) => void;
-  onError: (text: string) => void;
 }
 
-export const UserCreateForm: FC<IUserCreateFormProps> = ({ onCreated, onError }) => {
+export const UserCreateForm: FC<IUserCreateFormProps> = ({ onCreated }) => {
+  const toast = useToast();
   const [login, setLogin] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<UserRole>('viewer');
   const [password, setPassword] = useState('');
-  const id = useId();
 
   const create = useMutation({
     mutationFn: (input: { login: string; displayName: string; role: UserRole; password: string }) =>
@@ -36,7 +39,7 @@ export const UserCreateForm: FC<IUserCreateFormProps> = ({ onCreated, onError })
       setPassword('');
       onCreated(user, input.password);
     },
-    onError: (err: Error) => onError(err.message),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   const ready = login.trim() !== '' && displayName.trim() !== '' && password !== '';
@@ -47,67 +50,52 @@ export const UserCreateForm: FC<IUserCreateFormProps> = ({ onCreated, onError })
   };
 
   return (
-    <form className={styles.createForm} onSubmit={submit}>
-      <div className={adminStyles.field}>
-        <label className={adminStyles.label} htmlFor={`${id}-login`}>
-          Логин
-        </label>
-        <input
-          id={`${id}-login`}
-          className={adminStyles.input}
-          value={login}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="ivanov или ivanov@firma.ru"
-          onChange={e => setLogin(e.target.value)}
-        />
-      </div>
-      <div className={adminStyles.field}>
-        <label className={adminStyles.label} htmlFor={`${id}-name`}>
-          Имя
-        </label>
-        <input
-          id={`${id}-name`}
-          className={adminStyles.input}
-          value={displayName}
-          placeholder="Иван Иванов"
-          onChange={e => setDisplayName(e.target.value)}
-        />
-      </div>
-      <div className={adminStyles.field}>
-        <label className={adminStyles.label} htmlFor={`${id}-role`}>
-          Роль
-        </label>
-        <select id={`${id}-role`} value={role} onChange={e => setRole(e.target.value as UserRole)}>
-          {ROLES.map(r => (
-            <option key={r} value={r}>
-              {USER_ROLE_LABELS[r]}
-            </option>
-          ))}
-        </select>
-        <span className={styles.roleHint}>{USER_ROLE_HINTS[role]}</span>
-      </div>
-      <div className={adminStyles.field}>
-        <label className={adminStyles.label} htmlFor={`${id}-password`}>
-          Пароль для первого входа
-        </label>
-        <span className={styles.passwordRow}>
-          <input
-            id={`${id}-password`}
-            className={`${adminStyles.input} ${styles.mono}`}
-            type="text"
-            autoComplete="off"
+    <form className={formStyles.grid} onSubmit={submit}>
+      <Field label="Логин">
+        {control => (
+          <TextInput
+            {...control}
+            value={login}
+            autoCapitalize="none"
+            autoCorrect="off"
             spellCheck={false}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
+            placeholder="ivanov или ivanov@firma.ru"
+            onChange={e => setLogin(e.target.value)}
           />
-          <Button onClick={() => setPassword(generatePassword())}>Сгенерировать</Button>
-        </span>
+        )}
+      </Field>
+      <Field label="Имя">
+        {control => <TextInput {...control} value={displayName} placeholder="Иван Иванов" onChange={e => setDisplayName(e.target.value)} />}
+      </Field>
+      <Field label="Роль" hint={USER_ROLE_HINTS[role]}>
+        {control => (
+          <Select {...control} value={role} onChange={e => setRole(e.target.value as UserRole)}>
+            {ROLES.map(r => (
+              <option key={r} value={r}>
+                {USER_ROLE_LABELS[r]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <div className={formStyles.inline}>
+        <Field label="Пароль для первого входа" className={formStyles.grow}>
+          {control => (
+            <TextInput
+              {...control}
+              className={formStyles.mono}
+              autoComplete="off"
+              spellCheck={false}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+          )}
+        </Field>
+        <Button onClick={() => setPassword(generatePassword())}>Сгенерировать</Button>
       </div>
-      <div className={styles.createActions}>
-        <Button type="submit" variant="primary" disabled={!ready || create.isPending}>
-          {create.isPending ? 'Создание…' : 'Создать пользователя'}
+      <div className={formStyles.full}>
+        <Button type="submit" variant="primary" loading={create.isPending} disabled={!ready}>
+          Создать пользователя
         </Button>
       </div>
     </form>

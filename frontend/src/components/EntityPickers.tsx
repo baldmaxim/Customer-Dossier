@@ -1,127 +1,112 @@
-import { FC, useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+// Выбор компании или объекта: одно поле с меткой, выбранное видно в самом поле, найденное —
+// по группам «Компании» и «Объекты» с реквизитами и городом, чтобы одноимённые различались.
+// CompanyPicker и ProjectPicker — прежние имена и пропсы поверх общего поля.
 
-import { api } from '../api/client';
-import type { ICompanySearchItem, IProjectSearchItem } from '../api/types';
-import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, PROJECT_LEVEL_LABELS } from '../lib/labels';
-import styles from '../pages/Dossier.module.css';
+import { FC, useState } from 'react';
 
-const useDebounced = (value: string, delay = 300): string => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
+import { useDebounced } from '../hooks/useDebounced';
+import { describeLoadError } from '../lib/loadError';
+import { EntityCombobox, type IComboboxGroup } from './EntityCombobox';
+import {
+  MIN_QUERY,
+  companyOption,
+  projectOption,
+  useCompanySearch,
+  useProjectSearch,
+  type IEntityRef,
+} from './entitySearch';
+
+export { identifierText, type IEntityRef } from './entitySearch';
+
+type EntityKind = IEntityRef['kind'];
+
+const BOTH: readonly EntityKind[] = ['company', 'project'];
+
+export interface IEntityPickerProps {
+  label: string;
+  value: IEntityRef | null;
+  onSelect: (entity: IEntityRef) => void;
+  hint?: string;
+  /** Что искать: компании, объекты или то и другое (по умолчанию). */
+  kinds?: readonly EntityKind[];
+  /** Крестик при выбранном значении снимает выбор (без него — только очищает поле для нового поиска). */
+  onClear?: () => void;
+}
+
+export const EntityPicker: FC<IEntityPickerProps> = ({ label, value, onSelect, hint = 'Название, ИНН или ОГРН', kinds = BOTH, onClear }) => {
+  const [text, setText] = useState('');
+  const q = useDebounced(text.trim(), 300);
+  const withCompanies = kinds.includes('company');
+  const withProjects = kinds.includes('project');
+  const companies = useCompanySearch(q, withCompanies);
+  const projects = useProjectSearch(q, withProjects);
+  // Пока пауза набора не кончилась, прежний ответ — не ответ на то, что в поле.
+  const typing = text.trim().length >= MIN_QUERY && text.trim() !== q;
+
+  const groups: IComboboxGroup[] = [];
+  if (withCompanies) {
+    groups.push({
+      key: 'companies',
+      label: 'Компании',
+      options: typing ? [] : (companies.data?.items ?? []).map(companyOption),
+      loading: typing || companies.isLoading,
+      error: companies.isError ? describeLoadError(companies.error) : null,
+      emptyText: 'Компания не найдена.',
+    });
+  }
+  if (withProjects) {
+    groups.push({
+      key: 'projects',
+      label: 'Объекты',
+      options: typing ? [] : (projects.data?.items ?? []).map(projectOption),
+      loading: typing || projects.isLoading,
+      error: projects.isError ? describeLoadError(projects.error) : null,
+      emptyText: 'Объект не найден.',
+    });
+  }
+
+  return <EntityCombobox label={label} hint={hint} value={value} query={text} onQueryChange={setText} groups={groups} onSelect={onSelect} onClear={onClear} />;
 };
 
-export const identifierText = (raw: string): string => {
-  const [type, ...rest] = raw.split(' ');
-  return `${IDENTIFIER_TYPE_LABELS[type ?? ''] ?? type} ${rest.join(' ')}`;
-};
+interface ISelected {
+  id: number;
+  name: string;
+}
 
 interface ICompanyPickerProps {
   label: string;
-  selected: { id: number; name: string } | null;
-  onSelect: (company: { id: number; name: string } | null) => void;
+  selected: ISelected | null;
+  onSelect: (company: ISelected | null) => void;
+  hint?: string;
 }
 
-/** Выбор юрлица среди кандидатов: вид сущности, реквизиты, город и одноимённые — выбор осознанный, первая строка не подставляется. */
-export const CompanyPicker: FC<ICompanyPickerProps> = ({ label, selected, onSelect }) => {
-  const [input, setInput] = useState('');
-  const q = useDebounced(input.trim());
-  const query = useQuery({
-    queryKey: ['picker', 'companies', q],
-    queryFn: () => api.get<{ items: ICompanySearchItem[] }>(`/api/companies?q=${encodeURIComponent(q)}&limit=10`),
-    enabled: q.length >= 2,
-  });
-
-  return (
-    <div className={styles.field}>
-      <span>{label}</span>
-      {selected ? (
-        <div className={styles.row}>
-          <strong>{selected.name}</strong> <span className={styles.meta}>#{selected.id}</span>
-          <button type="button" className={styles.linkButton} onClick={() => onSelect(null)}>
-            выбрать другое
-          </button>
-        </div>
-      ) : (
-        <>
-          <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Название, алиас, ИНН или ОГРН" autoComplete="off" />
-          {query.isError && <span className={styles.error}>Поиск недоступен: {(query.error as Error).message}</span>}
-          {query.data && query.data.items.length === 0 && <span className={styles.hint}>В базе не найдено.</span>}
-          <ul className={styles.candidates}>
-            {(query.data?.items ?? []).map(c => (
-              <li key={c.id}>
-                <button type="button" className={styles.candidate} onClick={() => onSelect({ id: c.id, name: c.name })}>
-                  <strong>{c.name}</strong>
-                  {c.legalForm && ` · ${c.legalForm}`}
-                  {c.entityType && c.entityType !== 'unknown' && ` · ${ENTITY_TYPE_LABELS[c.entityType] ?? c.entityType}`}
-                  {c.city && ` · ${c.city}`}
-                  <span className={styles.quoteMeta}>
-                    {c.identifiers && c.identifiers.length > 0 ? c.identifiers.map(identifierText).join(', ') : 'реквизитов нет'}
-                    {c.projects !== null && c.projects !== undefined && ` · объектов в выборке: ${c.projects}`}
-                    {c.matchedAlias && ` · найдено по написанию «${c.matchedAlias}»`}
-                    {c.homonyms ? ` · одноимённых: ${c.homonyms} — сверьте реквизиты` : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-};
+/** Выбор юрлица среди кандидатов: вид, реквизиты, город и одноимённые — первая строка не подставляется. */
+export const CompanyPicker: FC<ICompanyPickerProps> = ({ label, selected, onSelect, hint }) => (
+  <EntityPicker
+    label={label}
+    hint={hint}
+    kinds={['company']}
+    value={selected ? { kind: 'company', ...selected } : null}
+    onSelect={entity => onSelect({ id: entity.id, name: entity.name })}
+    onClear={() => onSelect(null)}
+  />
+);
 
 interface IProjectPickerProps {
-  selected: { id: number; name: string } | null;
-  onSelect: (project: { id: number; name: string } | null) => void;
+  selected: ISelected | null;
+  onSelect: (project: ISelected | null) => void;
+  label?: string;
+  hint?: string;
 }
 
 /** Выбор объекта: город, уровень (комплекс, очередь, корпус) и родитель — одноимённые ЖК разных городов различимы. */
-export const ProjectPicker: FC<IProjectPickerProps> = ({ selected, onSelect }) => {
-  const [input, setInput] = useState('');
-  const q = useDebounced(input.trim());
-  const query = useQuery({
-    queryKey: ['picker', 'projects', q],
-    queryFn: () => api.get<{ items: IProjectSearchItem[] }>(`/api/projects/search?q=${encodeURIComponent(q)}&limit=10`),
-    enabled: q.length >= 2,
-  });
-
-  return (
-    <div className={styles.field}>
-      <span>Объект</span>
-      {selected ? (
-        <div className={styles.row}>
-          <strong>{selected.name}</strong> <span className={styles.meta}>#{selected.id}</span>
-          <button type="button" className={styles.linkButton} onClick={() => onSelect(null)}>
-            выбрать другой
-          </button>
-        </div>
-      ) : (
-        <>
-          <input type="search" value={input} onChange={e => setInput(e.target.value)} placeholder="Название объекта" autoComplete="off" />
-          {query.isError && <span className={styles.error}>Поиск недоступен: {(query.error as Error).message}</span>}
-          {query.data && query.data.items.length === 0 && <span className={styles.hint}>Объект в базе не найден — укажите название со слов ниже.</span>}
-          <ul className={styles.candidates}>
-            {(query.data?.items ?? []).map(p => (
-              <li key={p.id}>
-                <button type="button" className={styles.candidate} onClick={() => onSelect({ id: p.id, name: p.name })}>
-                  <strong>{p.name}</strong> · {PROJECT_LEVEL_LABELS[p.level] ?? p.level}
-                  {p.levelLabel && ` ${p.levelLabel}`}
-                  <span className={styles.quoteMeta}>
-                    {p.city ?? 'город не указан'}
-                    {p.parentName && ` · входит в «${p.parentName}»`}
-                    {p.children > 0 && ` · очередей и корпусов: ${p.children}`}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-};
+export const ProjectPicker: FC<IProjectPickerProps> = ({ selected, onSelect, label = 'Объект', hint = 'Название объекта' }) => (
+  <EntityPicker
+    label={label}
+    hint={hint}
+    kinds={['project']}
+    value={selected ? { kind: 'project', ...selected } : null}
+    onSelect={entity => onSelect({ id: entity.id, name: entity.name })}
+    onClear={() => onSelect(null)}
+  />
+);

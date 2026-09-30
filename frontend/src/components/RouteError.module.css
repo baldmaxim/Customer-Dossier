@@ -1,0 +1,25 @@
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: var(--prose);
+}
+
+.fullPage {
+  min-height: 100dvh;
+  justify-content: center;
+  margin: 0 auto;
+  padding: var(--safe-top) var(--gutter) var(--safe-bottom);
+}
+
+.title {
+  font-size: var(--fs-h1);
+}
+
+.details {
+  display: block;
+  margin-top: var(--sp-2);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}

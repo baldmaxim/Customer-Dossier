@@ -1,3 +1,5 @@
+/* Связи: шапка, одно поле «Чьи связи показать», типы связей и сразу схема. */
+
 .page {
   display: flex;
   flex-direction: column;
@@ -5,41 +7,14 @@
   min-width: 0;
 }
 
-.header {
+.picker {
+  max-width: 36rem;
+  min-width: 0;
+}
+
+.graph {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.title {
-  margin: 0;
-  font-size: var(--fs-2xl);
-}
-
-.lead {
-  max-width: var(--prose);
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--fs-md);
-  line-height: var(--lh-snug);
-}
-
-.pickers {
-  display: grid;
-  gap: var(--sp-4);
-  grid-template-columns: 1fr;
-}
-
-@media (min-width: 768px) {
-  .pickers {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.note {
-  max-width: var(--prose);
-  margin: var(--sp-3) 0 0;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
+  gap: var(--sp-3);
+  min-width: 0;
 }

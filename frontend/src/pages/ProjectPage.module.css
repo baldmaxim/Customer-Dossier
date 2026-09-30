@@ -1,0 +1,138 @@
+/* Объект: шапка, реестр, состояние, участники, раскрытия. Только токены и min-width 600/900. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+/* Родитель в надписи над названием — обычным регистром: заглавными длинное название не читается. */
+.eyebrowLink {
+  font-weight: var(--fw-medium);
+  letter-spacing: normal;
+  text-transform: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.headerMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* ─── Состояние ─── */
+
+.stateCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.stateLabel {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.stateItems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  min-width: 0;
+}
+
+.stateItem {
+  font-weight: var(--fw-medium);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+  font-size: var(--fs-md);
+}
+
+/* ─── Участники ─── */
+
+.participants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.list {
+  min-width: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.busy {
+  opacity: 0.55;
+}
+
+.period {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.periodFields {
+  display: grid;
+  /* 10.5rem — поле даты целиком, с кнопкой календаря: уже — дата обрезается. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  gap: var(--sp-3);
+  max-width: 28rem;
+}
+
+.companyLink {
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+
+.evidenceRow td {
+  background: var(--surface-2);
+}
+
+.cardLine {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.cardEvidence {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* ─── Раскрытия ─── */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.disclosureBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}

@@ -1,37 +1,50 @@
+// Текст публикации. Снимок записи реестра раскладываем по полям (главные — первыми), обычный пост
+// остаётся исходным текстом — со ссылками, по которым можно перейти.
+
 import { FC } from 'react';
 
+import { Disclosure } from './ui/Disclosure';
+import { DescriptionList } from './ui/DescriptionList';
+import { Heading } from './ui/Heading';
+import { LinkifiedText } from './LinkifiedText';
 import styles from './RegistryPublicationBody.module.css';
 
-const FIRST_FIELDS = [
-  'Адрес', 'Статус строительства', 'Сдача дома', 'Количество квартир',
-  'Генподрядчики', 'Генподрядчик', 'Застройщик', 'Группа компаний',
-];
+const REGISTRY_REPRESENTATIONS = new Set(['registry_object_browser@1', 'registry_object@1']);
 
-interface Props {
+const FIRST_FIELDS = ['Адрес', 'Статус строительства', 'Сдача дома', 'Количество квартир', 'Генподрядчики', 'Генподрядчик', 'Застройщик', 'Группа компаний'];
+
+interface IRegistryPublicationBodyProps {
   body: string;
   representation: string;
 }
 
-/** Структурируем только сохранённые снимки реестра; обычный пост остаётся исходным текстом. */
-export const RegistryPublicationBody: FC<Props> = ({ body, representation }) => {
-  if (representation !== 'registry_object_browser@1' && representation !== 'registry_object@1') return <p className={styles.raw}>{body}</p>;
+const priority = (label: string): number => {
+  const index = FIRST_FIELDS.indexOf(label);
+  return index === -1 ? FIRST_FIELDS.length : index;
+};
 
-  const fields = body.split('\n').flatMap(line => {
+export const RegistryPublicationBody: FC<IRegistryPublicationBodyProps> = ({ body, representation }) => {
+  const raw = (
+    <p className={styles.raw}>
+      <LinkifiedText text={body} />
+    </p>
+  );
+  if (!REGISTRY_REPRESENTATIONS.has(representation)) return raw;
+
+  const fields = body.split('\n').flatMap((line, index) => {
     const match = /^([^:\n]{2,80}):\s*(.+)$/.exec(line.trim());
-    return match?.[1] && match[2] && match[1] !== 'Объект' ? [{ label: match[1], value: match[2] }] : [];
+    return match?.[1] && match[2] && match[1] !== 'Объект' ? [{ label: match[1], value: match[2], index }] : [];
   });
-  if (fields.length === 0) return <p className={styles.raw}>{body}</p>;
-  const priority = (label: string): number => {
-    const index = FIRST_FIELDS.indexOf(label);
-    return index === -1 ? FIRST_FIELDS.length : index;
-  };
-  const ordered = fields.map((field, index) => ({ ...field, index })).sort((a, b) => priority(a.label) - priority(b.label) || a.index - b.index);
+  if (fields.length === 0) return raw;
+  const ordered = [...fields].sort((a, b) => priority(a.label) - priority(b.label) || a.index - b.index);
 
-  return <div className={styles.wrap}>
-    <h3>Характеристики объекта</h3>
-    <dl className={styles.fields}>{ordered.map(field => <div className={styles.field} key={`${field.label}-${field.index}`}>
-      <dt>{field.label}</dt><dd>{field.value}</dd>
-    </div>)}</dl>
-    <details className={styles.source}><summary>Исходный текст снимка</summary><pre>{body}</pre></details>
-  </div>;
+  return (
+    <div className={styles.wrap}>
+      <Heading className={styles.heading}>Характеристики объекта</Heading>
+      <DescriptionList dense items={ordered.map(f => ({ key: `${f.label}-${f.index}`, label: f.label, value: <LinkifiedText text={f.value} /> }))} />
+      <Disclosure summary="Исходный текст записи реестра">
+        <pre className={styles.source}>{body}</pre>
+      </Disclosure>
+    </div>
+  );
 };

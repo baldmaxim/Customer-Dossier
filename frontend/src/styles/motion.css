@@ -1,0 +1,94 @@
+/* Движение: общие кадры, смена страницы (View Transitions), prefers-reduced-motion.
+   Длительности и кривые — токены --dur-* / --ease-* в src/index.css. */
+
+/* Кадры общие для всех модулей. В CSS-модуле имя пишется через global(), иначе
+   модуль сделает его локальным: animation: global(enter-up) var(--dur-base) var(--ease-out). */
+
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shift-enter));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes exit-down {
+  to {
+    opacity: 0;
+    transform: translateY(var(--shift-enter));
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Скелет «дышит» прозрачностью ~1.2 с: дольше 400 мс осознанно — это индикатор ожидания. */
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Смена страницы — View Transitions (RouterProvider + viewTransition на ссылках).
+   Старый экран гаснет, новый поднимается; шапка и нижняя панель — свои имена
+   (Layout.module.css) и не мигают. Без поддержки браузера экран просто сменится. */
+::view-transition-old(root) {
+  animation: var(--dur-exit) var(--ease-in) both fade-out;
+}
+
+::view-transition-new(root) {
+  animation: var(--dur-slow) var(--ease-out) both enter-up;
+}
+
+::view-transition-old(app-header),
+::view-transition-old(app-tabbar) {
+  display: none;
+}
+
+::view-transition-new(app-header),
+::view-transition-new(app-tabbar) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,152 @@
+/* «Обработка»: итоги по базе, счётчики «Где тексты сейчас», список разборов, журнал. */
+
+.totalsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.totals {
+  margin: 0;
+  max-width: var(--prose);
+  font-size: var(--fs-base);
+  line-height: var(--lh-text);
+}
+
+.totalsLead {
+  font-weight: var(--fw-semibold);
+}
+
+.totalsMuted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Счётчики плитками: колонок столько, сколько влезает (на 360px — по две), ряд — во всю ширину. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tileItem {
+  display: flex;
+  min-width: 0;
+}
+
+/* Плитка — и статичная, и кнопка-фильтр — одного вида: число крупно, подпись под ним.
+   Два класса в селекторе: перебивают раскладку кнопки (Button.module.css) по центру. */
+.tiles .tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--sp-1);
+  min-width: 0;
+  min-height: 4.5rem; /* число и подпись в две строки — плитки ряда одной высоты */
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--fw-regular);
+  text-align: left;
+}
+
+/* Плитка-фильтр: рамка контрола (≥ 3:1) — видно, что её можно нажать. */
+.tiles button.tile {
+  border-color: var(--border-control);
+}
+
+.tiles button.tile[aria-pressed='true'] {
+  border-color: var(--selected-indicator);
+  background: var(--selected-bg);
+  box-shadow: inset 0 0 0 1px var(--selected-indicator);
+}
+
+.tileValue {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+.tileLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+}
+
+.dot {
+  flex: none;
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: var(--radius-full);
+  background: var(--neutral);
+}
+
+.dot[data-tone='success'] {
+  background: var(--success);
+}
+
+.dot[data-tone='warning'] {
+  background: var(--warning);
+}
+
+.dot[data-tone='danger'] {
+  background: var(--danger);
+}
+
+.dot[data-tone='info'] {
+  background: var(--info);
+}
+
+.failures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-left: var(--sp-5);
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}
+
+/* Ссылка строки — обычный текст ячейки; вся строка — цель нажатия (.row-link). */
+.rowLink {
+  color: var(--text);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+
+/* Контур внутрь: снаружи его срезает край прокрутки таблицы; строку при этом ещё и подсвечивает .row-link. */
+.rowLink:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* Высота ячейки у таблицы — минимальная высота строки: вся строка — цель нажатия не ниже 44px. */
+.whenCell {
+  height: var(--tap-min);
+}
+
+/* Ключ канала без пробелов («gosstroynadzor_spb_official_…») переносится, а не распирает таблицу. */
+.sourceCell {
+  min-width: 12rem;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  display: block;
+  margin-top: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}

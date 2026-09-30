@@ -1,0 +1,75 @@
+/* Область тостов: по центру снизу, над нижней панелью (--bottom-ui) и над домашней полоской
+   iPhone. Там, где панели нет (экран входа, ширина от 600px), --bottom-ui = 0. */
+.region {
+  position: fixed;
+  z-index: var(--z-toast);
+  left: 50%;
+  bottom: calc(max(var(--bottom-ui), var(--safe-bottom)) + var(--sp-3));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+  width: min(440px, calc(100% - 2 * var(--gutter)));
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+  pointer-events: auto;
+  animation: global(enter-up) var(--dur-base) var(--ease-out) both;
+}
+
+.leaving {
+  animation: global(exit-down) var(--dur-exit) var(--ease-in) both;
+}
+
+.icon {
+  flex: none;
+  color: var(--info);
+}
+
+.success .icon {
+  color: var(--success);
+}
+
+.warning .icon {
+  color: var(--warning);
+}
+
+.danger {
+  border-color: var(--danger-border);
+}
+
+.danger .icon {
+  color: var(--danger);
+}
+
+.neutral .icon {
+  color: var(--neutral);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  padding-block: var(--sp-1);
+}
+
+.action {
+  flex: none;
+}
+
+.close {
+  flex: none;
+}

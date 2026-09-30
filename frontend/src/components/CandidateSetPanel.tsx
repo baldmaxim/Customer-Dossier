@@ -1,109 +1,134 @@
+// Что найденное в тексте дало карточкам — только чтение.
+//
+// Оператор ничего не переносит: разобранное уходит в карточки само после полного разбора.
+// Здесь видно, что именно туда попало, что убрано прежним разбором и что не попало вовсе.
+// Найденное — это сказанное в тексте, а не проверенные факты.
+
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 
 import { api } from '../api/client';
 import type { IPublishPreview, IPublishPreviewItem } from '../api/types';
-import { RUN_STATUS_LABELS } from '../lib/labels';
+import { formatCount, pluralize } from '../lib/format';
+import { CANDIDATE_SET_STATUS_LABELS, PREDICATE_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
-import styles from '../pages/Dossier.module.css';
+import { CANDIDATE_SET_STATUS_TONE, toneOf } from '../lib/statusTone';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { ButtonLink } from './ui/ButtonLink';
+import { Callout } from './ui/Callout';
+import { Cluster } from './ui/Cluster';
+import { Disclosure } from './ui/Disclosure';
+import { Loading } from './ui/Loading';
+import { Stack } from './ui/Stack';
+import styles from './admin/Found.module.css';
 
-const Items: FC<{ title: string; items: IPublishPreviewItem[] }> = ({ title, items }) =>
-  items.length === 0 ? null : (
-    <details>
-      <summary>
-        {title}: {items.length}
-      </summary>
+/** Список найденного одного вида: вид сведения и цитаты, без внутренних подписей. */
+const items = (title: string, list: IPublishPreviewItem[]) =>
+  list.length === 0 ? null : (
+    <Disclosure summary={title} meta={formatCount(list.length)}>
       <ul className={styles.list}>
-        {items.map(i => (
-          <li key={i.signature} className={styles.listItem}>
-            <span className={styles.meta}>{i.signature}</span>
-            {i.quotes.map(q => (
-              <blockquote key={q} className={styles.quote}>
-                {q}
-              </blockquote>
-            ))}
+        {list.map(i => (
+          <li key={i.signature} className={styles.item}>
+            <span className={styles.kind}>{PREDICATE_LABELS[i.predicate] ?? i.predicate}</span>
+            {i.quotes.length === 0 ? (
+              <span className={styles.muted}>цитаты в тексте нет</span>
+            ) : (
+              i.quotes.map(q => (
+                <blockquote key={q} className={styles.quote}>
+                  {q}
+                </blockquote>
+              ))
+            )}
           </li>
         ))}
       </ul>
-    </details>
+    </Disclosure>
   );
 
-/**
- * Что набор кандидатов даёт карточкам — только чтение.
- *
- * Оператор ничего не публикует: разбор уходит в карточки сам после полного прохода.
- * Здесь видно, что именно туда попало, что снялось прежним разбором и что не попало
- * вовсе. Числа — кандидаты, найденные в тексте, а не подтверждённые факты.
- */
 export const CandidateSetPanel: FC<{ setId: number }> = ({ setId }) => {
   const preview = useQuery({
     queryKey: ['candidate-set', setId],
     queryFn: () => api.get<IPublishPreview>(`/api/reprocess/sets/${setId}/preview`),
   });
 
-  if (preview.isLoading) return <p className={styles.meta}>Загрузка набора…</p>;
+  if (preview.isLoading) return <Loading label="Загружаю найденное…" />;
   if (preview.isError || !preview.data) {
     return (
-      <p className={styles.error} role="alert">
-        Набор недоступен: {describeLoadError(preview.error)}
-      </p>
+      <Callout tone="danger" title="Найденное не загрузилось" action={<Button onClick={() => void preview.refetch()}>Повторить</Button>}>
+        {describeLoadError(preview.error)}
+      </Callout>
     );
   }
   const p = preview.data;
 
   return (
-    <div className={styles.form}>
-      <p className={styles.hint}>
-        Ниже — кандидаты из текста, а не проверенные факты. Попадание в карточки не ставит «проверено
-        аналитиком» и не трогает решения аналитика и доказательства других публикаций.
-      </p>
+    <Stack gap={3}>
+      <Cluster gap={2}>
+        <span className={styles.muted}>Найденное в тексте:</span>
+        <Badge tone={toneOf(CANDIDATE_SET_STATUS_TONE, p.status)}>{CANDIDATE_SET_STATUS_LABELS[p.status] ?? p.status}</Badge>
+      </Cluster>
       {!p.run.complete && (
-        <p className={styles.error}>
-          Запуск не завершён полностью ({RUN_STATUS_LABELS[p.run.status] ?? p.run.status}, покрыто{' '}
-          {p.run.coveredChars ?? '?'} из {p.run.totalChars ?? '?'}) — такой набор в карточки не идёт ни при
-          каком флаге. Портал повторит разбор сам.
-        </p>
+        <Callout tone="warning">Текст разобран не полностью — в карточки не попадёт; портал повторит разбор сам.</Callout>
       )}
       {!p.policy.allowed && (
-        <p className={styles.error}>Нет ИИ-допуска источника: {p.policy.reason}. Допуск оформляет оператор с основанием.</p>
+        <Callout tone="neutral">
+          Источник выключен{p.policy.reason ? `: ${p.policy.reason}` : ''}. Найденное перенесётся после его включения.
+        </Callout>
       )}
-      {p.stale.stale && <p className={styles.warn}>Устаревший разбор: {p.stale.reason}</p>}
-      <p className={styles.meta}>
-        Публикация #{p.sourceItemId}, версия {p.expectedVersion}; сейчас в карточках набор{' '}
-        {p.activeSetId === null ? 'нет' : `#${p.activeSetId}`}. Текст{' '}
-        {p.relevant ? 'признан относящимся к стройке' : 'признан нерелевантным'}.
-      </p>
-      <Items title="Взято в карточки" items={p.added} />
-      <Items title="Снято (основания прежнего набора)" items={p.removed} />
-      <Items title="Осталось прежним" items={p.kept} />
-      <Items title="Не взято (нет в тексте или на проверке)" items={p.ungrounded} />
-      {p.changed.length > 0 && (
-        <details>
-          <summary>Изменились детали: {p.changed.length}</summary>
-          <ul className={styles.list}>
-            {p.changed.map(c => (
-              <li key={c.before + c.after} className={styles.listItem}>
-                <span className={styles.meta}>было: {c.before}</span>
-                <br />
-                <span className={styles.meta}>стало: {c.after}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+      {p.stale.stale && (
+        <Callout tone="info">
+          Текст изменился после разбора{p.stale.reason ? `: ${p.stale.reason}` : ''}. Портал разберёт новую версию сам.
+        </Callout>
       )}
+      {!p.relevant && <p className={styles.muted}>Текст признан не относящимся к стройке.</p>}
+
+      <div>
+        {items('Перенесено в карточки', p.added)}
+        {items('Убрано из карточек', p.removed)}
+        {items('Осталось как было', p.kept)}
+        {items('Не перенесено: нет цитаты или нужна проверка', p.ungrounded)}
+        {p.changed.length > 0 && (
+          <Disclosure summary="Изменились подробности" meta={formatCount(p.changed.length)}>
+            <ul className={styles.list}>
+              {p.changed.map(c => (
+                <li key={c.before + c.after} className={styles.item}>
+                  <span className={styles.muted}>было: {c.before}</span>
+                  <span>стало: {c.after}</span>
+                </li>
+              ))}
+            </ul>
+          </Disclosure>
+        )}
+      </div>
+
       {p.reviewImpact.length > 0 && (
-        <p className={styles.warn}>
-          Решения аналитика остались, но у {p.reviewImpact.length} утверждений снялось это основание — они
-          попали в «нужен пересмотр»: {p.reviewImpact.map(r => `#${r.assertionId}`).join(', ')}.
-        </p>
+        <Callout
+          tone="warning"
+          action={
+            <ButtonLink to="/admin/review?tab=conflicts" variant="link" size="sm">
+              Открыть «Проверку»
+            </ButtonLink>
+          }
+        >
+          {formatCount(p.reviewImpact.length)}{' '}
+          {pluralize(p.reviewImpact.length, ['сведение потеряло', 'сведения потеряли', 'сведений потеряли'])} эту цитату — решения оператора
+          остались, но их стоит перепроверить.
+        </Callout>
       )}
       {p.contradictions.length > 0 && (
-        <p className={styles.warn}>Есть опровержения из других источников: {p.contradictions.map(c => `#${c.assertionId}`).join(', ')}.</p>
+        <Callout
+          tone="info"
+          action={
+            <ButtonLink to="/admin/review?tab=conflicts" variant="link" size="sm">
+              Противоречия в «Проверке»
+            </ButtonLink>
+          }
+        >
+          Другие источники это опровергают ({formatCount(p.contradictions.length)}).
+        </Callout>
       )}
-      <div className={styles.row}>
-        <Link to="/admin/review">Очередь проверки</Link>
-      </div>
-    </div>
+      <p className={styles.muted}>Это то, что модель нашла в тексте, а не проверенные факты.</p>
+    </Stack>
   );
 };

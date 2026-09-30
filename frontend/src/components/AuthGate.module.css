@@ -1,0 +1,29 @@
+/* Экран до ответа сессии: знак портала по центру и строка загрузки. */
+.gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  min-height: 100dvh;
+  padding: var(--safe-top) var(--gutter) var(--safe-bottom);
+}
+
+.logoLight,
+.logoDark {
+  display: block;
+  height: 28px;
+  width: auto;
+}
+
+.logoDark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoLight {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoDark {
+  display: block;
+}

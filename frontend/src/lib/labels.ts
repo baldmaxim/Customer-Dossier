@@ -1,6 +1,12 @@
 // Русские подписи для машинных значений + форматирование.
 // Одно место: иначе «general_contractor» превращается в «генподрядчик» на одном
 // экране и в «Генеральный подрядчик» на другом.
+//
+// Слова — оператора, а не конвейера: «сведение», а не «утверждение»; «цитата», а не
+// «доказательство»; «разбор», а не «запуск»; «часть текста», а не «чанк»; «источник
+// включён», а не «ИИ-допуск»; «возможный дубль», а не «пара на слияние». Имён переменных
+// окружения, миграций и команд здесь нет: подпись говорит, что происходит, а как это
+// настраивается — дело настроек сервера.
 
 import type {
   AccessPermission,
@@ -8,9 +14,7 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
-  PermissionStatus,
   Role,
-  Sentiment,
   TextCompleteness,
   UserRole,
 } from '../api/types';
@@ -20,24 +24,16 @@ export const COMPLETENESS_LABELS: Record<TextCompleteness, string> = {
   full: 'полный текст',
   excerpt: 'анонс',
   caption_only: 'подпись к вложению',
-  failed: 'не получен',
+  failed: 'текст не получен',
   unknown: 'полнота неизвестна',
 };
 
-/** Полнота — по происхождению текста, а не по его длине: короткий пост бывает полным. */
-export const COMPLETENESS_HINTS: Record<string, string> = {
-  full: 'источник отдал текст целиком',
-  excerpt: 'источник отдал только анонс; полная версия осталась на странице публикации',
-  caption_only: 'в посте были фото или видео, портал сохранил только подпись к ним',
-  failed: 'текст получить не удалось — это сбой загрузки, а не пустая публикация',
-  unknown: 'откуда взят текст, достоверно неизвестно',
-};
-
-/** Статус утверждения: «найдено в тексте» и «подтверждено аналитиком» — разные вещи. */
+/** Статус сведения: «найдено в тексте» и «подтверждено оператором» — разные вещи. */
 export const ASSERTION_STATUS_LABELS: Record<AssertionStatus, string> = {
-  candidate: 'кандидат',
+  // Модель нашла, но цитата не сверена или сведение отправлено на проверку — это ещё не факт.
+  candidate: 'найдено, не проверено',
   text_grounded: 'есть в тексте источника',
-  reviewed_supported: 'подтверждено аналитиком',
+  reviewed_supported: 'подтверждено оператором',
   disputed: 'спорно',
   rejected: 'отклонено',
 };
@@ -47,6 +43,7 @@ export const REVIEW_SCOPE_LABELS: Record<string, string> = {
   fact_confirmed: 'факт подтверждён независимо',
 };
 
+/** Как цитата относится к сведению. */
 export const STANCE_LABELS: Record<string, string> = {
   supports: 'подтверждает',
   contradicts: 'опровергает',
@@ -59,11 +56,14 @@ export const MODALITY_LABELS: Record<string, string> = {
   planned: 'план',
   possible: 'возможно',
   negated: 'отрицание',
-  unknown: 'модальность неизвестна',
+  unknown: 'не ясно: факт или план',
 };
 
-/** Роль на объекте, вид договора и корпоративной связи в утверждениях (этап 06). */
-export const ASSERTION_ROLE_LABELS: Record<string, string> = {
+/**
+ * Роль компании на объекте — одна таблица слов на весь портал. Со строчной буквы: подпись
+ * стоит и в ярлыке, и внутри фразы («генподрядчик · ЖК …»).
+ */
+const PARTICIPANT_ROLE_WORDS = {
   customer: 'заказчик',
   general_contractor: 'генподрядчик',
   contractor: 'подрядчик',
@@ -74,6 +74,11 @@ export const ASSERTION_ROLE_LABELS: Record<string, string> = {
   operator: 'эксплуатация',
   // Застройщик по 214-ФЗ — не подрядная роль: приходит из реестра, модель её не выбирает.
   developer: 'застройщик',
+} as const;
+
+/** Роль на объекте, вид договора и корпоративной связи в сведениях (этап 06). */
+export const ASSERTION_ROLE_LABELS: Record<string, string> = {
+  ...PARTICIPANT_ROLE_WORDS,
   general_contract: 'договор генподряда',
   subcontract: 'договор субподряда',
   supply: 'договор поставки',
@@ -140,61 +145,36 @@ export const AMOUNT_PURPOSE_LABELS: Record<string, string> = {
   amount: 'сумма',
 };
 
-export const REVIEW_QUEUE_LABELS: Record<string, string> = {
-  identity: 'неоднозначная идентичность',
-  polarity_conflict: 'утверждение и отрицание',
-  role_period_conflict: 'конфликт ролей в одном периоде',
-  correction: 'основание изменилось',
-  dispute: 'оспаривается',
-};
-
-export const CHRONOLOGY_LABELS: Record<string, string> = {
-  source_modified_at: 'по дате изменения от источника',
-  observed_order: 'по порядку наблюдения',
-  unknown: 'порядок неизвестен',
-};
-
-export const PERMISSION_LABELS: Record<PermissionStatus, string> = {
-  unknown: 'не подтверждён',
-  approved: 'разрешён',
-  blocked: 'запрещён',
-  revoked: 'отозван',
-  expired: 'истёк',
-};
-
+/**
+ * Те же слова, что в ASSERTION_ROLE_LABELS, но строго по типу `Role` (роль из списка объектов).
+ * Раньше здесь было «Заказчик» с заглавной, и одна строка сводки писала роль то так, то этак.
+ */
 export const ROLE_LABELS: Record<Role, string> = {
-  customer: 'Заказчик',
-  general_contractor: 'Генподрядчик',
-  contractor: 'Подрядчик',
-  designer: 'Проектировщик',
-  investor: 'Инвестор',
-  operator: 'Эксплуатация',
+  customer: PARTICIPANT_ROLE_WORDS.customer,
+  general_contractor: PARTICIPANT_ROLE_WORDS.general_contractor,
+  contractor: PARTICIPANT_ROLE_WORDS.contractor,
+  designer: PARTICIPANT_ROLE_WORDS.designer,
+  investor: PARTICIPANT_ROLE_WORDS.investor,
+  operator: PARTICIPANT_ROLE_WORDS.operator,
 };
 
-/** Тональность упоминания. Подпись словом обязательна: одного цвета мало. */
-export const SENTIMENT_LABELS: Record<Sentiment, string> = {
-  positive: 'позитив',
-  neutral: 'нейтрально',
-  negative: 'негатив',
-};
+/**
+ * Стадия объекта — одни слова для списка объектов (`projects.stage`) и для состояния по дате
+ * события (CONTEXT_STATE_LABELS): раньше один и тот же ввод в эксплуатацию был «Сдан» в одном
+ * месте и «введён» в другом. Со строчной буквы — как роли, рядом с которыми стоит ярлык.
+ */
+const PROJECT_STAGE_WORDS = {
+  announced: 'анонсирован',
+  design: 'проектируется',
+  construction: 'строится',
+  suspended: 'приостановлен',
+  commissioned: 'сдан',
+  cancelled: 'отменён',
+} as const;
 
 export const STAGE_LABELS: Record<string, string> = {
-  announced: 'Анонсирован',
-  design: 'Проектирование',
-  construction: 'Строится',
-  suspended: 'Приостановлен',
-  commissioned: 'Сдан',
-  cancelled: 'Отменён',
-  unknown: 'Стадия неизвестна',
-};
-
-export const KIND_LABELS: Record<string, string> = {
-  residential: 'Жильё',
-  office: 'Офисы',
-  industrial: 'Промышленность',
-  infrastructure: 'Инфраструктура',
-  social: 'Соцобъект',
-  other: 'Прочее',
+  ...PROJECT_STAGE_WORDS,
+  unknown: 'стадия неизвестна',
 };
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -218,10 +198,14 @@ export const EVENT_LABELS: Record<string, string> = {
   other: 'Прочее',
 };
 
+/**
+ * Вид источника — подпись у поста и в списках. Сайт без ссылки на оригинал подписывался
+ * «вставлено вручную», хотя его собрал обходчик: вид берётся отсюда, а не из тернарника.
+ */
 export const SOURCE_KIND_LABELS: Record<string, string> = {
-  telegram: 'Telegram',
-  website: 'Сайт',
-  manual: 'Вручную',
+  telegram: 'Telegram-канал',
+  website: 'сайт',
+  manual: 'ручная вставка',
 };
 
 export const formatDate = (iso: string | null): string => {
@@ -283,17 +267,61 @@ export const formatDateTime = (iso: string | null): string => {
   });
 };
 
-/** Суммы в стройке бывают в миллиардах — полное число нечитаемо. */
-export const formatMoney = (amount: number): string => {
-  if (amount >= 1e9) return `${(amount / 1e9).toFixed(1)} млрд ₽`;
-  if (amount >= 1e6) return `${(amount / 1e6).toFixed(1)} млн ₽`;
-  return `${amount.toLocaleString('ru-RU')} ₽`;
+// ─── Деньги и доли ──────────────────────────────────────────────────────────
+// Русский вид: запятая в дробях, пробел между разрядами («38,1 млн ₽»). Между числом и единицей —
+// неразрывный пробел: в узкой колонке «млн ₽» не уезжает на новую строку. Счётчики
+// («12 345», «3 публикации») — formatCount и formatCountWord в format.ts.
+
+const NBSP = '\u00a0';
+const SCALED_FORMAT = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const EXACT_MONEY_FORMAT = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+const PERCENT_FORMAT = new Intl.NumberFormat('ru-RU', { style: 'percent', maximumFractionDigits: 0 });
+
+/** Суммы в стройке бывают в миллиардах — полное число нечитаемо. От миллиона — порядком. */
+const MONEY_SCALE: ReadonlyArray<{ divisor: number; unit: string }> = [
+  { divisor: 1e12, unit: 'трлн' },
+  { divisor: 1e9, unit: 'млрд' },
+  { divisor: 1e6, unit: 'млн' },
+];
+
+const CURRENCY_SIGNS: Record<string, string> = {
+  RUB: '₽',
+  USD: '$',
+  EUR: '€',
+  KZT: '₸',
 };
 
-export const formatPercent = (share: number | null): string =>
-  share === null ? '—' : `${Math.round(share * 100)} %`;
+const scaledAmount = (value: number): string => {
+  const step = MONEY_SCALE.find(s => Math.abs(value) >= s.divisor);
+  if (!step) return EXACT_MONEY_FORMAT.format(value);
+  const shown = Math.round((value / step.divisor) * 10) / 10;
+  // 999,96 млн после округления — «1000 млн»: это уже следующий порядок.
+  const bigger = MONEY_SCALE[MONEY_SCALE.indexOf(step) - 1];
+  if (bigger && Math.abs(shown) >= 1000) {
+    return `${SCALED_FORMAT.format(Math.round((value / bigger.divisor) * 10) / 10)}${NBSP}${bigger.unit}`;
+  }
+  return `${SCALED_FORMAT.format(shown)}${NBSP}${step.unit}`;
+};
 
-/** Вид сущности компании (этап 04). */
+/**
+ * Сумма: «38,1 млн ₽», «1,2 млрд ₽», «950 000 ₽». Сервер отдаёт суммы и строкой
+ * («38100000.00») — её можно передать как есть. Валюты не пересчитываются (ADR-008):
+ * сумма в долларах остаётся в долларах, а если валюту источник не назвал, так и сказано —
+ * рубль не подставляется.
+ */
+export const formatMoney = (amount: number | string, currency: string | null = 'RUB'): string => {
+  const value = typeof amount === 'string' ? Number(amount) : amount;
+  if (!Number.isFinite(value)) return '—';
+  const code = currency?.trim().toUpperCase() || null;
+  const unit = code === null ? '(валюта не указана)' : (CURRENCY_SIGNS[code] ?? code);
+  return `${scaledAmount(value)}${NBSP}${unit}`;
+};
+
+/** Доля: «83 %». Неизвестное — прочерк. */
+export const formatPercent = (share: number | null): string =>
+  share === null || !Number.isFinite(share) ? '—' : PERCENT_FORMAT.format(share);
+
+/** Вид компании (этап 04). */
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
   legal_entity: 'юрлицо',
   brand: 'бренд',
@@ -310,6 +338,15 @@ export const IDENTIFIER_TYPE_LABELS: Record<string, string> = {
   other: 'реквизит',
 };
 
+/**
+ * Реквизит словами: «ИНН 7801234567». Сервер присылает тип с юрисдикцией («RU:inn») —
+ * на экран уходил сырой ключ и склейка без пробела.
+ */
+export const formatIdentifier = ({ type, value }: { type: string; value: string }): string => {
+  const bare = type.includes(':') ? type.slice(type.lastIndexOf(':') + 1) : type;
+  return `${IDENTIFIER_TYPE_LABELS[bare] ?? IDENTIFIER_TYPE_LABELS.other} ${value}`;
+};
+
 export const RELATION_LABELS: Record<string, { outgoing: string; incoming: string }> = {
   brand_of: { outgoing: 'бренд компании', incoming: 'владеет брендом' },
   member_of_group: { outgoing: 'входит в группу', incoming: 'группа включает' },
@@ -322,150 +359,138 @@ export const PROJECT_LEVEL_LABELS: Record<string, string> = {
   building: 'корпус',
 };
 
-/** Что переносит слияние — подписи счётчиков предпросмотра. */
+/** Что переносит объединение дублей — подписи счётчиков при сравнении двух карточек. */
 export const MERGE_COUNT_LABELS: Record<string, string> = {
-  aliases: 'написаний',
-  aliasDuplicates: 'совпавших написаний',
+  aliases: 'вариантов написания',
+  aliasDuplicates: 'совпавших вариантов написания',
   mentions: 'упоминаний',
-  events: 'событий (legacy)',
-  participants: 'ролей на объектах (legacy)',
+  events: 'событий (прежняя обработка)',
+  participants: 'ролей на объектах (прежняя обработка)',
   participantDuplicates: 'совпавших ролей',
   identifiers: 'реквизитов',
   relations: 'связей',
   children: 'очередей и корпусов',
-  assertions: 'утверждений',
-  activeEvidence: 'активных оснований',
-  pendingQueuePairs: 'других пар в очереди',
-  priorMerges: 'прежних слияний сторон',
+  assertions: 'сведений',
+  activeEvidence: 'цитат',
+  pendingQueuePairs: 'других возможных дублей',
+  priorMerges: 'прежних объединений',
 };
 
-/** Здоровье источника (этап 05A). */
+/** Как работает сборщик по последним проходам (этап 05A). */
 export const SOURCE_HEALTH_LABELS: Record<string, string> = {
   unknown: 'не проверялся',
   ok: 'в порядке',
-  parser_degraded: 'вёрстка изменилась?',
-  rate_limited: 'ограничение частоты (429)',
+  parser_degraded: 'похоже, изменилась вёрстка',
+  rate_limited: 'сайт просит реже',
   blocked: 'доступ закрыт',
-  error: 'ошибка',
-  config_invalid: 'профиль некорректен',
+  error: 'ошибка сбора',
+  config_invalid: 'ошибка в настройке сайта',
   identity_uncertain: 'канал не совпадает с источником',
 };
 
+/** Итог одного прохода сборщика: «ничего нового» и «не смогли прочитать» — разные исходы. */
 export const RUN_OUTCOME_LABELS: Record<string, string> = {
   ok: 'успешно',
-  not_modified: 'без изменений (304)',
-  partial: 'частично',
-  parser_degraded: 'селекторы не нашли записи',
-  rate_limited: 'ограничение частоты',
-  blocked: 'отказ доступа',
-  http_error: 'ошибка HTTP',
+  not_modified: 'без изменений',
+  partial: 'собрано частично',
+  parser_degraded: 'вёрстка изменилась — записи не найдены',
+  rate_limited: 'сайт просит реже',
+  blocked: 'сайт закрыл доступ',
+  http_error: 'сайт ответил ошибкой',
   network: 'сеть недоступна',
-  oversize: 'ответ слишком большой',
-  config_invalid: 'профиль некорректен',
-  error: 'ошибка',
-  policy_blocked: 'допуск отозван во время прохода',
-  identity_changed: 'другой канал на странице',
+  oversize: 'страница слишком большая',
+  config_invalid: 'ошибка в настройке сайта',
+  error: 'ошибка сбора',
+  policy_blocked: 'источник выключили во время сбора',
+  identity_changed: 'на странице другой канал',
   not_found: 'канал не найден',
   private: 'канал закрыт',
 };
 
+/** Где и почему остановился проход сборщика. */
 export const COVERAGE_STOP_LABELS: Record<string, string> = {
   exhausted: 'пройдены все страницы',
-  caught_up: 'догнали уже сохранённое',
-  max_pages: 'лимит страниц — история не полная',
-  max_items: 'лимит записей — история не полная',
+  caught_up: 'дошли до уже собранного',
+  max_pages: 'лимит страниц — собрано не всё',
+  max_items: 'лимит записей — собрано не всё',
   failed: 'остановлено сбоем',
   not_modified: 'страница не менялась',
-  parser_degraded: 'остановлено: вёрстка',
-  feed_window: 'окно ленты — история не гарантируется',
+  parser_degraded: 'остановлено: изменилась вёрстка',
+  feed_window: 'лента отдаёт только последние записи',
   empty_feed: 'лента пуста',
   up_to_date: 'новые посты сохранены',
-  history_not_collected: 'история канала не собиралась',
+  history_not_collected: 'старые посты не собирались',
   channel_start_reached: 'дошли до начала канала',
-  gap_open_max_pages: 'разрыв постов ещё не догружен',
-  gap_closed: 'разрыв постов догружен',
+  gap_open_max_pages: 'пропуск в постах ещё не догружен',
+  gap_closed: 'пропуск в постах догружен',
   policy_blocked: 'остановлено: источник выключен',
-  identity_changed: 'остановлено: другой канал',
+  identity_changed: 'остановлено: на странице другой канал',
   history_in_progress: 'история догружается по сроку сбора',
   history_depth_reached: 'история собрана за весь срок',
-  pagination_loop: 'остановлено: пагинация зациклилась',
+  pagination_loop: 'остановлено: страницы архива повторяются',
 };
 
-// ─── Сигналы (этап 07) ────────────────────────────────────────────────────
+// ─── Показатели компании (этап 07) ──────────────────────────────────────────
 
+/** Опознание компании. Верный номер ИНН/ОГРН — это «без опечаток», а не проверка в реестре. */
 export const IDENTITY_STATUS_LABELS: Record<string, string> = {
-  identified: 'реквизит с верной контрольной суммой',
-  identifier_unverified: 'реквизит не проверен',
-  name_only: 'только название, реквизитов нет',
-  ambiguous: 'идентичность под вопросом',
+  identified: 'ИНН/ОГРН указан, номер без ошибок',
+  identifier_unverified: 'ИНН/ОГРН указан, номер не проверен',
+  name_only: 'только название, без ИНН и ОГРН',
+  ambiguous: 'опознание под вопросом: есть возможные дубли или неясные упоминания',
 };
 
 export const REVIEW_LEVEL_LABELS: Record<string, string> = {
-  reviewed: 'проверено аналитиком',
+  reviewed: 'проверено оператором',
   text_grounded: 'есть в тексте, не проверено',
-  legacy_unreviewed: 'из старого разбора, не проверено',
+  legacy_unreviewed: 'из прежней обработки, не проверено',
   disputed: 'спорно',
-  rejected: 'отклонено аналитиком',
+  rejected: 'отклонено оператором',
 };
 
+/** Дата события относительно окна «последние 12 месяцев» от даты расчёта показателей. */
 export const DATE_STATUS_LABELS: Record<string, string> = {
-  in_window: 'в окне 12 месяцев',
-  boundary: 'на границе окна (неточная дата)',
-  before_window: 'раньше окна',
-  future: 'дата позже среза',
+  in_window: 'за последние 12 месяцев',
+  boundary: 'около границы 12 месяцев (дата неточная)',
+  before_window: 'больше 12 месяцев назад',
+  future: 'позже даты расчёта',
   undated: 'дата события неизвестна',
 };
 
+/** Совпадает ли событие объекта с периодом участия компании. Совпадение — контекст, а не вина. */
 export const OVERLAP_LABELS: Record<string, string> = {
-  overlaps: 'периоды пересекаются',
-  no_overlap: 'периоды не пересекаются',
-  unknown: 'пересечение неизвестно',
+  overlaps: 'в период участия компании',
+  no_overlap: 'вне периода участия компании',
+  unknown: 'совпадение с участием неизвестно',
 };
 
+/** Состояние объекта по дате события — те же слова, что у стадии объекта. */
 export const CONTEXT_STATE_LABELS: Record<string, string> = {
-  construction: 'строится',
-  suspended: 'приостановлен',
-  cancelled: 'отменён',
-  commissioned: 'введён',
+  construction: PROJECT_STAGE_WORDS.construction,
+  suspended: PROJECT_STAGE_WORDS.suspended,
+  cancelled: PROJECT_STAGE_WORDS.cancelled,
+  commissioned: PROJECT_STAGE_WORDS.commissioned,
 };
 
-// ─── Рабочее досье (этап 08A) ────────────────────────────────────────────
+// ─── Откуда известно ────────────────────────────────────────────────────────
 
+/** Кто стоит за фразой сводки — словами, а не цветом. */
 export const ATTRIBUTION_LABELS: Record<string, string> = {
   source_reported: 'в публикации сообщается',
-  analyst_reviewed: 'проверено аналитиком',
-  analyst_disputed: 'спорно по решению аналитика',
-  analyst_rejected: 'отклонено аналитиком',
-  operator_claim: 'со слов обратившегося',
-  not_established: 'не установлено в выборке',
-  system_context: 'контекст',
+  analyst_reviewed: 'проверено оператором',
+  analyst_disputed: 'спорно по решению оператора',
+  analyst_rejected: 'отклонено оператором',
+  not_established: 'в собранных публикациях не найдено',
+  // Фразу составил сам портал (опознание, полнота, свежесть расчёта), а не взял из текста.
+  system_context: 'пояснение портала',
 };
 
-export const CASE_ROLE_STATUS_LABELS: Record<string, string> = {
-  reviewed: 'подтверждена аналитиком в пределах основания',
-  reported: 'сообщается в публикациях, не проверена',
-  // Противоречие источников и решение аналитика — разные оси: решение по утверждению не снимает отрицание из другой публикации.
-  contradicted: 'источники противоречат — противоречие сохраняется и после решения аналитика (решение указано у утверждения)',
-  scope_unknown: 'сведения есть, но корпус, работы или период не указаны или другие — для обращения не установлена',
-  not_established: 'по источникам не установлена',
-  no_project: 'объект не выбран',
-  no_company: 'юрлицо не установлено',
-};
-
-export const CASE_CHAIN_STATUS_LABELS: Record<string, string> = {
-  documented: 'договор с заказчиком документирован',
-  differs_from_claim: 'в источниках другой заказчик, чем заявлено',
-  scope_unknown: 'прямой договор по этому объекту, корпусу и работам не установлен; есть договоры вне предмета обращения',
-  not_documented: 'договорная цепочка не установлена',
-  no_project: 'объект не выбран',
-  no_company: 'юрлицо не установлено',
-};
-
+/** Вид вопроса в «Проверке». */
 export const REVIEW_QUEUE_KIND_LABELS: Record<string, string> = {
-  identity: 'нерешённая идентификация',
+  identity: 'неясное упоминание',
   polarity_conflict: 'противоречие источников',
-  role_period_conflict: 'конфликт ролей в одном периоде',
-  correction: 'изменилась доказательная база',
+  role_period_conflict: 'две компании в одной роли одновременно',
+  correction: 'цитаты изменились после решения',
   dispute: 'оспаривается',
 };
 
@@ -476,18 +501,6 @@ export const IN_PERIOD_LABELS: Record<string, string> = {
   no_period_selected: '',
 };
 
-export const CLAIMED_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'customer', label: 'заказчик' },
-  { value: 'general_contractor', label: 'генподрядчик' },
-  { value: 'contractor', label: 'подрядчик' },
-  { value: 'subcontractor', label: 'субподрядчик' },
-  { value: 'supplier', label: 'поставщик' },
-  { value: 'designer', label: 'проектировщик' },
-  { value: 'investor', label: 'инвестор' },
-  { value: 'operator', label: 'эксплуатация' },
-];
-
-/** Типы рёбер схемы связей (этап 08B). Различаются подписью и штрихом линии, не цветом надёжности. */
 /**
  * На каком основании компания считается контрагентом (этап 22). Совместное участие —
  * не договор: две фирмы на одном объекте могут не иметь отношений между собой.
@@ -501,9 +514,10 @@ export const PARTNER_KIND_LABELS: Record<string, string> = {
 export const PARTNER_KIND_HINTS: Record<string, string> = {
   contract: 'обе стороны названы в одном предложении источника как стороны договора',
   corporate: 'доля, контроль, группа или бренд — по сообщению источника',
-  co_participation: 'обе компании работают на одном объекте. Это не договор между ними и не доказательство отношений',
+  co_participation: 'обе компании работают на одном объекте. Это не договор между ними и не значит, что они связаны',
 };
 
+/** Типы линий схемы связей (этап 08B). Различаются подписью и штрихом линии, не цветом надёжности. */
 export const GRAPH_EDGE_LABELS: Record<string, string> = {
   participation: 'участие в объекте',
   contract: 'договор (сообщён источником)',
@@ -512,105 +526,125 @@ export const GRAPH_EDGE_LABELS: Record<string, string> = {
   co_mentioned: 'совместное упоминание',
 };
 
-/** Этап 15A: решение по одному неоднозначному упоминанию — не слияние и не проверка утверждения. */
+/** Решение по одному неясному упоминанию — не объединение карточек и не проверка сведения (этап 15A). */
 export const AMBIGUITY_DECISION_LABELS: Record<string, string> = {
-  resolved_to: 'в этом тексте — выбранный кандидат',
-  kept_unknown: 'оставлено неустановленным',
-  dismissed: 'не упоминание компании/объекта',
+  resolved_to: 'опознано',
+  kept_unknown: 'оставлено неясным',
+  dismissed: 'не компания и не объект',
 };
 
 export const AMBIGUITY_STATUS_LABELS: Record<string, string> = {
-  open: 'не разобрано',
+  open: 'ждёт решения',
   resolved: 'решено',
-  dismissed: 'отклонено',
+  dismissed: 'не компания и не объект',
 };
 
-/** Этап 15B: статусы запусков, чанков, ответов и кандидатов. */
+// ─── Обработка: разбор текстов моделью (этап 15B) ───────────────────────────
+
+/** Статус одного разбора текста. */
 export const RUN_STATUS_LABELS: Record<string, string> = {
   queued: 'в очереди',
   running: 'выполняется',
-  completed: 'разобран полностью',
-  partial: 'разобран частично',
-  failed: 'не разобран',
+  completed: 'выполнен полностью',
+  partial: 'выполнен частично',
+  failed: 'не удался',
   cancelled: 'отменён',
 };
 
+/** Ответ модели на одну часть текста. */
 export const CHUNK_OUTCOME_LABELS: Record<string, string> = {
   ok: 'ответ принят',
-  invalid_json: 'невалидный JSON',
-  schema_error: 'ответ не по схеме',
+  invalid_json: 'модель ответила не по формату',
+  schema_error: 'модель ответила не теми полями',
   llm_error: 'ошибка модели или соединения',
-  timeout: 'тайм-аут',
+  timeout: 'модель не ответила вовремя',
   truncated_input: 'ответ обрезан',
 };
 
+/** Что будет с одним найденным в тексте сведением. */
 export const CANDIDATE_VERDICT_LABELS: Record<string, string> = {
-  publishable: 'пройдёт в карточки',
-  review: 'найден в тексте, но отправлен на проверку',
-  ungrounded: 'цитата не найдена — в карточки не попадёт',
+  publishable: 'попадёт в карточки',
+  review: 'есть в тексте, нужна проверка',
+  ungrounded: 'цитаты нет в тексте — в карточки не попадёт',
 };
 
+/** Что стало с найденным в тексте: перенесено ли в карточки, а если нет — почему. */
 export const CANDIDATE_SET_STATUS_LABELS: Record<string, string> = {
-  built: 'собран, в карточки не попал',
+  built: 'разобран, не перенесён',
   published: 'в карточках',
-  superseded: 'замещён новым набором',
-  rejected_policy: 'отклонён: нет допуска',
-  rejected_stale: 'отклонён: устарел',
+  superseded: 'заменён более новым разбором',
+  rejected_policy: 'не перенесён: источник выключен',
+  rejected_stale: 'не перенесён: текст изменился',
   discarded: 'отброшен',
 };
 
-/** Этап 16: состояние источника (source-health@1) — словами, не цветом. */
+/** Журнал переноса в карточки: те же слова, что у CANDIDATE_SET_STATUS_LABELS. */
+export const PUBLICATION_ACTION_LABELS: Record<string, string> = {
+  publish: 'перенесён в карточки',
+  rejected_policy: 'не перенесён: источник выключен',
+  rejected_stale: 'не перенесён: текст изменился',
+};
+
+export const PUBLICATION_ACTION_HINTS: Record<string, string> = {
+  publish: 'сведения из текста добавлены в карточки компаний и объектов',
+  rejected_policy: 'источник был выключен — найденное перенесётся после его включения',
+  rejected_stale: 'текст изменился после разбора — портал разберёт новую версию сам',
+};
+
+/** Состояние источника для оператора (source-health@1) — словами, не цветом. */
 export const SOURCE_HEALTH_STATE_LABELS: Record<string, string> = {
-  never_run: 'не запускался',
+  never_run: 'ещё не собирался',
   healthy: 'работает',
-  degraded: 'разбор деградировал',
+  degraded: 'сбор работает с ошибками',
   policy_blocked: 'выключен',
-  temporary_error: 'временная ошибка',
-  partial_history: 'неполная история',
+  temporary_error: 'временный сбой',
+  partial_history: 'собрана не вся история',
 };
 
 /** Исход сохранения текста, вставленного вручную (`StoreOutcome` бэкенда). */
 export const MANUAL_OUTCOME_LABELS: Record<string, string> = {
   inserted: 'текст сохранён как новая публикация',
-  duplicate: 'такой текст уже есть в базе — вставка учтена как ещё одно появление',
-  new_revision: 'это правка уже известной публикации — сохранена новая редакция',
+  duplicate: 'такой текст уже есть в базе',
+  new_revision: 'это правка уже известной публикации — сохранена новая версия текста',
   unchanged: 'этот текст уже вставлялся, изменений нет',
-  stale: 'в базе есть более поздняя редакция этой публикации',
+  stale: 'в базе уже есть более новая версия этой публикации',
   too_short: 'текст слишком короткий — не сохранён',
-  edited_skipped: 'публикация известна с другим текстом, а запись редакций выключена — правка не сохранена',
+  edited_skipped: 'публикация известна с другим текстом, а новые версии не сохраняются — правка не сохранена',
 };
 
 /**
- * Что портал сделал с текстом публикации. Причины пустоты разные, и смешивать их нельзя:
- * «не о стройке» — это решение модели, «нет допуска» — решение оператора, «не разбирался» —
- * отсутствие данных.
+ * Что стало с текстом публикации — итог коротко (`/api/items/:id/extraction`; те же слова годятся
+ * для колонки «Итог» в «Обработке»). Причины пустоты разные, и смешивать их нельзя: «не о стройке» —
+ * решение модели, «источник выключен» — решение оператора, «ещё не разбирался» — отсутствие данных.
  */
 export const ITEM_STATE_LABELS: Record<string, string> = {
-  in_cards: 'разобрано, сведения в карточках',
-  nothing_found: 'разобрано, связей в тексте не найдено',
-  not_relevant: 'текст признан не относящимся к стройке и недвижимости',
-  built_not_in_cards: 'разобрано, в карточки ещё не перенесено',
-  queued: 'ждёт разбора',
+  in_cards: 'в карточках',
+  nothing_found: 'связей не найдено',
+  not_relevant: 'не о стройке',
+  built_not_in_cards: 'разобран, не перенесён',
+  queued: 'в очереди на разбор',
   running: 'разбирается',
-  partial: 'разобрано частично — в карточки не идёт',
-  failed: 'разобрать не удалось',
-  cancelled: 'разбор отменён',
-  no_policy: 'у источника нет допуска на ИИ-обработку — текст не разбирался',
+  partial: 'разобран частично',
+  failed: 'разбор не удался',
+  cancelled: 'разбор отменён: источник выключен',
+  no_policy: 'источник выключен',
   no_run: 'ещё не разбирался',
 };
 
 export const ITEM_STATE_HINTS: Record<string, string> = {
-  in_cards: 'утверждения из этого текста подтверждаются его цитатами и видны в карточках компаний и объектов',
-  nothing_found: 'текст про стройку, но связей, которые портал умеет извлекать, в нём нет',
-  not_relevant: 'модель не нашла в тексте строительной темы; в карточки такой текст не идёт',
-  built_not_in_cards: 'набор кандидатов собран, но перенос в карточки не состоялся — причина видна в запуске',
-  partial: 'часть текста осталась неразобранной; неполный разбор в карточки не идёт ни при каком флаге',
-  no_policy: 'допуск на ИИ-обработку ставит оператор с основанием; без него текст модели не показывают',
-  no_run: 'портал ставит разбор сам; если источник допущен, это произойдёт в ближайшем проходе',
+  in_cards: 'сведения из этого текста видны в карточках компаний и объектов — у каждого есть цитата',
+  nothing_found: 'текст о стройке, но связей между компаниями и объектами в нём нет',
+  not_relevant: 'модель не нашла в тексте строительной темы — в карточки такой текст не идёт',
+  built_not_in_cards: 'текст разобран, но в карточки не перенесён — причина видна в разборе',
+  partial: 'часть текста не разобрана; неполный разбор в карточки не идёт — если повтор включён, портал повторит его сам',
+  failed: 'разбор прервался ошибкой (чаще всего модель не ответила); если повтор включён, портал повторит его сам',
+  cancelled: 'источник выключили во время разбора; такой разбор портал сам не повторяет',
+  no_policy: 'пока источник выключен, его тексты модели не показывают',
+  no_run: 'портал разберёт текст сам в ближайшем проходе, если источник включён',
 };
 
 /**
- * Вид утверждения (extract@3). Без словаря на экран запуска уходили сырые
+ * Вид сведения (extract@3). Без словаря на экран разбора уходили сырые
  * `company_mentioned` и `project_mentioned` — оператор читал машинный ключ.
  */
 export const PREDICATE_LABELS: Record<string, string> = {
@@ -622,7 +656,7 @@ export const PREDICATE_LABELS: Record<string, string> = {
   project_mentioned: 'упоминание объекта',
 };
 
-/** Пояснения к видам утверждений: чем участие отличается от договора. */
+/** Пояснения к видам сведений: чем участие отличается от договора. */
 export const PREDICATE_HINTS: Record<string, string> = {
   participates_in_project:
     'источник называет компанию участником объекта в определённой роли; договор этим не подтверждается',
@@ -633,45 +667,30 @@ export const PREDICATE_HINTS: Record<string, string> = {
   project_mentioned: 'в тексте назван объект; чьё это участие — отдельный вопрос',
 };
 
-/** Состояние чанка разбора. Раньше три значения печатались тернарником мимо словаря. */
+/** Состояние одной части текста в разборе. Раньше три значения печатались тернарником мимо словаря. */
 export const CHUNK_STATUS_LABELS: Record<string, string> = {
-  ok: 'принят',
-  failed: 'не разобран',
-  pending: 'ожидает',
+  ok: 'разобрана',
+  failed: 'не разобрана',
+  pending: 'ждёт разбора',
   running: 'разбирается',
 };
 
-/** Операционный статус источника: только расписание опроса, не допуск. */
-export const SOURCE_STATUS_LABELS: Record<string, string> = {
-  active: 'активен',
-  paused: 'пауза',
-  broken: 'сломан',
-};
-
-/** Состояние сырого документа в очереди разбора. */
 /**
- * Где сейчас публикация и почему её нет в карточках (этап 22). Каждое состояние —
- * ответ на вопрос оператора, а не внутреннее слово конвейера.
+ * Где сейчас текст и почему его нет в карточках (этап 22) — по последним версиям текстов.
+ * Каждое состояние — ответ на вопрос оператора, а не внутреннее слово конвейера; слова те же,
+ * что в ITEM_STATE_LABELS.
  */
 export const REVISION_STATE_LABELS: Record<string, string> = {
   published: 'в карточках',
-  completed_unpublished: 'разобрано, но не попало в карточки',
-  irrelevant: 'не о стройке — разбор пропущен',
-  in_queue: 'ждёт разбора моделью',
-  waiting: 'ещё не ставилось в разбор',
-  no_ai_permission: 'нет ИИ-допуска у источника',
-  failed_retrying: 'разбор упал, будет повтор',
-  failed_exhausted: 'разбор упал, попытки исчерпаны',
-  cancelled: 'разбор отменён допуском',
-  unknown: 'состояние не определено',
-};
-
-export const DOCUMENT_STATUS_LABELS: Record<string, string> = {
-  queued: 'ждут разбора',
-  extracting: 'разбираются',
-  extracted: 'разобраны',
-  failed: 'разбор не удался',
-  skipped: 'признаны нерелевантными',
+  completed_unpublished: 'разобран, не перенесён',
+  irrelevant: 'не о стройке',
+  in_queue: 'в очереди на разбор',
+  waiting: 'ещё не разбирался',
+  no_ai_permission: 'источник выключен',
+  failed_retrying: 'разбор не удался, будет повтор',
+  failed_exhausted: 'разбор не удался, попытки исчерпаны',
+  cancelled: 'разбор отменён: источник выключен',
+  unknown: 'состояние неизвестно',
 };
 
 // ─── Пользователи и права (ADR-014) ──────────────────────────────────────────
@@ -683,23 +702,34 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const USER_ROLE_HINTS: Record<UserRole, string> = {
-  admin: 'всё, что может оператор, плюс пользователи, их права и журнал входа',
-  operator: 'портал и админка: источники, разбор, решения по утверждениям и слияния',
+  admin: 'всё, что может оператор, плюс пользователи, права, журнал входа и ключ модели',
+  operator: 'портал и админка: источники, обработка, проверка и объединение дублей',
   viewer: 'только поиск, карточки компаний и объектов, публикации и связи',
 };
 
 export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
   'portal.read': 'Поиск, карточки, публикации, связи',
-  'admin.view': 'Админка: смотреть сбор, разбор и очередь проверки',
+  'admin.view': 'Админка: источники, обработка, проверка (просмотр)',
   'sources.manage': 'Источники: добавить, включить, срок сбора, ручная вставка',
-  'pipeline.manage': 'Разбор: запуски, публикация набора, пересчёт сигналов',
-  'review.decide': 'Решения по утверждениям, реквизитам и связям компаний',
-  'entities.merge': 'Слияние компаний и его отмена',
-  'dossier.view': 'Обращения и снимки досье: смотреть',
-  'dossier.manage': 'Обращения и снимки досье: изменять',
+  // Кнопок для этого в интерфейсе нет: обработка идёт сама, право нужно для восстановления после сбоя.
+  'pipeline.manage': 'Перезапуск разбора и пересчёт показателей после сбоя',
+  'review.decide': 'Проверка: решения по сведениям, цитатам, упоминаниям и реквизитам',
+  'entities.merge': 'Проверка: объединение дублей и его отмена',
+  'dossier.view': 'Обращения и снимки: смотреть (раздел снят)',
+  'dossier.manage': 'Обращения и снимки: изменять (раздел снят)',
   'users.manage': 'Пользователи, права и журнал входа',
   'llm.manage': 'Модель: ключ OpenRouter',
 };
+
+/**
+ * Права, которых экран не показывает: разделы обращений и снимков сняты (21.09.2026), а сервер
+ * эти права по-прежнему выдаёт. Из типа они не удалены — иначе ответ сервера разошёлся бы с типом.
+ */
+export const HIDDEN_PERMISSIONS: ReadonlySet<AccessPermission> = new Set<AccessPermission>(['dossier.view', 'dossier.manage']);
+
+/** Права для показа в профиле и таблице ролей — без снятых разделов. */
+export const visiblePermissions = (permissions: readonly AccessPermission[]): AccessPermission[] =>
+  permissions.filter(p => !HIDDEN_PERMISSIONS.has(p));
 
 export const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
   lmstudio: 'LM Studio — модель на своём компьютере',
@@ -708,26 +738,38 @@ export const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
 
 export const LLM_KEY_SOURCE_LABELS: Record<LlmKeySource, string> = {
   admin: 'задан в админке',
-  env: 'из .env сервера (LLM_API_KEY)',
+  env: 'из настроек сервера',
   none: 'не задан',
 };
 
+/** Технические подробности — только в подсказке: экран «Модель» видит лишь админка. */
+export const LLM_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {
+  admin: 'хранится в базе зашифрованным; на экран возвращаются только четыре последних символа',
+  env: 'LLM_API_KEY в .env сервера; ключ, заданный в админке, главнее',
+  none: 'без ключа разбор через OpenRouter ждёт; собранное не теряется',
+};
+
 export const LLM_KEY_PROBLEM_LABELS: Record<LlmKeyProblem, string> = {
-  store_missing: 'Хранилища ключей нет: примените миграцию 032. Пока действует только LLM_API_KEY из .env.',
-  undecryptable: 'Сохранённый ключ не расшифровывается — сменился пароль базы. Задайте ключ заново.',
+  store_missing: 'Хранилище ключей на сервере не подготовлено: пока действует только ключ из настроек сервера.',
+  undecryptable: 'Сохранённый ключ не читается: на сервере сменили пароль базы данных. Задайте ключ заново.',
+};
+
+export const LLM_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
+  store_missing: 'не применена миграция 032 (таблица app_secrets); до этого действует LLM_API_KEY из .env',
+  undecryptable: 'ключ шифруется от пароля из DATABASE_URL: после смены пароля старый ключ не расшифровать',
 };
 
 export const AUTH_EVENT_LABELS: Record<string, string> = {
   login_succeeded: 'вход',
   login_failed: 'неудачный вход',
   logout: 'выход',
-  password_changed: 'сменил пароль',
+  password_changed: 'пароль сменён',
   password_reset: 'пароль сброшен',
   user_created: 'пользователь создан',
-  user_updated: 'изменён',
+  user_updated: 'пользователь изменён',
   user_disabled: 'доступ выключен',
   user_enabled: 'доступ включён',
-  session_revoked: 'сессия закрыта',
+  session_revoked: 'вход закрыт',
 };
 
 /** Почему вход не удался — видно только администратору; пользователь всегда слышит одно и то же. */

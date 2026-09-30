@@ -1,0 +1,26 @@
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.bar {
+  display: block;
+  max-width: 100%;
+  background: var(--skeleton);
+  /* ~1.2 с — дольше 400 мс осознанно: это индикатор ожидания. При reduced-motion статичен. */
+  animation: global(pulse) 1.2s var(--ease-in-out) infinite;
+}
+
+.sm {
+  border-radius: var(--radius-xs);
+}
+
+.md {
+  border-radius: var(--radius);
+}
+
+.full {
+  border-radius: var(--radius-full);
+}

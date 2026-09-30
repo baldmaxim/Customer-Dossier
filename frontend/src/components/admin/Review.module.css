@@ -1,0 +1,72 @@
+/* «Проверка»: строки-раскрытия, фильтры, две версии рядом. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.count {
+  padding-bottom: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Строка: о чём речь — первой строкой, вид и дата — второй. Не meta справа: длинный вид
+   («две компании в одной роли одновременно») на 360px сжимал заголовок до нуля. */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* заголовок и его подпись — одна запись */
+  min-width: 0;
+}
+
+.summaryTitle {
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  letter-spacing: 0;
+  overflow-wrap: break-word;
+}
+
+.summaryMeta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+}
+
+/* Две версии рядом — от 900px; уже — одна под другой. minmax(0, 1fr): колонка не шире окна,
+   как бы длинна ни была цитата (раньше на 360px сравнение распирало страницу на 37–67px). */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+}
+
+@media (min-width: 900px) {
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.columnTitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}

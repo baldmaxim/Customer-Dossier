@@ -1,65 +1,58 @@
+// Число показателя с правилом, окном, знаменателем и основанием — ничего не прячется за
+// цифрой. Основание — числом («12 публикаций»), а не списком внутренних номеров: номера
+// нужны оператору в админке, читателю они ничего не говорят.
+
 import { FC } from 'react';
 
-import type { ISignalAggregate, ISignalDate } from '../api/types';
+import type { ISignalAggregate } from '../api/types';
+import { formatCount, formatCountWord, type PluralForms } from '../lib/format';
 import { formatDate, formatPercent } from '../lib/labels';
 import styles from './CompanySignals.module.css';
+
+/** На чём стоит число: чего столько-то. */
+export type SignalBasis = 'publications' | 'projects' | 'assertions' | 'companies' | 'families';
+
+const BASIS_FORMS: Record<SignalBasis, PluralForms> = {
+  publications: ['публикация', 'публикации', 'публикаций'],
+  projects: ['объект', 'объекта', 'объектов'],
+  assertions: ['сведение', 'сведения', 'сведений'],
+  companies: ['компания', 'компании', 'компаний'],
+  families: ['текст', 'текста', 'текстов'],
+};
 
 interface ISignalAggregateProps {
   label: string;
   aggregate: ISignalAggregate;
   /** Доля (0…1) вместо количества. */
   asShare?: boolean;
-  /** Подпись исходных id: «утверждения», «публикации», «объекты». */
-  idsLabel: string;
+  basis: SignalBasis;
 }
 
-/** Число сигнала с правилом, окном, знаменателем и списком исходных id — ничего не прячется за цифрой. */
-export const SignalAggregate: FC<ISignalAggregateProps> = ({ label, aggregate, asShare = false, idsLabel }) => {
+export const SignalAggregate: FC<ISignalAggregateProps> = ({ label, aggregate, asShare = false, basis }) => {
   const insufficient = aggregate.status === 'insufficient_data';
-  const value = insufficient ? 'недостаточно данных' : asShare ? formatPercent(aggregate.value) : String(aggregate.value ?? '—');
+  const value = insufficient ? 'недостаточно данных' : asShare ? formatPercent(aggregate.value) : formatCount(aggregate.value);
+  const count = aggregate.ids.length;
   return (
     <details className={styles.aggregate}>
       <summary className={styles.aggregateSummary}>
         <span className={`${styles.aggregateValue} ${insufficient ? styles.insufficient : ''}`}>{value}</span>
         <span className={styles.aggregateLabel}>
           {label}
-          {aggregate.denominator !== null && !insufficient && ` · из ${aggregate.denominator}`}
+          {aggregate.denominator !== null && !insufficient && ` · из ${formatCount(aggregate.denominator)}`}
         </span>
       </summary>
       <div className={styles.aggregateBody}>
-        <p>Правило: {aggregate.rule}.</p>
+        <p>Как считается: {aggregate.rule}.</p>
         {aggregate.window && (
           <p>
-            Окно {aggregate.window.basis === 'event_date' ? 'по дате события' : 'по дате публикации'}: {formatDate(aggregate.window.from)} —{' '}
-            {formatDate(aggregate.window.to)}.
+            {aggregate.window.basis === 'event_date' ? 'По дате события' : 'По дате публикации'}: с{' '}
+            {formatDate(aggregate.window.from)} по {formatDate(aggregate.window.to)}.
           </p>
         )}
         <p>
-          {idsLabel}: {aggregate.ids.length === 0 ? 'нет' : aggregate.ids.map(id => `#${id}`).join(', ')}
-          {aggregate.idsTruncated && ' … (список сокращён)'}
+          Основание: {count === 0 ? 'нет' : formatCountWord(count, BASIS_FORMS[basis])}
+          {aggregate.idsTruncated && ' и больше — список сокращён'}.
         </p>
-      </div>
-    </details>
-  );
-};
-
-/**
- * Дата из выборки (signals@2): первая и последняя публикация. Дата неизвестна — так и
- * сказано: «дата неизвестна» не значит «давно» и не значит «сведений нет».
- */
-export const SignalDate: FC<{ label: string; date: ISignalDate }> = ({ label, date }) => {
-  const unknown = date.status === 'insufficient_data' || date.value === null;
-  return (
-    <details className={styles.aggregate}>
-      <summary className={styles.aggregateSummary}>
-        <span className={`${styles.aggregateValue} ${unknown ? styles.insufficient : ''}`}>
-          {unknown ? 'дата неизвестна' : formatDate(date.value)}
-        </span>
-        <span className={styles.aggregateLabel}>{label}</span>
-      </summary>
-      <div className={styles.aggregateBody}>
-        <p>Правило: {date.rule}.</p>
-        <p>Публикация: {date.sourceItemId === null ? 'нет' : `#${date.sourceItemId}`}</p>
       </div>
     </details>
   );

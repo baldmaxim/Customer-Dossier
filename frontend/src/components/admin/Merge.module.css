@@ -1,0 +1,113 @@
+/* «Дубли»: пары возможных дублей, сравнение двух карточек, история объединений. */
+
+.intro {
+  max-width: var(--prose);
+  margin: 0;
+  color: var(--muted);
+  line-height: var(--lh-text);
+}
+
+.pairs,
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pair {
+  min-width: 0;
+}
+
+.entityName {
+  min-width: 0;
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
+}
+
+.arrow {
+  flex: none;
+  color: var(--muted);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.conflict {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  overflow-wrap: break-word;
+}
+
+.warn {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.preview {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Две карточки рядом — с 600px; уже — одна под другой. minmax(0, 1fr): длинное название
+   или реквизиты не распирают окно на 360px. */
+.entities {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+
+@media (min-width: 600px) {
+  .entities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.entity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.entityRole {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.historyRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.historyRow:last-child {
+  border-bottom: 0;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-left: var(--sp-5);
+  font-size: var(--fs-md);
+}

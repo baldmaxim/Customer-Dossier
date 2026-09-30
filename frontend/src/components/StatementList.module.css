@@ -1,0 +1,123 @@
+/* Фразы сводки: подпись атрибуции один раз на группу, фраза, «Откуда известно» под ней. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.attribution {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--border-strong);
+}
+
+.text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Шеврон «Откуда известно» поворачивается, как у Disclosure. */
+.toggle svg {
+  transition: rotate var(--dur-fast) var(--ease-out);
+}
+
+.toggle[aria-expanded='true'] svg {
+  rotate: 180deg;
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  animation: global(enter-up) var(--dur-base) var(--ease-out);
+}
+
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quoteItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.quote {
+  margin: 0;
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}
+
+.quoteMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.metaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  /* Цель нажатия: 44px на тач-экране, 32px под мышь (было 17–19px — axe target-size).
+     Ширина тоже: короткое слово («разбор») давало цель 42px. */
+  min-height: var(--ctl-h-sm);
+  min-width: var(--ctl-h-sm);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}

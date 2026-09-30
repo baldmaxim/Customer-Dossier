@@ -1,91 +1,79 @@
-.createForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-3);
-  max-width: 880px;
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* имя и логин — одна запись */
+  min-width: 0;
 }
 
-@media (min-width: 768px) {
-  .createForm {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.name {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
 }
 
-.createActions {
-  grid-column: 1 / -1;
+.current {
+  color: var(--muted);
+  font-weight: var(--fw-regular);
 }
 
-.roleHint {
+.login {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+  overflow-wrap: anywhere; /* логин-почта без пробелов длиной до 70 знаков */
+}
+
+.badges {
+  margin-top: var(--sp-1);
+}
+
+.meta {
+  display: block;
   color: var(--muted);
   font-size: var(--fs-sm);
-  line-height: var(--lh-snug);
-}
-
-.passwordRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.passwordRow input {
-  flex: 1 1 200px;
-  min-width: 0;
 }
 
 .mono {
   font-family: var(--mono);
 }
 
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1);
-  margin-top: var(--sp-1);
+/* Логин-почта и адрес IPv6 — «слова» до 70 знаков: переносятся, а не растягивают журнал вбок. */
+.breakable {
+  overflow-wrap: anywhere;
 }
 
-.badges:empty {
-  display: none;
+.note {
+  max-width: var(--prose);
+  margin: 0;
+  line-height: var(--lh-text);
 }
 
-.current {
-  color: var(--muted);
-  font-weight: 400;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  min-width: 0;
-}
-
-.panelHead {
+/* Выданный пароль: крупно и моноширинно — его диктуют и перепечатывают. */
+.issued {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
+  gap: var(--sp-2) var(--sp-3);
 }
 
-.panelNote {
-  margin: 0;
-  font-size: var(--fs-md);
-  line-height: var(--lh-text);
-  max-width: var(--prose);
+.password {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tracking-caps);
+  overflow-wrap: anywhere;
 }
 
 .sessions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .session {
@@ -93,24 +81,30 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1) var(--sp-3);
-  padding: var(--sp-2) 0;
+  padding: var(--sp-3) 0;
   border-top: 1px solid var(--border);
 }
 
 .session:first-child {
   border-top: 0;
+  padding-top: 0;
 }
 
 .sessionMain {
-  flex: 1 1 240px;
+  flex: 1 1 14rem;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .sessionMeta {
-  flex: 1 1 240px;
+  flex: 1 1 14rem;
   color: var(--muted);
   font-size: var(--fs-sm);
+}
+
+/* Список ролей не уже самой длинной роли («администратор») со стрелкой. */
+.roleCell {
+  min-width: 11rem;
 }
 
 .matrixRole,
@@ -118,17 +112,16 @@
   text-align: center;
 }
 
-.eventDetails {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-sm);
+.yes {
+  color: var(--success);
 }
 
-/* Дата и время в журнале — одной строкой: перенос посреди «30.09.2026, 10:15» читается хуже. */
-.nowrap {
-  white-space: nowrap;
-}
-
-.more {
-  margin-top: var(--sp-3);
+.permissions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-5);
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
 }

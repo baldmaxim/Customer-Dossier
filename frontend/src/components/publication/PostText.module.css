@@ -1,0 +1,13 @@
+.text {
+  margin: 0;
+  /* Переносы строк поста сохраняются; длинный адрес без пробелов не распирает пузырь на 360px. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Ссылка в тексте подчёркнута: цветом одним её не отличить (axe link-in-text-block). */
+.link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}

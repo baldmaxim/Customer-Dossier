@@ -1,8 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
-import type { ReactElement } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import type { ReactElement, ReactNode } from 'react';
+import { createMemoryRouter, MemoryRouter, RouterProvider, type RouteObject } from 'react-router-dom';
 import { vi } from 'vitest';
+
+import { ConfirmProvider } from '../components/ui/ConfirmProvider';
+import { ToastProvider } from '../components/ui/ToastProvider';
 
 export interface IFakeRoute {
   /** Метод и начало пути: 'GET /api/reprocess/runs'. */
@@ -44,12 +47,44 @@ export const offlineApi = (): void => {
   );
 };
 
+const testClient = (): QueryClient =>
+  new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+
+/** Тосты и подтверждения — как в корне приложения (AppRoot): useToast/useConfirm работают. */
+const UiProviders = ({ children }: { children: ReactNode }): ReactElement => (
+  <ToastProvider>
+    <ConfirmProvider>{children}</ConfirmProvider>
+  </ToastProvider>
+);
+
 export const renderWithProviders = (ui: ReactElement, route = '/'): RenderResult & { client: QueryClient } => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const client = testClient();
   const result = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
+        <UiProviders>{ui}</UiProviders>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
   return { ...result, client };
+};
+
+/**
+ * Data-роутер в памяти — как createBrowserRouter в App.tsx: история (PUSH/REPLACE), редиректы,
+ * ScrollRestoration. router.state.location — куда пришли; router.navigate — переход из теста.
+ */
+export const renderWithRouter = (
+  routes: RouteObject[],
+  initialEntries: string[] = ['/'],
+): RenderResult & { client: QueryClient; router: ReturnType<typeof createMemoryRouter> } => {
+  const client = testClient();
+  const router = createMemoryRouter(routes, { initialEntries });
+  const result = render(
+    <QueryClientProvider client={client}>
+      <UiProviders>
+        <RouterProvider router={router} />
+      </UiProviders>
+    </QueryClientProvider>,
+  );
+  return { ...result, client, router };
 };

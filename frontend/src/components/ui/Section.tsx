@@ -1,40 +1,48 @@
-// Карточка-раздел: поверхность, рамка, заголовок. Повторялась в десяти модулях.
+// Раздел страницы: заголовок, пояснение, действия и содержимое на карточке.
+// Уровень заголовка — из контекста (h2 на странице, h3 внутри другого раздела); содержимое
+// получает уровень на единицу глубже. Явный level — только если глубина известна заранее.
+//
+// EmptyState раньше жил в этом же файле; реэкспорт оставлен для прежних импортов.
 
 import { FC, ReactNode } from 'react';
 
+import { Heading } from './Heading';
+import { HeadingLevelContext, deeper, useHeadingLevel, type HeadingLevel } from './headingLevel';
 import styles from './Section.module.css';
 
+export { EmptyState, type IEmptyStateProps } from './EmptyState';
+
 export interface ISectionProps {
-  title?: string;
-  /** Короткое пояснение справа от заголовка. */
+  title?: ReactNode;
+  /** Короткое пояснение рядом с заголовком: «новые сверху», «всего 12». */
   note?: ReactNode;
-  /** Уровень заголовка: h2 по умолчанию, h1 у страницы нет — он в PageHeader. */
-  level?: 2 | 3;
+  /** Кнопки раздела справа от заголовка (на телефоне — под ним). */
+  actions?: ReactNode;
+  level?: HeadingLevel;
+  /** card — на карточке (по умолчанию); plain — прямо на полотне, без рамки. */
+  variant?: 'card' | 'plain';
+  id?: string;
   className?: string;
   children: ReactNode;
 }
 
-export const Section: FC<ISectionProps> = ({ title, note, level = 2, className, children }) => {
-  const Heading = level === 2 ? 'h2' : 'h3';
+export const Section: FC<ISectionProps> = ({ title, note, actions, level, variant = 'card', id, className, children }) => {
+  const contextLevel = useHeadingLevel();
+  const own = level ?? contextLevel;
   return (
-    <section className={className ? `${styles.section} ${className}` : styles.section}>
-      {(title || note) && (
+    <section id={id} className={[styles.section, styles[variant], className ?? ''].filter(Boolean).join(' ')}>
+      {(title || note || actions) && (
         <div className={styles.head}>
-          {title && <Heading className={styles.title}>{title}</Heading>}
+          {title && (
+            <Heading level={own} className={styles.title}>
+              {title}
+            </Heading>
+          )}
           {note && <span className={styles.note}>{note}</span>}
+          {actions && <div className={styles.actions}>{actions}</div>}
         </div>
       )}
-      {children}
+      <HeadingLevelContext.Provider value={deeper(own)}>{children}</HeadingLevelContext.Provider>
     </section>
   );
 };
-
-export interface IEmptyStateProps {
-  /** Почему пусто — словами. Пустой список и сбой загрузки читаются по-разному. */
-  children: ReactNode;
-  className?: string;
-}
-
-export const EmptyState: FC<IEmptyStateProps> = ({ children, className }) => (
-  <p className={className ? `${styles.empty} ${className}` : styles.empty}>{children}</p>
-);

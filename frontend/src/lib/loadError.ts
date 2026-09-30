@@ -7,6 +7,9 @@ import { ApiError } from '../api/client';
 export const describeLoadError = (err: unknown): string => {
   if (err instanceof ApiError) {
     if (err.status === 401) return 'Нет входа: сессия истекла, войдите заново.';
+    // 403 с кодом forbidden — роли не хватает права (ADR-014); остальные 403 — защита запроса
+    // (чужой адрес или страница, устаревший CSRF-токен), её снимает перезагрузка.
+    if (err.status === 403 && err.code === 'forbidden') return 'Недостаточно прав для этого раздела. Права выдаёт администратор.';
     if (err.status === 403) return 'Запрос отклонён защитой (чужой адрес, страница или устаревшая сессия) — обновите страницу.';
     if (err.status === 404) return `Не найдено: ${err.message}`;
     if (err.status >= 500) return `Сбой сервера (${err.status}): ${err.message}. Данные не получены — это не пустой результат.`;

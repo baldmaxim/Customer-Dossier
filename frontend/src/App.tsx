@@ -1,25 +1,11 @@
 import { FC } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
-import { AuthGate } from './components/AuthGate';
-import { Layout } from './components/Layout';
-import { UpdatePrompt } from './components/UpdatePrompt';
-import { AdminLayout } from './pages/admin/AdminLayout';
-import { CollectPage } from './pages/admin/CollectPage';
-import { PipelinePage } from './pages/admin/PipelinePage';
-import { ModelPage } from './pages/admin/ModelPage';
-import { ResultPage } from './pages/admin/ResultPage';
-import { CompanyPage } from './pages/CompanyPage';
-import { DocumentPage } from './pages/DocumentPage';
-import { LinksPage } from './pages/LinksPage';
-import { ProjectPage } from './pages/ProjectPage';
-import { RunPage } from './pages/admin/RunPage';
-import { RunsPage } from './pages/admin/RunsPage';
-import { ReviewQueuePage } from './pages/admin/ReviewQueuePage';
-import { UsersPage } from './pages/admin/UsersPage';
-import { AccountPage } from './pages/AccountPage';
-import { SearchPage } from './pages/SearchPage';
+import { AppRoot } from './components/AppRoot';
+import { RouteError } from './components/RouteError';
+import { Loading } from './components/ui/Loading';
+import { appRoutes } from './routes';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,60 +19,26 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Старая ссылка на запуск: номер сохраняется. */
-const RunsRedirect: FC = () => {
-  const { id } = useParams();
-  return <Navigate to={`/admin/process/${id ?? ''}`} replace />;
-};
-
-const Portal: FC = () => (
-  <Layout>
-    <Routes>
-      <Route path="/" element={<SearchPage />} />
-      <Route path="/company/:id" element={<CompanyPage />} />
-      <Route path="/links" element={<LinksPage />} />
-      <Route path="/documents/:id" element={<DocumentPage />} />
-      <Route path="/projects/:id" element={<ProjectPage />} />
-      {/* Профиль — вкладка админки; старая ссылка ведёт туда же. */}
-      <Route path="/account" element={<Navigate to="/admin/account" replace />} />
-
-      {/* Админка — конвейер: сбор → обработка → результат. Вложенный роут один,
-          и только здесь: подшапка ступеней рисуется один раз. */}
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<PipelinePage />} />
-        <Route path="collect" element={<CollectPage />} />
-        <Route path="process" element={<RunsPage />} />
-        <Route path="process/:id" element={<RunPage />} />
-        <Route path="result" element={<ResultPage />} />
-        <Route path="review" element={<ReviewQueuePage />} />
-        <Route path="model" element={<ModelPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="account" element={<AccountPage />} />
-      </Route>
-
-      {/* Постоянные редиректы: по старым ссылкам из закладок и отчётов.
-          «Подрядчики» были вторым видом того же каталога компаний — экран снят,
-          адрес ведёт на главную, где тот же список с теми же фильтрами. */}
-      <Route path="/contractors" element={<Navigate to="/" replace />} />
-      <Route path="/runs" element={<Navigate to="/admin/process" replace />} />
-      <Route path="/runs/:id" element={<RunsRedirect />} />
-      <Route path="/review" element={<Navigate to="/admin/review" replace />} />
-      {/* Обращения и снимки сняты с портала: данные в базе целы, экранов нет.
-          Редиректы постоянные — по старым ссылкам из закладок и отчётов. */}
-      <Route path="/cases/*" element={<Navigate to="/" replace />} />
-      <Route path="/snapshots/*" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </Layout>
-);
+// Data-роутер, а не <BrowserRouter>: только он умеет viewTransition у ссылок (View Transitions
+// между страницами) и ScrollRestoration. Ошибка отрисовки страницы остаётся внутри оболочки
+// (меню на месте); ошибка самой оболочки — на весь экран.
+const router = createBrowserRouter([
+  {
+    element: <AppRoot />,
+    errorElement: <RouteError fullPage />,
+    children: [
+      {
+        errorElement: <RouteError />,
+        // Первый заход прямо в админку: её чанк грузится лениво, а шапка и меню уже на месте.
+        hydrateFallbackElement: <Loading variant="page" label="Открываю раздел…" />,
+        children: appRoutes,
+      },
+    ],
+  },
+]);
 
 export const App: FC = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <AuthGate>
-        <Portal />
-      </AuthGate>
-      <UpdatePrompt />
-    </BrowserRouter>
+    <RouterProvider router={router} />
   </QueryClientProvider>
 );

@@ -1,25 +1,57 @@
 .group {
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1);
-  padding: var(--sp-1);
+  flex-wrap: nowrap;
+  gap: 2px; /* пункты почти вплотную: это один контрол, а не ряд кнопок */
+  max-width: 100%;
+  padding: 3px; /* 3px: выбранный пункт с рамкой не прилипает к краю дорожки */
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
   background: var(--surface-2);
-  max-width: 100%;
+  /* Не влезает — прокрутка в одну строку, а не перенос «облаком» внутри пилюли. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  vertical-align: middle;
+}
+
+.group::-webkit-scrollbar {
+  display: none;
+}
+
+.fill {
+  display: flex;
+  width: 100%;
+}
+
+.fill .item {
+  flex: 1 1 0;
 }
 
 .item {
+  flex: none;
+  min-width: var(--tap-min); /* «Все» — короткое слово, но цель всё равно 44px */
   border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
-.active {
+/* Контур внутрь: снаружи его срезал бы край прокручиваемой дорожки. */
+.item:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* Выбранный пункт различим не только оттенком: поверхность, рамка ≥ 3:1 и цвет текста.
+   В тёмной теме surface на surface-2 даёт 1.09:1 — одного фона не хватало. */
+.active,
+.active:disabled {
   background: var(--surface);
-  border-color: var(--border-strong);
+  border-color: var(--border-control);
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
 
-.active:hover:not(:disabled) {
-  background: var(--surface);
+@media (hover: hover) {
+  .active:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--text);
+  }
 }

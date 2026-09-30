@@ -1,203 +1,121 @@
-import { FC, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+// «Обработка»: что в базе, где сейчас тексты и последние разборы — только чтение.
+//
+// Обработка идёт сама: портал ставит разбор по новым версиям текстов включённых источников и
+// переносит разобранное в карточки. Здесь видно, почему текст туда не попал. Бывший «Конвейер»
+// (счётчики состояний) и журнал переноса из «Результата» — здесь же, а флаги фоновых заданий —
+// в строке состояния над разделами. Фильтры и страница списка — в адресе.
 
+import { FC, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
+import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { api } from '../../api/client';
-import type { IRunPage, RunStatus } from '../../api/types';
-import { describeLoadError } from '../../lib/loadError';
-import { CANDIDATE_SET_STATUS_LABELS, RUN_STATUS_LABELS, formatDateTime } from '../../lib/labels';
+import type { IRunPage, ISourceRow, RunStatus } from '../../api/types';
+import { BaseTotals } from '../../components/admin/BaseTotals';
+import { Pager } from '../../components/admin/Pager';
+import { PublicationLog } from '../../components/admin/PublicationLog';
+import { RevisionStates } from '../../components/admin/RevisionStates';
+import { RUN_STATUSES, RunsFilters } from '../../components/admin/RunsFilters';
+import { RunsList } from '../../components/admin/RunsList';
+import { useCursorPaging } from '../../components/admin/useCursorPaging';
 import { Button } from '../../components/ui/Button';
-import { EmptyState } from '../../components/ui/Section';
-import { TableScroll } from '../../components/ui/TableScroll';
-import styles from '../Dossier.module.css';
+import { Callout } from '../../components/ui/Callout';
+import { Disclosure } from '../../components/ui/Disclosure';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Section } from '../../components/ui/Section';
+import { Stack } from '../../components/ui/Stack';
+import { enumParam, numberParam, useUrlPatch, useUrlState } from '../../hooks/useUrlState';
+import { formatCount } from '../../lib/format';
+import { describeLoadError } from '../../lib/loadError';
+import formStyles from '../../components/admin/Forms.module.css';
 
 const PAGE = 50;
-const STATUSES: RunStatus[] = ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled'];
+const STATUS_VALUES: readonly (RunStatus | '')[] = ['', ...RUN_STATUSES];
 
-interface IFilters {
-  status: '' | RunStatus;
-  sourceId: string;
-  revisionId: string;
-  schemaVersion: string;
-  fingerprint: string;
-}
-
-const EMPTY: IFilters = { status: '', sourceId: '', revisionId: '', schemaVersion: '', fingerprint: '' };
-
-/**
- * Запуски разбора: фильтры, курсорная пагинация, покрытие чанков, допуск. Только чтение —
- * обработка идёт сама, ставить и отменять её из портала нечем.
- */
 export const RunsPage: FC = () => {
-  const [draft, setDraft] = useState<IFilters>(EMPTY);
-  const [filters, setFilters] = useState<IFilters>(EMPTY);
-  const [cursors, setCursors] = useState<number[]>([]);
-  const before = cursors[cursors.length - 1];
+  const [sourceId] = useUrlState('source', numberParam(null));
+  const [status] = useUrlState('status', enumParam(STATUS_VALUES, ''));
+  const patch = useUrlPatch();
+  const listRef = useRef<HTMLDivElement>(null);
+  const paging = useCursorPaging('before', listRef);
+  const before = paging.cursor !== null && /^\d+$/.test(paging.cursor) ? paging.cursor : null;
+  // Журнал грузится, только когда его открыли: свёрнутый он запроса не стоит.
+  const [logOpened, setLogOpened] = useState(false);
+
+  const sources = useQuery({
+    queryKey: ['sources'],
+    queryFn: () => api.get<{ items: ISourceRow[] }>('/api/admin/sources'),
+  });
+  const sourceItems = sources.data?.items ?? [];
+  const byId = new Map(sourceItems.map(s => [s.id, s]));
 
   const page = useQuery({
-    queryKey: ['runs', filters, before ?? 0],
+    queryKey: ['runs', sourceId, status, before],
     queryFn: () => {
       const params = new URLSearchParams({ limit: String(PAGE) });
-      if (filters.status) params.set('status', filters.status);
-      if (filters.sourceId.trim()) params.set('sourceId', filters.sourceId.trim());
-      if (filters.revisionId.trim()) params.set('revisionId', filters.revisionId.trim());
-      if (filters.schemaVersion.trim()) params.set('schemaVersion', filters.schemaVersion.trim());
-      if (filters.fingerprint.trim()) params.set('fingerprint', filters.fingerprint.trim().toLowerCase());
-      if (before) params.set('beforeId', String(before));
+      if (sourceId !== null) params.set('sourceId', String(sourceId));
+      if (status) params.set('status', status);
+      if (before) params.set('beforeId', before);
       return api.get<IRunPage>(`/api/reprocess/runs?${params.toString()}`);
     },
   });
   const data = page.data;
-  const field = (key: keyof IFilters, label: string, inputMode?: 'numeric') => (
-    <label className={styles.field}>
-      <span>{label}</span>
-      <input value={draft[key]} inputMode={inputMode} onChange={e => setDraft({ ...draft, [key]: e.target.value })} />
-    </label>
-  );
+
+  // Смена фильтра начинает список сначала: курсор прежней выборки к новой не относится.
+  const filter = (next: { sourceId?: number | null; status?: RunStatus | '' }): void =>
+    patch({
+      ...(next.sourceId !== undefined ? { source: next.sourceId } : {}),
+      ...(next.status !== undefined ? { status: next.status } : {}),
+      before: null,
+    });
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Запуски разбора</h1>
-        <p className={styles.meta}>
-          Обработка идёт сама: портал ставит запуск по новым редакциям допущенных источников и переносит
-          разобранное в карточки. Здесь видно, почему текст туда не попал: покрытие чанков, отказы модели
-          и проверки, допуск источника.
-        </p>
-        {data && (
-          <p className={data.worker.pipelineEnabled ? styles.meta : styles.warn}>
-            {data.worker.pipelineEnabled
-              ? 'Разбор работает в фоне (PIPELINE_ENABLED).'
-              : 'Разбор в фоне выключен (PIPELINE_ENABLED=false): поставленные запуски выполнит только `npm run pipeline:once`.'}
-          </p>
-        )}
-        {data && !data.worker.autoPublish && (
-          <p className={styles.warn}>
-            Перенос разобранного в карточки выключен (REPROCESS_AUTO_PUBLISH=false): наборы собираются, но
-            карточки не меняются. Включается в `.env`, из портала — нельзя.
-          </p>
-        )}
-      </header>
+    <Stack gap={5}>
+      <BaseTotals />
+      <RevisionStates status={status} onFilter={next => filter({ status: next })} />
 
-      <form
-        className={styles.form}
-        onSubmit={e => {
-          e.preventDefault();
-          setFilters(draft);
-          setCursors([]);
-        }}
-      >
-        <div className={styles.row}>
-          <label className={styles.field}>
-            <span>Статус</span>
-            <select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value as IFilters['status'] })}>
-              <option value="">все</option>
-              {STATUSES.map(s => (
-                <option key={s} value={s}>
-                  {RUN_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {field('sourceId', 'Источник #', 'numeric')}
-          {field('revisionId', 'Редакция #', 'numeric')}
-          {field('schemaVersion', 'Схема')}
-          {field('fingerprint', 'Отпечаток (начало)')}
-        </div>
-        <div className={styles.row}>
-          <Button type="submit" variant="primary" hint="применить фильтры и начать с первой страницы">
-            Показать
-          </Button>
-          <Button
-            hint="вернуть все фильтры к значениям по умолчанию"
-            onClick={() => {
-              setDraft(EMPTY);
-              setFilters(EMPTY);
-              setCursors([]);
-            }}
-          >
-            Сбросить
-          </Button>
-        </div>
-      </form>
+      <div ref={listRef}>
+        <Section title="Последние разборы" note={data ? `всего по фильтру: ${formatCount(data.total)}` : undefined} id="runs">
+          <Stack gap={4}>
+            <RunsFilters sources={sourceItems} sourceId={sourceId} status={status} onChange={filter} />
+            {page.isLoading && (
+              <LoadingSkeleton label="Загружаю разборы…" lines={6} height="44px" />
+            )}
+            {page.isError && (
+              <Callout tone="danger" title="Разборы не загрузились" action={<Button onClick={() => void page.refetch()}>Повторить</Button>}>
+                {describeLoadError(page.error)}
+              </Callout>
+            )}
+            {data && data.items.length === 0 && (
+              <EmptyState
+                size="sm"
+                action={
+                  sourceId !== null || status !== '' ? (
+                    <Button onClick={() => filter({ sourceId: null, status: '' })}>Сбросить фильтры</Button>
+                  ) : undefined
+                }
+              >
+                Разборов по фильтру нет.
+              </EmptyState>
+            )}
+            {data && data.items.length > 0 && <RunsList runs={data.items} sources={byId} />}
+            <Pager
+              label="Страницы разборов"
+              hasNewer={paging.hasNewer}
+              hasOlder={Boolean(data?.nextBeforeId)}
+              onNewer={paging.newer}
+              onOlder={() => data?.nextBeforeId && paging.older(data.nextBeforeId)}
+            />
+          </Stack>
+        </Section>
+      </div>
 
-      <section className={styles.section}>
-        {page.isLoading && <p className={styles.meta}>Загрузка…</p>}
-        {page.isError && (
-          <p className={styles.error} role="alert">
-            {describeLoadError(page.error)}
-          </p>
-        )}
-        {data && (
-          <p className={styles.meta}>
-            Всего по фильтру: {data.total}; страница {cursors.length + 1}, на ней {data.items.length}
-          </p>
-        )}
-        {data && data.items.length === 0 && <EmptyState>Запусков по фильтру нет.</EmptyState>}
-        <TableScroll minWidth={980}>
-          <thead>
-            <tr>
-              <th>Запуск</th>
-              <th>Статус</th>
-              <th>Редакция</th>
-              <th>Покрытие</th>
-              <th>Модель / схема</th>
-              <th>Допуск ИИ</th>
-              <th>Набор</th>
-              <th>Время</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items.map(r => (
-              <tr key={r.id}>
-                <td>
-                  <Link to={`/admin/process/${r.id}`}>#{r.id}</Link>
-                  {r.previousRunId !== null && <span className={styles.meta}> ← #{r.previousRunId}</span>}
-                </td>
-                <td>
-                  {RUN_STATUS_LABELS[r.status] ?? r.status}
-                  {r.error && <span className={styles.meta}> · {r.error}</span>}
-                </td>
-                <td>
-                  №{r.revisionNo}
-                  {r.latestRevisionNo > r.revisionNo && <span className={styles.warn}> (есть №{r.latestRevisionNo})</span>}
-                  <span className={styles.meta}> · {r.source.key}</span>
-                </td>
-                <td>
-                  чанков {r.coverage.chunksOk}/{r.coverage.chunks}
-                  {r.coverage.chunksFailed > 0 && <span className={styles.warn}> · сбой {r.coverage.chunksFailed}</span>}
-                  <span className={styles.meta}>
-                    {' '}
-                    · символов {r.coverage.coveredChars ?? '—'}/{r.coverage.totalChars ?? '—'}
-                  </span>
-                </td>
-                <td>
-                  {r.model ?? 'неизвестно'} · {r.schemaVersion ?? 'схема неизвестна'}
-                  <span className={styles.meta}> · {r.fingerprint.slice(0, 10)}</span>
-                </td>
-                <td>{r.policy.allowed ? 'действует' : `нет: ${r.policy.reason ?? 'не подтверждён'}`}</td>
-                <td>{r.candidateSet ? `#${r.candidateSet.id} · ${CANDIDATE_SET_STATUS_LABELS[r.candidateSet.status] ?? r.candidateSet.status}` : '—'}</td>
-                <td>
-                  {formatDateTime(r.createdAt)}
-                  {r.usage.latencyMs !== null ? <span className={styles.meta}> · {Math.round(r.usage.latencyMs / 1000)} с</span> : <span className={styles.meta}> · время неизвестно</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableScroll>
-        <div className={styles.row}>
-          <Button disabled={cursors.length === 0} onClick={() => setCursors(cursors.slice(0, -1))}>
-            Назад
-          </Button>
-          <Button
-            disabled={!data?.nextBeforeId}
-            hint="следующая страница: список идёт от новых запусков к старым"
-            onClick={() => data?.nextBeforeId && setCursors([...cursors, data.nextBeforeId])}
-          >
-            Дальше
-          </Button>
-        </div>
-      </section>
-    </div>
+      <Disclosure variant="card" level={2} summary="Журнал переноса в карточки" onToggle={open => open && setLogOpened(true)}>
+        <Stack gap={3}>
+          <p className={formStyles.hint}>Перенос автоматический: найденное уходит в карточки сразу после полного разбора текста.</p>
+          {logOpened && <PublicationLog />}
+        </Stack>
+      </Disclosure>
+    </Stack>
   );
 };

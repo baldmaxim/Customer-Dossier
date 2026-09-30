@@ -1,16 +1,59 @@
+/* Рамка вокруг прокрутки: на ней рисуются тени у краёв, поверх содержимого. */
+.frame {
+  position: relative;
+  min-width: 0;
+}
+
+.frame::before,
+.frame::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: calc(var(--z-raised) + 1);
+  width: var(--sp-4);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.frame::before {
+  left: 0;
+  background: linear-gradient(to right, var(--scroll-shadow), transparent);
+}
+
+.frame::after {
+  right: 0;
+  background: linear-gradient(to left, var(--scroll-shadow), transparent);
+}
+
+.frame[data-scroll-start]::before,
+.frame[data-scroll-end]::after {
+  opacity: 1;
+}
+
 .wrap {
+  /* relative: скрытые подписи (.visually-hidden, position: absolute) внутри ячеек
+     считаются от этой прокрутки и обрезаются ею, а не расширяют документ. */
+  position: relative;
   overflow-x: auto;
   /* Только по горизонтали. `overscroll-behavior: contain` без оси делает блок
      скролл-контейнером по обеим осям, и колесо над таблицей перестаёт листать
      страницу — при таблицах во всю ширину это выглядит как «прокрутка сломалась». */
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-sm);
 }
 
-/* Липкая шапка работает только внутри собственного окна прокрутки. Без высоты
-   sticky в горизонтальном скроллере бесполезен — так было в «Подрядчиках». */
+/* Контур фокуса области прокрутки — внутрь: снаружи его срезал бы соседний блок. */
+.wrap:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* Липкая шапка работает только внутри собственного окна прокрутки. Высота окна —
+   экран без шапки портала и нижней панели. */
 .tall {
-  max-height: calc(100dvh - var(--header-h) - var(--sp-7));
+  max-height: calc(100dvh - var(--sticky-top) - var(--bottom-ui) - var(--sp-7));
   overflow-y: auto;
 }
 
@@ -20,29 +63,54 @@
   font-size: var(--fs-md);
 }
 
+.caption {
+  margin-bottom: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+
 .table th,
 .table td {
   padding: var(--sp-2) var(--sp-3);
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--border);
-  /* Длинный URL больше не растягивает колонку за пределы экрана. */
-  overflow-wrap: anywhere;
+  /* break-word, а не anywhere: anywhere сжимал min-content колонки до одной буквы, и
+     «схема», «ОБЪЕКТОВ», «24817» рвались посреди. break-word рвёт только слово, которое
+     не помещается в строку целиком (длинный URL). */
+  overflow-wrap: break-word;
 }
 
+/* Заголовок колонки переносится только по пробелам — «ОБЪЕ/КТОВ» больше не будет. */
 .table th {
+  overflow-wrap: normal;
   color: var(--muted);
   font-size: var(--fs-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-caps);
+  vertical-align: bottom;
+}
+
+/* Числа, даты, суммы: вправо, табличные цифры, без переноса. Глобальный .num одним классом
+   проигрывал `.table td { text-align: left }` — здесь специфичность выше. */
+.table :is(th, td):global(.num) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(th, td):global(.nowrap) {
+  white-space: nowrap;
 }
 
 .tall thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
-  background: var(--surface-2);
+  z-index: var(--z-raised);
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .table tbody tr:last-child td {

@@ -1,0 +1,178 @@
+/* Поля: TextInput, Select, Textarea, SearchInput, Checkbox. База (рамка ≥ 3:1, контур фокуса,
+   шрифт ≥ 16px) — в index.css для всех input/select/textarea; здесь размеры и детали. */
+
+.control {
+  min-height: var(--ctl-h);
+  padding: var(--sp-2) var(--ctl-px-sm);
+  border: 1px solid var(--border-control);
+  border-radius: var(--ctl-radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-input);
+  line-height: var(--lh-snug);
+}
+
+.lg {
+  min-height: var(--ctl-h-lg);
+  padding-inline: var(--ctl-px);
+}
+
+.block {
+  width: 100%;
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.control:disabled {
+  opacity: var(--ctl-disabled-opacity);
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .control:hover:not(:disabled, :focus-visible) {
+    border-color: var(--text);
+  }
+}
+
+.textarea {
+  min-height: calc(var(--ctl-h) * 2);
+  line-height: var(--lh-text);
+  resize: vertical;
+}
+
+/* Select: системная стрелка заменена своей — иконкой поверх поля. */
+.selectWrap {
+  position: relative;
+  display: inline-grid;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.select {
+  appearance: none;
+  padding-inline-end: calc(var(--ctl-px-sm) + var(--icon-sm) + var(--sp-2));
+  cursor: pointer;
+}
+
+.selectIcon {
+  position: absolute;
+  inset-inline-end: var(--ctl-px-sm);
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Флажок: строка ≥ 44px целиком — цель нажатия; сам квадрат 20px, цвет — accent-color. */
+.checkWrap {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding-block: calc((var(--tap-min) - 20px) / 2); /* квадрат 20px по центру первой строки */
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 20px; /* = высоте квадрата: подпись в одну строку стоит ровно по нему */
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.checkDisabled {
+  opacity: var(--ctl-disabled-opacity);
+}
+
+.checkDisabled .check {
+  cursor: not-allowed;
+}
+
+.checkBox {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  cursor: inherit;
+}
+
+.checkText {
+  min-width: 0;
+}
+
+/* Подсказка — под подписью, по её левому краю; вплотную к строке флажка. */
+.checkHint {
+  margin-top: calc((var(--tap-min) - 20px) / -2 + 2px);
+  padding-inline-start: calc(20px + var(--sp-2));
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+/* Поиск */
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.searchLabel {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+
+.searchBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: var(--ctl-px);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.searchControl {
+  padding-inline: calc(var(--ctl-px) + var(--icon-md) + var(--sp-2)) calc(var(--tap-min) + var(--sp-1));
+  border-radius: var(--radius);
+}
+
+/* Своя кнопка очистки вместо системного крестика: он мелкий и в каждом браузере свой. */
+.searchControl::-webkit-search-cancel-button,
+.searchControl::-webkit-search-decoration {
+  appearance: none;
+}
+
+.searchClear {
+  position: absolute;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) {
+  .searchClear:hover {
+    color: var(--text);
+  }
+}
+
+.searchClear:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}

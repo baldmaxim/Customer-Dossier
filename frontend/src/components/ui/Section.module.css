@@ -1,24 +1,26 @@
 .section {
-  padding: var(--sp-5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  /* Секция внутри сетки не должна распираться своим содержимым. */
+  /* Раздел внутри сетки не должен распираться своим содержимым. */
   min-width: 0;
+}
+
+.card {
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-2) var(--sp-3);
+  gap: var(--sp-1) var(--sp-3);
   margin-bottom: var(--sp-3);
 }
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-h2);
   line-height: var(--lh-snug);
 }
 
@@ -27,17 +29,15 @@
   font-size: var(--fs-sm);
 }
 
-.empty {
-  padding: var(--sp-5) var(--sp-4);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
-  color: var(--muted);
-  font-size: var(--fs-md);
-  text-align: center;
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
 }
 
-@media (min-width: 640px) {
-  .section {
-    padding: var(--sp-5) var(--sp-6);
+@media (min-width: 600px) {
+  .card {
+    padding: var(--sp-5);
   }
 }

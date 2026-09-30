@@ -40,13 +40,22 @@ describe('вход', () => {
   // Тема уже проставлена инлайн-скриптом index.html: без неё шапка спросит matchMedia, которого нет в jsdom.
   beforeEach(() => document.documentElement.setAttribute('data-theme', 'light'));
 
+  it('пока сессия читается — знак портала и «Открываю портал…», а не белый экран', async () => {
+    fakeApi([{ match: 'GET /api/auth/session', respond: () => new Promise(() => undefined) }]);
+    renderWithProviders(gate());
+
+    expect((await screen.findByRole('status')).textContent).toContain('Открываю портал…');
+    expect(screen.queryByText('Портал')).toBeNull();
+    expect(screen.queryByLabelText('Логин')).toBeNull();
+  });
+
   it('на сервере без сессии — экран входа, данных портала не запрашивается', async () => {
     const api = fakeApi([{ match: 'GET /api/auth/session', respond: anonymous }]);
     renderWithProviders(gate());
 
     expect(await screen.findByLabelText('Логин')).not.toBeNull();
     expect(screen.getByLabelText('Пароль')).not.toBeNull();
-    expect(screen.queryByRole('button', { name: 'Выйти' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Выйти/ })).toBeNull();
     expect(api.calls.map(c => c.url)).toEqual(['/api/auth/session']);
   });
 
@@ -62,9 +71,10 @@ describe('вход', () => {
     fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'Correct-Horse-7731' } });
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
 
-    const logout = await screen.findByRole('button', { name: 'Выйти' });
+    // Имя вошедшего — в доступном имени кнопки выхода (и в подсказке): кто выйдет, слышно и видно.
+    const logout = await screen.findByRole('button', { name: 'Выйти (Иван Иванов)' });
     expect(api.calls.find(c => c.url === '/api/auth/login')?.body).toEqual({ login: 'ivanov', password: 'Correct-Horse-7731' });
-    // Профиль — вкладка админки: отдельной ссылки в шапке нет, имя — в подсказке кнопки выхода.
+    // Профиль — вкладка админки: отдельной ссылки в шапке нет.
     expect(screen.queryByRole('link', { name: /Мой профиль/ })).toBeNull();
     expect(logout.getAttribute('title')).toBe('Выйти (Иван Иванов)');
 
@@ -94,7 +104,8 @@ describe('вход', () => {
     const viewer = renderWithProviders(gate());
     await screen.findByText('Портал');
     expect(screen.queryAllByRole('link', { name: 'Админка' })).toHaveLength(0);
-    expect(screen.getAllByRole('link', { name: 'Компании' }).length).toBeGreaterThan(0);
+    // Главная — «Поиск»: на ней два режима (компании и публикации), пункт один.
+    expect(screen.getAllByRole('link', { name: 'Поиск' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Профиль' })[0]?.getAttribute('href')).toBe('/admin/account');
     viewer.unmount();
 
@@ -147,6 +158,6 @@ describe('вход', () => {
 
     await waitFor(() => expect(screen.getByText('Портал')).not.toBeNull());
     expect(screen.queryByLabelText('Логин')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Выйти' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Выйти/ })).toBeNull();
   });
 });

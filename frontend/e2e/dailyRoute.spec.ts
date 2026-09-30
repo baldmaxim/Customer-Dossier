@@ -1,4 +1,4 @@
-// Ежедневный маршрут на тестовом стенде: Origin- и Host-гарды, очередь проверки, запуски,
+// Ежедневный маршрут на тестовом стенде: Origin- и Host-гарды, «Проверка», «Обработка» и разбор,
 // отсутствие переполнения по ширине, кэш service worker без /api.
 // Вход по токену снят — портал открывается сразу. Обращения и снимки с портала убраны.
 // Данные — синтетические (seed:test-release).
@@ -39,32 +39,38 @@ test('T18-03 Origin и Host: запрос с чужой страницы и на
   expect(rebind.status()).toBe(403);
 });
 
-test('T18-01 очередь проверки: неоднозначности постранично, «всего» по фильтру', async ({ page }) => {
+test('T18-01 проверка: неясные упоминания постранично, «всего» по фильтру', async ({ page }) => {
   await open(page, '/admin/review');
-  await page.getByLabel('Вид').selectOption('identity');
-  await expect(page.getByText(/Всего: \d+; страница 1/)).toBeVisible();
+  // Неясные упоминания — своя вкладка «Проверки»; вкладка живёт в адресе.
+  await page.getByRole('tab', { name: /Неясные упоминания/ }).click();
+  await expect(page).toHaveURL(/\/admin\/review\?tab=mentions$/);
+  await expect(page.getByText(/^всего [\d\s]+$/)).toBeVisible();
   await noHorizontalOverflow(page);
 });
 
-test('T18-01 запуски: список отличает пустой результат от ошибки; карточка открывается', async ({ page }) => {
+test('T18-01 обработка: список отличает пустой результат от ошибки; разбор открывается', async ({ page }) => {
   await open(page, '/admin/process');
-  await expect(page.getByText(/Всего по фильтру: \d+/)).toBeVisible();
-  const link = page.locator('table a[href^="/admin/process/"]').first();
+  await expect(page.getByText(/всего по фильтру: [\d\s]+/)).toBeVisible();
+  // Строка списка (таблица или карточка на телефоне) — ссылка на разбор целиком.
+  const link = page.locator('main a[href^="/admin/process/"]').first();
   if ((await link.count()) > 0) {
     await link.click();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Запуск #');
-    await expect(page.getByText(/Чанки: \d+ из \d+ приняты/)).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Разбор от');
+    await expect(page.getByText('Технические подробности')).toBeVisible();
   }
   await noHorizontalOverflow(page);
 });
 
 test('каталог: строка открывается целиком, а не только имя', async ({ page }) => {
   await open(page, '/');
-  // Клик по ячейке «Город» — она не ссылка: переход даёт накладка строки (index.css).
-  const row = page.locator('tr.row-link').first();
+  // Строка каталога — строка таблицы на широком экране и карточка на телефоне. Щелчок у правого
+  // края — там числа, а не ссылка: переход даёт накладка строки (.row-link в index.css).
+  const row = page.locator('.row-link').first();
   if ((await row.count()) === 0) return;
   const href = await row.locator('a[href^="/company/"]').first().getAttribute('href');
-  await row.locator('td').nth(1).click();
+  const box = await row.boundingBox();
+  if (!box) return;
+  await page.mouse.click(box.x + box.width - 12, box.y + box.height / 2);
   await expect(page).toHaveURL(new RegExp(`${href}$`));
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await noHorizontalOverflow(page);
@@ -72,8 +78,11 @@ test('каталог: строка открывается целиком, а н�
 
 test('связи: схема строится вокруг одного центра и честно называет границы', async ({ page }) => {
   await open(page, '/');
-  // Центр берём из каталога: первая ссылка «схема» ведёт на /links?company=N.
-  const toGraph = page.locator('a[href^="/links?company="]').first();
+  // Путь к схеме — из карточки компании, кнопкой «Схема связей» (колонку «схема» в каталоге сняли).
+  const company = page.locator('main a[href^="/company/"]').first();
+  if ((await company.count()) === 0) return;
+  await company.click();
+  const toGraph = page.getByRole('link', { name: 'Схема связей' }).first();
   if ((await toGraph.count()) === 0) return;
   await toGraph.click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Связи');
@@ -83,7 +92,17 @@ test('связи: схема строится вокруг одного цент
 });
 
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
-  for (const path of ['/', '/links', '/contractors', '/admin', '/admin/collect', '/admin/process', '/admin/result', '/admin/review']) {
+  for (const path of [
+    '/',
+    '/links',
+    '/contractors',
+    '/admin',
+    '/admin/sources',
+    '/admin/sources?tab=website',
+    '/admin/process',
+    '/admin/review',
+    '/admin/review?tab=duplicates',
+  ]) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await noHorizontalOverflow(page);

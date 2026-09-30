@@ -6,6 +6,8 @@
 
 import { FC, useEffect, useState } from 'react';
 
+import { Select } from '../ui/Select';
+import { TextInput } from '../ui/TextInput';
 import styles from './HistoryDepthPicker.module.css';
 
 const PRESETS: ReadonlyArray<{ days: number; label: string }> = [
@@ -43,11 +45,11 @@ export const HistoryDepthPicker: FC<IHistoryDepthPickerProps> = ({ value, kind, 
 
   return (
     <span className={styles.picker}>
-      <select
-        className={styles.select}
+      <Select
         aria-label={label}
         value={mode}
         disabled={disabled}
+        block={false}
         onChange={e => {
           const next = e.target.value;
           setMode(next);
@@ -62,9 +64,9 @@ export const HistoryDepthPicker: FC<IHistoryDepthPickerProps> = ({ value, kind, 
           </option>
         ))}
         <option value="custom">своё число дней…</option>
-      </select>
+      </Select>
       {mode === 'custom' && (
-        <input
+        <TextInput
           className={styles.days}
           type="number"
           inputMode="numeric"
@@ -74,6 +76,7 @@ export const HistoryDepthPicker: FC<IHistoryDepthPickerProps> = ({ value, kind, 
           aria-label={`${label}: число дней`}
           value={custom}
           disabled={disabled}
+          block={false}
           onChange={e => setCustom(e.target.value)}
           onBlur={applyCustom}
           onKeyDown={e => {

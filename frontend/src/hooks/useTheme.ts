@@ -32,10 +32,13 @@ export const useTheme = (): { theme: Theme; toggle: () => void } => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     // Шапка PWA красится этим мета-тегом; без синхронизации она останется
-    // от предыдущей темы.
+    // от предыдущей темы. Цвет — токен --chrome из index.css (им же красятся шапка и нижняя
+    // панель): читаем его после смены атрибута, а не держим здесь вторую копию значений.
+    // Инлайн-скрипт index.html и manifest.json повторяют те же значения литералом —
+    // совпадение проверяет src/test/themeColor.test.ts.
     const meta = document.querySelector('meta[name="theme-color"]');
-    // Значения совпадают с --bg в index.css и с инлайн-скриптом в index.html.
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1015' : '#f4f5f8');
+    const chrome = getComputedStyle(document.documentElement).getPropertyValue('--chrome').trim();
+    if (meta && chrome) meta.setAttribute('content', chrome);
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {

@@ -1,11 +1,14 @@
-// Этап 18: ошибка загрузки отличима от пустого списка; курсор страницы; предупреждение о выключенном исполнителе.
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+// «Обработка»: ошибка загрузки отличима от пустого списка; итог разбора одним словом; фильтр по
+// источнику (по названию, в запрос — номер) и статусу — в адресе; счётчики состояний — фильтры;
+// «Новее / Старее» по курсору.
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import type { IFakeRoute } from '../../test/render';
 import { fakeApi, offlineApi, renderWithProviders } from '../../test/render';
 import { RunsPage } from './RunsPage';
 
-const run = (id: number) => ({
+const run = (id: number, over: Record<string, unknown> = {}) => ({
   id,
   revisionId: 1,
   revisionNo: 1,
@@ -13,7 +16,7 @@ const run = (id: number) => ({
   sourceItemId: 1,
   source: { id: 1, key: 'demo' },
   status: 'partial',
-  error: 'разобрано 1 из 2 чанков',
+  error: 'разобрано 1 из 2 частей',
   fingerprint: 'abcdef0123456789',
   model: 'fake',
   schemaVersion: 'extract@3',
@@ -28,45 +31,162 @@ const run = (id: number) => ({
   usage: { responses: 2, tokensIn: null, tokensOut: null, latencyMs: null },
   policy: { allowed: true, reason: null },
   candidateSet: null,
+  ...over,
 });
 
-describe('RunsPage — состояния загрузки', () => {
-  it('нет соединения — сообщение об отказе, а не «запусков нет»', async () => {
+const page = (items: unknown[], extra: Record<string, unknown> = {}) => ({
+  status: 200,
+  body: { items, total: items.length, nextBeforeId: null, worker: { pipelineEnabled: true, autoPublish: true }, ...extra },
+});
+
+const SOURCES = [
+  { id: 1, kind: 'telegram', key: 'demo', title: 'Демо-канал', collectBlockedReason: null, aiBlockedReason: null, status: 'active' },
+  { id: 2, kind: 'website', key: 'erzrf.ru', title: 'ЕРЗ.РФ', collectBlockedReason: null, aiBlockedReason: null, status: 'active' },
+];
+
+const PIPELINE = {
+  queue: [],
+  revisions: [
+    { state: 'published', n: 81230 },
+    { state: 'in_queue', n: 412 },
+    { state: 'failed_exhausted', n: 4 },
+  ],
+  failures: [],
+  model: { ok: true, error: null, models: [] },
+  extractions: [],
+  rejectedEvents: [],
+  worker: { ingestEnabled: true, pipelineEnabled: true, autoPublish: true, metricsAutoRefresh: false, retryEnabled: true, retryMax: 3 },
+};
+
+const around = (runs: IFakeRoute): IFakeRoute[] => [
+  runs,
+  { match: 'GET /api/admin/sources', respond: () => ({ status: 200, body: { items: SOURCES } }) },
+  { match: 'GET /api/admin/pipeline', respond: () => ({ status: 200, body: PIPELINE }) },
+  {
+    match: 'GET /api/contractors/summary',
+    respond: () => ({
+      status: 200,
+      body: {
+        byIdentity: [],
+        totals: { companies: 12334, projects: 4071, documents: 98213, pendingMerges: 3, lonelyCompanies: 10 },
+        refresh: { active: null, lastFailure: null, running: false, stale: true, staleReasons: [] },
+      },
+    }),
+  },
+];
+
+const runsCalls = (api: { calls: Array<{ url: string }> }): string[] =>
+  api.calls.filter(c => c.url.startsWith('/api/reprocess/runs')).map(c => c.url);
+
+describe('«Обработка»: состояния загрузки', () => {
+  it('нет соединения — сообщение об отказе, а не «разборов нет»', async () => {
     offlineApi();
-    renderWithProviders(<RunsPage />);
-    expect((await screen.findByRole('alert')).textContent).toMatch(/Нет соединения с API/);
-    expect(screen.queryByText(/Запусков по фильтру нет/)).toBeNull();
+    renderWithProviders(<RunsPage />, '/admin/process');
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some(a => /Нет соединения с API/.test(a.textContent ?? ''))).toBe(true);
+    expect(screen.queryByText(/Разборов по фильтру нет/)).toBeNull();
   });
 
-  it('500 — «сбой сервера … не пустой результат»; 401 — «нет входа»', async () => {
-    fakeApi([{ match: 'GET /api/reprocess/runs', respond: () => ({ status: 500, body: { error: 'boom' } }) }]);
-    renderWithProviders(<RunsPage />);
+  it('500 — «сбой сервера … не пустой результат»', async () => {
+    fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => ({ status: 500, body: { error: 'boom' } }) }));
+    renderWithProviders(<RunsPage />, '/admin/process');
     expect((await screen.findByRole('alert')).textContent).toMatch(/Сбой сервера \(500\).*не пустой результат/);
   });
 
-  it('пустой ответ — «запусков нет»; выключенный исполнитель показан', async () => {
-    fakeApi([{ match: 'GET /api/reprocess/runs', respond: () => ({ status: 200, body: { items: [], total: 0, nextBeforeId: null, worker: { pipelineEnabled: false, autoPublish: false } } }) }]);
-    renderWithProviders(<RunsPage />);
-    expect(await screen.findByText(/Запусков по фильтру нет/)).toBeTruthy();
-    expect(screen.getByText(/PIPELINE_ENABLED=false/)).toBeTruthy();
+  it('пустой ответ — «разборов по фильтру нет»; итоги по базе — словами', async () => {
+    fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([]) }));
+    renderWithProviders(<RunsPage />, '/admin/process');
+    expect(await screen.findByText(/Разборов по фильтру нет/)).toBeTruthy();
+    // Число и слово — через неразрывный пробел: «98 213» и «текстов» не разъезжаются по строкам.
+    expect((await screen.findByText(/В базе:/)).parentElement?.textContent).toMatch(/12\s334\sкомпании, 4\s071\sобъект, 98\s213\sтекстов/);
+  });
+});
+
+describe('«Обработка»: список разборов', () => {
+  it('итог — одним словом из статуса, признака «о стройке», судьбы найденного и допуска', async () => {
+    fakeApi(
+      around({
+        match: 'GET /api/reprocess/runs',
+        respond: () =>
+          page([
+            run(10, { status: 'completed', relevant: true, candidateSet: { id: 1, status: 'published' } }),
+            run(11, { status: 'completed', relevant: false }),
+            run(12, { status: 'completed', relevant: true, candidateSet: { id: 2, status: 'rejected_stale' } }),
+            run(13, { status: 'queued' }),
+            run(14, { status: 'failed' }),
+            run(15, { status: 'queued', policy: { allowed: false, reason: 'выключен' } }),
+          ]),
+      }),
+    );
+    renderWithProviders(<RunsPage />, '/admin/process');
+    const table = within(await screen.findByRole('table'));
+    for (const word of [
+      'в карточках',
+      'не о стройке',
+      'не перенесён: текст изменился',
+      'в очереди на разбор',
+      'разбор не удался',
+      'источник выключен',
+    ]) {
+      expect(table.getByText(word)).toBeTruthy();
+    }
+    // Источник — названием, а не ключом; строка — ссылка на разбор.
+    expect(table.getAllByText('Демо-канал').length).toBe(6);
+    expect(table.getAllByRole('link')[0]?.getAttribute('href')).toBe('/admin/process/10');
   });
 
-  it('«Дальше» запрашивает следующую страницу по beforeId; неизвестные токены не показаны нулём', async () => {
-    const api = fakeApi([
-      {
+  it('«Старее» запрашивает следующую страницу по beforeId; неизвестная длительность — прочерк, а не ноль', async () => {
+    const api = fakeApi(
+      around({
         match: 'GET /api/reprocess/runs',
         respond: url =>
-          url.includes('beforeId=150')
-            ? { status: 200, body: { items: [run(149)], total: 151, nextBeforeId: null, worker: { pipelineEnabled: true, autoPublish: false } } }
-            : { status: 200, body: { items: [run(151), run(150)], total: 151, nextBeforeId: 150, worker: { pipelineEnabled: true, autoPublish: false } } },
-      },
-    ]);
-    renderWithProviders(<RunsPage />);
-    expect(await screen.findByText(/Всего по фильтру: 151/)).toBeTruthy();
-    expect(screen.getAllByText(/время неизвестно/).length).toBe(2);
-    expect(screen.getAllByText(/есть №2/).length).toBe(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Дальше' }));
-    await waitFor(() => expect(api.calls.some(c => c.url.includes('beforeId=150'))).toBe(true));
-    expect(await screen.findByText('#149')).toBeTruthy();
+          url.includes('beforeId=150') ? page([run(149)], { total: 151 }) : page([run(151), run(150)], { total: 151, nextBeforeId: 150 }),
+      }),
+    );
+    renderWithProviders(<RunsPage />, '/admin/process');
+    expect(await screen.findByText(/всего по фильтру: 151/)).toBeTruthy();
+    expect(screen.getAllByText('текст с тех пор изменился').length).toBe(2);
+    expect(screen.queryByText('0 с')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Новее' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Старее' }));
+    await waitFor(() => expect(runsCalls(api).some(u => u.includes('beforeId=150'))).toBe(true));
+    expect(await screen.findByRole('link', { name: /Разбор от/ })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Новее' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('фильтр «Источник» — список названий, в запрос уходит номер источника', async () => {
+    const api = fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([run(10)]) }));
+    renderWithProviders(<RunsPage />, '/admin/process');
+
+    const select = await screen.findByRole('combobox', { name: 'Источник' });
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'ЕРЗ.РФ' })).toBeTruthy());
+    fireEvent.change(select, { target: { value: '2' } });
+    await waitFor(() => expect(runsCalls(api).some(u => u.includes('sourceId=2'))).toBe(true));
+    // Прежних полей по невидимым номерам и отпечатку нет.
+    expect(screen.queryByLabelText(/Редакция #/)).toBeNull();
+    expect(screen.queryByLabelText(/Отпечаток/)).toBeNull();
+  });
+
+  it('фильтры читаются из адреса: ?source=2&status=failed', async () => {
+    const api = fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([]) }));
+    renderWithProviders(<RunsPage />, '/admin/process?source=2&status=failed');
+
+    await screen.findByText(/Разборов по фильтру нет/);
+    expect(runsCalls(api)[0]).toMatch(/sourceId=2/);
+    expect(runsCalls(api)[0]).toMatch(/status=failed/);
+    expect((screen.getByRole('combobox', { name: 'Статус разбора' }) as HTMLSelectElement).value).toBe('failed');
+  });
+
+  it('счётчик «в очереди на разбор» — фильтр списка по статусу', async () => {
+    const api = fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([run(10)]) }));
+    renderWithProviders(<RunsPage />, '/admin/process');
+
+    const tile = await screen.findByRole('button', { name: /412.*в очереди на разбор/ });
+    expect(tile.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(tile);
+    await waitFor(() => expect(runsCalls(api).some(u => u.includes('status=queued'))).toBe(true));
+    expect(screen.getByRole('button', { name: /412.*в очереди на разбор/ }).getAttribute('aria-pressed')).toBe('true');
+    // «В карточках» — не фильтр: к статусу разбора это состояние не сводится.
+    expect(screen.queryByRole('button', { name: /81\s230/ })).toBeNull();
   });
 });

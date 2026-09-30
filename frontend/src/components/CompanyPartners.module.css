@@ -1,36 +1,46 @@
-/* Контрагенты компании (этап 22): основание связи подписано у каждой строки. */
+/* «С кем связана»: контрагент, вид связи ярлыком, объект словом, цитата — под «Откуда известно». */
 
 .list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .item {
-  border-top: 1px solid var(--border);
-  padding-top: var(--sp-3);
   min-width: 0;
 }
 
-.item:first-child {
-  border-top: none;
-  padding-top: 0;
+.item + .item {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
 }
 
 .head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-2);
+  gap: 0 var(--sp-2);
 }
 
+/* Имя — цель нажатия: 44px под палец, плотнее под мышь (--ctl-h-sm). */
 .name {
-  font-weight: 600;
-  font-size: var(--fs-base);
-  overflow-wrap: anywhere;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .name:hover {
+    color: var(--accent);
+  }
 }
 
 .city {
@@ -39,34 +49,66 @@
 }
 
 .links {
-  list-style: none;
-  margin: var(--sp-1) 0 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .link {
+  min-width: 0;
+  font-size: var(--fs-md);
+}
+
+.linkLine {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-2);
-  font-size: var(--fs-md);
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
   min-width: 0;
 }
 
 .linkText,
 .project {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .project {
   color: var(--muted);
 }
 
+/* Ссылка на объект — цель нажатия: 44px под палец, плотнее под мышь (--ctl-h-sm). */
+.projectLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+/* Что значит вид связи — одно пояснение на раздел, а не «?» у каждой строки. */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.legendTerm {
+  color: var(--text);
+  font-weight: var(--fw-medium);
+}
+
 .more,
-.muted,
 .note {
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -74,19 +116,4 @@
 
 .note {
   margin: var(--sp-3) 0 0;
-}
-
-.muted {
-  margin: 0;
-  font-size: var(--fs-md);
-}
-
-.evidence {
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
 }

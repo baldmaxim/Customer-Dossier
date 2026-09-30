@@ -1,5 +1,6 @@
-// Вкладка «Модель»: провайдер из .env, ключ OpenRouter — только администратору; ключ не возвращается
-// на экран, поле очищается после сохранения, без права llm.manage формы нет.
+// Раздел «Модель»: провайдер из настроек сервера, ключ OpenRouter — только администратору; ключ не
+// возвращается на экран, поле очищается после сохранения, без права llm.manage формы нет. Имена
+// переменных окружения — только в пояснениях администратору.
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -48,10 +49,21 @@ describe('вкладка «Модель»', () => {
 
     expect(await screen.findByText('OpenRouter — модель в облаке')).not.toBeNull();
     expect(screen.getByText('qwen/qwen3-30b-a3b-instruct-2507')).not.toBeNull();
-    expect(screen.getByText('самый дешёвый со строгой JSON-схемой')).not.toBeNull();
+    expect(screen.getByText('самый дешёвый подходящий')).not.toBeNull();
     expect(screen.getByText('не отвечает')).not.toBeNull();
     expect(screen.getByText('не задан')).not.toBeNull();
     expect(screen.getByText(/Без ключа разбор ждёт/)).not.toBeNull();
+    // Имена переменных окружения — не в тексте экрана, а в пояснении.
+    expect(document.body.textContent).not.toMatch(/LLM_PROVIDER|LMSTUDIO_MODEL|OPENROUTER_PROVIDERS/);
+    expect(screen.getByRole('button', { name: 'Пояснение: где это настраивается' }).getAttribute('aria-description')).toMatch(
+      /LLM_PROVIDER/,
+    );
+  });
+
+  it('пока настройки грузятся — «Проверяю модель…», а не пустое состояние', () => {
+    fakeApi([{ match: 'GET /api/admin/llm', respond: () => new Promise(() => undefined) }]);
+    renderWithProviders(as(ADMIN, <ModelPage />));
+    expect(screen.getByRole('status').textContent).toMatch(/Проверяю модель/);
   });
 
   it('сохранение: ключ уходит один раз, поле очищается, на экране — только четыре последних символа', async () => {
@@ -62,7 +74,10 @@ describe('вкладка «Модель»', () => {
         respond: () => ({
           status: 200,
           body: saved
-            ? settings({ key: keyStatus({ source: 'admin', hint: 'abcd', updatedAt: '2026-09-30T10:00:00Z', updatedBy: 'boss' }), connection: { ok: true, error: null } })
+            ? settings({
+                key: keyStatus({ source: 'admin', hint: 'abcd', updatedAt: '2026-09-30T10:00:00Z', updatedBy: 'boss' }),
+                connection: { ok: true, error: null },
+              })
             : settings(),
         }),
       },
@@ -92,7 +107,10 @@ describe('вкладка «Модель»', () => {
   it('OpenRouter не принял ключ — текст отказа, ключ в поле остаётся для правки', async () => {
     fakeApi([
       { match: 'GET /api/admin/llm', respond: () => ({ status: 200, body: settings() }) },
-      { match: 'PUT /api/admin/llm/key', respond: () => ({ status: 422, body: { error: 'OpenRouter не принял ключ — он не сохранён', code: 'key_rejected' } }) },
+      {
+        match: 'PUT /api/admin/llm/key',
+        respond: () => ({ status: 422, body: { error: 'OpenRouter не принял ключ — он не сохранён', code: 'key_rejected' } }),
+      },
     ]);
     renderWithProviders(as(ADMIN, <ModelPage />));
 
@@ -110,7 +128,12 @@ describe('вкладка «Модель»', () => {
         match: 'GET /api/admin/llm',
         respond: () => ({
           status: 200,
-          body: settings({ provider: 'lmstudio', model: 'qwen/qwen3-8b', key: keyStatus({ source: 'admin', hint: 'abcd' }), connection: { ok: true, error: null } }),
+          body: settings({
+            provider: 'lmstudio',
+            model: 'qwen/qwen3-8b',
+            key: keyStatus({ source: 'admin', hint: 'abcd' }),
+            connection: { ok: true, error: null },
+          }),
         }),
       },
     ]);
@@ -120,5 +143,7 @@ describe('вкладка «Модель»', () => {
     expect(screen.getByText('Пока разбор идёт через LM Studio, ключ не используется.')).not.toBeNull();
     expect(screen.getByText('Ключ задаёт администратор.')).not.toBeNull();
     expect(screen.queryByLabelText(/ключ OpenRouter/i)).toBeNull();
+    // Оператору не нужны имена переменных и в пояснениях.
+    expect(screen.queryByRole('button', { name: 'Пояснение: где это настраивается' })).toBeNull();
   });
 });

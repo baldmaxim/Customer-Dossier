@@ -1,0 +1,45 @@
+/* «Резюме и противоречия»: части через линию, внутри — фразы с атрибуцией (StatementList). */
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.part {
+  min-width: 0;
+}
+
+.part + .part {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-h3);
+}
+
+/* Подпункт части: обычным регистром — прописными уже подписаны группы фраз внутри (StatementList). */
+.subtitle {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-2);
+  padding-inline-start: var(--sp-4);
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}

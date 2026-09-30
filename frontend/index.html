@@ -6,6 +6,8 @@
     <title>Досье Заказчика</title>
     <meta name="description" content="Локальный портал досье участников строительного рынка" />
     <meta name="color-scheme" content="light dark" />
+    <!-- ИНН, ОГРН и суммы — не телефоны: без этого iOS делает из них tel-ссылки. -->
+    <meta name="format-detection" content="telephone=no" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -25,22 +27,27 @@
          рисуются белым поверх контента и на светлой теме исчезают. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Досье" />
-    <meta name="theme-color" content="#f4f5f8" />
+    <!-- Цвет системной панели = --chrome из src/index.css (цвет шапки): иначе между ними шов.
+         Значения повторены в скрипте ниже и в manifest.json; совпадение проверяет
+         src/test/themeColor.test.ts. -->
+    <meta name="theme-color" content="#fdfdfd" />
 
     <script>
       // Тема ставится до первой отрисовки — иначе при загрузке мигает светлым.
+      // Сохранённое значение проверяется: мусор в localStorage не должен давать
+      // data-theme="undefined" и страницу без токенов тёмной темы.
       (function () {
+        let theme = 'light';
         try {
-          var stored = localStorage.getItem('theme');
-          var theme =
-            stored ||
-            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-          document.documentElement.setAttribute('data-theme', theme);
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'dark' ? '#0e1015' : '#f4f5f8');
+          const stored = localStorage.getItem('theme');
+          if (stored === 'dark' || stored === 'light') theme = stored;
+          else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light');
+          // Хранилище недоступно (приватный режим) — остаётся светлая.
         }
+        document.documentElement.setAttribute('data-theme', theme);
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#14171e' : '#fdfdfd');
       })();
     </script>
   </head>

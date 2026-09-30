@@ -1,19 +1,29 @@
-// Журнал: что ушло в карточки, что не ушло и почему.
+// Журнал переноса в карточки: что ушло, что не ушло и почему.
 //
-// Перенос разобранного в карточки автоматический, поэтому единственное место, где
-// видно его работу, — этот журнал. Отказ здесь не ошибка портала: «допуск отозван»
-// и «разбор устарел» — законные исходы, и они названы словами.
+// Перенос разобранного в карточки автоматический, поэтому единственное место, где видно
+// его работу, — этот журнал. Отказ здесь не ошибка портала: «источник выключен» и «текст
+// изменился» — законные исходы, и они названы словами. Строка — ссылка на разбор.
 
-import { FC } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { FC, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import { formatDateTime } from '../../lib/labels';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { PUBLICATION_ACTION_HINTS, PUBLICATION_ACTION_LABELS, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import { MQ } from '../../lib/media';
+import { PUBLICATION_ACTION_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
-import { EmptyState } from '../ui/Section';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
+import { CardList } from '../ui/CardList';
+import { CardListItem } from '../ui/CardListItem';
+import { EmptyState } from '../ui/EmptyState';
+import { Loading } from '../ui/Loading';
 import { TableScroll } from '../ui/TableScroll';
+import { VisuallyHidden } from '../ui/VisuallyHidden';
+import styles from './Runs.module.css';
 
 interface IPublicationRow {
   id: number;
@@ -29,72 +39,91 @@ interface IPublicationRow {
   runId: number | null;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  publish: 'попало в карточки',
-  rejected_policy: 'отказ: нет допуска',
-  rejected_stale: 'отказ: разбор устарел',
-};
-
-const ACTION_HINTS: Record<string, string> = {
-  publish: 'набор кандидатов перенесён в утверждения и доказательства карточек',
-  rejected_policy:
-    'ИИ-допуск источника отозван или истёк на момент переноса — набор сохранён и уйдёт в карточки после решения оператора по допуску',
-  rejected_stale:
-    'публикация успела измениться после разбора: набор остаётся кандидатом, нужен новый запуск по последней редакции',
-};
-
 const ACTOR_LABELS: Record<string, string> = {
   auto: 'автоматически',
   operator: 'оператор',
 };
 
+/**
+ * Исход переноса ярлыком. Пояснение — подсказкой только в таблице: на телефоне ярлык с подсказкой
+ * становится кнопкой в 24px, а смысл и так сказан подписью.
+ */
+const actionBadge = (action: string, withHint: boolean): ReactNode => (
+  <Badge tone={toneOf(PUBLICATION_ACTION_TONE, action)} hint={withHint ? PUBLICATION_ACTION_HINTS[action] : undefined}>
+    {PUBLICATION_ACTION_LABELS[action] ?? action}
+  </Badge>
+);
+
 export const PublicationLog: FC = () => {
+  // Таблица из пяти колонок — от 900px: на планшете она уезжала вбок, там — карточки.
+  const wide = useMediaQuery(MQ.md);
   const log = useQuery({
     queryKey: ['publications'],
     queryFn: () => api.get<{ items: IPublicationRow[] }>('/api/reprocess/publications?limit=50'),
   });
 
-  const items = log.data?.items ?? [];
-
-  if (log.isError) return <p role="alert">{describeLoadError(log.error)}</p>;
-  if (log.isSuccess && items.length === 0) {
+  if (log.isLoading) return <Loading label="Загружаю журнал…" />;
+  if (log.isError) {
     return (
-      <EmptyState>
-        В карточки пока ничего не переносилось. Набор кандидатов появляется после полного разбора
-        редакции — неполный и упавший запуск в карточки не идут ни при каком флаге.
-      </EmptyState>
+      <Callout tone="danger" title="Журнал не загрузился" action={<Button onClick={() => void log.refetch()}>Повторить</Button>}>
+        {describeLoadError(log.error)}
+      </Callout>
+    );
+  }
+  const items = log.data?.items ?? [];
+  if (items.length === 0) {
+    return <EmptyState size="sm">В карточки пока ничего не переносилось. Туда попадает только полностью разобранный текст.</EmptyState>;
+  }
+
+  const actor = (row: IPublicationRow): string => ACTOR_LABELS[row.actor] ?? row.actor;
+
+  if (!wide) {
+    return (
+      <CardList label="Журнал переноса в карточки">
+        {items.map(row => (
+          <CardListItem
+            key={row.id}
+            to={row.runId !== null ? `/admin/process/${row.runId}` : undefined}
+            title={row.sourceTitle}
+            meta={`${formatDateTime(row.createdAt)} · ${actor(row)}`}
+            aside={actionBadge(row.action, false)}
+          >
+            {row.note && <span className={styles.note}>{row.note}</span>}
+          </CardListItem>
+        ))}
+      </CardList>
     );
   }
 
   return (
-    <TableScroll minWidth={760}>
+    <TableScroll label="Журнал переноса в карточки" minWidth={720}>
       <thead>
         <tr>
           <th>Когда</th>
-          <th>Исход</th>
-          <th>Кто</th>
+          <th>Итог</th>
           <th>Источник</th>
-          <th>Запуск</th>
+          <th>Кто</th>
           <th>Причина</th>
         </tr>
       </thead>
       <tbody>
         {items.map(row => (
-          <tr key={row.id}>
-            <td>{formatDateTime(row.createdAt)}</td>
-            <td>
-              <Badge
-                tone={row.action === 'publish' ? 'positive' : 'warn'}
-                hint={ACTION_HINTS[row.action] ?? row.action}
-              >
-                {ACTION_LABELS[row.action] ?? row.action}
-              </Badge>
+          <tr key={row.id} className={row.runId !== null ? 'row-link' : undefined}>
+            <td className={`nowrap ${styles.whenCell}`}>
+              {row.runId !== null ? (
+                <Link to={`/admin/process/${row.runId}`} viewTransition className={`row-link-target ${styles.rowLink}`}>
+                  <VisuallyHidden>Разбор от </VisuallyHidden>
+                  {formatDateTime(row.createdAt)}
+                </Link>
+              ) : (
+                formatDateTime(row.createdAt)
+              )}
             </td>
-            <td>{ACTOR_LABELS[row.actor] ?? row.actor}</td>
-            <td>{row.sourceTitle}</td>
             <td>
-              {row.runId !== null ? <Link to={`/admin/process/${row.runId}`}>запуск #{row.runId}</Link> : 'не указан'}
+              <span className="row-link-above">{actionBadge(row.action, true)}</span>
             </td>
+            <td className={styles.sourceCell}>{row.sourceTitle}</td>
+            <td>{actor(row)}</td>
             <td>{row.note ?? '—'}</td>
           </tr>
         ))}

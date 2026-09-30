@@ -1,0 +1,74 @@
+/* Экран до входа: карточка по центру, поля одной высоты с кнопкой (--ctl-h-lg), без шапки портала. */
+
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(var(--sp-4), var(--safe-top)) max(var(--sp-4), var(--safe-right)) max(var(--sp-4), var(--safe-bottom))
+    max(var(--sp-4), var(--safe-left));
+  background: var(--bg);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: 26rem; /* форма входа: одно поле на строку, строка короче 60 знаков */
+  padding: var(--sp-5) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: global(enter-up) var(--dur-slow) var(--ease-out);
+}
+
+@media (min-width: 600px) {
+  .card {
+    padding: var(--sp-6);
+  }
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.logo {
+  display: block;
+  height: 32px; /* высота знака в шапке портала — тот же размер, что и здесь */
+  width: auto;
+}
+
+.logoDark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoLight {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .logoDark {
+  display: block;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-xl);
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: var(--lh-text);
+  overflow-wrap: anywhere; /* логин-почта без пробелов (до 70 знаков) не распирает карточку на 360px */
+}

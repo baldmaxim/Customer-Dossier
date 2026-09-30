@@ -1,53 +1,85 @@
+/* Оболочка портала. Mobile-first: база — телефон (нижняя панель), с 600px — меню в шапке. */
+
 .shell {
+  position: relative;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* Страховка: широкий блок страницы не расширяет layout-viewport телефона и не уводит
+     нижнюю панель с экрана. clip, а не hidden: hidden ломает sticky у шапки. Причины
+     переполнения чинятся на месте — это только сетка под ними. */
+  overflow-x: clip;
+}
+
+/* «К содержанию» — первая остановка Tab: видна только в фокусе. */
+.skip {
+  position: absolute;
+  z-index: var(--z-skip);
+  top: calc(var(--safe-top) + var(--sp-2));
+  left: max(var(--sp-2), var(--safe-left));
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-4);
+  border-radius: var(--ctl-radius);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: var(--fw-semibold);
+  box-shadow: var(--shadow-lg);
+}
+
+.skip:not(:focus) {
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .header {
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  background: var(--surface-glass);
+  background: var(--chrome-glass);
   backdrop-filter: saturate(180%) blur(14px);
   -webkit-backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--border);
   /* «Чёлка» и Dynamic Island: шапка обязана начинаться под ними. */
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-top);
+  /* Своё имя в View Transitions: при смене страницы шапка не гаснет вместе с ней. */
+  view-transition-name: app-header;
 }
 
 /* Каркас идёт во всю ширину экрана: ограничивается не он, а отдельные блоки —
    абзац по читаемости, форма по смыслу. Поля — var(--gutter). */
 .headerInner {
-  height: var(--header-h);
-  padding: 0 max(var(--gutter), env(safe-area-inset-right)) 0 max(var(--gutter), env(safe-area-inset-left));
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--sp-3);
+  height: var(--header-h);
+  padding: 0 max(var(--gutter), var(--safe-right)) 0 max(var(--gutter), var(--safe-left));
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   flex: 0 0 auto;
   margin-right: auto;
   border-radius: var(--radius-sm);
-  transition: opacity var(--t-fast) var(--ease);
-}
-
-.brand:hover {
-  opacity: 0.82;
-  text-decoration: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .logoLight,
 .logoDark {
   display: block;
-  height: 26px;
+  height: 24px;
   width: auto;
 }
 
-/* Обе версии в DOM, переключаем классом на <html> — без мигания и без
+/* Обе версии в DOM, переключаем атрибутом на <html> — без мигания и без
    повторной загрузки файла при смене темы. */
 .logoDark {
   display: none;
@@ -61,65 +93,82 @@
   display: block;
 }
 
+/* Меню в шапке — с 600px; на телефоне его роль играет нижняя панель. */
 .nav {
-  display: flex;
-  gap: 2px;
-  align-items: center;
+  display: none;
+  align-items: stretch;
+  gap: var(--sp-1);
 }
 
 .navLink {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  /* min-height, а не height: длинная подпись пункта переносится, а не наезжает. */
-  min-height: var(--ctl-h-sm);
-  padding: var(--sp-1) var(--sp-3);
-  border-radius: var(--radius-sm);
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
   color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 500;
-  /* Только цвет и фон: анимировать размеры — лейаут-трешинг на смартфонах. */
-  transition:
-    background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-
-.navLink:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 
-.navLinkActive,
-.navLinkActive:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
+/* Индикатор выбранного пункта лежит на нижней линии шапки — как у вкладок страницы. */
+.navLink::after {
+  content: '';
+  position: absolute;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--selected-indicator);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
-.themeButton {
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+/* Контур внутрь: снаружи его срезала бы нижняя линия шапки. */
+.navLink:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+  border-radius: var(--radius-sm);
+}
+
+.navLinkActive {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+.navLinkActive::after {
+  transform: scaleX(1);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-inline-end: calc(var(--sp-2) * -1); /* кнопка-иконка прижата к краю: её поле прозрачное */
+}
+
+/* Тема и выход: иконки с целью 44px на любом экране. */
+.tool {
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  flex: none;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
   color: var(--muted);
   transition:
-    background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease);
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
-.themeButton:hover {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.themeIcon {
-  width: 18px;
-  height: 18px;
+.tool:active {
+  transform: scale(0.94);
 }
 
 .main {
@@ -127,146 +176,182 @@
   width: 100%;
   /* min-width: 0 — иначе широкая таблица внутри распирает flex-колонку оболочки. */
   min-width: 0;
-  padding: var(--sp-2) max(var(--gutter), env(safe-area-inset-right)) var(--sp-7)
-    max(var(--gutter), env(safe-area-inset-left));
+  padding: var(--sp-4) max(var(--gutter), var(--safe-right))
+    calc(var(--sp-7) + var(--bottom-ui) + var(--toast-space, 0px)) max(var(--gutter), var(--safe-left));
+}
+
+/* Возврат на детальных страницах: тихая строка над заголовком, не акцентная пилюля. */
+.backbar {
+  display: flex;
+  /* в режиме «один экран» main — flex-колонка: без этого строка растянется */
+  align-self: flex-start;
+  margin: calc(var(--sp-2) * -1) 0 var(--sp-2) calc(var(--sp-2) * -1);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3) 0 var(--sp-2);
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+/* Страница открыла пост вместо списка и показывает свой «К списку». */
+.main:has([data-hide-backbar]) .backbar {
+  display: none;
 }
 
 /* Нижняя панель навигации — только на смартфонах. */
 .tabbar {
-  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-tabbar);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: stretch;
+  height: calc(var(--tabbar-h) + var(--safe-bottom));
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: var(--chrome-glass);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-top: 1px solid var(--border);
+  view-transition-name: app-tabbar;
 }
 
-@media (max-width: 639.98px) {
-  .nav {
-    display: none;
-  }
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px; /* иконка и подпись — один пункт */
+  /* Колонка ужимается, подпись переносится: четвёртый пункт не распирает панель на 360px. */
+  min-width: 0;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-decoration: none;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
 
-  .headerInner {
-    height: var(--header-h);
-  }
+.tab:active {
+  transform: scale(0.94);
+}
 
-  .logoLight,
-  .logoDark {
-    height: 24px;
-  }
+.tab:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+  border-radius: var(--radius);
+}
 
-  .themeButton {
-    width: 44px;
-    height: 44px;
-  }
+/* Подложка под иконкой выбранного пункта — форма, а не только цвет. */
+.tabIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
 
-  .main {
-    padding: var(--sp-2) max(var(--gutter), env(safe-area-inset-right))
-      calc(var(--tabbar-h) + var(--sp-5) + env(safe-area-inset-bottom))
-      max(var(--gutter), env(safe-area-inset-left));
-  }
+.tabLabel {
+  max-width: 100%;
+  line-height: var(--lh-tight);
+  text-align: center;
+  overflow-wrap: break-word;
+}
 
-  .tabbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: var(--z-tabbar);
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    align-items: stretch;
-    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: var(--surface-glass);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
-    border-top: 1px solid var(--border);
-  }
+.tabActive {
+  color: var(--accent);
+  font-weight: var(--fw-semibold);
+}
 
-  .tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    /* Шестая вкладка не должна распирать панель на 360 px: колонка ужимается, подпись переносится. */
-    min-width: 0;
-    padding: 0 2px;
-    /* Тап-цель заведомо больше 44 px. */
-    min-height: 48px;
-    color: var(--muted);
-    font-size: 0.72rem;
-    font-weight: 500;
-    letter-spacing: 0;
-    transition:
-      color var(--t-fast) var(--ease),
-      transform var(--t-fast) var(--ease);
-  }
+.tabActive .tabIcon {
+  background: var(--selected-bg);
+}
 
-  .tab:hover {
+@media (hover: hover) {
+  .brand:hover {
+    opacity: 0.82;
     text-decoration: none;
   }
 
-  .tab:active {
-    transform: scale(0.94);
+  .navLink:hover {
+    color: var(--text);
+    text-decoration: none;
   }
 
-  .tabActive {
+  .navLink:not(.navLinkActive):hover::after {
+    background: var(--border-strong);
+    transform: scaleX(1);
+  }
+
+  .tool:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .back:hover {
+    background: var(--surface-2);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .tab:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .tabActive:hover {
     color: var(--accent);
   }
-
-  .tabIcon {
-    width: 22px;
-    height: 22px;
-  }
-
-  .tabLabel {
-    line-height: 1.1;
-    text-align: center;
-    overflow-wrap: anywhere;
-  }
 }
 
-@media (min-width: 640px) {
-  .logoLight,
-  .logoDark {
-    height: 24px;
+@media (min-width: 600px) {
+  .nav {
+    display: flex;
+  }
+
+  .tabbar {
+    display: none;
   }
 }
 
-/* Возврат на шаг назад: заметная кнопка с той же высотой, что и остальные контролы. */
-.back {
-  display: inline-flex;
-  align-self: flex-start; /* в режиме «один экран» main — flex-колонка: без этого кнопка растянется */
-  align-items: center;
-  min-height: var(--ctl-h);
-  margin-bottom: var(--sp-1);
-  padding: var(--sp-1) var(--sp-3);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  cursor: pointer;
+@media (min-width: 900px) {
+  .main {
+    padding-top: var(--sp-5);
+  }
 }
-
-.back:hover {
-  border-color: var(--accent);
-  background: var(--surface);
-  color: var(--accent);
-  text-decoration: none;
-}
-.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Экраны-читалки (список публикаций + пост): страница ровно в высоту окна, прокручиваются
    только колонки. Включается самой читалкой (data-fill-screen), остальные страницы
-   прокручиваются как обычно. Без :has() браузер просто покажет обычную прокрутку. */
-@media (min-width: 900px) {
+   прокручиваются как обычно. Без :has() браузер просто покажет обычную прокрутку.
+   Условие по высоте: телефон боком (932×430) под две колонки слишком низкий. */
+@media (min-width: 900px) and (min-height: 600px) {
   .main:has([data-fill-screen]) {
     display: flex;
     flex-direction: column;
     flex: none;
-    /* 1px — нижняя рамка шапки. */
-    height: calc(100dvh - var(--header-h) - env(safe-area-inset-top) - 1px);
-    padding-top: var(--sp-2);
-    padding-bottom: var(--sp-3);
+    height: calc(100dvh - var(--sticky-top));
+    padding-top: var(--sp-3);
+    padding-bottom: max(var(--sp-3), var(--safe-bottom));
   }
 }

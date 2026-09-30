@@ -1,0 +1,223 @@
+/* Блоки карточки компании: реквизиты под именем, «Обзор», события, опознание, разделы «Подробно». */
+
+/* ─── Реквизиты под именем ─── */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  margin: var(--sp-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px var(--sp-2); /* 2px: чип ниже кнопки — это подпись, а не действие */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.chipLabel {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+}
+
+/* ─── Похожие компании: одна строка-плашка ─── */
+.similar {
+  padding-block: var(--sp-2);
+}
+
+.similarText {
+  margin: 0;
+}
+
+.similarLead {
+  font-weight: var(--fw-semibold);
+}
+
+/* «Открыть в «Связях»» — по левому краю под схемой; сама схема — во всю ширину колонки. */
+/* ─── «Обзор»: основная колонка и «С кем связана» справа с 900px ─── */
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.overviewMain,
+.overviewAside {
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .overview {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: var(--sp-5);
+  }
+}
+
+/* ─── События ─── */
+.events {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding-block: var(--sp-3);
+}
+
+.event:first-child {
+  padding-top: 0;
+}
+
+.event + .event {
+  border-top: 1px solid var(--border);
+}
+
+.eventHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--sp-3);
+}
+
+.eventType {
+  font-weight: var(--fw-semibold);
+}
+
+.eventDate {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Название объекта — длинное (до 120 символов): переносится по словам, не шире колонки. */
+.eventMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-3);
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}
+
+.eventMeta > * {
+  min-width: 0;
+}
+
+.eventAmount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.eventSource {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Ссылка на объект или компанию в строке события — цель нажатия: 44px под палец, плотнее под мышь. */
+.refLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  /* Ссылка среди текста строки — подчёркнута: цветом одним её не отличить (axe link-in-text-block). */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: var(--ctl-h-sm);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+
+.sourceLabel {
+  flex: none;
+  color: var(--muted);
+}
+
+.sourceName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.external {
+  flex: none;
+}
+
+/* ─── Опознание ─── */
+.refList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.identityLead {
+  margin: 0;
+  font-weight: var(--fw-semibold);
+}
+
+.issues {
+  margin: var(--sp-2) 0 0;
+  padding-inline-start: var(--sp-4);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+.note {
+  margin: var(--sp-3) 0 0;
+  max-width: var(--prose);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* ─── Разделы «Подробно» ─── */
+.detailSection {
+  min-width: 0;
+}
+
+/* «Откуда известно», «Контекст объекта»: строка-ссылка под сведением, содержимое — не шире колонки. */
+.lazy {
+  font-size: var(--fs-sm);
+}
+
+.lazy > summary {
+  color: var(--accent);
+  font-weight: var(--fw-regular);
+}

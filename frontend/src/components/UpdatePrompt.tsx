@@ -1,10 +1,12 @@
-import { FC } from 'react';
+import { FC, useEffect, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
-import styles from './UpdatePrompt.module.css';
+import { useToast } from './ui/toast';
+
+const TOAST_ID = 'pwa-update';
 
 /**
- * Тост «доступна новая версия».
+ * Тост «доступна новая версия» — на общей системе тостов (над нижней панелью, с анимацией).
  *
  * Обновляемся только по нажатию: молчаливый skipWaiting подменяет чанки под
  * открытой вкладкой, и пользователь получает смесь старого кода с новым —
@@ -19,23 +21,26 @@ export const UpdatePrompt: FC = () => {
       console.error('[pwa] регистрация service worker не удалась', error);
     },
   });
+  const { show, dismiss } = useToast();
+  // Функции из useRegisterSW меняются на каждом рендере; тост зависит только от needRefresh.
+  const actions = useRef({ setNeedRefresh, updateServiceWorker });
+  actions.current = { setNeedRefresh, updateServiceWorker };
 
-  if (!needRefresh) return null;
+  useEffect(() => {
+    if (!needRefresh) {
+      dismiss(TOAST_ID);
+      return;
+    }
+    show({
+      id: TOAST_ID,
+      tone: 'info',
+      text: 'Доступна новая версия',
+      duration: null,
+      action: { label: 'Обновить', onClick: () => void actions.current.updateServiceWorker(true) },
+      dismissLabel: 'Отложить',
+      onDismiss: () => actions.current.setNeedRefresh(false),
+    });
+  }, [needRefresh, show, dismiss]);
 
-  return (
-    <div className={styles.toast} role="status">
-      <span>Доступна новая версия</span>
-      <button type="button" className={styles.action} onClick={() => void updateServiceWorker(true)}>
-        Обновить
-      </button>
-      <button
-        type="button"
-        className={styles.dismiss}
-        onClick={() => setNeedRefresh(false)}
-        aria-label="Отложить"
-      >
-        ×
-      </button>
-    </div>
-  );
+  return null;
 };

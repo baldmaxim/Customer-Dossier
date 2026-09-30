@@ -1,22 +1,39 @@
-// Вкладка «Модель»: где идёт разбор и ключ OpenRouter.
+// Раздел «Модель»: где идёт разбор и ключ OpenRouter.
 //
-// Провайдер, модель и хостинги — из .env сервера: переход в облако — решение владельца (тексты публикаций
-// уходят внешнему сервису), а не кнопка на экране. Здесь задаётся только ключ OpenRouter (право llm.manage).
+// Провайдер, модель и поставщики — из настроек сервера: переход в облако — решение владельца
+// (тексты публикаций уходят внешнему сервису), а не кнопка на экране. Здесь задаётся только
+// ключ OpenRouter (право llm.manage). Имена переменных окружения и миграций — только в
+// пояснениях, и только администратору.
 
-import { FC, useState } from 'react';
+import { FC } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { api } from '../../api/client';
 import type { ILlmKeySaved, ILlmKeyStatus, ILlmSettings } from '../../api/types';
 import { LlmKeyForm } from '../../components/admin/LlmKeyForm';
 import { Badge } from '../../components/ui/Badge';
-import { EmptyState, Section } from '../../components/ui/Section';
+import { Button } from '../../components/ui/Button';
+import { Callout } from '../../components/ui/Callout';
+import { Cluster } from '../../components/ui/Cluster';
+import { DescriptionList } from '../../components/ui/DescriptionList';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Hint } from '../../components/ui/Hint';
+import { Section } from '../../components/ui/Section';
+import { Stack } from '../../components/ui/Stack';
+import { useToast } from '../../components/ui/toast';
 import { useCan } from '../../hooks/useAuth';
-import { formatDateTime, LLM_KEY_PROBLEM_LABELS, LLM_KEY_SOURCE_LABELS, LLM_PROVIDER_LABELS } from '../../lib/labels';
+import {
+  LLM_KEY_PROBLEM_HINTS,
+  LLM_KEY_PROBLEM_LABELS,
+  LLM_KEY_SOURCE_HINTS,
+  LLM_KEY_SOURCE_LABELS,
+  LLM_PROVIDER_LABELS,
+  formatDateTime,
+} from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
-import styles from '../AccountPage.module.css';
-import adminStyles from '../AdminPage.module.css';
-import { Notice } from './AdminLayout';
+import { modelTone } from '../../lib/statusTone';
+import styles from './ModelPage.module.css';
 
 const QUERY_KEY = ['llm-settings'];
 
@@ -32,86 +49,138 @@ const keyLine = (key: ILlmKeyStatus): string =>
 export const ModelPage: FC = () => {
   const canManage = useCan('llm.manage');
   const queryClient = useQueryClient();
-  const [notice, setNotice] = useState<string | null>(null);
+  const toast = useToast();
   const settings = useQuery({ queryKey: QUERY_KEY, queryFn: () => api.get<ILlmSettings>('/api/admin/llm') });
 
-  if (settings.isError) return <p role="alert">{describeLoadError(settings.error)}</p>;
-  if (!settings.data) return <EmptyState>Проверяю модель…</EmptyState>;
+  if (settings.isLoading) {
+    return (
+      <LoadingSkeleton label="Проверяю модель…" lines={4} height="44px" />
+    );
+  }
+  if (settings.isError || !settings.data) {
+    return (
+      <Callout
+        tone="danger"
+        title="Состояние модели не получено"
+        action={<Button onClick={() => void settings.refetch()}>Повторить</Button>}
+      >
+        {describeLoadError(settings.error)}
+      </Callout>
+    );
+  }
 
   const { provider, model, routeProviders, key, connection } = settings.data;
   const refresh = (): void => void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
 
   return (
-    <>
-      {notice && <Notice text={notice} onClose={() => setNotice(null)} />}
-
-      <Section title="Модель" note="задаётся в .env сервера">
-        <dl className={styles.facts}>
-          <dt>Провайдер</dt>
-          <dd>{LLM_PROVIDER_LABELS[provider]}</dd>
-          <dt>Модель</dt>
-          <dd className={styles.mono}>{model}</dd>
-          {provider === 'openrouter' && (
-            <>
-              <dt>Хостинги</dt>
-              <dd className={routeProviders.length > 0 ? styles.mono : undefined}>
-                {routeProviders.length > 0 ? routeProviders.join(', ') : 'самый дешёвый со строгой JSON-схемой'}
-              </dd>
-            </>
-          )}
-          <dt>Состояние</dt>
-          <dd>
-            <Badge tone={connection.ok ? 'positive' : 'warn'}>{connection.ok ? 'отвечает' : 'не отвечает'}</Badge>
-            {!connection.ok && connection.error && <span className={adminStyles.hint}> {connection.error}</span>}
-          </dd>
-        </dl>
-        <p className={adminStyles.hint}>
-          Провайдер, модель и хостинги меняются в .env сервера (<code>LLM_PROVIDER</code>, <code>LMSTUDIO_MODEL</code>,{' '}
-          <code>OPENROUTER_PROVIDERS</code>). Переход на OpenRouter отправляет тексты публикаций внешнему сервису — это решение
-          владельца.
-        </p>
+    <Stack gap={5}>
+      <Section title="Модель" note="меняется в настройках сервера">
+        <Stack gap={3}>
+          <DescriptionList
+            items={[
+              { label: 'Провайдер', value: LLM_PROVIDER_LABELS[provider] },
+              { label: 'Модель', value: <span className={styles.mono}>{model}</span> },
+              ...(provider === 'openrouter'
+                ? [
+                    {
+                      label: 'Поставщики модели',
+                      value:
+                        routeProviders.length > 0 ? (
+                          <span className={styles.mono}>{routeProviders.join(', ')}</span>
+                        ) : (
+                          'самый дешёвый подходящий'
+                        ),
+                    },
+                  ]
+                : []),
+              {
+                label: 'Состояние',
+                value: (
+                  <Stack gap={1}>
+                    <span>
+                      <Badge tone={modelTone(connection.ok)}>{connection.ok ? 'отвечает' : 'не отвечает'}</Badge>
+                    </span>
+                    {!connection.ok && connection.error && <span className={styles.muted}>{connection.error}</span>}
+                  </Stack>
+                ),
+              },
+            ]}
+          />
+          <Cluster gap={1} align="center">
+            <p className={styles.note}>
+              Провайдера и модель меняет владелец в настройках сервера. С облачной моделью тексты публикаций уходят внешнему сервису.
+            </p>
+            {canManage && (
+              <Hint
+                label="где это настраивается"
+                text="Провайдер — LLM_PROVIDER, модель — LMSTUDIO_MODEL, поставщики OpenRouter — OPENROUTER_PROVIDERS в .env сервера."
+              />
+            )}
+          </Cluster>
+        </Stack>
       </Section>
 
       <Section title="Ключ OpenRouter">
-        <dl className={styles.facts}>
-          <dt>Ключ</dt>
-          <dd>{keyLine(key)}</dd>
-          {key.source === 'admin' && key.updatedAt && (
-            <>
-              <dt>Задан</dt>
-              <dd>
-                {formatDateTime(key.updatedAt)}, {key.updatedBy}
-              </dd>
-            </>
-          )}
-        </dl>
-        {key.problem && <p role="alert">{LLM_KEY_PROBLEM_LABELS[key.problem]}</p>}
-        {provider === 'lmstudio' && key.source !== 'none' && (
-          <p className={adminStyles.hint}>Пока разбор идёт через LM Studio, ключ не используется.</p>
-        )}
-        {provider === 'openrouter' && key.source === 'none' && (
-          <p className={adminStyles.hint}>Без ключа разбор ждёт: собранное не теряется, запуски не падают.</p>
-        )}
-
-        {!canManage && <EmptyState>Ключ задаёт администратор.</EmptyState>}
-        {canManage && !key.canStore && (
-          <EmptyState>В DATABASE_URL нет пароля — ключ в базе нечем зашифровать. Задайте LLM_API_KEY в .env сервера.</EmptyState>
-        )}
-        {canManage && key.canStore && (
-          <LlmKeyForm
-            hasAdminKey={key.source === 'admin' || key.problem === 'undecryptable'}
-            onSaved={result => {
-              setNotice(savedText(result));
-              refresh();
-            }}
-            onCleared={status => {
-              setNotice(status.source === 'env' ? 'Ключ удалён из админки. Действует ключ из .env сервера.' : 'Ключ удалён из админки.');
-              refresh();
-            }}
-            onError={setNotice}
+        <Stack gap={3}>
+          <DescriptionList
+            items={[
+              {
+                label: 'Ключ',
+                value: canManage ? (
+                  <>
+                    {keyLine(key)} <Hint label="откуда ключ" text={LLM_KEY_SOURCE_HINTS[key.source]} />
+                  </>
+                ) : (
+                  keyLine(key)
+                ),
+              },
+              ...(key.source === 'admin' && key.updatedAt
+                ? [{ label: 'Задан', value: `${formatDateTime(key.updatedAt)}, ${key.updatedBy ?? '—'}` }]
+                : []),
+            ]}
           />
-        )}
+          {key.problem && (
+            <Callout tone="warning" live="polite">
+              {LLM_KEY_PROBLEM_LABELS[key.problem]}
+              {canManage && <Hint label="подробнее о ключе" text={LLM_KEY_PROBLEM_HINTS[key.problem]} />}
+            </Callout>
+          )}
+          {provider === 'lmstudio' && key.source !== 'none' && (
+            <p className={styles.note}>Пока разбор идёт через LM Studio, ключ не используется.</p>
+          )}
+          {provider === 'openrouter' && key.source === 'none' && (
+            <p className={styles.note}>Без ключа разбор ждёт: собранное не теряется, запуски не падают.</p>
+          )}
+
+          {!canManage && <EmptyState size="sm">Ключ задаёт администратор.</EmptyState>}
+          {canManage && !key.canStore && (
+            <EmptyState size="sm">
+              Сохранить ключ здесь нельзя: на сервере не настроено шифрование. Действует ключ из настроек сервера.{' '}
+              <Hint
+                label="почему нельзя сохранить"
+                text="В DATABASE_URL нет пароля — ключ в базе нечем зашифровать. Задайте LLM_API_KEY в .env сервера."
+              />
+            </EmptyState>
+          )}
+          {canManage && key.canStore && (
+            <LlmKeyForm
+              hasAdminKey={key.source === 'admin' || key.problem === 'undecryptable'}
+              onSaved={result => {
+                toast.show({ tone: result.check.verdict === 'accepted' ? 'success' : 'warning', text: savedText(result) });
+                refresh();
+              }}
+              onCleared={status => {
+                toast.show({
+                  tone: 'success',
+                  text: status.source === 'env' ? 'Ключ удалён из админки. Действует ключ из настроек сервера.' : 'Ключ удалён из админки.',
+                });
+                refresh();
+              }}
+              onError={text => toast.show({ tone: 'danger', text })}
+            />
+          )}
+        </Stack>
       </Section>
-    </>
+    </Stack>
   );
 };

@@ -1,0 +1,5 @@
+.text {
+  max-width: var(--prose);
+  margin: 0;
+  line-height: var(--lh-text);
+}

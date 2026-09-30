@@ -4,6 +4,8 @@ import { AuthContext, LOCAL_AUTH, type IAuthState } from '../hooks/useAuth';
 import { useSession } from '../hooks/useSession';
 import { LoginPage } from '../pages/LoginPage';
 import { PasswordChangePage } from '../pages/PasswordChangePage';
+import { Loading } from './ui/Loading';
+import styles from './AuthGate.module.css';
 
 interface IAuthGateProps {
   children: ReactNode;
@@ -30,7 +32,17 @@ export const AuthGate: FC<IAuthGateProps> = ({ children }) => {
     };
   }, [user, authRequired, logout, changePassword]);
 
-  if (session.isLoading) return null;
+  // Пока сессия читается — знак портала и «Загрузка…», а не белый экран.
+  if (session.isLoading) {
+    return (
+      <main className={styles.gate}>
+        <h1 className="visually-hidden">Досье Заказчика</h1>
+        <img className={styles.logoLight} src="/logo-light.svg" alt="" />
+        <img className={styles.logoDark} src="/logo-dark.svg" alt="" />
+        <Loading label="Открываю портал…" />
+      </main>
+    );
+  }
   if (session.authRequired && !session.authenticated) {
     return <LoginPage onLogin={session.login} error={session.loginError} pending={session.isLoggingIn} />;
   }

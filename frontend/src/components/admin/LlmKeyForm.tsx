@@ -1,4 +1,4 @@
-// Ключ OpenRouter: ввод и удаление (вкладка «Модель», право llm.manage).
+// Ключ OpenRouter: ввод и удаление (раздел «Модель», право llm.manage).
 //
 // Значение живёт только в поле ввода до отправки: ни в адресе, ни в localStorage, ни в кэше запросов.
 // Поэтому сохранение — прямым вызовом, а не useMutation: переменные мутации остаются в кэше клиента
@@ -9,8 +9,12 @@ import { useMutation } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import type { ILlmKeySaved, ILlmKeyStatus } from '../../api/types';
-import adminStyles from '../../pages/AdminPage.module.css';
 import { Button } from '../ui/Button';
+import { Cluster } from '../ui/Cluster';
+import { Field } from '../ui/Field';
+import { Stack } from '../ui/Stack';
+import { TextInput } from '../ui/TextInput';
+import styles from './Forms.module.css';
 
 interface ILlmKeyFormProps {
   /** В админке уже есть ключ — его можно удалить. */
@@ -47,12 +51,15 @@ export const LlmKeyForm: FC<ILlmKeyFormProps> = ({ hasAdminKey, onSaved, onClear
   };
 
   return (
-    <form onSubmit={e => void submit(e)}>
-      <div className={adminStyles.fields}>
-        <label className={adminStyles.field}>
-          <span className={adminStyles.label}>{hasAdminKey ? 'Новый ключ OpenRouter — заменит прежний' : 'Ключ OpenRouter'}</span>
-          <input
-            className={adminStyles.input}
+    <Stack as="form" gap={3} className={styles.narrowForm} onSubmit={e => void submit(e)}>
+      <Field
+        label={hasAdminKey ? 'Новый ключ OpenRouter — заменит прежний' : 'Ключ OpenRouter'}
+        hint="Перед сохранением ключ проверяется в OpenRouter. На экран он не возвращается — видно только четыре последних символа. Лимит расходов задайте у ключа в самом OpenRouter: исчерпан — разбор ждёт, а не падает."
+      >
+        {control => (
+          <TextInput
+            {...control}
+            className={styles.mono}
             type="password"
             autoComplete="off"
             spellCheck={false}
@@ -60,22 +67,18 @@ export const LlmKeyForm: FC<ILlmKeyFormProps> = ({ hasAdminKey, onSaved, onClear
             value={value}
             onChange={e => setValue(e.target.value)}
           />
-        </label>
-      </div>
-      <p className={adminStyles.hint}>
-        Перед сохранением ключ проверяется в OpenRouter. На экран он не возвращается — видно только четыре последних
-        символа. Лимит расходов задайте у ключа в самом OpenRouter: исчерпан — разбор ждёт, а не падает.
-      </p>
-      <div className={adminStyles.rowActions}>
-        <Button type="submit" variant="primary" disabled={value.trim() === '' || saving}>
+        )}
+      </Field>
+      <Cluster gap={2}>
+        <Button type="submit" variant="primary" loading={saving} disabled={value.trim() === ''}>
           {saving ? 'Проверяю…' : 'Сохранить ключ'}
         </Button>
         {hasAdminKey && (
-          <Button variant="secondary" onClick={() => clear.mutate()} disabled={clear.isPending}>
+          <Button variant="secondary" onClick={() => clear.mutate()} loading={clear.isPending}>
             Удалить ключ из админки
           </Button>
         )}
-      </div>
-    </form>
+      </Cluster>
+    </Stack>
   );
 };

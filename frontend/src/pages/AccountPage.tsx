@@ -1,14 +1,19 @@
-// Профиль — вкладка админки (/admin/account): кто я, что мне можно, смена пароля, выход.
-// Заголовок страницы даёт AdminLayout.
+// Профиль — раздел админки (/admin/account): кто я, что мне можно, смена пароля, выход.
+// Заголовок «Профиль» даёт AdminLayout — и администратору, и читателю.
 
 import { FC, useState } from 'react';
 
 import { ChangePasswordForm } from '../components/ChangePasswordForm';
-import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { EmptyState, Section } from '../components/ui/Section';
+import { Button } from '../components/ui/Button';
+import { Callout } from '../components/ui/Callout';
+import { DescriptionList } from '../components/ui/DescriptionList';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Heading } from '../components/ui/Heading';
+import { Section } from '../components/ui/Section';
+import { Stack } from '../components/ui/Stack';
 import { useAuth } from '../hooks/useAuth';
-import { ACCESS_PERMISSION_LABELS, USER_ROLE_HINTS, USER_ROLE_LABELS } from '../lib/labels';
+import { ACCESS_PERMISSION_LABELS, USER_ROLE_HINTS, USER_ROLE_LABELS, visiblePermissions } from '../lib/labels';
 import styles from './AccountPage.module.css';
 
 export const AccountPage: FC = () => {
@@ -16,48 +21,58 @@ export const AccountPage: FC = () => {
   const [changed, setChanged] = useState(false);
 
   return (
-    <div className={styles.page}>
+    <Stack gap={5} className={styles.page}>
       <Section title={user.displayName}>
-        <dl className={styles.facts}>
-          <dt>Логин</dt>
-          <dd className={styles.mono}>{user.login}</dd>
-          <dt>Роль</dt>
-          <dd>
-            <Badge tone="accent" hint={USER_ROLE_HINTS[user.role]}>
-              {USER_ROLE_LABELS[user.role]}
-            </Badge>
-          </dd>
-        </dl>
-        <h3 className={styles.subtitle}>Что можно</h3>
-        <ul className={styles.permissions}>
-          {user.permissions.map(p => (
-            <li key={p}>{ACCESS_PERMISSION_LABELS[p]}</li>
-          ))}
-        </ul>
+        <Stack gap={4}>
+          <DescriptionList
+            items={[
+              { label: 'Логин', value: <span className={styles.mono}>{user.login}</span> },
+              {
+                label: 'Роль',
+                value: (
+                  <Stack gap={1}>
+                    <span>
+                      <Badge tone="accent">{USER_ROLE_LABELS[user.role]}</Badge>
+                    </span>
+                    <span className={styles.roleHint}>{USER_ROLE_HINTS[user.role]}</span>
+                  </Stack>
+                ),
+              },
+            ]}
+          />
+          <Stack gap={2}>
+            <Heading className={styles.subtitle}>Что можно</Heading>
+            <ul className={styles.permissions}>
+              {visiblePermissions(user.permissions).map(p => (
+                <li key={p}>{ACCESS_PERMISSION_LABELS[p]}</li>
+              ))}
+            </ul>
+          </Stack>
+        </Stack>
       </Section>
 
       <Section title="Пароль">
         {authRequired ? (
-          <>
+          <Stack gap={3}>
             {changed && (
-              <p className={styles.done} role="status">
+              <Callout tone="success" live="polite" onClose={() => setChanged(false)}>
                 Пароль сменён. Входы с других устройств закрыты — там понадобится войти заново.
-              </p>
+              </Callout>
             )}
             <ChangePasswordForm onSubmit={changePassword} onDone={() => setChanged(true)} />
-          </>
+          </Stack>
         ) : (
-          <EmptyState>Портал работает локально, без входа: пароль не нужен.</EmptyState>
+          <EmptyState size="sm">Портал работает локально, без входа: пароль не нужен.</EmptyState>
         )}
       </Section>
 
       {logout && (
         <div>
-          <Button variant="secondary" onClick={logout}>
+          <Button variant="secondary" icon="exit" onClick={logout}>
             Выйти
           </Button>
         </div>
       )}
-    </div>
+    </Stack>
   );
 };

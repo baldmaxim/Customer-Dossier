@@ -7,14 +7,15 @@ export const describeAssertion = (a: IAssertion): string => {
   const object = a.objectProjectName ?? a.objectCompanyName ?? a.objectText;
   const scope = [a.scopeBuilding, a.workPackage ?? a.workPackageLabel].filter(Boolean).join(', ');
   const scopeText = scope ? ` (${scope})` : '';
-  const role = a.role ? (ASSERTION_ROLE_LABELS[a.role] ?? a.role) : 'роль?';
+  const role = a.role ? (ASSERTION_ROLE_LABELS[a.role] ?? 'роль не названа') : 'роль не названа';
   const not = a.polarity === 'negative' ? 'не ' : '';
 
   switch (a.predicate) {
     case 'participates_in_project':
       return `${subject} — ${not}${role} на объекте ${object ?? '—'}${scopeText}`;
     case 'contract':
-      return `${subject} → ${object ?? '—'}: ${not}${role}${a.contextProjectName ? ` по объекту ${a.contextProjectName}` : ''}${scopeText}`;
+      // Тире, а не стрелка: диктор читает «→» вслух как «стрелка вправо».
+      return `${subject} — ${object ?? '—'}: ${not}${role}${a.contextProjectName ? ` по объекту ${a.contextProjectName}` : ''}${scopeText}`;
     case 'corporate_relation':
       return `${subject} ${not}${role} ${object ?? '—'}`;
     case 'event':

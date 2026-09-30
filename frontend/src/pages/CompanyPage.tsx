@@ -1,166 +1,121 @@
-import { FC, useState } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Link, Navigate, useParams } from 'react-router-dom';
-import { api } from '../api/client';
-import type { ICompanyResponse, IEventRow, IProjectRow, IPublicationRow } from '../api/types';
-import { RegistryPanel } from '../components/RegistryPanel';
-import { CompanyBrief } from '../components/CompanyBrief';
-import { CompanyPartners } from '../components/CompanyPartners';
-import { CompanyProjects } from '../components/CompanyProjects';
-import { CompanyProjectDetail } from '../components/CompanyProjectDetail';
-import { CompanySignals } from '../components/CompanySignals';
-import { CompanySummary } from '../components/CompanySummary';
-import { CompanyReviewOverview } from '../components/CompanyReviewOverview';
-import { GraphPanel } from '../components/GraphPanel';
-import { PublicationBrowser, type IPublicationListItem } from '../components/PublicationBrowser';
-import { Segmented } from '../components/ui/Segmented';
-import { EVENT_LABELS, ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, RELATION_LABELS, formatDate, formatMoney, sourceLabel } from '../lib/labels';
-import { factText } from '../lib/publicationFacts';
+// Карточка компании: шапка (имя, реквизиты, «Схема связей») и три вкладки — «Обзор ·
+// Публикации · Подробно». Вкладка и открытый пост — в адресе (?tab=, ?post=): «Назад»
+// возвращает прежнюю вкладку, ссылкой можно поделиться. Содержимое вкладок — в
+// components/company/*, здесь только сборка и состояния загрузки.
+//
+// Шапка одна во всех состояниях и стоит на том же месте дерева: заголовок страницы (h1)
+// остаётся тем же элементом, пока данные грузятся, — фокус после перехода не теряется,
+// когда вместо «Компания» появляется имя.
+
+import { FC, ReactNode, useId } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
+
+import { ApiError } from '../api/client';
+import { CompanyDetails } from '../components/company/CompanyDetails';
+import { CompanyMeta } from '../components/company/CompanyMeta';
+import { CompanyOverview } from '../components/company/CompanyOverview';
+import { CompanyPublications } from '../components/company/CompanyPublications';
+import { CompanySimilar } from '../components/company/CompanySimilar';
+import { useCompany } from '../components/company/useCompanyQueries';
+import { LoadingSkeleton } from '../components/LoadingSkeleton';
+import { Button } from '../components/ui/Button';
+import { ButtonLink } from '../components/ui/ButtonLink';
+import { Callout } from '../components/ui/Callout';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader, type IPageHeaderProps } from '../components/ui/PageHeader';
+import { TabPanel } from '../components/ui/TabPanel';
+import { Tabs } from '../components/ui/Tabs';
+import { enumParam, useUrlPatch, useUrlState } from '../hooks/useUrlState';
+import { describeLoadError } from '../lib/loadError';
 import styles from './CompanyPage.module.css';
 
-type View = 'dossier' | 'publications';
-const VIEWS: ReadonlyArray<{ value: View; label: string; hint?: string }> = [
-  { value: 'dossier', label: 'Обзор', hint: 'досье компании, объекты, связи и основания' },
-  { value: 'publications', label: 'Публикации', hint: 'сообщения источников и исходный текст' },
+const TAB_VALUES = ['overview', 'publications', 'details'] as const;
+type Tab = (typeof TAB_VALUES)[number];
+
+const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
+  { value: 'overview', label: 'Обзор' },
+  { value: 'publications', label: 'Публикации' },
+  { value: 'details', label: 'Подробно' },
 ];
-const SILENT_PREDICATES = new Set(['company_mentioned', 'project_mentioned']);
-const toListItem = (row: IPublicationRow): IPublicationListItem => ({
-  key: row.itemId, revisionId: row.revisionId, title: row.title, topic: row.topic,
-  publishedAt: row.publishedAt, observedAt: row.observedAt, sourceTitle: row.sourceTitle,
-  sourceKey: row.sourceKey, sourceKind: row.sourceKind, url: row.url, snippet: row.snippet,
-  facts: row.facts.filter(f => !SILENT_PREDICATES.has(f.predicate)).map(factText),
-});
-const eventSourceName = (event: IEventRow): string => {
-  if (event.sourceTitle) return sourceLabel({
-    sourceTitle: event.sourceTitle, sourceKey: event.sourceKey, sourceKind: event.sourceKind ?? '',
-  });
-  if (event.url) {
-    try { return new URL(event.url).hostname; } catch { return 'Публикация'; }
-  }
-  return 'Источник не указан';
-};
+
+const notFound = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
 
 export const CompanyPage: FC = () => {
   const { id } = useParams<{ id: string }>();
   const companyId = Number(id);
-  const [view, setView] = useState<View>('dossier');
-  const [showEvidence, setShowEvidence] = useState(false);
-  const [showAllEvents, setShowAllEvents] = useState(false);
-  const [projectSelection, setProjectSelection] = useState<{ companyId: number; projectId: number } | null>(null);
-  const companyQuery = useQuery({ queryKey: ['company', companyId], queryFn: () => api.get<ICompanyResponse>(`/api/companies/${companyId}`), enabled: Number.isFinite(companyId) });
-  const projectsQuery = useQuery({ queryKey: ['company', companyId, 'projects'], queryFn: () => api.get<{ items: IProjectRow[] }>(`/api/companies/${companyId}/projects`), enabled: Number.isFinite(companyId) });
-  const eventsQuery = useQuery({ queryKey: ['company', companyId, 'events'], queryFn: () => api.get<{ items: IEventRow[] }>(`/api/companies/${companyId}/events`), enabled: Number.isFinite(companyId) });
-  const similarQuery = useQuery({ queryKey: ['company', companyId, 'similar'], queryFn: () => api.get<{ items: Array<{ id: number; name: string; city: string | null }> }>(`/api/companies/${companyId}/similar`), enabled: Number.isFinite(companyId) });
-  const publicationsQuery = useInfiniteQuery({
-    queryKey: ['company', companyId, 'publications'], initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '20' });
-      if (pageParam) params.set('cursor', pageParam);
-      return api.get<{ items: IPublicationRow[]; nextCursor: string | null }>(`/api/companies/${companyId}/publications?${params}`);
-    },
-    getNextPageParam: last => last.nextCursor,
-    enabled: Number.isFinite(companyId) && view === 'publications',
-  });
-  if (!Number.isFinite(companyId)) return <p className={styles.empty}>Некорректный адрес карточки.</p>;
-  if (companyQuery.isLoading) return <p className={styles.empty}>Загрузка…</p>;
-  if (companyQuery.isError) return <p className={styles.empty}>Компания не найдена.</p>;
-  const data = companyQuery.data;
+  const valid = Number.isInteger(companyId) && companyId > 0;
+  const query = useCompany(companyId, valid);
+  const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'overview'));
+  const patch = useUrlPatch();
+  const idBase = useId();
+
+  const data = query.data;
   if (data?.mergedInto) return <Navigate to={`/company/${data.mergedInto}`} replace />;
-  if (!data?.company) return <p className={styles.empty}>Компания не найдена.</p>;
 
-  const { company, aliases, identifiers = [], relations = [], registry } = data;
-  const projects = projectsQuery.data?.items ?? [];
-  const selectedProjectId = projectSelection?.companyId === companyId ? projectSelection.projectId : null;
-  const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
-  const events = eventsQuery.data?.items ?? [];
-  const featuredEvents = events.filter(e => e.type !== 'other').slice(0, 4);
-  const previewEvents = featuredEvents.length ? featuredEvents : events.slice(0, 4);
-  const similar = similarQuery.data?.items ?? [];
-  const identifierFacts = identifiers.length > 0
-    ? identifiers.map(i => `${IDENTIFIER_TYPE_LABELS[i.type] ?? i.type} ${i.value}`)
-    : company.taxId ? [`ИНН/ОГРН ${company.taxId}`] : [];
-  const identityFacts = [company.entityType && company.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[company.entityType] : null,
-    company.legalForm, company.city, ...identifierFacts].filter((value): value is string => Boolean(value));
-  const openEvidence = (): void => {
-    setShowEvidence(true);
-    document.getElementById('company-evidence')?.scrollIntoView?.({ behavior: 'smooth' });
-  };
-  const selectProject = (projectId: number): void => {
-    setProjectSelection({ companyId, projectId });
-    if (window.matchMedia?.('(max-width: 899px)').matches) {
-      window.requestAnimationFrame(() => document.getElementById('company-project-detail')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
-    }
-  };
+  let header: Pick<IPageHeaderProps, 'title' | 'meta' | 'actions' | 'children'>;
+  let body: ReactNode;
+  const reader = tab === 'publications';
 
-  return <>
-    <header className={`${styles.dossierHeader} ${view === 'publications' ? styles.readerHeader : ''}`}>
-      <div>
-        <p className={styles.eyebrow}>Компания №{company.id} · сведения из источников</p>
-        <h1 className={styles.name}>{company.name}</h1>
-        <div className={styles.facts}>{identityFacts.length ? identityFacts.map(fact => <span key={fact} className={styles.fact}>{fact}</span>) : <span>Реквизиты не установлены</span>}</div>
-      </div>
-      <Segmented label="Вид карточки" items={VIEWS} value={view} onChange={setView} size="md" />
-    </header>
-    {view === 'dossier' && similar.length > 0 && <div className={styles.callout}>
-      <strong>Похожие названия — проверьте идентификацию: </strong>
-      {similar.map((s, i) => <span key={s.id}>{i > 0 && ', '}<Link to={`/company/${s.id}`}>{s.name}</Link>{s.city ? ` (${s.city})` : ''}</span>)}.
-    </div>}
+  if (valid && query.isLoading) {
+    header = { title: 'Компания' };
+    body = <LoadingSkeleton label="Загружаю карточку компании…" lines={5} height="72px" radius="md" />;
+  } else if (valid && query.isError && !notFound(query.error)) {
+    header = { title: 'Не удалось загрузить компанию' };
+    body = (
+      <Callout tone="danger" title="Карточка не загрузилась" action={<Button onClick={() => void query.refetch()}>Повторить</Button>}>
+        {describeLoadError(query.error)}
+      </Callout>
+    );
+  } else if (!valid || !data?.company) {
+    header = { title: 'Компания не найдена' };
+    body = (
+      <EmptyState
+        action={
+          <ButtonLink to="/" icon="search">
+            К поиску
+          </ButtonLink>
+        }
+      >
+        {valid
+          ? 'Такой карточки нет: возможно, адрес набран с ошибкой или карточку убрали.'
+          : 'В адресе нет номера карточки компании.'}
+      </EmptyState>
+    );
+  } else {
+    const { company } = data;
+    const selectTab = (next: Tab): void =>
+      patch({ tab: next === 'overview' ? null : next, post: null }, { history: 'push' });
+    header = {
+      title: company.name,
+      meta: <CompanyMeta company={company} identifiers={data.identifiers ?? []} />,
+      actions: (
+        <ButtonLink to={`/links?company=${company.id}`} icon="links">
+          Схема связей
+        </ButtonLink>
+      ),
+      children: (
+        <>
+          {/* Похожие — только на «Обзоре»: в «Подробно» они в «Опознании», а на читалке каждая
+              строка высоты отнята у поста. */}
+          {tab === 'overview' && <CompanySimilar companyId={company.id} />}
+          {/* Вкладки — записи истории: стрелки только ведут фокус, выбор — Enter или пробел. */}
+          <Tabs label="Разделы компании" idBase={idBase} items={TABS} value={tab} onChange={selectTab} activation="manual" />
+        </>
+      ),
+    };
+    body = (
+      <TabPanel idBase={idBase} value={tab} focusable={tab === 'overview'} className={reader ? styles.readerPanel : styles.panel}>
+        {tab === 'overview' && <CompanyOverview companyId={company.id} />}
+        {tab === 'publications' && <CompanyPublications companyId={company.id} />}
+        {tab === 'details' && <CompanyDetails companyId={company.id} data={data} />}
+      </TabPanel>
+    );
+  }
 
-    {view === 'dossier' && <div className={styles.dossierBody}>
-      <CompanyBrief companyId={companyId} projects={projects} events={events} projectsKnown={projectsQuery.isSuccess} eventsKnown={eventsQuery.isSuccess} />
-      <CompanyReviewOverview companyId={companyId} registry={registry ?? null} onOpenEvidence={openEvidence} />
-      <div className={styles.projectWorkspace}>
-        <CompanyProjects projects={projects} isLoading={projectsQuery.isLoading} error={projectsQuery.error}
-          selectedProjectId={selectedProjectId} onSelect={selectProject} />
-        <CompanyProjectDetail companyId={companyId} project={selectedProject} />
-      </div>
-      <div className={styles.overview}>
-        <div className={styles.overviewCol}>
-          <CompanyPartners companyId={companyId} />
-        </div>
-        <div className={styles.overviewCol}>
-          {events.length > 0 && <section className={styles.eventsPanel}>
-            <h2>События из публикаций <span className={styles.count}>{events.length}</span></h2>
-            <ol className={styles.timeline}>{(showAllEvents ? events : previewEvents).map(e => {
-              const sourceName = eventSourceName(e);
-              return <li key={e.id} className={styles.event}>
-              <div className={styles.eventHead}>
-                <span className={styles.eventType}>{EVENT_LABELS[e.type] ?? e.type}</span>
-                <span className={styles.eventDate}>{formatDate(e.occurredOn) || 'дата неизвестна'}</span>
-              </div>
-              <div className={styles.eventMeta}>
-                {e.projectName && <span className={styles.tag}>{e.projectName}</span>}
-                {e.amountRub !== null && <span className={styles.tag}>{formatMoney(e.amountRub)}</span>}
-                {e.url
-                  ? <a className={styles.eventSource} href={e.url} target="_blank" rel="noreferrer noopener" aria-label={`${sourceName} — открыть публикацию`}>{sourceName}</a>
-                  : <span className={styles.eventSource}>{sourceName}</span>}
-              </div>
-            </li>})}</ol>
-            {events.length > previewEvents.length && <button type="button" className={styles.evidenceToggle} onClick={() => setShowAllEvents(v => !v)}>{showAllEvents ? 'Свернуть события' : `Показать все ${events.length} событий`}</button>}
-          </section>}
-        </div>
-      </div>
-      <GraphPanel companyId={companyId} />
-      <section id="company-evidence" className={styles.evidenceSection}>
-        <button type="button" className={styles.evidenceToggle} aria-expanded={showEvidence} onClick={() => setShowEvidence(v => !v)}>
-          {showEvidence ? 'Скрыть' : 'Открыть'} основания и проверку данных
-        </button>
-        <p>Подробные сигналы, реестр, резюме и исходные утверждения.</p>
-        {showEvidence && <div className={styles.evidenceContent}>
-          <RegistryPanel registry={registry ?? null} title="Данные реестра о застройщике" />
-          <CompanySignals companyId={companyId} projectNames={new Map(projects.map(p => [p.id, p.name]))} />
-          <CompanySummary companyId={companyId} />
-          {relations.length > 0 && <section><h2>Связи из реестра</h2><ul>{relations.map(r => <li key={r.id}>{RELATION_LABELS[r.relationType]?.[r.direction] ?? r.relationType} «{r.otherCompanyName}»{r.status === 'candidate' ? ' · не подтверждено' : ''}</li>)}</ul></section>}
-          {aliases.length > 1 && <section><h2>Варианты написания</h2><p>{aliases.map(a => a.alias).join(' · ')}</p></section>}
-        </div>}
-      </section>
-    </div>}
-    {view === 'publications' && <PublicationBrowser
-      items={(publicationsQuery.data?.pages.flatMap(p => p.items) ?? []).map(toListItem)}
-      isLoading={publicationsQuery.isLoading} error={publicationsQuery.error}
-      hasMore={publicationsQuery.hasNextPage} loadingMore={publicationsQuery.isFetchingNextPage}
-      onLoadMore={() => void publicationsQuery.fetchNextPage()}
-      empty="Публикаций об этой компании в выборке нет. Это значит только то, что в собранных источниках её не нашли."
-    />}
-  </>;
+  return (
+    <>
+      <PageHeader eyebrow="Компания" className={`${styles.header} ${reader ? styles.readerHeader : ''}`} {...header} />
+      {body}
+    </>
+  );
 };

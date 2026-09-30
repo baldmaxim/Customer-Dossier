@@ -1,0 +1,251 @@
+/* Схема связей вокруг рисунка: фильтры, таблица, «Откуда известно», пояснения. Только токены. */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Центр схемы в строке связи — в одну строку: полное имя уже в заголовке и в подсказке. */
+.seedName {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* В ячейке таблицы проценты при расчёте ширины колонки не действуют (строка без переноса
+   распирала колонку до 550px) — потолок в rem. */
+td .seedName {
+  max-width: 22rem;
+}
+
+/* Доли колонок: названия и связь делят ширину, а не отдают её самому длинному названию. */
+.colWho {
+  width: 26%;
+}
+
+.colLink {
+  width: 24%;
+}
+
+.colWhom {
+  width: 24%;
+}
+
+/* Имя второй стороны связи — отдельная цель нажатия: на тач-экране не мельче 44px. */
+@media (pointer: coarse) {
+  .nameLink {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap-min);
+  }
+}
+
+/* ─── Фильтры ─── */
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.types {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.typesLegend {
+  padding: 0;
+  margin-bottom: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.typeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--sp-4);
+  min-width: 0;
+}
+
+.typeLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.moreFields {
+  display: grid;
+  /* 10.5rem — поле даты целиком, с кнопкой календаря: уже — дата обрезается. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  gap: var(--sp-3);
+  max-width: 48rem;
+}
+
+/* ─── «Откуда известно» ─── */
+
+.detailWrap {
+  min-width: 0;
+  border-radius: var(--radius);
+  animation: global(enter-up) var(--dur-base) var(--ease-out);
+}
+
+.detailWrap:focus {
+  outline: none;
+}
+
+.detailWrap:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.detailTitle {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+
+.sentence {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-base);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+}
+
+.detailMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.facts {
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+}
+
+.evidenceRow td {
+  background: var(--surface-2);
+}
+
+/* ─── Карточки связей (телефон) ─── */
+
+.edgeCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.cardEvidence {
+  min-width: 0;
+}
+
+/* ─── Как читать схему ─── */
+
+.notes {
+  max-width: var(--prose);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.notesTitle {
+  margin: 0 0 var(--sp-1);
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+.notesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-inline-start: var(--sp-5);
+}
+
+/* ─── Панель на карточке ─── */
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.panelActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.panelPlain {
+  min-width: 0;
+}

@@ -1,0 +1,95 @@
+/* Каталог и результаты поиска на главной. */
+
+/* Фильтры: на телефоне — столбиком внутри раскрытой сводки, с 600px — одной строкой. */
+.filters {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.roleField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+@media (min-width: 600px) {
+  .filters {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-4);
+  }
+
+  /* Подпись слева от списка: иначе строка фильтров вырастает на высоту подписи. */
+  .roleField {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+}
+
+/* Таблица на карточке: без внутренних полей — их дают ячейки. */
+.tableCard {
+  overflow: hidden;
+}
+
+/* Ширины колонок: название забирает остаток, короткие колонки не сжимаются до буквы. */
+.colCity {
+  width: 18%;
+}
+
+.colRole {
+  width: 22%;
+}
+
+.colLevel {
+  width: 20%;
+}
+
+/* Строка-ссылка — цель нажатия: высота строки таблицы работает как минимальная (44px под палец). */
+.row {
+  height: var(--ctl-h);
+}
+
+.rowName {
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+
+.rowNote {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* Числа в карточке списка: по строке на число, выравнивание по правому краю. */
+.counts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px; /* две строки одного блока — теснее, чем строки карточки */
+}
+
+.count {
+  white-space: nowrap;
+}

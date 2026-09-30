@@ -1,0 +1,67 @@
+/* Формы админки: поля в строку на широком экране, столбиком на телефоне. Кнопка — по нижнему
+   краю полей: высота поля и кнопки одна (--ctl-h), подписи полей над ними не сдвигают кнопку. */
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.grow {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.narrow {
+  flex: 0 1 12rem;
+  min-width: 0;
+}
+
+/* Список выбора в строке фильтров: не шире длинного названия источника, но и не во всю строку. */
+.medium {
+  flex: 0 1 24rem;
+  min-width: 0;
+}
+
+/* Поля в сетку: одна колонка на телефоне, две с 600px. */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+/* Форма из одного-двух полей: не шире, чем нужно для ввода. */
+.narrowForm {
+  max-width: var(--form-max);
+}
+
+.hint {
+  max-width: var(--prose);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-text);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* Ссылка-кнопка с длинным названием внутри ячейки: переносится по словам, а не одной строкой. */
+.linkText {
+  justify-content: flex-start;
+  text-align: left;
+}

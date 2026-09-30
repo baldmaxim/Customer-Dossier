@@ -1,27 +1,43 @@
+// Разбор одного неясного упоминания (этап 15A): цитата, варианты с реквизитами, почему неясно,
+// история решений. Решение относится только к этому упоминанию в этом тексте; объединить
+// одноимённые карточки — во вкладке «Дубли», после сравнения.
+
 import { FC, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ApiError, api } from '../api/client';
 import type { AmbiguityDecisionKind, IAmbiguityDetail } from '../api/types';
-import { AMBIGUITY_DECISION_LABELS, AMBIGUITY_STATUS_LABELS, ENTITY_TYPE_LABELS, formatDateTime } from '../lib/labels';
-import styles from '../pages/Dossier.module.css';
+import { newKey } from '../lib/idempotency';
+import { AMBIGUITY_DECISION_LABELS, AMBIGUITY_STATUS_LABELS, formatDateTime } from '../lib/labels';
+import { describeLoadError } from '../lib/loadError';
+import { formatCountWord } from '../lib/format';
+import { AMBIGUITY_STATUS_TONE, toneOf } from '../lib/statusTone';
+import { AmbiguityCandidates } from './admin/AmbiguityCandidates';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { Callout } from './ui/Callout';
+import { Cluster } from './ui/Cluster';
+import { Field } from './ui/Field';
+import { Loading } from './ui/Loading';
+import { Stack } from './ui/Stack';
+import { Textarea } from './ui/Textarea';
+import { useToast } from './ui/toast';
+import styles from './admin/Ambiguity.module.css';
 
-const newKey = (): string =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `ambiguity-${Date.now()}-${Math.random()}`;
+export interface IAmbiguityChoice {
+  decision: AmbiguityDecisionKind;
+  entityId: number | null;
+}
 
-/**
- * Разбор одного неоднозначного упоминания (этап 15A): цитата, кандидаты с реквизитами, причина неопределённости,
- * история решений. Решение относится только к этому упоминанию; глобальное слияние — в очереди слияний с предпросмотром.
- */
 export const AmbiguityDetail: FC<{ ambiguityId: number }> = ({ ambiguityId }) => {
   const queryClient = useQueryClient();
-  const [choice, setChoice] = useState<{ decision: AmbiguityDecisionKind; entityId: number | null } | null>(null);
+  const toast = useToast();
+  const [choice, setChoice] = useState<IAmbiguityChoice | null>(null);
   const [reason, setReason] = useState('');
   // Один ключ на открытую форму: повторное нажатие не создаёт второе решение.
-  const [key, setKey] = useState(newKey);
+  const [key, setKey] = useState(() => newKey('ambiguity'));
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const detail = useQuery({
     queryKey: ['ambiguity', ambiguityId],
@@ -39,161 +55,132 @@ export const AmbiguityDetail: FC<{ ambiguityId: number }> = ({ ambiguityId }) =>
         idempotencyKey: key,
       }),
     onSuccess: result => {
-      setNotice(result.replayed ? 'Это решение уже было записано.' : `Решение #${result.decisionId} записано.`);
+      toast.show({ tone: 'success', text: result.replayed ? 'Это решение уже было записано.' : 'Решение записано.' });
       setChoice(null);
       setReason('');
-      setKey(newKey());
+      setKey(newKey('ambiguity'));
       void queryClient.invalidateQueries({ queryKey: ['ambiguity', ambiguityId] });
       void queryClient.invalidateQueries({ queryKey: ['ambiguities'] });
       void queryClient.invalidateQueries({ queryKey: ['review-queue'] });
     },
     onError: (err: Error) => {
       if (err instanceof ApiError && err.code === 'version_conflict') {
-        setError('Неоднозначность изменилась (новые кандидаты или другое решение). Решение не записано — данные обновлены.');
+        setError('Упоминание изменилось (новые варианты или чужое решение). Решение не записано — данные обновлены, решите заново.');
         void detail.refetch();
       } else if (err instanceof ApiError && err.code === 'choice_blocked') {
-        setError(`Выбор отклонён сервером: ${err.message}`);
+        setError(`Этот выбор сервер не принял: ${err.message}`);
       } else {
-        setError(err.message);
+        setError(describeLoadError(err));
       }
     },
   });
 
-  if (detail.isLoading) return <p className={styles.meta}>Загрузка упоминания…</p>;
+  if (detail.isLoading) return <Loading label="Загружаю упоминание…" />;
   if (detail.isError || !detail.data) {
     return (
-      <p className={styles.error} role="alert">
-        Упоминание недоступно: {(detail.error as Error | null)?.message ?? 'нет данных'}
-      </p>
+      <Callout tone="danger" title="Упоминание не загрузилось" action={<Button onClick={() => void detail.refetch()}>Повторить</Button>}>
+        {describeLoadError(detail.error)}
+      </Callout>
     );
   }
   const d = detail.data;
-  const cardPath = (id: number): string => (d.entityKind === 'company' ? `/company/${id}` : `/projects/${id}`);
+  const open = d.status === 'open';
+  const nameOf = (id: number | null): string | null => (id === null ? null : (d.candidates.find(c => c.id === id)?.name ?? null));
+  const chosenLabel = choice
+    ? `${AMBIGUITY_DECISION_LABELS[choice.decision] ?? choice.decision}${choice.entityId !== null ? `: ${nameOf(choice.entityId) ?? 'выбранный вариант'}` : ''}`
+    : '';
 
   return (
-    <div className={styles.form}>
-      <p className={styles.statusLine}>
-        «{d.surface}» · {AMBIGUITY_STATUS_LABELS[d.status] ?? d.status} · версия {d.version} · встречено {d.occurrences}
-      </p>
-      <p className={styles.warn}>{d.scopeNote}</p>
-      <p className={styles.meta}>Почему неоднозначно: {d.whyAmbiguous}</p>
-      {d.revision ? (
-        <>
-          <blockquote className={styles.quote}>{d.revision.excerpt ?? 'упоминание в тексте редакции дословно не найдено'}</blockquote>
-          <p className={styles.quoteMeta}>
-            редакция #{d.revision.id}
-            {d.revision.publishedAt ? ` · опубликовано ${formatDateTime(d.revision.publishedAt)}` : ''}
-          </p>
-        </>
-      ) : (
-        <p className={styles.meta}>Редакция не сохранена: решение не будет применено резолвером.</p>
-      )}
+    <Stack gap={4} className={styles.detail}>
+      <Cluster gap={2}>
+        <Badge tone={toneOf(AMBIGUITY_STATUS_TONE, d.status)}>{AMBIGUITY_STATUS_LABELS[d.status] ?? d.status}</Badge>
+        <span className={styles.muted}>встречается {formatCountWord(d.occurrences, ['раз', 'раза', 'раз'])}</span>
+      </Cluster>
 
-      <ul className={styles.candidates}>
-        {d.candidates.map(c => {
-          const blocked = c.choice.conflicts.length > 0;
-          const active = choice?.decision === 'resolved_to' && choice.entityId === c.id;
-          return (
-            <li key={c.id} className={active ? styles.candidateActive : styles.candidate}>
-              <div className={styles.row}>
-                <Link to={cardPath(c.id)}>
-                  {c.name} #{c.id}
-                </Link>
-                <span className={styles.meta}>
-                  {d.entityKind === 'company' ? (ENTITY_TYPE_LABELS[c.entityType ?? 'unknown'] ?? c.entityType) : c.entityType}
-                  {c.legalForm ? ` · ${c.legalForm}` : ''} · {c.city ?? 'город неизвестен'}
-                </span>
-              </div>
-              <span className={styles.meta}>
-                {c.identifiers.length > 0 ? c.identifiers.map(i => `${i.type} ${i.value}`).join(', ') : 'реквизитов нет'}
-                {c.mergedIntoId !== null ? ` · слита в #${c.mergedIntoId}` : ''}
-              </span>
-              {c.choice.conflicts.map(x => (
-                <span key={x.code + x.message} className={styles.error}>
-                  Нельзя: {x.message}
-                </span>
-              ))}
-              {d.status === 'open' && (
-                <button
-                  type="button"
-                  className={styles.button}
-                  disabled={blocked}
-                  aria-pressed={active}
-                  onClick={() => setChoice({ decision: 'resolved_to', entityId: c.id })}
-                >
-                  В этом тексте — эта сущность
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {d.revision ? (
+        <figure className={styles.figure}>
+          <blockquote className={styles.quote}>
+            {d.revision.excerpt ?? 'Точной цитаты нет: упоминание не найдено в тексте дословно.'}
+          </blockquote>
+          {d.revision.publishedAt && (
+            <figcaption className={styles.muted}>опубликовано {formatDateTime(d.revision.publishedAt)}</figcaption>
+          )}
+        </figure>
+      ) : (
+        <Callout tone="neutral">Текст не сохранён — выбор ни на что не повлияет.</Callout>
+      )}
+      <p className={styles.text}>
+        <span className={styles.label}>Почему неясно:</span> {d.whyAmbiguous}
+      </p>
+
+      <AmbiguityCandidates
+        entityKind={d.entityKind}
+        candidates={d.candidates}
+        open={open}
+        choice={choice}
+        onChoose={entityId => setChoice({ decision: 'resolved_to', entityId })}
+      />
+      {/* Пояснения к выбору у всех вариантов общие: печатаем один раз. */}
       {d.candidates[0]?.choice.notes.map(n => (
-        <p key={n} className={styles.hint}>
+        <p key={n} className={styles.note}>
           {n}
         </p>
       ))}
 
-      {d.status === 'open' && (
-        <>
-          <div className={styles.row}>
-            <button type="button" className={styles.button} aria-pressed={choice?.decision === 'kept_unknown'} onClick={() => setChoice({ decision: 'kept_unknown', entityId: null })}>
-              Оставить неустановленным
-            </button>
-            <button type="button" className={styles.button} aria-pressed={choice?.decision === 'dismissed'} onClick={() => setChoice({ decision: 'dismissed', entityId: null })}>
-              Не упоминание
-            </button>
-          </div>
+      {open && (
+        <Stack gap={3}>
+          <Cluster gap={2}>
+            <Button
+              aria-pressed={choice?.decision === 'kept_unknown'}
+              onClick={() => setChoice({ decision: 'kept_unknown', entityId: null })}
+            >
+              Не ясно
+            </Button>
+            <Button aria-pressed={choice?.decision === 'dismissed'} onClick={() => setChoice({ decision: 'dismissed', entityId: null })}>
+              {d.entityKind === 'company' ? 'Это не компания' : 'Это не объект'}
+            </Button>
+          </Cluster>
           {choice && (
-            <label className={styles.field}>
-              <span>
-                Причина решения «{AMBIGUITY_DECISION_LABELS[choice.decision]}
-                {choice.entityId !== null ? ` #${choice.entityId}` : ''}» (обязательно)
-              </span>
-              <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} maxLength={2000} />
-            </label>
+            <Field label={`Причина решения «${chosenLabel}»`} hint="Обязательно: по ней решение потом перепроверяют." required>
+              {control => <Textarea {...control} rows={2} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} />}
+            </Field>
           )}
-          <p className={styles.hint}>
-            Выбор юрлица не подтверждает участие, договор или долг: утверждения проверяются отдельно. Слить одноимённые сущности —
-            только в очереди слияний после предпросмотра.
+          <p className={styles.note}>
+            Выбор компании относится только к этому тексту и не подтверждает участие, договор или долг. Если это одна и та же компания под
+            разными карточками — объедините их во вкладке <Link to="/admin/review?tab=duplicates">«Дубли»</Link>.
           </p>
-          {error && (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-          )}
-          {notice && <p className={styles.meta}>{notice}</p>}
-          <button
-            type="button"
-            className={styles.buttonPrimary}
-            disabled={!choice || reason.trim().length < 3 || decide.isPending}
-            onClick={() => {
-              setError(null);
-              setNotice(null);
-              decide.mutate({ version: d.version });
-            }}
-          >
-            Записать решение
-          </button>
-        </>
+          {error && <Callout tone="danger">{error}</Callout>}
+          <div>
+            <Button
+              variant="primary"
+              loading={decide.isPending}
+              disabled={!choice || reason.trim().length < 3}
+              onClick={() => {
+                setError(null);
+                decide.mutate({ version: d.version });
+              }}
+            >
+              Записать решение
+            </Button>
+          </div>
+        </Stack>
       )}
-      {d.status !== 'open' && notice && <p className={styles.meta}>{notice}</p>}
 
       {d.decisions.length > 0 && (
-        <>
-          <p className={styles.statusLine}>История решений</p>
-          <ul className={styles.list}>
+        <Stack gap={2}>
+          <span className={styles.label}>История решений</span>
+          <ul className={styles.history}>
             {d.decisions.map(x => (
-              <li key={x.id} className={styles.listItem}>
-                #{x.id} · {AMBIGUITY_DECISION_LABELS[x.decision] ?? x.decision}
-                {x.entityId !== null ? ` #${x.entityId}` : ''} · {x.actor} · {formatDateTime(x.decidedAt)} · к версии {x.ambiguityVersion}
-                <br />
-                <span className={styles.meta}>{x.reason}</span>
+              <li key={x.id}>
+                {AMBIGUITY_DECISION_LABELS[x.decision] ?? x.decision}
+                {x.entityId !== null ? `: ${nameOf(x.entityId) ?? 'вариант, которого больше нет в списке'}` : ''} · {x.actor} ·{' '}
+                {formatDateTime(x.decidedAt)}
+                <span className={styles.muted}>{x.reason}</span>
               </li>
             ))}
           </ul>
-        </>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 };
