@@ -38,8 +38,10 @@ echo "→ выпуск ${TAG} на ${HOST}"
 [ "${1:-}" = "--check" ] && { echo "проверка пройдена, ничего не собиралось"; exit 0; }
 
 echo "→ сборка образов"
-docker build -q -f deploy/Dockerfile --target api -t "tginfo-api:${TAG}" .
-docker build -q -f deploy/Dockerfile --target web -t "tginfo-web:${TAG}" .
+# Сеть сборки — сеть этой машины: в контейнерах сборки Docker подставляет DNS 8.8.8.8, а он отсюда не
+# отвечает — npm ci висел без единого байта; пока слой с зависимостями брался из кэша, этого не было видно.
+docker build -q --network=host -f deploy/Dockerfile --target api -t "tginfo-api:${TAG}" .
+docker build -q --network=host -f deploy/Dockerfile --target web -t "tginfo-web:${TAG}" .
 
 echo "→ перенос образов"
 docker save "tginfo-api:${TAG}" "tginfo-web:${TAG}" | gzip | ssh "$HOST" 'gunzip | docker load'
