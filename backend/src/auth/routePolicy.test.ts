@@ -69,6 +69,10 @@ const WRITES: Record<string, string> = {
   'POST /users/:id/sessions/:sessionId/revoke': 'users.manage',
   'POST /users/:id/passkeys/:passkeyId/revoke': 'users.manage',
   'PUT /admin/llm/key': 'llm.manage',
+  'POST /admin/domrf-candidates/confirm': 'sources.manage',
+  'POST /admin/domrf-candidates/:id/confirm': 'sources.manage',
+  'POST /admin/domrf-candidates/:id/reject': 'sources.manage',
+  'POST /admin/domrf-candidates/:id/replace': 'sources.manage',
   'DELETE /admin/llm/key': 'llm.manage',
 };
 

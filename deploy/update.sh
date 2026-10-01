@@ -52,11 +52,22 @@ echo "→ миграции"
 # Destructive-миграция здесь останавливает выкладку: её применяют руками после копии базы.
 "${COMPOSE[@]}" --profile tools run --rm migrate
 
-"${COMPOSE[@]}" up -d --force-recreate api web
+# Браузерный сбор ДОМ.РФ (этап 20D): образ собирается здесь из уже загруженных tginfo-api и Playwright —
+# только копирование, без контекста. Выпуск до 20D (откат) такого кода не содержит — сервис тогда стоит.
+domrf_services=()
+if docker run --rm --entrypoint test "tginfo-api:${TAG}" -f dist/ingest/registry/domrfWorkerMain.js; then
+  echo "→ образ браузерного сбора ДОМ.РФ"
+  docker build -q -t "tginfo-domrf:${TAG}" --build-arg "API_IMAGE=tginfo-api:${TAG}" - < Dockerfile.domrf >/dev/null
+  domrf_services=(domrf)
+else
+  "${COMPOSE[@]}" rm -sf domrf >/dev/null 2>&1 || true
+fi
+
+"${COMPOSE[@]}" up -d --force-recreate api web "${domrf_services[@]}"
 
 echo "→ из чего собраны контейнеры:"
 fail=0
-for name in api web; do
+for name in api web "${domrf_services[@]}"; do
   want="tginfo-${name}:${TAG}"
   got="$(docker inspect "tginfo-${name}" --format '{{.Config.Image}}')"
   printf '   %-12s %s\n' "tginfo-${name}" "$got"

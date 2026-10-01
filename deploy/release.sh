@@ -45,7 +45,7 @@ echo "→ перенос образов"
 docker save "tginfo-api:${TAG}" "tginfo-web:${TAG}" | gzip | ssh "$HOST" 'gunzip | docker load'
 
 echo "→ compose и скрипты"
-scp -q deploy/docker-compose.yml deploy/update.sh deploy/compose.sh deploy/backup.sh deploy/tginfo.env.example \
+scp -q deploy/docker-compose.yml deploy/Dockerfile.domrf deploy/update.sh deploy/compose.sh deploy/backup.sh deploy/tginfo.env.example \
   "${HOST}:${REMOTE_DIR}/"
 ssh "$HOST" "chmod 750 ${REMOTE_DIR}/update.sh ${REMOTE_DIR}/compose.sh ${REMOTE_DIR}/backup.sh"
 
@@ -58,7 +58,7 @@ echo "${PUBLIC_URL}/api/health → ${code}"
 
 echo "→ уборка старых образов на сервере (остаются два последних)"
 # Поимённо, не prune: на сервере живут образы Quantor. Образ работающего контейнера docker не удалит.
-ssh "$HOST" 'for repo in tginfo-api tginfo-web; do
+ssh "$HOST" 'for repo in tginfo-api tginfo-web tginfo-domrf; do
   docker images "$repo" --format "{{.Tag}}" | tail -n +3 | xargs -r -I{} docker rmi "$repo:{}" >/dev/null 2>&1 || true
 done; docker images --format "{{.Repository}}:{{.Tag}}" | grep ^tginfo-'
 # Локально держим только что собранное: на сервере уже есть копия, а откат — предыдущий тег там.

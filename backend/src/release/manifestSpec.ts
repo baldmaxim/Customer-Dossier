@@ -81,6 +81,9 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'user_passkeys', class: 'domain', why: 'ключи доступа (passkey): только открытые ключи, счётчик подписей, отзыв (миграция 034)' },
   // Секреты из админки (миграция 032)
   { table: 'app_secrets', class: 'operational', why: 'ключ OpenRouter из админки: шифротекст, четыре последних символа, кто и когда задал' },
+  // Объекты застройщика с ДОМ.РФ (миграция 035)
+  { table: 'domrf_cards', class: 'operational', why: 'страницы застройщиков и групп в едином реестре: реквизиты, список объектов, очередь чтения' },
+  { table: 'domrf_candidates', class: 'domain', why: 'найденные на страницах застройщика объекты и решения оператора: подтвердить, отклонить, заменить' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];

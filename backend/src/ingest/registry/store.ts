@@ -44,7 +44,7 @@ export const buildRegistryDocument = (
     publishedAtPrecision: asOf ? 'date_only' : null,
     publishedAtRaw: asOf,
     forwardFrom: null,
-    representation: browserPage ? 'registry_object_browser@1' : representationOf(record.type),
+    representation: browserPage ? (record.type === 'object' ? 'registry_object_browser@1' : 'registry_developer_browser@1') : representationOf(record.type),
     completeness: browserPage ? 'excerpt' : 'full',
     completenessReason: `${browserPage ? 'browser_page_fields' : 'registry_fields'}:${record.fields.length}`,
     attachments: [],

@@ -1,0 +1,18 @@
+# Браузерный сбор ДОМ.РФ на сервере (этап 20D): сервис domrf в docker-compose.yml.
+#
+# Сайт пускает только браузер с окном (фоновому Chromium — 403, обычному запросу — проверка Servicepipe),
+# а в образе API (Alpine) Chromium нет. Здесь — образ Playwright той же версии, что пакет playwright в
+# backend/package.json, с виртуальным экраном Xvfb; код и node_modules — из tginfo-api того же выпуска.
+#
+# Собирает update.sh на сервере без контекста (`docker build - < Dockerfile.domrf`): только копирование
+# из уже загруженных образов — ни npm, ни tsc на сервере (память общая с Quantor). Зависимости API —
+# чистый JS, поэтому собранные под Alpine node_modules работают и здесь.
+ARG API_IMAGE
+FROM ${API_IMAGE} AS app
+
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+COPY --from=app /app /app
+WORKDIR /app/backend
+ENV NODE_ENV=production DISPLAY=:99
+# От root Chromium запускается с --no-sandbox (domrfBrowserWorker.ts): контейнер — граница изоляции.
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1440x900x24 -nolisten tcp >/dev/null 2>&1 & exec node dist/ingest/registry/domrfWorkerMain.js"]

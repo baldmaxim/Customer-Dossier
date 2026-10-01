@@ -12,6 +12,7 @@ import { snapshotRouter } from './api/snapshot.routes.js';
 import { createAttachAuth, createAuthRouter, createRequireAccess, type IAuthOptions } from './api/auth.js';
 import { createUsersRouter } from './api/users.routes.js';
 import { llmRouter } from './api/llm.routes.js';
+import { domrfRouter } from './api/domrf.routes.js';
 import { passkeyRelyingParty, PasskeyService } from './auth/passkeys.js';
 import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
@@ -74,6 +75,7 @@ export const dataRouters = (service: AuthService, passkeys: PasskeyService | nul
   ['', entitiesRouter],
   ['/admin', adminRouter],
   ['/admin', llmRouter],
+  ['/admin', domrfRouter],
   ['', revisionsRouter],
   ['', assertionsRouter],
   ['', reprocessRouter],

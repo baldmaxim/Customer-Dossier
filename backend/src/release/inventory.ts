@@ -59,6 +59,8 @@ export const COUNTED_TABLES = [
   'auth_events',
   'user_passkeys',
   'app_secrets',
+  'domrf_cards',
+  'domrf_candidates',
   'bot_processed_updates',
   'source_policy_log',
   'backfill_checkpoints',

@@ -79,6 +79,26 @@ services:
     mem_limit: 448m
     networks: [internal]
 
+  # Браузерный сбор ДОМ.РФ (этап 20D): карточки объектов из очереди и страницы их застройщиков и групп.
+  # Сайт пускает только браузер с окном — образ Playwright с Xvfb (Dockerfile.domrf), код — из образа API
+  # того же выпуска. Выключить сбор — ./compose.sh stop domrf (флаг в .env здесь перекрыт: у API он false).
+  domrf:
+    image: tginfo-domrf:${IMAGE_TAG:?запускайте через update.sh или compose.sh}
+    container_name: tginfo-domrf
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      <<: *api-fixed
+      DOMRF_BROWSER_ENABLED: 'true'
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+    # Chromium с одной страницей и Xvfb; /dev/shm по умолчанию (64 МБ) браузеру мало.
+    mem_limit: 768m
+    shm_size: 256m
+    networks: [internal]
+
   web:
     image: tginfo-web:${IMAGE_TAG:?запускайте через update.sh или compose.sh}
     container_name: tginfo-web

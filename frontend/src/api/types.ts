@@ -1401,3 +1401,44 @@ export interface ILlmKeySaved {
   key: ILlmKeyStatus;
   check: { verdict: LlmKeyVerdict; error: string | null };
 }
+
+// ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────
+
+export type DomRfCardKind = 'developer' | 'group';
+
+export type DomRfCandidateState = 'pending' | 'confirmed' | 'rejected' | 'replaced';
+
+/** Объект со страницы застройщика или группы; сам не собирается, ждёт решения оператора. */
+export interface IDomRfCandidate {
+  id: number;
+  externalRef: string;
+  url: string;
+  label: string | null;
+  details: string | null;
+  foundViaKind: DomRfCardKind;
+  foundViaRef: string;
+  state: DomRfCandidateState;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  replacementRef: string | null;
+  firstSeenAt: string;
+}
+
+/** Страница, на которой нашлись объекты, и заказчик портала с тем же ИНН. */
+export interface IDomRfCandidateSource {
+  kind: DomRfCardKind;
+  externalRef: string;
+  url: string;
+  name: string | null;
+  inn: string | null;
+  scannedAt: string | null;
+  companyId: number | null;
+  companyName: string | null;
+  pending: number;
+}
+
+export interface IDomRfCandidates {
+  items: IDomRfCandidate[];
+  sources: IDomRfCandidateSource[];
+}

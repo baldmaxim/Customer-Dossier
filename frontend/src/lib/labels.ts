@@ -14,6 +14,8 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
+  DomRfCandidateState,
+  DomRfCardKind,
   Role,
   TextCompleteness,
   UserRole,
@@ -757,6 +759,18 @@ export const LLM_KEY_PROBLEM_LABELS: Record<LlmKeyProblem, string> = {
 export const LLM_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
   store_missing: 'не применена миграция 032 (таблица app_secrets); до этого действует LLM_API_KEY из .env',
   undecryptable: 'ключ шифруется от пароля из DATABASE_URL: после смены пароля старый ключ не расшифровать',
+};
+
+export const DOMRF_CANDIDATE_STATE_LABELS: Record<DomRfCandidateState, string> = {
+  pending: 'ждёт решения',
+  confirmed: 'подтверждён — в сборе',
+  rejected: 'отклонён',
+  replaced: 'заменён другой карточкой',
+};
+
+export const DOMRF_CARD_KIND_LABELS: Record<DomRfCardKind, string> = {
+  developer: 'Застройщик',
+  group: 'Группа компаний',
 };
 
 export const AUTH_EVENT_LABELS: Record<string, string> = {

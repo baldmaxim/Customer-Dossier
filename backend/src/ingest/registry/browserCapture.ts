@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 import { payloadHash } from '../../snapshot/canonical.js';
+import type { IDomRfDeveloperIdentity } from './domrfCards.js';
 import { toPayload, type IRegistryField, type IRegistryRecord } from './map.js';
 
 const text = z.string().trim().min(1).max(1000);
@@ -19,6 +20,9 @@ const captureSchema = z.object({
   declaration: optionalText,
   projectDate: optionalText,
   contractor: optionalText,
+  // Номера страниц застройщика и группы в едином реестре застройщиков — из ссылок карточки (этап 20D).
+  developerRef: z.string().regex(/^[0-9]{1,18}$/).nullable().optional(),
+  groupRef: z.string().regex(/^[0-9]{1,18}$/).nullable().optional(),
   developer: z.object({ name: text, group: optionalText }).strict().nullable().optional(),
   characteristics: z.array(z.object({ label: text, value: text }).strict()).max(100),
   apartmentGroups: z.array(text).max(20).default([]),
@@ -31,7 +35,12 @@ export type IDomRfBrowserCapture = z.infer<typeof captureSchema>;
 export const isDomRfBrowserCapture = (body: unknown): boolean =>
   typeof body === 'object' && body !== null && (body as Record<string, unknown>).format === 'domrf-browser@1';
 
-export const mapDomRfBrowserCapture = (body: unknown): IRegistryRecord => {
+/**
+ * `developerCard` — застройщик со своей страницы реестра (domrfCards.ts). Принимается, только если
+ * карточка объекта ссылается именно на эту страницу: реквизиты приходят по ссылке самого источника,
+ * а не по совпадению названия. Номер страницы застройщика остаётся в снимке объекта.
+ */
+export const mapDomRfBrowserCapture = (body: unknown, developerCard: IDomRfDeveloperIdentity | null = null): IRegistryRecord => {
   const parsed = captureSchema.parse(body);
   const url = new URL(parsed.url);
   if (url.hostname !== 'xn--80az8a.xn--d1aqf.xn--p1ai') throw new Error('адрес не принадлежит наш.дом.рф');
@@ -64,18 +73,20 @@ export const mapDomRfBrowserCapture = (body: unknown): IRegistryRecord => {
   const developer = parsed.developer;
   add('Застройщик', developer?.name);
   add('Группа компаний', developer?.group);
+  const linked = developerCard !== null && parsed.developerRef === developerCard.externalRef ? developerCard : null;
   const identity = {
     externalRef: match[1]!,
     name: names?.[1] ?? parsed.title,
     city: parsed.address?.match(/^(.+?) город(?:,|$)/)?.[1] ?? null,
     address: parsed.address ?? null,
     asOf: null,
-    // Страница объекта не показывает реквизиты застройщика. Для утверждения о
-    // компании нужен отдельный снимок её карточки, с собственным URL.
-    developer: null,
-    groupName: null,
+    // Страница объекта реквизитов застройщика не показывает. Они берутся со страницы застройщика,
+    // на которую ведёт ссылка этой карточки, — у той свой снимок со своим адресом (этап 20D).
+    developer: linked ? { name: linked.name, legalForm: null, inn: linked.inn, ogrn: linked.ogrn } : null,
+    groupName: linked ? linked.groupName ?? developer?.group ?? null : null,
   };
   const payload = toPayload(identity, fields);
   payload.captureMethod = 'browser_page';
+  if (linked) payload.developerCardRef = linked.externalRef;
   return { type: 'object', projectKind: 'residential', identity, fields, payload, payloadHash: payloadHash(payload) };
 };

@@ -138,6 +138,33 @@ export const failDomRfTarget = async (id: number, error: string, attempts: numbe
   );
 };
 
+/** Ссылки карточки объекта на страницы застройщика и группы (этап 20D). */
+export const setDomRfTargetRefs = async (externalRef: string, developerRef: string | null, groupRef: string | null): Promise<void> => {
+  await query(
+    `UPDATE domrf_targets SET developer_ref = coalesce($2, developer_ref), group_ref = coalesce($3, group_ref), updated_at = now()
+     WHERE external_ref = $1`,
+    [externalRef, developerRef, groupRef],
+  );
+};
+
+/**
+ * Реквизиты застройщика стали известны после снимка его объектов (страница застройщика не открылась
+ * в тот раз) — объекты снимаются ещё раз, теперь со строкой «Застройщик объекта … ИНН …».
+ */
+export const requestRecaptureForDeveloper = async (developerRef: string): Promise<number> => {
+  const result = await query<{ id: number }>(
+    `UPDATE domrf_targets t SET requested_at = now(), next_attempt_at = NULL, updated_at = now()
+     WHERE t.developer_ref = $1
+       AND NOT (t.captured_at IS NULL OR t.captured_at < t.requested_at)
+       AND NOT EXISTS (
+         SELECT 1 FROM registry_records r
+         WHERE r.record_type = 'object' AND r.external_ref = t.external_ref AND r.payload->>'developerCardRef' = $1)
+     RETURNING t.id`,
+    [developerRef],
+  );
+  return result.length;
+};
+
 export const markDomRfCaptured = async (
   client: PoolClient,
   externalRef: string,

@@ -12,7 +12,8 @@
 //    та же запись реестра, полученная другим способом.
 //
 // Собирается только то, что оператор передал: каталог не обходится, соседние
-// записи не подтягиваются.
+// записи не подтягиваются. Страница застройщика (этап 20D) — такой же снимок
+// со своим адресом: работник читает её по ссылке подтверждённой карточки объекта.
 
 import fs from 'node:fs';
 
@@ -21,6 +22,7 @@ import { attachBrowserCaptureToProject, linkedRegistryProject } from '../../regi
 import { findDomRfTarget, markDomRfCaptured } from './domrfTargets.js';
 import type { ISource } from '../sources.js';
 import { isDomRfBrowserCapture, mapDomRfBrowserCapture } from './browserCapture.js';
+import { isDomRfCardCapture, mapDomRfDeveloperCapture, type IDomRfDeveloperIdentity } from './domrfCards.js';
 import { availablePaths, mapRecord, type RegistryRecordType } from './map.js';
 import { RegistryProfileError, buildUrl, parseRegistryProfile } from './profile.js';
 import { buildRegistryDocument, persistRegistryRecord, type IRegistryPersistResult } from './store.js';
@@ -42,6 +44,8 @@ export interface IRegistryImportOptions {
   fetchedAt?: Date;
   /** Existing portal card for a browser capture. Never creates a card from this ID. */
   projectId?: number;
+  /** Застройщик со своей страницы реестра — для снимка объекта, который на неё ссылается. */
+  developerCard?: IDomRfDeveloperIdentity | null;
 }
 
 /** Идентификатор записи из адреса каталога: последний числовой сегмент пути. */
@@ -98,10 +102,15 @@ export const importRegistryPayload = async (
   if (bytes > profile.limits.maxBytes) return { kind: 'too_large', bytes, limit: profile.limits.maxBytes };
 
   const browserPage = isDomRfBrowserCapture(body);
+  const developerPage = isDomRfCardCapture(body);
   if (browserPage && options.type === 'developer') return { kind: 'invalid_page', message: 'снимок страницы описывает объект, а не застройщика' };
   let record;
   try {
-    record = browserPage ? mapDomRfBrowserCapture(body) : mapRecord(body, profile, options.type ?? 'object');
+    record = browserPage
+      ? mapDomRfBrowserCapture(body, options.developerCard ?? null)
+      : developerPage
+        ? mapDomRfDeveloperCapture(body)
+        : mapRecord(body, profile, options.type ?? 'object');
   } catch (err) {
     return { kind: 'invalid_page', message: err instanceof Error ? err.message : String(err) };
   }
@@ -124,7 +133,7 @@ export const importRegistryPayload = async (
 
   const type = record.type;
   const template = type === 'object' ? profile.endpoints.object : profile.endpoints.developer;
-  const url = options.url ?? (browserPage ? (body as { url: string }).url : template ? buildUrl(template, { id: record.identity.externalRef }) : `registry:${record.identity.externalRef}`);
+  const url = options.url ?? (browserPage || developerPage ? (body as { url: string }).url : template ? buildUrl(template, { id: record.identity.externalRef }) : `registry:${record.identity.externalRef}`);
   const doc = buildRegistryDocument(source, record, url, options.sourceRunId ?? null, options.fetchedAt);
   const persisted = await persistRegistryRecord({ source, record, doc, requestedProjectId: projectId });
   if (browserPage && !persisted.publishError) {
