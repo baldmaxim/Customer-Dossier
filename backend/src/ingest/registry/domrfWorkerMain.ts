@@ -26,7 +26,7 @@ const main = async (): Promise<void> => {
     return;
   }
   startDomRfBrowserWorker(controller.signal);
-  console.log('[domrf] браузерный сбор ДОМ.РФ запущен: карточки из очереди, затем страницы застройщиков и групп');
+  console.log('[domrf] браузерный сбор ДОМ.РФ запущен: карточки из очереди, страницы застройщиков и групп, затем поиск компаний портала');
 };
 
 main().catch(err => {
