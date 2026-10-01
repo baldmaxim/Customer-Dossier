@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 
 import { env } from '../config/env.js';
-import { LEGACY_SPEC, SEMANTIC_SPEC, extractFromText, extractSemantic, llmTarget, RETRY_POLICY_VERSION, type ILlmResult } from '../llm/client.js';
+import { LEGACY_SPEC, SEMANTIC_SPEC, extractFromText, extractSemantic, llmTarget, retryPolicyVersion, type ILlmResult } from '../llm/client.js';
 import { requestRouting } from '../llm/endpoint.js';
 import { SYSTEM_PROMPT } from '../llm/prompt.js';
 import { EXTRACT_JSON_SCHEMA, SCHEMA_VERSION, type IExtraction } from '../llm/schema.js';
@@ -131,7 +131,7 @@ export const buildModelIdentity = (provider: IModelProvider): Record<string, unk
     provider: provider.provider,
     model: provider.model,
     params: provider.params,
-    retryPolicy: RETRY_POLICY_VERSION,
+    retryPolicy: retryPolicyVersion(),
     candidateBuildVersion: CANDIDATE_BUILD_VERSION,
     serverReported: { ...UNKNOWN_SERVER_METADATA, ...(provider.serverReported ?? {}) },
   };

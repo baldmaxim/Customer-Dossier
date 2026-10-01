@@ -124,6 +124,17 @@ export interface IExtractOptions {
 /** Политика повторов ниже — часть идентичности исполнения запуска (reprocess/provider.ts). */
 export const RETRY_POLICY_VERSION = 'retry@1:llm_error×3(2s,8s);invalid_json→1×temp0,70%';
 
+/**
+ * OpenRouter: хостинг иногда отдаёт JSON без обязательных полей, хотя строгую схему заявляет (28 из 289
+ * ответов при переразборе 30.09.2026). Один повтор тем же текстом при temperature 0. У LM Studio
+ * схему держит сам сервер — политика и отпечаток прежние.
+ */
+export const retryPolicyVersion = (): string =>
+  env.LLM_PROVIDER === 'openrouter' ? `${RETRY_POLICY_VERSION};schema_error→1×temp0` : RETRY_POLICY_VERSION;
+
+/** Таймаут одного вызова: у облака ответ идёт через туннель и медленные хостинги — свой предел. */
+export const llmTimeoutMs = (): number => (env.LLM_PROVIDER === 'openrouter' ? env.OPENROUTER_TIMEOUT_MS : env.LMSTUDIO_TIMEOUT_MS);
+
 const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
   const startedAt = Date.now();
   const emptyUsage = (): ILlmUsage => ({
@@ -155,8 +166,8 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
         ...(routing ? { provider: routing } : {}),
       }),
       signal: options.signal
-        ? AbortSignal.any([options.signal, AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS)])
-        : AbortSignal.timeout(env.LMSTUDIO_TIMEOUT_MS),
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(llmTimeoutMs())])
+        : AbortSignal.timeout(llmTimeoutMs()),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -234,7 +245,8 @@ const BACKOFF_MS = [2000, 8000, 30_000];
  * Сетевые сбои и 5xx — три попытки с backoff: LM Studio мог перезагружать модель.
  * Невалидный JSON — ровно один повтор при temperature 0 и урезанном на 30 %
  * тексте: обычная причина — обрыв генерации на лимите токенов, и повтор с той
- * же длиной даст тот же обрыв.
+ * же длиной даст тот же обрыв. OpenRouter: ответ не по схеме — один повтор
+ * тем же текстом при temperature 0 (retryPolicyVersion).
  */
 export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
   let last: ILlmResult<T> | null = null;
@@ -253,7 +265,14 @@ export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpe
   }
 
   if (!last) throw new Error('extractWith: недостижимое состояние');
-  if (last.ok || last.failure !== 'invalid_json') return last;
+  if (last.ok) return last;
+  if (last.failure === 'schema_error' && env.LLM_PROVIDER === 'openrouter') {
+    // Ответ не по схеме — дело хостинга, а не длины текста: повтор тем же текстом (retryPolicyVersion).
+    console.warn('[llm] ответ не по схеме, повтор при temperature=0');
+    if (options.beforeAttempt) await options.beforeAttempt();
+    return callOnce({ ...options, temperature: 0 }, spec);
+  }
+  if (last.failure !== 'invalid_json') return last;
 
   const shortened = options.body.slice(0, Math.floor(options.body.length * 0.7));
   console.warn('[llm] невалидный JSON, повтор при temperature=0 и укороченном тексте');

@@ -65,6 +65,9 @@ export const parseEnv = (source: EnvSource) => {
     OPENROUTER_PROVIDERS: llmAccess.routeProviders,
     LMSTUDIO_MODEL: optional(source, 'LMSTUDIO_MODEL', 'qwen3-8b'),
     LMSTUDIO_TIMEOUT_MS: parsePositiveInt('LMSTUDIO_TIMEOUT_MS', source.LMSTUDIO_TIMEOUT_MS, 120_000),
+    // Таймаут одного вызова при LLM_PROVIDER=openrouter. 120 с не хватало: длинный ответ медленного хостинга
+    // обрывался таймаутом (24 из 289 ответов при переразборе 30.09.2026). Аренда запуска — 10 минут.
+    OPENROUTER_TIMEOUT_MS: parsePositiveInt('OPENROUTER_TIMEOUT_MS', source.OPENROUTER_TIMEOUT_MS, 300_000),
 
     PROMPT_VERSION: optional(source, 'PROMPT_VERSION', 'p1'),
     // Схема ответа модели для новых запусков конвейера (этап 06). extract@2 — откат к прежней

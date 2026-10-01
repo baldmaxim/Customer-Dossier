@@ -138,7 +138,7 @@ export const showErrors = async (limit = 15): Promise<void> => {
   console.log(
     '\nПодсказки:\n' +
       '  "context" / "token" в тексте — в LM Studio мал контекст. Нужно 8192.\n' +
-      '  "aborted" / "timeout"        — модель не успевает. Поднимите LMSTUDIO_TIMEOUT_MS\n' +
+      '  "aborted" / "timeout"        — модель не успевает. Поднимите LMSTUDIO_TIMEOUT_MS (OpenRouter — OPENROUTER_TIMEOUT_MS)\n' +
       '                                 или возьмите модель меньше (Qwen3-4B).\n' +
       '  "fetch failed" / ECONNREFUSED — сервер LM Studio не запущен (Developer -> Start Server).\n' +
       '  "model" / "not found"         — LMSTUDIO_MODEL не совпадает с загруженной моделью.',

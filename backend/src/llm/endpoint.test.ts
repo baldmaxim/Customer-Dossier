@@ -6,7 +6,7 @@ import { parseEnv } from '../config/env.js';
 import { OPENROUTER_BASE_URL } from '../config/llm.js';
 import { EnvValueError } from '../config/parse.js';
 import { buildFingerprint, lmStudioProvider, type IChunkerParams } from '../reprocess/provider.js';
-import { extractHeadline, setAdminLlmApiKey } from './client.js';
+import { extractHeadline, llmTimeoutMs, retryPolicyVersion, setAdminLlmApiKey } from './client.js';
 import { checkOpenRouter, checkOpenRouterKey, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
 
 const SECRET = 'sk-or-v1-test-secret-value';
@@ -126,6 +126,7 @@ describe('идентичность исполнения', () => {
     expect(cloud.provider.params.routing).toEqual(openRouterRouting([]));
     // Облаку — предел ответа 4096: длинные тексты не обрываются посреди JSON. У LM Studio — прежние 2048.
     expect(cloud.provider.params.maxTokens).toBe(4096);
+    expect(cloud.fp.json.retryPolicy).toMatch(/schema_error→1×temp0$/);
     expect(cloud.fp.modelIdentityHash).not.toBe(local.modelIdentityHash);
     expect(pinned.modelIdentityHash).not.toBe(cloud.fp.modelIdentityHash);
     const json = JSON.stringify(cloud.fp.json);
@@ -183,6 +184,25 @@ describe('запрос к модели', () => {
     expect(calls[0]?.body.provider).toEqual(openRouterRouting([]));
     expect(calls[0]?.body.response_format).toMatchObject({ type: 'json_schema', json_schema: { strict: true } });
     expect(JSON.stringify(calls[0]?.body)).not.toContain(SECRET);
+  });
+
+  it('OpenRouter: ответ не по схеме — один повтор тем же текстом при temperature 0; у LM Studio повтора нет', async () => {
+    const client = await loadWith(OPENROUTER_ENV, () => import('./client.js'));
+    const cloud = capture([ok('{"неверное_поле":1}'), ok('{"topic":"Стройка школы"}')]);
+    const result = await client.extractHeadline({ body: 'Текст новости о стройке.', publishedAt: null });
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.truncatedInput).toBeFalsy();
+    expect(cloud.map(c => c.body.temperature)).toEqual([0.1, 0]);
+    expect(cloud[1]?.body.messages).toEqual(cloud[0]?.body.messages);
+    expect(client.retryPolicyVersion()).toMatch(/schema_error→1×temp0$/);
+    expect(client.llmTimeoutMs()).toBe(300_000);
+
+    const local = capture([ok('{"неверное_поле":1}')]);
+    const failed = await extractHeadline({ body: 'Текст новости о стройке.', publishedAt: null });
+    expect(failed).toMatchObject({ ok: false, failure: 'schema_error' });
+    expect(local).toHaveLength(1);
+    expect(retryPolicyVersion()).toBe('retry@1:llm_error×3(2s,8s);invalid_json→1×temp0,70%');
+    expect(llmTimeoutMs()).toBe(120_000);
   });
 
   it('сбой хостинга в теле ответа — сетевой сбой с повтором, а не «невалидный JSON» с урезанным текстом', async () => {
