@@ -12,6 +12,7 @@ import { snapshotRouter } from './api/snapshot.routes.js';
 import { createAttachAuth, createAuthRouter, createRequireAccess, type IAuthOptions } from './api/auth.js';
 import { createUsersRouter } from './api/users.routes.js';
 import { llmRouter } from './api/llm.routes.js';
+import { passkeyRelyingParty, PasskeyService } from './auth/passkeys.js';
 import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
@@ -43,21 +44,30 @@ export const defaultAllowedOrigins = (): string[] => {
 const defaultAllowedHostnames = (): string[] =>
   env.PUBLIC_ORIGIN === null ? [] : [new URL(env.PUBLIC_ORIGIN).hostname];
 
-const defaultAuthOptions = (): IAuthOptions => ({
-  mode: env.AUTH_MODE,
-  service: new AuthService(pgAuthStore, {
+/** Имя портала в окне устройства при добавлении ключа доступа. */
+const PASSKEY_RP_NAME = 'Досье Заказчика';
+
+const defaultAuthOptions = (): IAuthOptions => {
+  const service = new AuthService(pgAuthStore, {
     idleMs: env.SESSION_IDLE_MINUTES * 60_000,
     maxMs: env.SESSION_MAX_HOURS * 3_600_000,
-  }),
-  secureCookie: env.PUBLIC_ORIGIN?.startsWith('https:') ?? false,
-  maxAgeSec: env.SESSION_MAX_HOURS * 3600,
-});
+  });
+  // Ключ доступа привязан к домену из PUBLIC_ORIGIN; без него (локально, по IP) вход ключом выключен.
+  const rp = passkeyRelyingParty(env.PUBLIC_ORIGIN, env.AUTH_MODE);
+  return {
+    mode: env.AUTH_MODE,
+    service,
+    secureCookie: env.PUBLIC_ORIGIN?.startsWith('https:') ?? false,
+    maxAgeSec: env.SESSION_MAX_HOURS * 3600,
+    passkeys: rp === null ? null : new PasskeyService(pgAuthStore, service, { ...rp, rpName: PASSKEY_RP_NAME }),
+  };
+};
 
 /**
  * Роутеры данных под /api и их префиксы. Право каждого маршрута — auth/routePolicy.ts;
  * routePolicy.test.ts обходит этот список и требует правило для каждого изменяющего маршрута.
  */
-export const dataRouters = (service: AuthService): ReadonlyArray<readonly [string, IRouter]> => [
+export const dataRouters = (service: AuthService, passkeys: PasskeyService | null = null): ReadonlyArray<readonly [string, IRouter]> => [
   ['/manual', manualRouter],
   ['/companies', companiesRouter],
   ['/contractors', contractorsRouter],
@@ -70,7 +80,7 @@ export const dataRouters = (service: AuthService): ReadonlyArray<readonly [strin
   ['', dossierRouter],
   ['', graphRouter],
   ['', snapshotRouter],
-  ['', createUsersRouter(service)],
+  ['', createUsersRouter(service, passkeys)],
 ];
 
 /**
@@ -140,7 +150,7 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   // Локально (AUTH_MODE=none) запрос идёт от локального оператора со всеми правами: защита —
   // loopback, Host и Origin; изменение без правила в таблице прав запрещено и здесь.
   app.use('/api', createAttachAuth(auth), createRequireAccess(auth));
-  for (const [prefix, router] of dataRouters(auth.service)) app.use(`/api${prefix}`, router);
+  for (const [prefix, router] of dataRouters(auth.service, auth.passkeys ?? null)) app.use(`/api${prefix}`, router);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Не найдено' });

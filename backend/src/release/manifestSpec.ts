@@ -5,7 +5,8 @@
 // Все строки всех перечисленных таблиц хешируются целиком. Исключение колонки допускается только
 // с причиной в `excludedColumns`; сейчас исключений нет. Секретов в открытом виде в базе нет (ADR-014):
 // пароль — только хеш scrypt, идентификатор сессии — только sha256, ключ OpenRouter из админки — шифротекст
-// AES-256-GCM (app_secrets, миграция 032); в fingerprint входит хеш от хеша или шифротекста.
+// AES-256-GCM (app_secrets, миграция 032), ключ доступа (passkey) — только открытый ключ (user_passkeys, 034);
+// в fingerprint входит хеш от хеша или шифротекста.
 
 export const MANIFEST_VERSION = 'content-manifest@1';
 export const ROW_SERIALIZATION = 'pg-text-row@1';
@@ -77,6 +78,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'users', class: 'domain', why: 'пользователи портала, роли, хеши паролей; логины стоят в атрибуции решений' },
   { table: 'user_sessions', class: 'operational', why: 'серверные сессии входа (sha256 идентификатора), отзыв и простой' },
   { table: 'auth_events', class: 'history', why: 'неизменяемый журнал входа и действий с пользователями' },
+  { table: 'user_passkeys', class: 'domain', why: 'ключи доступа (passkey): только открытые ключи, счётчик подписей, отзыв (миграция 034)' },
   // Секреты из админки (миграция 032)
   { table: 'app_secrets', class: 'operational', why: 'ключ OpenRouter из админки: шифротекст, четыре последних символа, кто и когда задал' },
   // Реестр схемы

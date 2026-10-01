@@ -1,0 +1,51 @@
+/* Ключи доступа: строка — название и вид ключа, даты, «Убрать»; на телефоне переносится в столбик. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.main {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px; /* название и вид ключа — одна запись */
+  min-width: 0;
+}
+
+.name {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
+}
+
+.meta {
+  flex: 1 1 14rem;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.note {
+  max-width: var(--prose);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: var(--lh-text);
+}

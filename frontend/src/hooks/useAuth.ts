@@ -14,6 +14,8 @@ export interface IAuthState {
   /** Только на сервере: локально выходить некуда. */
   logout?: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Сервер принимает ключи доступа (passkey); локально и без адреса-домена — нет. */
+  passkeys?: boolean;
 }
 
 const ALL_PERMISSIONS: AccessPermission[] = [

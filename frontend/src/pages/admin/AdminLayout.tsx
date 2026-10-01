@@ -38,9 +38,9 @@ export const AdminLayout: FC = () => {
 
   const section = sectionOf(pathname);
   // Без раздела — старый адрес (/admin, /admin/collect, /admin/result): дочерний маршрут
-  // перенаправит, шапку рисовать незачем. Разбор — детальная страница со своим заголовком
-  // и возвратом (BackBar): вкладки разделов над ним стали бы третьим уровнем навигации.
-  if (!section || matchPath('/admin/process/:id', pathname)) return <Outlet />;
+  // перенаправит, шапку рисовать незачем. Разбор и пользователь — детальные страницы со своим
+  // заголовком и возвратом (BackBar): вкладки разделов над ними стали бы третьим уровнем навигации.
+  if (!section || matchPath('/admin/process/:id', pathname) || matchPath('/admin/users/:id', pathname)) return <Outlet />;
 
   return (
     <div className={styles.admin}>

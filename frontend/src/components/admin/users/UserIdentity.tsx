@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { Link } from 'react-router-dom';
 
 import type { IUserRow } from '../../../api/types';
 import { formatDateTime } from '../../../lib/labels';
@@ -6,11 +7,17 @@ import { Badge } from '../../ui/Badge';
 import { Cluster } from '../../ui/Cluster';
 import styles from './Users.module.css';
 
-/** Кто это: имя, логин и отметки «сменит пароль», «вход закрыт до …». */
-export const UserIdentity: FC<{ user: IUserRow; self: boolean }> = ({ user, self }) => (
+/** Кто это: имя (ссылкой на страницу пользователя, если задан `to`), логин и отметки «сменит пароль», «вход закрыт до …». */
+export const UserIdentity: FC<{ user: IUserRow; self: boolean; to?: string }> = ({ user, self, to }) => (
   <span className={styles.identity}>
     <span className={styles.name}>
-      {user.displayName}
+      {to ? (
+        <Link to={to} viewTransition className={styles.nameLink}>
+          {user.displayName}
+        </Link>
+      ) : (
+        user.displayName
+      )}
       {self && <span className={styles.current}> · это вы</span>}
     </span>
     <span className={styles.login}>{user.login}</span>

@@ -11,6 +11,18 @@
   overflow-wrap: break-word;
 }
 
+.nameLink {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-control);
+  text-underline-offset: 3px;
+}
+
+.nameLink:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
 .current {
   color: var(--muted);
   font-weight: var(--fw-regular);

@@ -7,7 +7,8 @@
 //   - правка пользователя — только с ожидаемой версией (`version_conflict`);
 //   - заявка на доступ (`pending`) и отклонённая заявка (`rejected`) не бывают активными: включить вход
 //     можно только одобрением (`decideRegistration`), не правкой (`not_approved`);
-//   - живая сессия — не отозвана, не истекла, не простаивала дольше idle и принадлежит активному пользователю.
+//   - живая сессия — не отозвана, не истекла, не простаивала дольше idle и принадлежит активному пользователю;
+//   - ключ доступа (passkey) уникален по credential id; отозванный ключ не находится ни для входа, ни в списке.
 
 import type { Role } from './permissions.js';
 
@@ -68,6 +69,8 @@ export const AUTH_EVENTS = [
   'registration_requested',
   'registration_approved',
   'registration_rejected',
+  'passkey_added',
+  'passkey_removed',
 ] as const;
 export type AuthEventType = (typeof AUTH_EVENTS)[number];
 
@@ -133,6 +136,34 @@ export const registrationDecisionProblem = (
   return null;
 };
 
+/** Ключ доступа живёт на одном устройстве или синхронизируется между устройствами (iCloud, Google). */
+export const PASSKEY_DEVICE_TYPES = ['singleDevice', 'multiDevice'] as const;
+export type PasskeyDeviceType = (typeof PASSKEY_DEVICE_TYPES)[number];
+
+export const isPasskeyDeviceType = (value: unknown): value is PasskeyDeviceType =>
+  typeof value === 'string' && (PASSKEY_DEVICE_TYPES as readonly string[]).includes(value);
+
+/** Ключ доступа (миграция 034): только открытая часть, секретов нет. */
+export interface IPasskeyRecord {
+  id: number;
+  userId: number;
+  credentialId: Buffer;
+  /** Открытый ключ COSE. */
+  publicKey: Buffer;
+  signCount: number;
+  transports: string[];
+  /** user.id WebAuthn — один на пользователя. */
+  userHandle: Buffer;
+  deviceType: PasskeyDeviceType;
+  backedUp: boolean;
+  aaguid: string;
+  name: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
+export type INewPasskey = Omit<IPasskeyRecord, 'id' | 'createdAt' | 'lastUsedAt'>;
+
 export interface INewSession {
   tokenHash: Buffer;
   userId: number;
@@ -145,8 +176,8 @@ export interface INewSession {
 export interface IAuthStore {
   findUserByLogin(login: string): Promise<IUserRecord | null>;
   findUserById(id: number): Promise<IUserRecord | null>;
-  /** Все пользователи с числом живых сессий, по логину. */
-  listUsers(now: Date, idleMs: number): Promise<Array<IUserRecord & { liveSessions: number }>>;
+  /** Все пользователи с числом живых сессий и ключей доступа, по логину. */
+  listUsers(now: Date, idleMs: number): Promise<Array<IUserRecord & { liveSessions: number; passkeys: number }>>;
   countUsers(): Promise<number>;
   createUser(input: INewUser, now: Date): Promise<IUserRecord | 'login_taken'>;
   updateUser(id: number, expectedVersion: number, patch: IUserPatch, now: Date): Promise<UpdateUserResult>;
@@ -167,6 +198,22 @@ export interface IAuthStore {
   revokeSessionById(userId: number, sessionId: number, reason: RevokeReason, now: Date): Promise<boolean>;
   /** Отзыв всех сессий пользователя, кроме exceptSessionId. Возвращает число отозванных. */
   revokeUserSessions(userId: number, reason: RevokeReason, now: Date, exceptSessionId?: number): Promise<number>;
+
+  /** Живые ключи доступа пользователя, новые сверху. */
+  listPasskeys(userId: number): Promise<IPasskeyRecord[]>;
+  /** Живой ключ по credential id — вход без логина. */
+  findPasskey(credentialId: Buffer): Promise<IPasskeyRecord | null>;
+  /** user.id WebAuthn пользователя: с его первого ключа, в том числе отозванного; null — ключей не было. */
+  findPasskeyUserHandle(userId: number): Promise<Buffer | null>;
+  createPasskey(input: INewPasskey, now: Date): Promise<IPasskeyRecord | 'credential_taken'>;
+  /**
+   * Удачный вход ключом: счётчик подписей, признак резервной копии, время ключа и последнего входа
+   * пользователя. Счётчик неудачных паролей и блокировку не трогает: вход ключом не даёт подбору пароля
+   * новых попыток.
+   */
+  recordPasskeyUse(id: number, signCount: number, backedUp: boolean, now: Date): Promise<void>;
+  /** Отзыв живого ключа пользователя; null — такого живого ключа нет. */
+  revokePasskey(userId: number, passkeyId: number, by: string, now: Date): Promise<IPasskeyRecord | null>;
 
   logEvent(input: IAuthEventInput, now: Date): Promise<void>;
   listEvents(filter: { userId?: number; beforeId?: number; limit: number }): Promise<IAuthEventRecord[]>;

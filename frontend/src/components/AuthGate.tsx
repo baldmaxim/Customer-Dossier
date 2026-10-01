@@ -37,8 +37,9 @@ export const AuthGate: FC<IAuthGateProps> = ({ children }) => {
       can: permission => permissions.has(permission),
       logout: authRequired ? () => void logout() : undefined,
       changePassword,
+      passkeys: session.passkeysEnabled,
     };
-  }, [user, authRequired, logout, changePassword]);
+  }, [user, authRequired, logout, changePassword, session.passkeysEnabled]);
 
   // Пока сессия читается — знак портала и «Загрузка…», а не белый экран.
   if (session.isLoading) {
@@ -63,6 +64,11 @@ export const AuthGate: FC<IAuthGateProps> = ({ children }) => {
           session.clearLoginError();
           setRegister(true);
         }}
+        passkey={
+          session.passkeysEnabled
+            ? { onLogin: () => void session.loginWithPasskey(), pending: session.isPasskeyPending, error: session.passkeyError }
+            : undefined
+        }
       />
     );
   }

@@ -1,4 +1,5 @@
-// Пользователи и сессии в PostgreSQL (миграция 031, ADR-014). Контракт и инварианты — auth/store.ts.
+// Пользователи, сессии и ключи доступа в PostgreSQL (миграции 031, 033, 034; ADR-014). Контракт и
+// инварианты — auth/store.ts.
 
 import type { PoolClient, QueryResultRow } from 'pg';
 
@@ -6,14 +7,17 @@ import { getPool, withTransaction } from '../db/pool.js';
 import { isRole } from './permissions.js';
 import {
   TOUCH_INTERVAL_MS,
+  isPasskeyDeviceType,
   isRegistrationState,
   registrationDecisionProblem,
   type DecideRegistrationResult,
   type IAuthEventInput,
   type IAuthEventRecord,
   type IAuthStore,
+  type INewPasskey,
   type INewSession,
   type INewUser,
+  type IPasskeyRecord,
   type ISessionRecord,
   type IUserPatch,
   type IUserRecord,
@@ -32,6 +36,18 @@ const userColumns = (a: string): string => `
 const SESSION_COLUMNS = `
   id, user_id AS "userId", created_at AS "createdAt", last_seen_at AS "lastSeenAt",
   expires_at AS "expiresAt", ip, user_agent AS "userAgent"`;
+
+const PASSKEY_COLUMNS = `
+  id, user_id AS "userId", credential_id AS "credentialId", public_key AS "publicKey", sign_count AS "signCount",
+  transports, user_handle AS "userHandle", device_type AS "deviceType", backed_up AS "backedUp", aaguid, name,
+  created_at AS "createdAt", last_used_at AS "lastUsedAt"`;
+
+type PasskeyRow = Omit<IPasskeyRecord, 'deviceType'> & { deviceType: string };
+
+const toPasskey = (row: PasskeyRow): IPasskeyRecord => {
+  if (!isPasskeyDeviceType(row.deviceType)) throw new Error(`user_passkeys.device_type: неизвестный вид у ключа ${row.id}`);
+  return { ...row, deviceType: row.deviceType };
+};
 
 /** Живая сессия: не отозвана, не истекла и не простаивала дольше idle (параметры: сейчас, idle в мс). */
 const LIVE = (a: string, nowParam: number, idleParam: number): string =>
@@ -65,14 +81,15 @@ export const pgAuthStore: IAuthStore = {
   },
 
   async listUsers(now, idleMs) {
-    const result = await rows<UserRow & { liveSessions: number }>(
+    const result = await rows<UserRow & { liveSessions: number; passkeys: number }>(
       `SELECT ${userColumns('u')},
-              (SELECT count(*)::int FROM user_sessions s WHERE s.user_id = u.id AND ${LIVE('s', 1, 2)}) AS "liveSessions"
+              (SELECT count(*)::int FROM user_sessions s WHERE s.user_id = u.id AND ${LIVE('s', 1, 2)}) AS "liveSessions",
+              (SELECT count(*)::int FROM user_passkeys p WHERE p.user_id = u.id AND p.revoked_at IS NULL) AS "passkeys"
          FROM users u
         ORDER BY u.login`,
       [now, idleMs],
     );
-    return result.map(r => ({ ...toUser(r), liveSessions: r.liveSessions }));
+    return result.map(r => ({ ...toUser(r), liveSessions: r.liveSessions, passkeys: r.passkeys }));
   },
 
   async countUsers() {
@@ -263,6 +280,73 @@ export const pgAuthStore: IAuthStore = {
       [userId, reason, now, exceptSessionId ?? null],
     );
     return result.rowCount ?? 0;
+  },
+
+  async listPasskeys(userId) {
+    const result = await rows<PasskeyRow>(
+      `SELECT ${PASSKEY_COLUMNS} FROM user_passkeys WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC, id DESC`,
+      [userId],
+    );
+    return result.map(toPasskey);
+  },
+
+  async findPasskey(credentialId) {
+    const [row] = await rows<PasskeyRow>(`SELECT ${PASSKEY_COLUMNS} FROM user_passkeys WHERE credential_id = $1 AND revoked_at IS NULL`, [
+      credentialId,
+    ]);
+    return row ? toPasskey(row) : null;
+  },
+
+  async findPasskeyUserHandle(userId) {
+    const [row] = await rows<{ userHandle: Buffer }>(
+      'SELECT user_handle AS "userHandle" FROM user_passkeys WHERE user_id = $1 ORDER BY id LIMIT 1',
+      [userId],
+    );
+    return row?.userHandle ?? null;
+  },
+
+  async createPasskey(input: INewPasskey, now) {
+    const [row] = await rows<PasskeyRow>(
+      `INSERT INTO user_passkeys (user_id, credential_id, public_key, sign_count, transports, user_handle,
+                                  device_type, backed_up, aaguid, name, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (credential_id) DO NOTHING
+       RETURNING ${PASSKEY_COLUMNS}`,
+      [
+        input.userId,
+        input.credentialId,
+        input.publicKey,
+        input.signCount,
+        input.transports,
+        input.userHandle,
+        input.deviceType,
+        input.backedUp,
+        input.aaguid,
+        input.name,
+        now,
+      ],
+    );
+    return row ? toPasskey(row) : 'credential_taken';
+  },
+
+  async recordPasskeyUse(id, signCount, backedUp, now) {
+    await getPool().query(
+      `WITH used AS (
+         UPDATE user_passkeys SET sign_count = $2, backed_up = $3, last_used_at = $4 WHERE id = $1 RETURNING user_id
+       )
+       UPDATE users SET last_login_at = $4 FROM used WHERE users.id = used.user_id`,
+      [id, signCount, backedUp, now],
+    );
+  },
+
+  async revokePasskey(userId, passkeyId, by, now) {
+    const [row] = await rows<PasskeyRow>(
+      `UPDATE user_passkeys SET revoked_at = $4, revoked_by = $3
+        WHERE id = $2 AND user_id = $1 AND revoked_at IS NULL
+        RETURNING ${PASSKEY_COLUMNS}`,
+      [userId, passkeyId, by, now],
+    );
+    return row ? toPasskey(row) : null;
   },
 
   async logEvent(input: IAuthEventInput, now) {

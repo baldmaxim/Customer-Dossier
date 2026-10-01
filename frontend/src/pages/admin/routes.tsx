@@ -37,6 +37,7 @@ export const adminRoutes: RouteObject[] = [
       { path: 'review', lazy: lazyPage(pages => pages.ReviewQueuePage) },
       { path: 'model', lazy: lazyPage(pages => pages.ModelPage) },
       { path: 'users', lazy: lazyPage(pages => pages.UsersPage) },
+      { path: 'users/:id', lazy: lazyPage(pages => pages.UserPage) },
       { path: 'account', lazy: lazyPage(pages => pages.AccountPage) },
     ],
   },

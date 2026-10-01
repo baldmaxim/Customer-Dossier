@@ -57,6 +57,7 @@ export const COUNTED_TABLES = [
   'users',
   'user_sessions',
   'auth_events',
+  'user_passkeys',
   'app_secrets',
   'bot_processed_updates',
   'source_policy_log',

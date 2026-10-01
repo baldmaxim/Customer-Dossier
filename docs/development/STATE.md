@@ -1,6 +1,22 @@
 # Customer Dossier — состояние развития
 
-Обновлено: 2026-09-30.
+Обновлено: 2026-10-01.
+
+## Вход по ключу доступа (passkey) и страница пользователя (01.10.2026, ADR-014 дополнение)
+
+| Что | Итог |
+|---|---|
+| Схема | Миграция 034 (только добавление): `user_passkeys` — открытые ключи, счётчик, отзыв; CHECK журнала + `passkey_added`, `passkey_removed`. В `manifestSpec` и `COUNTED_TABLES` |
+| Сервер | `auth/passkeys.ts` (`@simplewebauthn/server` 13): RP ID и origin из `PUBLIC_ORIGIN`, проверка пользователя обязательна, вызов одноразовый 5 минут в памяти. `api/passkeys.ts`: `POST /api/auth/passkey/options`, `POST /api/auth/passkey` (вход → cookie), `GET/POST /api/auth/passkeys`, `POST /api/auth/passkeys/options` (текущий пароль), `DELETE /api/auth/passkeys/:id`; админ — `GET /api/users/:id/passkeys`, `POST …/passkeys/:passkeyId/revoke` (`users.manage`). Без домена — 404 `passkeys_disabled` |
+| Экраны | Вход — «Войти с ключом доступа»; «Профиль» → «Ключи доступа» (добавить с паролем, убрать); «Пользователи» → имя → страница пользователя `/admin/users/:id` (доступ, пароль, ключи, входы, журнал), число ключей в списке; окно «Входы» снято |
+| nginx | `tginfo.conf`: адреса входа ключом — в зоне `tginfo_auth` |
+
+Проверки агента: `tsc` в обоих пакетах, backend unit 799/799 (полный цикл с программным аутентификатором и настоящей
+подписью P-256: повтор, чужой origin и RP ID, без проверки пользователя, откат счётчика, отзыв, выключенный), frontend
+350/350, `check:labels`, `build` + `check:build` — зелёные.
+**Не проверено:** `auth/pgStore.int.test.ts` (новый блок про ключи) на `tg_info_test`, миграция 034 на рабочей базе,
+вход живым устройством (iPhone, Android, Windows Hello) на `pulse.meridianai.ru`, правка `tginfo.conf` на сервере
+(кладётся руками).
 
 ## Заявка на доступ вместо «Нового пользователя» (30.09.2026, ADR-014 дополнение)
 

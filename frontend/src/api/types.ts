@@ -1297,6 +1297,18 @@ export interface ISessionInfo {
   csrfToken?: string;
   expiresAt?: string;
   user?: IAuthUser;
+  /** Сервер принимает вход по ключу доступа (passkey): есть публичный адрес-домен. */
+  passkeys?: boolean;
+}
+
+/** Ключ доступа (passkey): только подпись и даты — открытый ключ и идентификаторы на экран не приходят. */
+export interface IPasskeyRow {
+  id: number;
+  name: string;
+  deviceType: 'singleDevice' | 'multiDevice';
+  backedUp: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
 
 /**
@@ -1322,6 +1334,8 @@ export interface IUserRow {
   version: number;
   registration: RegistrationState;
   liveSessions?: number;
+  /** Живых ключей доступа. */
+  passkeys?: number;
 }
 
 export interface IUserSessionRow {

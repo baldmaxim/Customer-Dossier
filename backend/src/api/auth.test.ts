@@ -3,11 +3,11 @@
 // отсутствие CSRF-токена отклоняются. Права ролей — на каждом запросе. Хранилище пользователей и
 // сессий — в памяти (auth/memoryStore.ts): база (мёртвый адрес) не нужна ни одному отказу.
 
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type http from 'node:http';
 
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 
+import { close, listen, makeRequest } from '../__tests__/http.js';
 import { createApp } from '../app.js';
 import { createMemoryAuthStore } from '../auth/memoryStore.js';
 import { AuthService } from '../auth/service.js';
@@ -18,60 +18,6 @@ const HOSTNAME = 'radar.example.ru';
 const ORIGIN = `https://${HOSTNAME}`;
 const COOKIE = sessionCookieName(true);
 const PASSWORD = 'Correct-Horse-7731';
-
-interface IResponse {
-  status: number;
-  headers: http.IncomingHttpHeaders;
-  body: Record<string, unknown>;
-}
-
-const makeRequest =
-  (portOf: () => number, defaultHost: () => string) =>
-  (method: string, path: string, options: { headers?: Record<string, string>; body?: unknown; raw?: string } = {}): Promise<IResponse> =>
-    new Promise((resolve, reject) => {
-      const payload = options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
-      const req = http.request(
-        {
-          host: '127.0.0.1',
-          port: portOf(),
-          method,
-          path,
-          headers: {
-            host: defaultHost(),
-            ...(payload ? { 'content-type': 'application/json' } : {}),
-            ...options.headers,
-          },
-        },
-        res => {
-          let data = '';
-          res.on('data', chunk => (data += chunk));
-          res.on('end', () => {
-            let body: Record<string, unknown> = {};
-            try {
-              body = data ? (JSON.parse(data) as Record<string, unknown>) : {};
-            } catch {
-              body = { raw: data };
-            }
-            resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
-          });
-        },
-      );
-      req.on('error', reject);
-      if (payload) req.write(payload);
-      req.end();
-    });
-
-const listen = async (app: http.RequestListener): Promise<{ server: http.Server; port: number }> => {
-  const server = http.createServer(app);
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { server, port: (server.address() as AddressInfo).port };
-};
-
-const close = (server: http.Server): Promise<void> =>
-  new Promise<void>(resolve => {
-    server.closeAllConnections();
-    server.close(() => resolve());
-  });
 
 describe('серверный режим: вход по логину и паролю за прокси', () => {
   let now = Date.parse('2026-09-30T10:00:00Z');

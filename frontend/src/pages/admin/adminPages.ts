@@ -8,4 +8,5 @@ export { ReviewQueuePage } from './ReviewQueuePage';
 export { RunPage } from './RunPage';
 export { RunsPage } from './RunsPage';
 export { SourcesPage } from './SourcesPage';
+export { UserPage } from './UserPage';
 export { UsersPage } from './UsersPage';

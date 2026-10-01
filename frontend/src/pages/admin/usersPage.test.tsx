@@ -1,6 +1,6 @@
 // «Пользователи» (ADR-014): заявки на доступ (одобрить с ролью, отклонить после подтверждения,
 // пусто — блока нет), список, смена роли — только после подтверждения и с ожидаемой версией, свою
-// строку администратор не меняет, сброшенный пароль — в окне; формы «Новый пользователь» нет —
+// строку администратор не меняет, сброшенный пароль — в окне; имя ведёт на страницу пользователя; формы «Новый пользователь» нет —
 // учётную запись человек заводит сам заявкой; без права users.manage — ни одного запроса.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -28,6 +28,7 @@ const row = (id: number, login: string, role: IUserRow['role'], extra: Partial<I
   version: 3,
   registration: 'approved',
   liveSessions: 1,
+  passkeys: 2,
   ...extra,
 });
 
@@ -78,6 +79,9 @@ describe('экран «Пользователи»', () => {
     expect(other.disabled).toBe(false);
     expect(other.value).toBe('viewer');
     expect(screen.getByText('сменит пароль при входе')).not.toBeNull();
+    // Имя — ссылка на страницу пользователя (входы, ключи доступа, журнал); число ключей — в строке.
+    expect(screen.getByRole('link', { name: 'Иван Иванов' }).getAttribute('href')).toBe('/admin/users/2');
+    expect(screen.getAllByText(/ключей доступа: 2/).length).toBeGreaterThan(0);
     // Таблица ролей: у читателя — только портал; права обращений и снимков не показываются.
     expect(await screen.findByRole('columnheader', { name: 'читатель' })).not.toBeNull();
     expect(screen.queryByText(/Обращения и снимки/)).toBeNull();

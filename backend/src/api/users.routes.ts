@@ -1,10 +1,13 @@
 // Пользователи, сессии, заявки на доступ и журнал входа — для администратора (право users.manage,
 // auth/routePolicy.ts). Правила (последний администратор, себя не выключить, ожидаемая версия,
 // решение по заявке) — в auth/service.ts. Заявку подаёт сам человек: POST /api/auth/register (api/auth.ts).
+// Ключи доступа пользователя (passkey) администратор видит и отзывает здесь; добавляет ключ только сам
+// пользователь — в профиле (api/passkeys.ts).
 
 import type { IRouter, Request, Response } from 'express';
 import { z } from 'zod';
 
+import type { PasskeyService } from '../auth/passkeys.js';
 import { PERMISSIONS, ROLES, ROLE_PERMISSIONS } from '../auth/permissions.js';
 import { actorOfContext, LOCAL_CONTEXT, type AuthService, type IServiceError } from '../auth/service.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
@@ -50,7 +53,7 @@ const eventsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-export const createUsersRouter = (service: AuthService): IRouter => {
+export const createUsersRouter = (service: AuthService, passkeys: PasskeyService | null = null): IRouter => {
   const router = asyncRouter();
 
   router.get('/users', async (_req, res) => {
@@ -176,6 +179,36 @@ export const createUsersRouter = (service: AuthService): IRouter => {
       return;
     }
     const result = await service.revokeSession(actorOf(req), id, sessionId, requestMeta(req));
+    if (!result.ok) {
+      sendError(res, result);
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  // Без публичного адреса-домена вход ключом выключен (auth/passkeys.ts): ключей нет и убирать нечего.
+  router.get('/users/:id/passkeys', async (req, res) => {
+    const id = idParam(req.params.id);
+    const user = id === null ? null : await service.getUser(id);
+    if (id === null || !user) {
+      res.status(404).json({ error: 'Пользователь не найден', code: 'not_found' });
+      return;
+    }
+    res.json({ enabled: passkeys !== null, items: passkeys ? ((await passkeys.list(id)) ?? []) : [] });
+  });
+
+  router.post('/users/:id/passkeys/:passkeyId/revoke', async (req, res) => {
+    const id = idParam(req.params.id);
+    const passkeyId = idParam(req.params.passkeyId);
+    if (id === null || passkeyId === null) {
+      res.status(400).json({ error: 'Некорректные параметры', code: 'invalid' });
+      return;
+    }
+    if (!passkeys) {
+      res.status(404).json({ error: 'Ключ не найден или уже убран', code: 'not_found' });
+      return;
+    }
+    const result = await passkeys.revoke(actorOf(req), id, passkeyId, requestMeta(req));
     if (!result.ok) {
       sendError(res, result);
       return;

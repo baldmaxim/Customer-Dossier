@@ -26,12 +26,15 @@ interface IPage {
   nextBefore: number | null;
 }
 
-export const AuthEventLog: FC = () => {
+/** userId — журнал одного пользователя (его страница); без него — весь журнал. */
+export const AuthEventLog: FC<{ userId?: number }> = ({ userId }) => {
   const wide = useMediaQuery(MQ.sm);
   const eventsQuery = useInfiniteQuery({
-    queryKey: ['auth-events'],
+    // ['auth-events'] — префикс обоих журналов: действие с пользователем обновляет и общий, и его.
+    queryKey: ['auth-events', userId ?? 'all'],
     // По 20: журнал — справка, а не главное на экране; дальше — «Показать ещё».
-    queryFn: ({ pageParam }) => api.get<IPage>(`/api/users/events?limit=20${pageParam === null ? '' : `&before=${pageParam}`}`),
+    queryFn: ({ pageParam }) =>
+      api.get<IPage>(`/api/users/events?limit=20${userId === undefined ? '' : `&userId=${userId}`}${pageParam === null ? '' : `&before=${pageParam}`}`),
     initialPageParam: null as number | null,
     getNextPageParam: last => last.nextBefore,
   });

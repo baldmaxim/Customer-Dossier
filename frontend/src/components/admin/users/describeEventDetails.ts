@@ -3,10 +3,11 @@ import { LOGIN_FAILURE_LABELS, USER_ROLE_LABELS } from '../../../lib/labels';
 
 const isRole = (v: unknown): v is UserRole => v === 'admin' || v === 'operator' || v === 'viewer';
 
-/** Подробности события словами: причина отказа, смена роли, сколько входов закрыто. */
+/** Подробности события словами: способ входа, причина отказа, смена роли, сколько входов закрыто. */
 export const describeEventDetails = (e: IAuthEventRow): string => {
   const d = e.details;
   const parts: string[] = [];
+  if (d.method === 'passkey') parts.push('по ключу доступа');
   if (typeof d.reason === 'string') parts.push(LOGIN_FAILURE_LABELS[d.reason] ?? 'другая причина');
   if (d.locked === true) parts.push('вход закрыт на время');
   const role = d.role as { from?: unknown; to?: unknown } | string | undefined;

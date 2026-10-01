@@ -1,20 +1,20 @@
-// Пользователи таблицей (от 900px): роль, доступ, последний вход, входы и сброс пароля.
+// Пользователи таблицей (от 900px): роль, доступ, последний вход и ключи доступа, сброс пароля. Имя — ссылка
+// на страницу пользователя.
 
 import { FC } from 'react';
 
 import { formatCount } from '../../../lib/format';
 import { formatDateTime } from '../../../lib/labels';
 import { Button } from '../../ui/Button';
-import { Cluster } from '../../ui/Cluster';
 import { Switch } from '../../ui/Switch';
 import { TableScroll } from '../../ui/TableScroll';
 import { VisuallyHidden } from '../../ui/VisuallyHidden';
 import { UserIdentity } from './UserIdentity';
 import { UserRoleSelect } from './UserRoleSelect';
-import type { IUsersViewProps } from './UsersList';
+import { userPath, type IUsersViewProps } from './UsersList';
 import styles from './Users.module.css';
 
-export const UsersTable: FC<IUsersViewProps> = ({ users, meId, actions, onSessions, onResetPassword }) => (
+export const UsersTable: FC<IUsersViewProps> = ({ users, meId, actions, onResetPassword }) => (
   <TableScroll label="Пользователи" minWidth={820}>
     <thead>
       <tr>
@@ -33,7 +33,7 @@ export const UsersTable: FC<IUsersViewProps> = ({ users, meId, actions, onSessio
         return (
           <tr key={u.id}>
             <td>
-              <UserIdentity user={u} self={self} />
+              <UserIdentity user={u} self={self} to={userPath(u)} />
             </td>
             <td className={styles.roleCell}>
               <UserRoleSelect user={u} self={self} actions={actions} />
@@ -50,19 +50,16 @@ export const UsersTable: FC<IUsersViewProps> = ({ users, meId, actions, onSessio
             </td>
             <td>
               <span className="nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'не входил'}</span>
-              <span className={styles.meta}>открытых входов: {formatCount(u.liveSessions ?? 0)}</span>
+              <span className={styles.meta}>
+                открытых входов: {formatCount(u.liveSessions ?? 0)} · ключей доступа: {formatCount(u.passkeys ?? 0)}
+              </span>
             </td>
             <td>
-              <Cluster gap={1}>
-                <Button size="sm" variant="ghost" onClick={() => onSessions(u)}>
-                  Входы<VisuallyHidden> «{u.displayName}»</VisuallyHidden>
+              {!self && (
+                <Button size="sm" variant="ghost" onClick={() => onResetPassword(u)}>
+                  Сбросить пароль<VisuallyHidden> «{u.displayName}»</VisuallyHidden>
                 </Button>
-                {!self && (
-                  <Button size="sm" variant="ghost" onClick={() => onResetPassword(u)}>
-                    Сбросить пароль<VisuallyHidden> «{u.displayName}»</VisuallyHidden>
-                  </Button>
-                )}
-              </Cluster>
+              )}
             </td>
           </tr>
         );

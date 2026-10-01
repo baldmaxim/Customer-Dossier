@@ -1,12 +1,15 @@
-// Пользователи и сессии на настоящей базе (миграции 031, 033, ADR-014): те же правила, что проверяет
+// Пользователи и сессии на настоящей базе (миграции 031, 033, 034, ADR-014): те же правила, что проверяет
 // auth.test.ts на хранилище в памяти, плюс то, что держит сама база — уникальность логина,
 // CHECK роли, неизменяемость журнала, гонка двух администраторов за «последнего», заявка на доступ,
-// которую нельзя включить мимо одобрения, и два одновременных решения по одной заявке.
+// которую нельзя включить мимо одобрения, два одновременных решения по одной заявке и ключи доступа
+// (полный цикл с программным аутентификатором, уникальность credential id, отзыв).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
+import { SoftAuthenticator } from '../__tests__/softAuthenticator.js';
+import { PasskeyService } from './passkeys.js';
 import { pgAuthStore } from './pgStore.js';
 import { AuthService, hashToken, type IActor } from './service.js';
 
@@ -186,5 +189,50 @@ describe('pgAuthStore: заявка на доступ (миграция 033)', (
     ]);
     const text = await getPool().query<{ t: string }>(`SELECT string_agg(details::text, ' ') AS t FROM auth_events`);
     expect(text.rows[0]?.t ?? '').not.toContain(OWN);
+  });
+
+  it('ключ доступа: добавление, вход без логина, счётчик, уникальность и отзыв на настоящей базе', async () => {
+    const origin = 'https://radar.example.ru';
+    const passkeys = new PasskeyService(pgAuthStore, service, { rpId: 'radar.example.ru', origin, rpName: 'Досье Заказчика', now: () => now });
+    const device = new SoftAuthenticator();
+    const id = await seed('juliet', 'viewer');
+    await pgAuthStore.setPassword(id, (await pgAuthStore.findUserById(id))!.passwordHash, false, new Date(now));
+    const r = await service.login('juliet', PASSWORD, META);
+    if (!r.ok) throw new Error(r.code);
+
+    const opts = await passkeys.registrationOptions(r.context, PASSWORD);
+    if (!opts.ok) throw new Error(opts.code);
+    const registration = device.create(opts.options, { origin, synced: false });
+    const added = await passkeys.register(r.context, registration, 'YubiKey', META);
+    if (!added.ok) throw new Error(added.code);
+    expect(added.passkey).toMatchObject({ name: 'YubiKey', deviceType: 'singleDevice', backedUp: false });
+
+    // Тот же credential id второй раз не записывается — его держит уникальный индекс.
+    const stored = (await pgAuthStore.listPasskeys(id))[0]!;
+    expect(await pgAuthStore.createPasskey({ ...stored, name: 'копия' }, new Date(now))).toBe('credential_taken');
+    expect((await service.listUsers()).find(u => u.id === id)?.passkeys).toBe(1);
+
+    now += 1_000;
+    const login = await passkeys.login(device.get(await passkeys.loginOptions(), { origin, synced: false }), META);
+    if (!login.ok) throw new Error(login.code);
+    expect((await service.resolve(login.token))?.user.login).toBe('juliet');
+    const row = await getPool().query<{ signCount: number; lastUsed: Date; lastLogin: Date }>(
+      `SELECT p.sign_count AS "signCount", p.last_used_at AS "lastUsed", u.last_login_at AS "lastLogin"
+         FROM user_passkeys p JOIN users u ON u.id = p.user_id WHERE p.id = $1`,
+      [added.passkey.id],
+    );
+    expect(row.rows[0]).toMatchObject({ signCount: 1 });
+    expect(row.rows[0]?.lastUsed.getTime()).toBe(now);
+    expect(row.rows[0]?.lastLogin.getTime()).toBe(now);
+
+    expect(await passkeys.revoke({ id: null, login: 'cli' }, id, added.passkey.id, META)).toEqual({ ok: true });
+    expect(await pgAuthStore.findPasskey(stored.credentialId)).toBeNull();
+    // Строка остаётся: по ней читается журнал; user.id для следующего ключа — прежний.
+    expect((await pgAuthStore.findPasskeyUserHandle(id))?.equals(stored.userHandle)).toBe(true);
+    const events = await getPool().query<{ event: string }>(
+      `SELECT event FROM auth_events WHERE user_id = $1 AND event IN ('passkey_added', 'passkey_removed') ORDER BY id`,
+      [id],
+    );
+    expect(events.rows.map(e => e.event)).toEqual(['passkey_added', 'passkey_removed']);
   });
 });

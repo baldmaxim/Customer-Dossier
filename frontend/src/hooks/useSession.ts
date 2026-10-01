@@ -1,11 +1,20 @@
 import { useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 
 import { ApiError, AUTH_REQUIRED_EVENT, SESSION_STALE_EVENT, api, setCsrfToken } from '../api/client';
 import type { IAuthUser, ISessionInfo } from '../api/types';
 import { purgeSensitiveCaches } from '../lib/cachePurge';
+import { askPasskey, forgetPasskey, isPasskeyCancel, passkeyErrorText, passkeysSupported } from '../lib/passkey';
 
 const SESSION_KEY = ['auth', 'session'] as const;
+
+/** Без сессии — экран входа; признак «сервер принимает ключи доступа» остаётся, чтобы кнопка не пропала. */
+const signedOut = (prev: ISessionInfo | undefined): ISessionInfo => ({
+  authRequired: true,
+  authenticated: false,
+  ...(prev?.passkeys ? { passkeys: true } : {}),
+});
 
 export interface IUseSession {
   isLoading: boolean;
@@ -25,6 +34,13 @@ export interface IUseSession {
   /** Убрать прежний отказ: человек ушёл к заявке и вернулся — старое «неверный пароль» не нужно. */
   clearLoginError: () => void;
   isLoggingIn: boolean;
+  /** Вход по ключу доступа возможен: сервер его принимает и браузер умеет WebAuthn. */
+  passkeysEnabled: boolean;
+  /** Вход ключом без логина: окно устройства, затем серверная сессия, как после пароля. */
+  loginWithPasskey: () => Promise<void>;
+  /** Отказ входа ключом словами; закрытое окно устройства — не отказ (null). */
+  passkeyError: string | null;
+  isPasskeyPending: boolean;
 }
 
 export const useSession = (): IUseSession => {
@@ -47,7 +63,7 @@ export const useSession = (): IUseSession => {
   useEffect(() => {
     const onAuthRequired = (): void => {
       queryClient.removeQueries({ predicate: q => q.queryKey[0] !== 'auth' });
-      queryClient.setQueryData<ISessionInfo>(SESSION_KEY, { authRequired: true, authenticated: false });
+      queryClient.setQueryData<ISessionInfo>(SESSION_KEY, signedOut);
     };
     const onStale = (): void => {
       void queryClient.invalidateQueries({ queryKey: SESSION_KEY });
@@ -68,11 +84,36 @@ export const useSession = (): IUseSession => {
     },
   });
 
+  const passkeyMutation = useMutation({
+    mutationFn: async () => {
+      const { options } = await api.post<{ options: PublicKeyCredentialRequestOptionsJSON }>('/api/auth/passkey/options');
+      const response = await askPasskey(options);
+      return api.post<ISessionInfo>('/api/auth/passkey', { response });
+    },
+    onSuccess: session => {
+      setCsrfToken(session.csrfToken ?? null);
+      queryClient.setQueryData(SESSION_KEY, session);
+    },
+    onError: err => {
+      // Ключ убрали с портала — пусть менеджер паролей перестанет его предлагать.
+      const body = err instanceof ApiError ? (err.body as { rpId?: unknown; credentialId?: unknown } | null) : null;
+      if (err instanceof ApiError && err.code === 'passkey_unknown' && typeof body?.rpId === 'string' && typeof body.credentialId === 'string') {
+        forgetPasskey(body.rpId, body.credentialId);
+      }
+    },
+  });
+
+  const loginWithPasskey = useCallback(async (): Promise<void> => {
+    loginMutation.reset();
+    await passkeyMutation.mutateAsync().catch(() => undefined);
+  }, [loginMutation, passkeyMutation]);
+
   const login = useCallback(
     async (loginName: string, password: string): Promise<void> => {
+      passkeyMutation.reset();
       await loginMutation.mutateAsync({ login: loginName, password });
     },
-    [loginMutation],
+    [loginMutation, passkeyMutation],
   );
 
   const changePassword = useCallback(
@@ -89,13 +130,19 @@ export const useSession = (): IUseSession => {
   const logout = useCallback(async (): Promise<void> => {
     await api.post('/api/auth/logout').catch(() => undefined);
     setCsrfToken(null);
-    queryClient.setQueryData<ISessionInfo>(SESSION_KEY, { authRequired: true, authenticated: false });
+    queryClient.setQueryData<ISessionInfo>(SESSION_KEY, signedOut);
     queryClient.removeQueries({ predicate: q => q.queryKey[0] !== 'auth' });
     queryClient.getMutationCache().clear();
     await purgeSensitiveCaches();
   }, [queryClient]);
 
+  const clearLoginError = useCallback((): void => {
+    loginMutation.reset();
+    passkeyMutation.reset();
+  }, [loginMutation, passkeyMutation]);
+
   const data = sessionQuery.data;
+  const passkeyFailure = passkeyMutation.error;
   return {
     isLoading: sessionQuery.isLoading,
     isError: sessionQuery.isError,
@@ -107,7 +154,11 @@ export const useSession = (): IUseSession => {
     changePassword,
     loginError: loginMutation.error ? loginMutation.error.message : null,
     loginErrorCode: loginMutation.error instanceof ApiError ? loginMutation.error.code : null,
-    clearLoginError: loginMutation.reset,
+    clearLoginError,
     isLoggingIn: loginMutation.isPending,
+    passkeysEnabled: data?.passkeys === true && passkeysSupported(),
+    loginWithPasskey,
+    passkeyError: passkeyFailure && !isPasskeyCancel(passkeyFailure) ? passkeyErrorText(passkeyFailure) : null,
+    isPasskeyPending: passkeyMutation.isPending,
   };
 };

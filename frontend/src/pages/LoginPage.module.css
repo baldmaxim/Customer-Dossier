@@ -1,0 +1,25 @@
+/* Вход ключом доступа под формой пароля: черта «или» и подпись, чем подтверждается вход. */
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  text-align: center;
+}

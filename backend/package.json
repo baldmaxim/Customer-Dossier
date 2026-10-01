@@ -41,6 +41,7 @@
     "pilot:check": "tsx src/release/pilotCli.ts"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

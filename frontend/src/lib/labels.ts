@@ -773,6 +773,8 @@ export const AUTH_EVENT_LABELS: Record<string, string> = {
   registration_requested: 'заявка на доступ',
   registration_approved: 'заявка одобрена',
   registration_rejected: 'заявка отклонена',
+  passkey_added: 'ключ доступа добавлен',
+  passkey_removed: 'ключ доступа убран',
 };
 
 /**
@@ -786,6 +788,8 @@ export const LOGIN_FAILURE_LABELS: Record<string, string> = {
   disabled: 'доступ выключен',
   registration_pending: 'заявка ещё не одобрена',
   registration_rejected: 'заявка отклонена',
+  passkey_unknown: 'ключа доступа нет на портале',
+  passkey_invalid: 'ключ доступа не прошёл проверку',
 };
 
 /** Отказ во входе по заявке — экран входа объясняет словами (сервер отвечает так только на верный пароль). */
@@ -798,6 +802,12 @@ export const LOGIN_REFUSAL_LABELS: Record<string, { title: string; text: string 
     title: 'Заявка отклонена',
     text: 'Администратор портала отклонил заявку на доступ. Если это ошибка — свяжитесь с ним.',
   },
+};
+
+/** Ключ доступа живёт на одном устройстве или синхронизируется (iCloud Keychain, Google, менеджер паролей). */
+export const PASSKEY_DEVICE_LABELS: Record<string, string> = {
+  multiDevice: 'синхронизируется между устройствами',
+  singleDevice: 'только на этом устройстве',
 };
 
 /** Кто действовал, если не пользователь портала. */

@@ -80,7 +80,7 @@ export const loginProblem = (login: string): string | null => {
   return null;
 };
 
-const displayNameProblem = (name: string): string | null => {
+export const displayNameProblem = (name: string): string | null => {
   if (name.length < 1 || name.length > 120) return 'Имя — от 1 до 120 символов';
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(name)) return 'Имя содержит управляющие символы';
@@ -114,6 +114,8 @@ export interface IUserView {
   /** pending — заявка ждёт решения, rejected — отклонена; обе не входят. */
   registration: RegistrationState;
   liveSessions?: number;
+  /** Живых ключей доступа (passkey). */
+  passkeys?: number;
 }
 
 export interface ISessionView {
@@ -128,7 +130,7 @@ export interface ISessionView {
 const iso = (d: Date | null): string | null => (d === null ? null : d.toISOString());
 
 /** Хеш пароля и прочее внутреннее наружу не уходит. */
-export const toUserView = (u: IUserRecord & { liveSessions?: number }, now: Date): IUserView => ({
+export const toUserView = (u: IUserRecord & { liveSessions?: number; passkeys?: number }, now: Date): IUserView => ({
   id: u.id,
   login: u.login,
   displayName: u.displayName,
@@ -145,6 +147,7 @@ export const toUserView = (u: IUserRecord & { liveSessions?: number }, now: Date
   version: u.version,
   registration: u.registration,
   ...(u.liveSessions === undefined ? {} : { liveSessions: u.liveSessions }),
+  ...(u.passkeys === undefined ? {} : { passkeys: u.passkeys }),
 });
 
 const toSessionView = (s: ISessionRecord): ISessionView => ({
@@ -172,7 +175,7 @@ export interface IServiceError {
   error: string;
 }
 
-const fail = (status: IServiceError['status'], code: string, error: string): IServiceError => ({ ok: false, status, code, error });
+export const fail = (status: IServiceError['status'], code: string, error: string): IServiceError => ({ ok: false, status, code, error });
 
 export type LoginResult =
   | { ok: true; token: string; context: IAuthContext }
@@ -254,6 +257,20 @@ export class AuthService {
     }
 
     await this.store.recordLoginSuccess(user.id, now, needsRehash(user.passwordHash) ? await hashPassword(password) : null);
+    return { ok: true, ...(await this.startSession(user, meta, previousToken, {}, now)) };
+  }
+
+  /**
+   * Новая серверная сессия — только после проверенного входа (пароль здесь, ключ доступа — auth/passkeys.ts).
+   * Прежняя сессия этого браузера закрывается, вход пишется в журнал; `details` — без секретов.
+   */
+  async startSession(
+    user: IUserRecord,
+    meta: IRequestMeta,
+    previousToken: string | undefined,
+    details: Record<string, unknown>,
+    now: Date,
+  ): Promise<{ token: string; context: IAuthContext }> {
     if (previousToken) await this.store.revokeSessionByToken(hashToken(previousToken), 'replaced', now);
 
     const token = crypto.randomBytes(32).toString('base64url');
@@ -266,8 +283,11 @@ export class AuthService {
       userAgent: meta.userAgent,
       now,
     });
-    await this.store.logEvent({ event: 'login_succeeded', userId: user.id, actor: user.login, ip: meta.ip, details: { sessionId: session.id } }, now);
-    return { ok: true, token, context: { user: toAuthUser(user), sessionId: session.id, csrfToken: csrfFor(token), expiresAt } };
+    await this.store.logEvent(
+      { event: 'login_succeeded', userId: user.id, actor: user.login, ip: meta.ip, details: { sessionId: session.id, ...details } },
+      now,
+    );
+    return { token, context: { user: toAuthUser(user), sessionId: session.id, csrfToken: csrfFor(token), expiresAt } };
   }
 
   /** Контекст запроса по cookie или null: сессии нет, она истекла, отозвана или пользователь выключен. */

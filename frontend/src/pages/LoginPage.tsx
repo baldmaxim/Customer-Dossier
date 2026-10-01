@@ -4,6 +4,9 @@
 //
 // Отказ по заявке (ещё не одобрена, отклонена) сервер сообщает только на верный пароль — его
 // объясняем словами; прочие отказы — текстом сервера («Неверный логин или пароль»).
+//
+// Ключ доступа (passkey) — кнопка под формой, если сервер его принимает и браузер умеет: логин не нужен,
+// устройство само предложит сохранённый ключ портала (Face ID, Touch ID, Windows Hello, телефон рядом).
 
 import { FC, FormEvent, useState } from 'react';
 
@@ -15,6 +18,14 @@ import { TextInput } from '../components/ui/TextInput';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { LOGIN_REFUSAL_LABELS } from '../lib/labels';
 import { AuthCard } from './AuthCard';
+import styles from './LoginPage.module.css';
+
+export interface IPasskeyLogin {
+  onLogin: () => void;
+  pending: boolean;
+  /** Отказ словами; закрытое окно устройства — не отказ. */
+  error: string | null;
+}
 
 interface ILoginPageProps {
   onLogin: (login: string, password: string) => Promise<void>;
@@ -24,9 +35,11 @@ interface ILoginPageProps {
   pending: boolean;
   /** К заявке на доступ. */
   onRegister: () => void;
+  /** Вход по ключу доступа; нет — кнопки нет. */
+  passkey?: IPasskeyLogin;
 }
 
-export const LoginPage: FC<ILoginPageProps> = ({ onLogin, error, errorCode = null, pending, onRegister }) => {
+export const LoginPage: FC<ILoginPageProps> = ({ onLogin, error, errorCode = null, pending, onRegister, passkey }) => {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const ready = login.trim() !== '' && password !== '';
@@ -93,6 +106,20 @@ export const LoginPage: FC<ILoginPageProps> = ({ onLogin, error, errorCode = nul
           Войти
         </Button>
       </Stack>
+      {passkey && (
+        <Stack gap={3}>
+          <p className={styles.or}>или</p>
+          <Button variant="secondary" size="lg" block loading={passkey.pending} onClick={passkey.onLogin}>
+            Войти с ключом доступа
+          </Button>
+          <p className={styles.hint}>Face ID, Touch ID, Windows Hello или телефон рядом — логин и пароль не нужны.</p>
+          {passkey.error && (
+            <Callout tone="danger" live="assertive">
+              {passkey.error}
+            </Callout>
+          )}
+        </Stack>
+      )}
     </AuthCard>
   );
 };

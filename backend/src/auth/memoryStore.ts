@@ -1,4 +1,4 @@
-// Пользователи и сессии в памяти — для unit-тестов HTTP-слоя без базы. В рабочем процессе
+// Пользователи, сессии и ключи доступа в памяти — для unit-тестов HTTP-слоя без базы. В рабочем процессе
 // не используется: там pgAuthStore. Инварианты те же (auth/store.ts), их проверяет auth.test.ts.
 
 import {
@@ -7,6 +7,7 @@ import {
   type IAuthEventInput,
   type IAuthEventRecord,
   type IAuthStore,
+  type IPasskeyRecord,
   type ISessionRecord,
   type IUserRecord,
 } from './store.js';
@@ -17,22 +18,31 @@ interface IStoredSession extends ISessionRecord {
   revokedReason: string | null;
 }
 
-export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession[]; events: IAuthEventRecord[] } => {
+interface IStoredPasskey extends IPasskeyRecord {
+  revokedAt: Date | null;
+  revokedBy: string | null;
+}
+
+export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession[]; events: IAuthEventRecord[]; passkeys: IStoredPasskey[] } => {
   const users: IUserRecord[] = [];
   const sessions: IStoredSession[] = [];
   const events: IAuthEventRecord[] = [];
+  const passkeys: IStoredPasskey[] = [];
   let userSeq = 0;
   let sessionSeq = 0;
   let eventSeq = 0;
+  let passkeySeq = 0;
 
   const copy = (u: IUserRecord): IUserRecord => ({ ...u });
   const isLive = (s: IStoredSession, now: Date, idleMs: number): boolean =>
     s.revokedAt === null && s.expiresAt > now && now.getTime() - s.lastSeenAt.getTime() < idleMs;
   const publicSession = ({ tokenHash: _t, revokedAt: _r, revokedReason: _rr, ...s }: IStoredSession): ISessionRecord => ({ ...s });
+  const publicPasskey = ({ revokedAt: _r, revokedBy: _b, ...p }: IStoredPasskey): IPasskeyRecord => ({ ...p, transports: [...p.transports] });
 
   return {
     sessions,
     events,
+    passkeys,
 
     async findUserByLogin(login) {
       const u = users.find(x => x.login === login);
@@ -47,7 +57,11 @@ export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession
     async listUsers(now, idleMs) {
       return [...users]
         .sort((a, b) => a.login.localeCompare(b.login))
-        .map(u => ({ ...copy(u), liveSessions: sessions.filter(s => s.userId === u.id && isLive(s, now, idleMs)).length }));
+        .map(u => ({
+          ...copy(u),
+          liveSessions: sessions.filter(s => s.userId === u.id && isLive(s, now, idleMs)).length,
+          passkeys: passkeys.filter(p => p.userId === u.id && p.revokedAt === null).length,
+        }));
     },
 
     async countUsers() {
@@ -199,6 +213,45 @@ export const createMemoryAuthStore = (): IAuthStore & { sessions: IStoredSession
         n += 1;
       }
       return n;
+    },
+
+    async listPasskeys(userId) {
+      return passkeys
+        .filter(p => p.userId === userId && p.revokedAt === null)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id)
+        .map(publicPasskey);
+    },
+
+    async findPasskey(credentialId) {
+      const p = passkeys.find(x => x.credentialId.equals(credentialId) && x.revokedAt === null);
+      return p ? publicPasskey(p) : null;
+    },
+
+    async findPasskeyUserHandle(userId) {
+      return passkeys.find(p => p.userId === userId)?.userHandle ?? null;
+    },
+
+    async createPasskey(input, now) {
+      if (passkeys.some(p => p.credentialId.equals(input.credentialId))) return 'credential_taken';
+      passkeySeq += 1;
+      const p: IStoredPasskey = { ...input, transports: [...input.transports], id: passkeySeq, createdAt: now, lastUsedAt: null, revokedAt: null, revokedBy: null };
+      passkeys.push(p);
+      return publicPasskey(p);
+    },
+
+    async recordPasskeyUse(id, signCount, backedUp, now) {
+      const p = passkeys.find(x => x.id === id);
+      if (!p) return;
+      Object.assign(p, { signCount, backedUp, lastUsedAt: now });
+      const u = users.find(x => x.id === p.userId);
+      if (u) u.lastLoginAt = now;
+    },
+
+    async revokePasskey(userId, passkeyId, by, now) {
+      const p = passkeys.find(x => x.id === passkeyId && x.userId === userId && x.revokedAt === null);
+      if (!p) return null;
+      Object.assign(p, { revokedAt: now, revokedBy: by });
+      return publicPasskey(p);
     },
 
     async logEvent(input: IAuthEventInput, now) {

@@ -8,6 +8,9 @@
 // (auth/permissions.ts) и таблице маршрутов (auth/routePolicy.ts), проверяются на каждом запросе:
 // смена роли или выключение действуют сразу, без повторного входа.
 //
+// Вход по ключу доступа (passkey, WebAuthn) и свои ключи — api/passkeys.ts, под этим же роутером
+// (`/passkey`, `/passkeys`); работает только при публичном адресе-домене (auth/passkeys.ts).
+//
 // Заявка на доступ (POST /register) — тоже здесь, до проверки входа: её подаёт человек без
 // учётной записи. Создаёт выключенного читателя; войти он сможет, когда администратор одобрит
 // заявку в «Пользователях». Локально (AUTH_MODE=none) входа нет — и заявок тоже: 404.
@@ -21,8 +24,10 @@ import { Router, type NextFunction, type Request, type RequestHandler, type Resp
 import { z } from 'zod';
 
 import type { AuthMode } from '../config/parse.js';
+import type { PasskeyService } from '../auth/passkeys.js';
 import { permissionFor } from '../auth/routePolicy.js';
 import { LOCAL_CONTEXT, safeEqual, type AuthService, type IAuthContext, type IAuthUser, type IRequestMeta } from '../auth/service.js';
+import { createPasskeyRoutes } from './passkeys.js';
 
 export { safeEqual };
 
@@ -67,16 +72,18 @@ export interface IAuthOptions {
   /** Cookie с флагом Secure и префиксом `__Host-` — портал открыт по https. */
   secureCookie: boolean;
   maxAgeSec: number;
+  /** Вход по ключу доступа; null или нет — выключен (нет публичного адреса-домена). */
+  passkeys?: PasskeyService | null;
 }
 
-const deny = (res: Response, status: number, error: string, code: string): void => {
+export const deny = (res: Response, status: number, error: string, code: string): void => {
   res.status(status).json({ error, code });
 };
 
-const sessionTokenOf = (req: Request, options: IAuthOptions): string | undefined =>
+export const sessionTokenOf = (req: Request, options: IAuthOptions): string | undefined =>
   parseCookies(req.headers.cookie)[sessionCookieName(options.secureCookie)];
 
-const cookieHeader = (options: IAuthOptions, value: string, maxAgeSec: number): string =>
+export const cookieHeader = (options: IAuthOptions, value: string, maxAgeSec: number): string =>
   `${sessionCookieName(options.secureCookie)}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSec}` +
   (options.secureCookie ? '; Secure' : '');
 
@@ -89,7 +96,7 @@ export const requestMeta = (req: Request): IRequestMeta => ({
 /** Логин того, кто делает запрос, — для атрибуции решений и журналов. Локально — 'operator'. */
 export const actorOf = (req: Request): string => req.auth?.user.login ?? LOCAL_CONTEXT.user.login;
 
-const hasValidCsrf = (req: Request, ctx: IAuthContext): boolean => {
+export const hasValidCsrf = (req: Request, ctx: IAuthContext): boolean => {
   const header = req.headers[CSRF_HEADER];
   const provided = Array.isArray(header) ? header[0] : header;
   return provided !== undefined && ctx.csrfToken !== null && safeEqual(provided, ctx.csrfToken);
@@ -142,7 +149,7 @@ export const createRequireAccess = (options: IAuthOptions): RequestHandler => (r
   next();
 };
 
-const sessionBody = (ctx: IAuthContext, authRequired: boolean) => {
+export const sessionBody = (ctx: IAuthContext, authRequired: boolean) => {
   const user: IAuthUser = ctx.user;
   return {
     authRequired,
@@ -182,7 +189,7 @@ const REGISTRATION_REFUSALS = {
   registration_rejected: 'Заявка отклонена администратором',
 } as const;
 
-const wrap =
+export const wrap =
   (handler: (req: Request, res: Response) => Promise<void>): RequestHandler =>
   (req: Request, res: Response, next: NextFunction) => {
     handler(req, res).catch(next);
@@ -192,26 +199,30 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
   const router = Router();
   const attach = createAttachAuth(options);
 
+  // Экран входа и профиль показывают ключи доступа, только когда сервер их принимает.
+  const passkeysFlag = options.mode !== 'none' && options.passkeys ? { passkeys: true } : {};
+
   router.get('/session', attach, (req, res) => {
     // no-store: ответ с CSRF-токеном не должен оседать ни в каком кэше.
     res.setHeader('Cache-Control', 'no-store');
     const ctx = req.auth;
     if (!ctx) {
-      res.json({ authRequired: true, authenticated: false });
+      res.json({ authRequired: true, authenticated: false, ...passkeysFlag });
       return;
     }
-    res.json(sessionBody(ctx, options.mode !== 'none'));
+    res.json({ ...sessionBody(ctx, options.mode !== 'none'), ...passkeysFlag });
   });
 
   if (options.mode === 'none') {
     // Без входа нет и заявок на доступ: адреса нет, а не «запрещено».
     router.post('/register', (_req, res) => deny(res, 404, 'Не найдено', 'not_found'));
+    router.use(createPasskeyRoutes(options, () => (_req, _res, next) => next()));
     return router;
   }
 
   // Портал открыт в интернет: перебор упирается сначала в лимит nginx, затем сюда,
   // затем в блокировку учётной записи (auth/service.ts).
-  const limiter = (limit: number) =>
+  const limiter = (limit: number): RequestHandler =>
     rateLimit({
       windowMs: 15 * 60_000,
       limit,
@@ -243,7 +254,7 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
         return;
       }
       res.setHeader('Set-Cookie', cookieHeader(options, result.token, options.maxAgeSec));
-      res.json(sessionBody(result.context, true));
+      res.json({ ...sessionBody(result.context, true), ...passkeysFlag });
     }),
   );
 
@@ -268,12 +279,14 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
     }),
   );
 
+  router.use(createPasskeyRoutes(options, limiter));
+
   router.post(
     '/logout',
     wrap(async (req, res) => {
       await options.service.logout(sessionTokenOf(req, options), requestMeta(req));
       res.setHeader('Set-Cookie', cookieHeader(options, '', 0));
-      res.json({ authRequired: true, authenticated: false });
+      res.json({ authRequired: true, authenticated: false, ...passkeysFlag });
     }),
   );
 
@@ -302,7 +315,7 @@ export const createAuthRouter = (options: IAuthOptions): Router => {
         deny(res, result.status, result.error, result.code);
         return;
       }
-      res.json(sessionBody(result.context, true));
+      res.json({ ...sessionBody(result.context, true), ...passkeysFlag });
     }),
   );
 
