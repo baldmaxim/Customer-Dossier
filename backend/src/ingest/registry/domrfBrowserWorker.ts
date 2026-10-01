@@ -1,8 +1,8 @@
 // Фоновое чтение наш.дом.рф через настоящий браузер Playwright (этапы 20C, 20D).
 // Внешний сайт читается только из DOM открытой страницы, без его API. Открываются карточки объектов,
-// подтверждённые оператором, и страницы их застройщика и группы в едином реестре застройщиков —
-// по ссылкам самих карточек. Каталог не обходится: объекты со страниц застройщика и группы
-// становятся кандидатами и ждут решения оператора (domrfCandidates.ts).
+// подтверждённые оператором, страницы их застройщика и группы в едином реестре застройщиков — по ссылкам
+// самих карточек, и поиск компаний портала в реестре застройщиков. Каталог объектов не обходится:
+// найденное — предложения и кандидаты, которые ждут решения оператора (domrfCompanies.ts, domrfCandidates.ts).
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,15 @@ import { evaluateSourcePolicy } from '../policy.js';
 import { getSourceByKey, type ISource } from '../sources.js';
 import { type IDomRfBrowserCapture } from './browserCapture.js';
 import { upsertDomRfCandidates } from './domrfCandidates.js';
+import {
+  claimDomRfCompanySearch,
+  domRfSearchUrl,
+  failDomRfCompanySearch,
+  parseDomRfSearchCapture,
+  saveDomRfCompanySearch,
+  type IDomRfCompanyToSearch,
+  type IDomRfSearchCapture,
+} from './domrfCompanies.js';
 import {
   DOMRF_HOST,
   claimDueDomRfCard,
@@ -45,6 +54,13 @@ const script = (name: string): string => fs.readFileSync(fileURLToPath(new URL(`
 
 /** «Показать ещё» добавляет объекты порциями: 60 нажатий хватает на несколько сотен домов группы. */
 const MORE_CLICKS_MAX = 60;
+
+/**
+ * Поисков компаний за проход: браузер запускается один раз на серию, страница — не чаще раза в 4 секунды.
+ * Три за минуту — около 16 часов на первый обход 2800 компаний, дальше — только новые и месячный пересмотр.
+ */
+const SEARCHES_PER_PASS = 3;
+const SEARCH_PAUSE_MS = 4000;
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -190,13 +206,75 @@ const scanDueCard = async (card: IDomRfCardRow): Promise<IDomRfPassResult> => {
   }
 };
 
-/** Один шаг: сначала подтверждённые оператором карточки объектов, затем страницы застройщиков и групп. */
-export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult | null> => {
+/** Выдача поиска; не пришла по адресу — запрос вводится в поле, как это сделал бы человек. */
+const runSearch = async (page: Page, text: string): Promise<IDomRfSearchCapture> => {
+  await open(page, domRfSearchUrl(text));
+  await page.waitForTimeout(4000); // выдача приходит после заголовка
+  const read = async (): Promise<IDomRfSearchCapture> => parseDomRfSearchCapture(await page.evaluate(script('domrf-search-capture.js')));
+  const direct = await read();
+  if (direct.results.length > 0) return direct;
+  const input = page.getByPlaceholder(/ИНН, ОГРН/).first();
+  if (!(await input.count())) return direct;
+  await input.fill(text);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(5000);
+  return read();
+};
+
+const searchCompany = async (page: Page, company: IDomRfCompanyToSearch): Promise<IDomRfPassResult> => {
+  const what = `компания «${company.name}»`;
+  try {
+    const search = await runSearch(page, company.query);
+    const added = await saveDomRfCompanySearch(company, search);
+    return { what, outcome: `${company.foundBy === 'inn' ? 'по ИНН' : 'по названию'}: найдено ${search.results.length}, новых предложений ${added}` };
+  } catch (err) {
+    await failDomRfCompanySearch(company.companyId, message(err), company.attemptCount);
+    return { what, outcome: `ошибка: ${message(err)}` };
+  }
+};
+
+/** Серия поисков в одном окне: до SEARCHES_PER_PASS компаний, первая ошибка останавливает серию. */
+const searchCompanies = async (first: IDomRfCompanyToSearch): Promise<IDomRfPassResult[]> => {
+  const results: IDomRfPassResult[] = [];
+  let next: IDomRfCompanyToSearch | null = first;
+  try {
+    await withPage(async page => {
+      while (next) {
+        const company: IDomRfCompanyToSearch = next;
+        next = null;
+        const result = await searchCompany(page, company);
+        results.push(result);
+        if (result.outcome.startsWith('ошибка:') || results.length >= SEARCHES_PER_PASS) return;
+        await page.waitForTimeout(SEARCH_PAUSE_MS);
+        next = await claimDomRfCompanySearch();
+      }
+    });
+  } catch (err) {
+    // Браузер не запустился или упал между поисками: взятая и не искавшаяся компания — повтор с паузой.
+    if (next) await failDomRfCompanySearch(next.companyId, message(err), next.attemptCount);
+    results.push({ what: 'поиск компаний', outcome: `ошибка: ${message(err)}` });
+  }
+  return results;
+};
+
+const sourceApproved = (): Promise<boolean> => approvedSource().then(
+  () => true,
+  () => false,
+);
+
+/**
+ * Один шаг: сначала подтверждённые оператором карточки объектов, затем страницы застройщиков и групп,
+ * затем серия поисков компаний портала в реестре застройщиков. Поиск — фоновый обход без решения
+ * оператора: без допуска сбора компании не берутся вовсе, иначе каждая получила бы ошибку.
+ */
+export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   const target = await claimDomRfTarget();
-  if (target) return captureTarget(target);
+  if (target) return [await captureTarget(target)];
   const card = await claimDueDomRfCard();
-  if (card) return scanDueCard(card);
-  return null;
+  if (card) return [await scanDueCard(card)];
+  if (!(await sourceApproved())) return [];
+  const company = await claimDomRfCompanySearch();
+  return company ? searchCompanies(company) : [];
 };
 
 /** Один обработчик на сервер: база выдаёт отдельную аренду для каждого процесса. */
@@ -206,8 +284,7 @@ export const startDomRfBrowserWorker = (signal: AbortSignal): void => {
     if (running || signal.aborted) return;
     running = true;
     try {
-      const result = await runDomRfBrowserPass();
-      if (result) console.log(`[domrf] ${result.what}: ${result.outcome}`);
+      for (const result of await runDomRfBrowserPass()) console.log(`[domrf] ${result.what}: ${result.outcome}`);
     } catch (err) {
       console.error('[domrf] проход упал:', message(err));
     } finally {

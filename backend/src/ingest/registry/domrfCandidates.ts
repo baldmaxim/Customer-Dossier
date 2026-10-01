@@ -97,6 +97,10 @@ export const listDomRfCandidates = async (
          UNION
          -- Совместимая проекция реквизита (companies.tax_id), как в резолвере.
          SELECT c2.id FROM companies c2 WHERE c2.tax_id IS NOT NULL AND c2.tax_id IN (d.inn, d.ogrn)
+         UNION
+         -- Страницу подтвердил оператор как страницу этого заказчика (шаг 2, у группы ИНН нет).
+         SELECT l.company_id FROM domrf_company_links l
+         WHERE l.kind = d.kind AND l.external_ref = d.external_ref AND l.state = 'confirmed'
        )
        ORDER BY c.id LIMIT 1
      ) co ON true

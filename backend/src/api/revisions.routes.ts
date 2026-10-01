@@ -8,6 +8,7 @@ import { loadItemOutcome } from '../reprocess/itemOutcome.js';
 import { diffLines } from '../revisions/diff.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
+import { likePattern } from '../utils/likePattern.js';
 
 export const revisionsRouter = asyncRouter();
 
@@ -56,9 +57,6 @@ const feedSchema = z.object({
   /** Поиск по тексту публикации, её заголовку, теме и названию источника. */
   q: z.string().trim().min(2).max(200).optional(),
 });
-
-/** Спецсимволы LIKE в запросе — буквы, а не шаблон: «50%» ищет «50%», а не всё подряд. */
-export const likePattern = (q: string): string => `%${q.replace(/[\\%_]/g, m => `\\${m}`)}%`;
 
 /**
  * Лента публикаций и поиск по ним: что вообще пришло в портал.

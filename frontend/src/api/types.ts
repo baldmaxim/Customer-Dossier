@@ -1442,3 +1442,44 @@ export interface IDomRfCandidates {
   items: IDomRfCandidate[];
   sources: IDomRfCandidateSource[];
 }
+
+export type DomRfCompanyLinkState = 'pending' | 'confirmed' | 'rejected';
+
+export type DomRfFoundBy = 'inn' | 'name' | 'manual';
+
+/** Застройщик или группа из реестра, найденные для заказчика; решение — за оператором. */
+export interface IDomRfCompanyLink {
+  id: number;
+  kind: DomRfCardKind;
+  externalRef: string;
+  url: string;
+  name: string | null;
+  foundBy: DomRfFoundBy;
+  rank: number | null;
+  state: DomRfCompanyLinkState;
+  decidedBy: string | null;
+  decidedAt: string | null;
+}
+
+/** Компания портала и её поиск в едином реестре застройщиков. */
+export interface IDomRfCompanyRow {
+  companyId: number;
+  name: string;
+  /** Текущие роли на объектах; заказчики и застройщики — в начале списка и очереди поиска. */
+  roles: string[];
+  query: string | null;
+  foundBy: 'inn' | 'name' | null;
+  searchedAt: string | null;
+  resultCount: number | null;
+  lastError: string | null;
+  links: IDomRfCompanyLink[];
+}
+
+export type DomRfCompanyFilter = 'pending' | 'notFound' | 'confirmed' | 'all';
+
+export interface IDomRfCompanies {
+  items: IDomRfCompanyRow[];
+  /** Сколько компаний подошло под фильтр и поиск; в items — первые из них. */
+  matched: number;
+  totals: { companies: number; searched: number; withPending: number; confirmed: number; notFound: number };
+}

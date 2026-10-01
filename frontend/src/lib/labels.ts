@@ -16,6 +16,8 @@ import type {
   LlmProvider,
   DomRfCandidateState,
   DomRfCardKind,
+  DomRfCompanyLinkState,
+  DomRfFoundBy,
   Role,
   TextCompleteness,
   UserRole,
@@ -766,6 +768,18 @@ export const DOMRF_CANDIDATE_STATE_LABELS: Record<DomRfCandidateState, string> =
   confirmed: 'подтверждён — в сборе',
   rejected: 'отклонён',
   replaced: 'заменён другой карточкой',
+};
+
+export const DOMRF_COMPANY_LINK_STATE_LABELS: Record<DomRfCompanyLinkState, string> = {
+  pending: 'предложено',
+  confirmed: 'это он',
+  rejected: 'не он',
+};
+
+export const DOMRF_FOUND_BY_LABELS: Record<DomRfFoundBy, string> = {
+  inn: 'по ИНН',
+  name: 'по названию',
+  manual: 'указано вручную',
 };
 
 export const DOMRF_CARD_KIND_LABELS: Record<DomRfCardKind, string> = {

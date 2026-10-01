@@ -1,4 +1,4 @@
-// «Найдено на ДОМ.РФ» (этап 20D): найденное сгруппировано по застройщику, заказчик — по ИНН;
+// «Найдено на ДОМ.РФ» (этап 20D): найденное сгруппировано по застройщику, компания портала — по ИНН;
 // подтвердить, подтвердить пачкой, заменить правильной ссылкой; без права sources.manage решений нет.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -51,7 +51,7 @@ const as = (permissions: AccessPermission[], ui: ReactElement) => (
 const OPERATOR: AccessPermission[] = ['portal.read', 'admin.view', 'sources.manage'];
 
 describe('Найдено на ДОМ.РФ', () => {
-  it('группа с заказчиком по ИНН; «Подтвердить» ставит объект в сбор', async () => {
+  it('группа с компанией портала по ИНН; «Подтвердить» ставит объект в сбор', async () => {
     const api = fakeApi([
       { match: 'GET /api/admin/domrf-candidates', respond: () => ({ status: 200, body: PENDING }) },
       { match: 'POST /api/admin/domrf-candidates/1/confirm', respond: () => ({ status: 200, body: { ok: true } }) },
@@ -60,7 +60,7 @@ describe('Найдено на ДОМ.РФ', () => {
 
     expect(await screen.findByText('Группа компаний ДЕМО-ГРУППА')).not.toBeNull();
     expect(screen.getByText('ИНН 7700001235')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Заказчик в портале: Демо-Группа' }).getAttribute('href')).toBe('/company/42');
+    expect(screen.getByRole('link', { name: 'Компания в портале: Демо-Группа' }).getAttribute('href')).toBe('/company/42');
     expect(screen.getByText('ждут решения: 2')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Подтвердить №7001' }));

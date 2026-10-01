@@ -19,6 +19,7 @@ import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
 import { DomRfTargets } from './DomRfTargets';
 import { DomRfCandidates } from './DomRfCandidates';
+import { DomRfCompanies } from './DomRfCompanies';
 import { MANUAL_HINT, ManualPaste } from './ManualPaste';
 import { SourceAdd } from './SourceAdd';
 import { SourceCards } from './SourceCards';
@@ -115,6 +116,7 @@ export const SourcesPanel: FC<ISourcesPanelProps> = ({ kind, sources, actions, l
       </Section>
 
       {kind === 'website' && <DomRfTargets />}
+      {kind === 'website' && <DomRfCompanies />}
       {kind === 'website' && <DomRfCandidates />}
     </Stack>
   );

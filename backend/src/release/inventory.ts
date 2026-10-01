@@ -61,6 +61,8 @@ export const COUNTED_TABLES = [
   'app_secrets',
   'domrf_cards',
   'domrf_candidates',
+  'domrf_company_searches',
+  'domrf_company_links',
   'bot_processed_updates',
   'source_policy_log',
   'backfill_checkpoints',

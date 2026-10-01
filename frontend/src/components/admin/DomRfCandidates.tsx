@@ -1,7 +1,8 @@
 // Найдено на ДОМ.РФ (этап 20D): объекты со страниц застройщика и группы компаний, на которые ссылаются
 // собранные карточки. Портал их сам не собирает — решает оператор: подтвердить (ссылка встаёт в сбор),
 // отклонить (не тот объект) или заменить правильной карточкой. Список сгруппирован по застройщику и
-// группе; заказчик портала находится по ИНН со страницы застройщика.
+// группе; компания портала находится по ИНН со страницы застройщика или по подтверждённой ссылке
+// «Компании на ДОМ.РФ».
 
 import { FC, ReactNode, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -249,10 +250,10 @@ export const DomRfCandidates: FC = () => {
                   {source?.inn && <span>ИНН {source.inn}</span>}
                   {source?.companyId ? (
                     <ButtonLink to={`/company/${source.companyId}`} variant="link" size="sm">
-                      Заказчик в портале: {source.companyName ?? `№${source.companyId}`}
+                      Компания в портале: {source.companyName ?? `№${source.companyId}`}
                     </ButtonLink>
                   ) : (
-                    source?.inn && <span>в портале такого заказчика пока нет</span>
+                    source?.inn && <span>в портале такой компании пока нет</span>
                   )}
                   {source && externalLink(source.url, source.externalRef)}
                   {canDecide && view === 'pending' && ids.length > 1 && (

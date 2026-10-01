@@ -41,7 +41,7 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
   { methods: 'read', pattern: /^\/review-queue$/, permission: 'admin.view' },
 
   // Источники и сбор.
-  { methods: 'write', pattern: /^\/admin\/(sources|domrf-targets|domrf-candidates)(\/|$)/, permission: 'sources.manage' },
+  { methods: 'write', pattern: /^\/admin\/(sources|domrf-targets|domrf-candidates|domrf-companies|domrf-company-links)(\/|$)/, permission: 'sources.manage' },
   { methods: 'write', pattern: /^\/manual$/, permission: 'sources.manage' },
 
   // Модель: ключ OpenRouter.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { likePattern } from './revisions.routes.js';
+import { likePattern } from '../utils/likePattern.js';
 
 describe('likePattern — поиск по публикациям', () => {
   it('ищет подстроку в любом месте текста', () => {
