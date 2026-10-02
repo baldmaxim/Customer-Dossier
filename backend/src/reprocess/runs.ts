@@ -23,7 +23,7 @@ import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
-import { approvedPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
+import { modelTextPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import type { IExtraction } from '../llm/schema.js';
 import type { ISemanticExtraction } from '../llm/semantic/schema.js';
 import { buildCandidates, type IAssertionCandidate, type IEntityCandidate } from './candidates.js';
@@ -80,8 +80,8 @@ export const loadRevisionPolicy = async (
   revisionId: number,
 ): Promise<{ allowed: boolean; reason: string | null } | null> => {
   const row = (
-    await exec.query<ISourcePolicyRow>(
-      `SELECT ${POLICY_COLUMNS}
+    await exec.query<ISourcePolicyRow & { mode: string | null }>(
+      `SELECT ${POLICY_COLUMNS}, s.config->>'mode' AS mode
        FROM document_revisions r
        JOIN source_items si ON si.id = r.source_item_id
        JOIN sources s ON s.id = si.source_id
@@ -90,6 +90,8 @@ export const loadRevisionPolicy = async (
     )
   ).rows[0];
   if (!row) return null;
+  // Реестр разбирается без модели (ADR-012), даже при ИИ-допуске для подсказок — см. modelTextPolicySql.
+  if (row.mode === 'registry_api') return { allowed: false, reason: 'реестр разбирается без модели: снимок — поля реестра, а не публикация' };
   return evaluateSourcePolicy(
     {
       key: row.key,
@@ -169,7 +171,7 @@ export const claimNextRun = async (
            AND r2.claim_count < $3
            AND ($4::bigint IS NULL OR r2.id = $4)
            AND ($5::text IS NULL OR r2.fingerprint_json->>'modelIdentityHash' = $5)
-           AND ${approvedPolicySql('s', 'ai_processing')}
+           AND ${modelTextPolicySql('s')}
          ORDER BY r2.created_at, r2.id
          FOR UPDATE OF r2 SKIP LOCKED
          LIMIT 1

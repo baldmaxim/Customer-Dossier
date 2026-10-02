@@ -93,3 +93,14 @@
 .count {
   white-space: nowrap;
 }
+
+/* «Похожие по написанию» — разделитель внутри таблицы результатов: подпись мелко, без заливки строки. */
+.groupRow th {
+  padding-top: var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-align: start;
+  text-transform: uppercase;
+}

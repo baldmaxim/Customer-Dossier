@@ -50,6 +50,7 @@ import {
 } from './domrfTargets.js';
 import { importRegistryPayload } from './importFile.js';
 import { syncDomRfGroupRelations } from '../../registry/groupSync.js';
+import { withdrawModelExtractionOnRegistry } from '../../registry/modelArtifacts.js';
 
 const script = (name: string): string => fs.readFileSync(fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url)), 'utf8');
 
@@ -280,6 +281,11 @@ let passNo = 0;
 export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   const queued = await autoConfirmLinkedDomRfCandidates();
   const prefix: IDomRfPassResult[] = queued > 0 ? [{ what: 'объекты подтверждённых страниц', outcome: `в сбор поставлено ${queued}` }] : [];
+  // Разбор моделью по снимкам реестра — не наш путь (ADR-012 п. 34): уже попавшее снимается.
+  const extraction = await withdrawModelExtractionOnRegistry();
+  if (extraction.evidence + extraction.runs > 0) {
+    prefix.push({ what: 'разбор моделью по снимкам реестра', outcome: `снято доказательств ${extraction.evidence}, запусков ${extraction.runs}` });
+  }
   // Связи «застройщик входит в группу» — к компании, подтверждённой для страницы группы (ADR-012 п. 33).
   const groups = await syncDomRfGroupRelations();
   if (groups.linked + groups.withdrawn > 0) {

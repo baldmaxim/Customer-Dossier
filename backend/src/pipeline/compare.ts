@@ -11,7 +11,7 @@
 import { env } from '../config/env.js';
 import { query } from '../db/pool.js';
 import { extractFromText } from '../llm/client.js';
-import { approvedPolicySql } from '../ingest/policy.js';
+import { modelTextPolicySql } from '../ingest/policy.js';
 import { planChunks, recordExtraction } from './worker.js';
 
 export interface IShadowResult {
@@ -36,7 +36,7 @@ export const runShadowExtraction = async (
      JOIN sources s ON s.id = d.source_id
      WHERE d.status IN ('extracted', 'skipped')
        -- теневой прогон тоже отдаёт тексты модели: нужен допуск к ИИ-обработке
-       AND ${approvedPolicySql('s', 'ai_processing')}
+       AND ${modelTextPolicySql('s')}
        AND ($2::text IS NULL OR s.key = $2::text)
        AND NOT EXISTS (
          SELECT 1 FROM extractions e

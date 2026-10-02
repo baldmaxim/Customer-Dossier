@@ -1,7 +1,7 @@
 // Команды CLI нового конвейера (этап 03B). Разбор аргументов — в pipeline/cli.ts.
 
 import { getPool } from '../db/pool.js';
-import { approvedPolicySql } from '../ingest/policy.js';
+import { modelTextPolicySql } from '../ingest/policy.js';
 import { previewCandidateSet, publishCandidateSet, type IPreviewItem } from './publish.js';
 import { buildFingerprint, defaultChunkerParams, lmStudioProvider } from './provider.js';
 import { enqueueRun, retryRun } from './runs.js';
@@ -83,7 +83,7 @@ export const reextractCommand = async (options: {
          AND ($1::text IS NULL OR s.key = $1)
          AND ($2::bigint IS NULL OR r.source_item_id IN (
                SELECT r3.source_item_id FROM document_revisions r3 WHERE r3.legacy_document_id = $2))
-         AND ${approvedPolicySql('s', 'ai_processing')}
+         AND ${modelTextPolicySql('s')}
        ORDER BY r.first_observed_at DESC, r.id
        LIMIT $3`,
       [options.sourceKey, options.documentId, limit],

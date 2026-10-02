@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 
 import { env } from '../config/env.js';
 import { getPool } from '../db/pool.js';
-import { approvedPolicySql } from '../ingest/policy.js';
+import { modelTextPolicySql } from '../ingest/policy.js';
 import { NotPublishableError, PublicationConflictError, publishCandidateSet, type IPublishResult } from './publish.js';
 import type { IModelProvider } from './provider.js';
 import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunResult } from './runs.js';
@@ -32,7 +32,7 @@ export const enqueueNewRevisions = async (provider: IModelProvider, limit: numbe
        WHERE r.revision_no = (SELECT max(r2.revision_no) FROM document_revisions r2 WHERE r2.source_item_id = r.source_item_id)
          AND NOT EXISTS (SELECT 1 FROM extraction_runs er WHERE er.revision_id = r.id)
          AND (d.id IS NULL OR d.status NOT IN ('extracted', 'skipped'))
-         AND ${approvedPolicySql('s', 'ai_processing')}
+         AND ${modelTextPolicySql('s')}
        ORDER BY r.first_observed_at DESC, r.id
        LIMIT $1`,
       [limit],
@@ -83,7 +83,7 @@ export const retryFailedRuns = async (
                            AND live.status IN ('queued', 'running', 'completed'))
          AND (SELECT count(*) FROM extraction_runs a WHERE a.revision_id = er.revision_id
                 AND a.status IN ('failed', 'partial')) < $2::int
-         AND ${approvedPolicySql('s', 'ai_processing')}
+         AND ${modelTextPolicySql('s')}
        ORDER BY er.finished_at
        LIMIT $3`,
       [policy.backoffMinutes, policy.max, limit],

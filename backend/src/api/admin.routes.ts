@@ -20,7 +20,7 @@ import {
   getSourceById,
   updateSourcePolicy,
 } from '../ingest/sources.js';
-import { PERMISSION_STATUSES, approvedPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
+import { PERMISSION_STATUSES, modelTextPolicySql, evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { checkLlmConnection, modelProbeTimeoutMs } from '../llm/client.js';
 import { PROBE_LIMITS, probeWebsiteSource } from '../ingest/sites/probe.js';
 import { parseSourceProfile } from '../ingest/crawl.js';
@@ -460,7 +460,7 @@ adminRouter.post('/metrics/refresh', async (_req, res) => {
 const REVISION_STATES_SQL = `
   WITH latest AS (
     SELECT r.id AS revision_id, si.id AS item_id,
-           ${approvedPolicySql('s', 'ai_processing')} AS ai_allowed
+           ${modelTextPolicySql('s')} AS ai_allowed
     FROM document_revisions r
     JOIN source_items si ON si.id = r.source_item_id
     JOIN sources s ON s.id = si.source_id

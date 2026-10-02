@@ -20,6 +20,14 @@ export interface ICompanySearchItem {
   projects?: number | null;
   matchedAlias?: string | null;
   homonyms?: number;
+  /** 02.10.2026: чем одноимённые различаются — публикации, группа и юридический адрес со страницы ДОМ.РФ,
+   *  группа, в которую компания входит, и сколько застройщиков в её группе. */
+  publications?: number | null;
+  registryGroup?: string | null;
+  registryAddress?: string | null;
+  memberOf?: string | null;
+  members?: number;
+  exact?: boolean;
 }
 
 export interface ICompany {

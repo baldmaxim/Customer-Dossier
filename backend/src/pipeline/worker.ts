@@ -8,7 +8,7 @@ import { env } from '../config/env.js';
 import { getPool, withTransaction, query, execute } from '../db/pool.js';
 import { extractFromText } from '../llm/client.js';
 import { SCHEMA_VERSION, emptyExtraction, type IExtraction } from '../llm/schema.js';
-import { approvedPolicySql } from '../ingest/policy.js';
+import { modelTextPolicySql } from '../ingest/policy.js';
 import { applyExtraction, clearDocumentContribution, type IApplyStats } from './apply.js';
 import { assertCanonWriteAllowed } from './guard.js';
 import { verifyExtraction } from './verify.js';
@@ -52,7 +52,7 @@ export const claimBatch = async (limit: number): Promise<IQueuedDocument[]> =>
        JOIN sources s ON s.id = d.source_id
        WHERE d.status IN ('new', 'queued') AND d.attempts < $2
          -- тексты уходят модели только у источников с допуском к ИИ-обработке
-         AND ${approvedPolicySql('s', 'ai_processing')}
+         AND ${modelTextPolicySql('s')}
        ORDER BY d.published_at DESC NULLS LAST, d.id
        FOR UPDATE OF d SKIP LOCKED
        LIMIT $1

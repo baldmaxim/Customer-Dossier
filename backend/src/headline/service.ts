@@ -18,7 +18,7 @@ import type { IHeadline } from '../llm/headline/schema.js';
 import { HEADLINE_PROMPT_VERSION } from '../llm/headline/prompt.js';
 import { HEADLINE_SCHEMA_VERSION } from '../llm/headline/schema.js';
 import { loadRevisionPolicy } from '../reprocess/runs.js';
-import { approvedPolicySql } from '../ingest/policy.js';
+import { modelTextPolicySql } from '../ingest/policy.js';
 
 export type HeadlineOutcome =
   | { outcome: 'saved'; topic: string; revisionId: number }
@@ -118,7 +118,7 @@ export const revisionsWithoutHeadline = async (limit: number): Promise<number[]>
      FROM source_items i
      JOIN sources s ON s.id = i.source_id
      JOIN document_revisions r ON r.id = i.latest_revision_id
-     WHERE ${approvedPolicySql('s', 'ai_processing')}
+     WHERE ${modelTextPolicySql('s')}
        AND NOT EXISTS (
          SELECT 1 FROM revision_headlines h
          WHERE h.revision_id = r.id AND h.headline_version = $2 AND h.model = $3 AND h.prompt_version = $4

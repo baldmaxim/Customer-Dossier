@@ -90,6 +90,16 @@ export const assertSourceAllowed = (
  * SQL-условие того же смысла для выборок пачками (очередь разбора, теневой
  * прогон). Имя колонки подставляется из фиксированного набора, не из ввода.
  */
+/**
+ * Тексты, которые можно отдать модели на разбор: ИИ-допуск источника — и источник не реестр. Реестр
+ * (`mode: registry_api`, ADR-012) разбирается без модели: его снимок — рендер полей, а модель по такому
+ * тексту угадывает компании по названию («Донстрой» из строки «входит в группу» стал отдельной карточкой).
+ * ИИ-допуск у реестра бывает — для подсказок к совпадениям ДОМ.РФ, — но разбор и темы его не касаются
+ * (02.10.2026: 121 запуск разбора по снимкам ДОМ.РФ дал 51 лишнее утверждение).
+ */
+export const modelTextPolicySql = (alias: string): string =>
+  `(${approvedPolicySql(alias, 'ai_processing')} AND coalesce(${alias}.config->>'mode', '') <> 'registry_api')`;
+
 export const approvedPolicySql = (alias: string, operation: PolicyOperation): string => {
   const column = operation === 'collect' ? 'access_status' : 'ai_processing_status';
   return `(${alias}.${column} = 'approved' AND (${alias}.policy_expires_at IS NULL OR ${alias}.policy_expires_at > now()))`;

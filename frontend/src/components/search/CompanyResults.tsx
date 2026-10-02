@@ -1,11 +1,17 @@
-// Найденные компании: таблица (компания · город · объектов) или карточки на телефоне.
+// Найденные компании: таблица (компания · город · объектов · публикаций) или карточки на телефоне.
+//
+// Под названием — чем компания отличается от одноимённых: форма, вид, ИНН, группа и число застройщиков
+// в ней. Четыре «СЗ ДОНСТРОЙ» из Самары, Иркутска и Ростова — разные юрлица, и без этой строки они
+// выглядели одним и тем же, повторённым четыре раза. Город — из карточки, иначе из юридического адреса
+// со страницы застройщика ДОМ.РФ. Похожие по написанию («Дострой» на «донстрой») — после совпавших.
 // Если нашлось по другому написанию — сказано, по какому: иначе непонятно, почему строка здесь.
 
-import { FC } from 'react';
+import { FC, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ICompanySearchItem } from '../../api/types';
-import { formatCount } from '../../lib/format';
+import { formatCount, pluralize } from '../../lib/format';
+import { ENTITY_TYPE_LABELS } from '../../lib/labels';
 import { CardList } from '../ui/CardList';
 import { CardListItem } from '../ui/CardListItem';
 import { TableScroll } from '../ui/TableScroll';
@@ -17,10 +23,34 @@ interface ICompanyResultsProps {
   wide: boolean;
 }
 
-const aliasNote = (item: ICompanySearchItem): string | null =>
-  item.matchedAlias && item.matchedAlias !== item.name ? `найдено по «${item.matchedAlias}»` : null;
+/** «Самарская область, г Самара, ул …» → «Самара»; без «г» — первая часть адреса. */
+export const placeFromAddress = (address: string | null | undefined): string | null => {
+  if (!address) return null;
+  const city = /(?:^|,\s*)(?:город|г\.?)\s+([^,]+)/iu.exec(address);
+  if (city?.[1]) return city[1].trim();
+  const first = address.split(',').map(part => part.trim()).find(part => part !== '' && !/^\d+$/.test(part));
+  return first ?? null;
+};
+
+const placeOf = (item: ICompanySearchItem): string | null => item.city ?? placeFromAddress(item.registryAddress);
+
+/** Строка под названием: что отличает компанию от одноимённых. Только известное — пустых «—» нет. */
+export const companyFacts = (item: ICompanySearchItem): string | null => {
+  const inn = item.identifiers?.find(id => id.startsWith('inn '))?.slice(4) ?? null;
+  const kind = item.entityType && item.entityType !== 'legal_entity' && item.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[item.entityType] : null;
+  const group = item.memberOf ? `входит в группу «${item.memberOf}»` : item.registryGroup ? `группа «${item.registryGroup}»` : null;
+  const members = item.members && item.members > 0
+    ? `${formatCount(item.members)} ${pluralize(item.members, ['застройщик', 'застройщика', 'застройщиков'])} в группе`
+    : null;
+  const alias = item.matchedAlias && item.matchedAlias !== item.name ? `найдено по «${item.matchedAlias}»` : null;
+  const facts = [item.legalForm, kind, inn ? `ИНН ${inn}` : null, group, members, alias].filter(Boolean);
+  return facts.length > 0 ? facts.join(' · ') : null;
+};
 
 export const CompanyResults: FC<ICompanyResultsProps> = ({ items, wide }) => {
+  // Совпавшие по началу названия — первыми; похожие по написанию — отдельно, с подписью.
+  const similarFrom = items.some(item => item.exact) ? items.findIndex(item => !item.exact) : -1;
+
   if (!wide) {
     return (
       <CardList label="Найденные компании">
@@ -29,8 +59,8 @@ export const CompanyResults: FC<ICompanyResultsProps> = ({ items, wide }) => {
             key={item.id}
             to={`/company/${item.id}`}
             title={item.name}
-            meta={[item.city, aliasNote(item)].filter(Boolean).join(' · ') || undefined}
-            aside={<CountPair projects={item.projects ?? null} />}
+            meta={[placeOf(item), companyFacts(item)].filter(Boolean).join(' · ') || undefined}
+            aside={<CountPair projects={item.projects ?? null} publications={item.publications ?? null} />}
           />
         ))}
       </CardList>
@@ -38,28 +68,39 @@ export const CompanyResults: FC<ICompanyResultsProps> = ({ items, wide }) => {
   }
 
   return (
-    <TableScroll label="Найденные компании" minWidth={480}>
+    <TableScroll label="Найденные компании" minWidth={560}>
       <thead>
         <tr>
           <th>Компания</th>
           <th className={styles.colCity}>Город</th>
           <th className="num">Объектов</th>
+          <th className="num">Публикаций</th>
         </tr>
       </thead>
       <tbody>
-        {items.map(item => {
-          const note = aliasNote(item);
+        {items.map((item, index) => {
+          const facts = companyFacts(item);
           return (
-            <tr key={item.id} className={`row-link ${styles.row}`}>
-              <td>
-                <Link className={`row-link-target ${styles.rowName}`} to={`/company/${item.id}`} viewTransition>
-                  {item.name}
-                </Link>
-                {note && <span className={styles.rowNote}>{note}</span>}
-              </td>
-              <td className={styles.muted}>{item.city ?? '—'}</td>
-              <td className="num">{formatCount(item.projects)}</td>
-            </tr>
+            <Fragment key={item.id}>
+              {index === similarFrom && (
+                <tr className={styles.groupRow}>
+                  <th colSpan={4} scope="colgroup">
+                    Похожие по написанию
+                  </th>
+                </tr>
+              )}
+              <tr className={`row-link ${styles.row}`}>
+                <td>
+                  <Link className={`row-link-target ${styles.rowName}`} to={`/company/${item.id}`} viewTransition>
+                    {item.name}
+                  </Link>
+                  {facts && <span className={styles.rowNote}>{facts}</span>}
+                </td>
+                <td className={styles.muted}>{placeOf(item) ?? '—'}</td>
+                <td className="num">{formatCount(item.projects)}</td>
+                <td className="num">{formatCount(item.publications)}</td>
+              </tr>
+            </Fragment>
           );
         })}
       </tbody>

@@ -95,42 +95,67 @@ companiesRouter.get('/', async (req, res) => {
     score: number;
   }>(
     // Кандидаты с контекстом для осознанного выбора (этап 08A): вид сущности, реквизиты, совпавший алиас,
-    // объекты из последнего снимка сигналов. Одноимённые юрлица различаются реквизитами, а не порядком строк.
-    `SELECT c.id, c.name, c.city, c.legal_form AS "legalForm", c.entity_type AS "entityType",
-            coalesce((SELECT array_agg(i.identifier_type || ' ' || i.value ORDER BY i.id) FROM entity_identifiers i
-                      WHERE i.company_id = c.id AND i.status = 'active'), '{}') AS identifiers,
-            (SELECT s.projects FROM company_signal_snapshots s WHERE s.company_id = c.id
-               AND s.refresh_id = (SELECT id FROM signal_active_refresh_v)) AS projects,
-            (SELECT a.alias FROM entity_aliases a WHERE a.entity_kind = 'company' AND a.entity_id = c.id
-               AND a.alias_latin % $1 ORDER BY similarity(a.alias_latin, $1) DESC LIMIT 1) AS "matchedAlias",
-            (SELECT count(*)::int FROM companies h WHERE h.merged_into_id IS NULL AND h.name_key = c.name_key AND h.id <> c.id) AS homonyms,
-            CASE WHEN $4::text IS NOT NULL AND (c.tax_id = $4::text OR EXISTS (
-                   SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
-                 THEN 1 ELSE
-            greatest(
-              similarity(c.name_latin, $1),
-              coalesce((SELECT max(similarity(a.alias_latin, $1))
-                        FROM entity_aliases a
-                        WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)
-            ) END AS score
-     FROM companies c
-     WHERE c.merged_into_id IS NULL
-       AND (
-         c.name_latin % $1
-         OR ($2 <> '' AND c.name_key LIKE $2 || '%')
-         -- Альтернативные написания участвуют не только в оценке, но и в отборе:
-         -- иначе компанию не найти по имени, под которым её знают.
-         OR EXISTS (
-           SELECT 1 FROM entity_aliases a
-           WHERE a.entity_kind = 'company' AND a.entity_id = c.id
-             AND (a.alias_latin % $1 OR ($2 <> '' AND replace(a.alias_latin, ' ', '') LIKE $2 || '%'))
+    // объекты и публикации из последнего снимка сигналов. Одноимённые юрлица различаются реквизитами, а не
+    // порядком строк; с 02.10.2026 — ещё группой и юридическим адресом со страницы застройщика ДОМ.РФ и
+    // группой, в которую компания входит: четыре «СЗ ДОНСТРОЙ» из Самары, Иркутска и Ростова иначе неотличимы.
+    // Порядок: совпадение по началу названия — раньше похожих по написанию, внутри — более полные карточки.
+    `SELECT * FROM (
+       SELECT c.id, c.name, c.city, c.legal_form AS "legalForm", c.entity_type AS "entityType",
+              coalesce((SELECT array_agg(i.identifier_type || ' ' || i.value ORDER BY i.id) FROM entity_identifiers i
+                        WHERE i.company_id = c.id AND i.status = 'active'), '{}') AS identifiers,
+              snap.projects, snap.publications,
+              reg.group_name AS "registryGroup", reg.address AS "registryAddress",
+              (SELECT string_agg(DISTINCT g.name, ', ') FROM assertions a
+                 JOIN companies g ON g.id = a.object_company_id AND g.merged_into_id IS NULL
+                WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.subject_company_id = c.id
+                  AND a.status <> 'rejected'
+                  AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')) AS "memberOf",
+              (SELECT count(DISTINCT a.subject_company_id)::int FROM assertions a
+                WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.object_company_id = c.id
+                  AND a.status <> 'rejected'
+                  AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')) AS members,
+              (SELECT a.alias FROM entity_aliases a WHERE a.entity_kind = 'company' AND a.entity_id = c.id
+                 AND a.alias_latin % $1 ORDER BY similarity(a.alias_latin, $1) DESC LIMIT 1) AS "matchedAlias",
+              (SELECT count(*)::int FROM companies h WHERE h.merged_into_id IS NULL AND h.name_key = c.name_key AND h.id <> c.id) AS homonyms,
+              ($2 <> '' AND c.name_key LIKE $2 || '%') AS exact,
+              CASE WHEN $4::text IS NOT NULL AND (c.tax_id = $4::text OR EXISTS (
+                     SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
+                   THEN 1 ELSE
+              greatest(
+                similarity(c.name_latin, $1),
+                coalesce((SELECT max(similarity(a.alias_latin, $1))
+                          FROM entity_aliases a
+                          WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)
+              ) END AS score
+       FROM companies c
+       LEFT JOIN LATERAL (
+         SELECT s.projects, s.publications FROM company_signal_snapshots s
+         WHERE s.company_id = c.id AND s.refresh_id = (SELECT id FROM signal_active_refresh_v)
+       ) snap ON true
+       LEFT JOIN LATERAL (
+         SELECT r.payload->'identity'->>'groupName' AS group_name, r.payload->'identity'->>'address' AS address
+         FROM registry_records r WHERE r.company_id = c.id AND r.record_type = 'developer'
+         ORDER BY r.fetched_at DESC LIMIT 1
+       ) reg ON true
+       WHERE c.merged_into_id IS NULL
+         AND (
+           c.name_latin % $1
+           OR ($2 <> '' AND c.name_key LIKE $2 || '%')
+           -- Альтернативные написания участвуют не только в оценке, но и в отборе:
+           -- иначе компанию не найти по имени, под которым её знают.
+           OR EXISTS (
+             SELECT 1 FROM entity_aliases a
+             WHERE a.entity_kind = 'company' AND a.entity_id = c.id
+               AND (a.alias_latin % $1 OR ($2 <> '' AND replace(a.alias_latin, ' ', '') LIKE $2 || '%'))
+           )
+           OR ($4::text IS NOT NULL AND c.tax_id = $4::text)
+           -- Типизированный реестр реквизитов (этап 04): ИНН, ОГРН, ОГРНИП.
+           OR ($4::text IS NOT NULL AND EXISTS (
+             SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
          )
-         OR ($4::text IS NOT NULL AND c.tax_id = $4::text)
-         -- Типизированный реестр реквизитов (этап 04): ИНН, ОГРН, ОГРНИП.
-         OR ($4::text IS NOT NULL AND EXISTS (
-           SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
-       )
-     ORDER BY score DESC, c.name
+     ) found
+     ORDER BY (score = 1) DESC, exact DESC, score DESC,
+              coalesce(members, 0) + coalesce(projects, 0) + coalesce(publications, 0) DESC, name
      LIMIT $3`,
     [normalized.latin, normalized.key, parsed.data.limit, taxId],
   );

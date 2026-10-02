@@ -11,6 +11,7 @@ import { env } from '../config/env.js';
 import { closeDb } from '../db/pool.js';
 import { loadStoredLlmKey } from '../settings/llmKey.js';
 import { syncDomRfGroupRelations } from '../registry/groupSync.js';
+import { withdrawModelExtractionOnRegistry } from '../registry/modelArtifacts.js';
 import { applyDomRfModelDecisions } from '../ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from '../ingest/registry/domrfHints.js';
 import { applyJudgedPairs, modelReviewCounts, runModelReviewPass, type IPairJudgement } from './modelReview.js';
@@ -48,6 +49,8 @@ try {
     console.log(`  ${d.companyName} (№ ${d.companyId}): ${d.action === 'confirm' ? 'ЭТО ОН' : 'не он'} — ${d.record}; ${d.reason}${apply && !d.applied ? ' [не применено]' : ''}`);
   }
   if (apply) {
+    const extraction = await withdrawModelExtractionOnRegistry();
+    console.log(`Реестр: снято доказательств разбора моделью по снимкам — ${extraction.evidence}, запусков — ${extraction.runs}`);
     const sync = await syncDomRfGroupRelations();
     console.log(`ДОМ.РФ: связи «входит в группу» — записано ${sync.linked}, снято ${sync.withdrawn}`);
   }
