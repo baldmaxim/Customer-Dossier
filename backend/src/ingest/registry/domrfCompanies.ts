@@ -18,7 +18,7 @@ import { DOMRF_HOST, domRfCardUrl as domRfCardUrlOf, ensureDomRfCard, type DomRf
 /** Повторный поиск компании: реестр пополняется, а новые сведения о компаниях приходят из новостей. */
 export const SEARCH_TTL_DAYS = 30;
 
-/** Сколько компаний с общими названиями пометить за одно взятие, прежде чем отдать проход следующему. */
+/** Сколько первых компаний очереди читает одно взятие: общие названия среди них помечаются, первая подходящая — берётся. */
 const CLAIM_SKIP_MAX = 50;
 
 /** Сколько первых результатов выдачи предлагать: дальше по названию — шум. */
@@ -128,7 +128,11 @@ const TAX_ID_SQL = `(SELECT ei.value FROM entity_identifiers ei
      AND ei.identifier_type IN ('inn', 'ogrn')
    ORDER BY (ei.identifier_type = 'inn') DESC, ei.id LIMIT 1)`;
 
-/** Текущие роли компаний на объектах: заказчики и застройщики ищутся первыми. */
+/**
+ * Текущие роли компаний на объектах: заказчики и застройщики ищутся первыми. Подключать только как
+ * MATERIALIZED: без этого планировщик (01.10.2026, 2867 компаний) оценил выборку компаний в одну строку
+ * и пересчитывал вид на каждую — взятие из очереди не укладывалось и в 120 с вместо 0,3.
+ */
 const ROLES_SQL = `SELECT company_id, array_agg(DISTINCT role ORDER BY role) AS roles FROM card_participations_v WHERE is_current GROUP BY company_id`;
 
 /**
@@ -140,27 +144,27 @@ const ROLES_SQL = `SELECT company_id, array_agg(DISTINCT role ORDER BY role) AS 
  */
 export const claimDomRfCompanySearch = async (): Promise<IDomRfCompanyToSearch | null> =>
   withTransaction(async client => {
-    for (let skipped = 0; skipped < CLAIM_SKIP_MAX; skipped += 1) {
-      const row = (
-        await client.query<{ company_id: number; name: string; tax_id: string | null; attempt_count: number | null }>(
-          `WITH roles AS (${ROLES_SQL})
-           SELECT c.id AS company_id, c.name, ${TAX_ID_SQL} AS tax_id, s.attempt_count
-           FROM companies c
-           LEFT JOIN domrf_company_searches s ON s.company_id = c.id
-           LEFT JOIN roles r ON r.company_id = c.id
-           WHERE c.merged_into_id IS NULL
-             AND (s.company_id IS NULL OR s.next_search_at <= now())
-             AND NOT EXISTS (SELECT 1 FROM domrf_company_links l WHERE l.company_id = c.id AND l.state = 'confirmed')
-           ORDER BY s.next_search_at NULLS LAST,
-                    coalesce(r.roles && ARRAY['customer', 'developer'], false) DESC,
-                    (${TAX_ID_SQL} IS NOT NULL) DESC,
-                    (c.entity_type IN ('group', 'brand')) DESC,
-                    (r.company_id IS NOT NULL) DESC,
-                    c.id
-           LIMIT 1`,
-        )
-      ).rows[0];
-      if (!row) return null;
+    const rows = (
+      await client.query<{ company_id: number; name: string; tax_id: string | null; attempt_count: number | null }>(
+        `WITH roles AS MATERIALIZED (${ROLES_SQL})
+         SELECT c.id AS company_id, c.name, ${TAX_ID_SQL} AS tax_id, s.attempt_count
+         FROM companies c
+         LEFT JOIN domrf_company_searches s ON s.company_id = c.id
+         LEFT JOIN roles r ON r.company_id = c.id
+         WHERE c.merged_into_id IS NULL
+           AND (s.company_id IS NULL OR s.next_search_at <= now())
+           AND NOT EXISTS (SELECT 1 FROM domrf_company_links l WHERE l.company_id = c.id AND l.state = 'confirmed')
+         ORDER BY s.next_search_at NULLS LAST,
+                  coalesce(r.roles && ARRAY['customer', 'developer'], false) DESC,
+                  (${TAX_ID_SQL} IS NOT NULL) DESC,
+                  (c.entity_type IN ('group', 'brand')) DESC,
+                  (r.company_id IS NOT NULL) DESC,
+                  c.id
+         LIMIT $1`,
+        [CLAIM_SKIP_MAX],
+      )
+    ).rows;
+    for (const row of rows) {
       if (!row.tax_id && tooGenericToSearch(row.name)) {
         await client.query(
           `INSERT INTO domrf_company_searches (company_id, query, found_by, searched_at, next_search_at, last_error)
@@ -353,7 +357,7 @@ export const listDomRfCompanies = async ({
   limit = 100,
 }: IDomRfCompaniesQuery = {}): Promise<{ items: IDomRfCompanyRow[]; matched: number; totals: IDomRfCompaniesTotals }> => {
   const rows = await query<Omit<IDomRfCompanyRow, 'links'> & { links: Array<Omit<IDomRfCompanyLink, 'url'>>; matched: number }>(
-    `WITH roles AS (${ROLES_SQL})
+    `WITH roles AS MATERIALIZED (${ROLES_SQL})
      SELECT c.id AS "companyId", c.name, coalesce(r.roles, '{}') AS roles, s.query, s.found_by AS "foundBy",
             s.searched_at AS "searchedAt", s.result_count AS "resultCount", s.last_error AS "lastError",
             coalesce((
