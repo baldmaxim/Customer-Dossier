@@ -107,4 +107,15 @@ describe('связь СЗ с группой ДОМ.РФ — по подтвер�
     );
     expect(superseded.rowCount).toBe(1);
   });
+
+  it('группу отклонили для компании и ни за кем не подтвердили — связь с ней снимается', async () => {
+    const [current] = await activeGroups();
+    await getPool().query(
+      `UPDATE domrf_company_links SET state = 'rejected', decided_by = 'model:test', decided_at = now()
+       WHERE kind = 'group' AND external_ref = '5661' AND company_id = $1`,
+      [current],
+    );
+    expect(await syncDomRfGroupRelations()).toEqual({ linked: 0, withdrawn: 1 });
+    expect(await activeGroups()).toEqual([]);
+  });
 });

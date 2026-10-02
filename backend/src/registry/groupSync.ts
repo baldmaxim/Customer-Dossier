@@ -9,7 +9,8 @@
 //  - связь с другой компанией, чем подтверждённая для его группы, снимается (доказательство реестра →
 //    superseded: снимается только вклад реестра, решения аналитика и чужие доказательства остаются);
 //  - связи с подтверждённой нет — записывается с цитатой из того же снимка («Застройщик … входит в группу …»).
-// Группа ни за кем не подтверждена — прежние связи не трогаются: угадывать нечем, а снять — значит потерять.
+// Группа ни за кем не подтверждена — прежние связи не трогаются (угадывать нечем, а снять — значит потерять),
+// кроме связи с компанией, для которой эту группу явно отклонили («не он» оператора или модели).
 // Повтор безопасен: второй проход ничего не меняет.
 
 import type { PoolClient } from 'pg';
@@ -19,6 +20,7 @@ import { companyTitle, groupLine } from '../ingest/registry/render.js';
 import { confirmedDomRfGroupCompany, memberOfGroup, writeRegistryAssertion } from './publish.js';
 
 export const GROUP_SYNC_REASON = 'группа ДОМ.РФ подтверждена за другой компанией портала';
+export const GROUP_REJECTED_REASON = 'группа ДОМ.РФ отклонена для этой компании портала («не он»)';
 
 export interface IGroupSyncResult {
   /** Связей записано с подтверждённой группой. */
@@ -41,7 +43,22 @@ interface IDeveloperRow {
 const syncOne = async (client: PoolClient, row: IDeveloperRow): Promise<IGroupSyncResult> => {
   const companyId = Number(row.company_id);
   const target = await confirmedDomRfGroupCompany(client, row.group_ref);
-  if (target === null || target === companyId) return { linked: 0, withdrawn: 0 };
+  if (target === null) {
+    if (!row.group_ref) return { linked: 0, withdrawn: 0 };
+    const rejected = await client.query(
+      `UPDATE evidence e SET status = 'superseded', status_reason = $3, status_changed_at = now()
+       FROM assertions a
+       WHERE e.assertion_id = a.id AND e.origin = 'registry' AND e.status = 'active'
+         AND a.origin = 'registry' AND a.predicate = 'corporate_relation' AND a.role = 'member_of_group'
+         AND a.subject_company_id = $1
+         AND EXISTS (SELECT 1 FROM domrf_company_links l JOIN companies c ON c.id = l.company_id
+                     WHERE l.kind = 'group' AND l.external_ref = $2 AND l.state = 'rejected'
+                       AND coalesce(c.merged_into_id, c.id) = a.object_company_id)`,
+      [companyId, row.group_ref, GROUP_REJECTED_REASON],
+    );
+    return { linked: 0, withdrawn: rejected.rowCount ?? 0 };
+  }
+  if (target === companyId) return { linked: 0, withdrawn: 0 };
 
   const withdrawn = await client.query(
     `UPDATE evidence e SET status = 'superseded', status_reason = $3, status_changed_at = now()

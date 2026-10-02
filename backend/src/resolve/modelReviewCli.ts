@@ -7,7 +7,9 @@
 // решит модель. С --apply — применяет: «Это он / Не он», слияние (при MERGE_APPLY_ENABLED) и отклонение пар.
 // Печатает отчёт: что решено, кем (правило или модель) и почему.
 
+import { env } from '../config/env.js';
 import { closeDb } from '../db/pool.js';
+import { loadStoredLlmKey } from '../settings/llmKey.js';
 import { syncDomRfGroupRelations } from '../registry/groupSync.js';
 import { applyDomRfModelDecisions } from '../ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from '../ingest/registry/domrfHints.js';
@@ -30,6 +32,10 @@ const ACTION_WORDS: Record<string, string> = {
 };
 
 try {
+  // Ключ OpenRouter из админки живёт в базе: без этого команда видела бы только LLM_API_KEY из .env.
+  if (env.LLM_PROVIDER === 'openrouter') {
+    await loadStoredLlmKey().catch(err => console.warn(`[llm] ключ из админки не прочитан: ${err instanceof Error ? err.message : String(err)}`));
+  }
   console.log(`Разбор разногласий моделью — ${apply ? 'С ПРИМЕНЕНИЕМ' : 'без применения (посмотреть)'}, до ${limit} записей за шаг\n`);
 
   const hints = await runDomRfHintPass(limit);
