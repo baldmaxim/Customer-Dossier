@@ -19,6 +19,7 @@ import { DescriptionList, type IDescriptionItem } from '../../components/ui/Desc
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Section } from '../../components/ui/Section';
 import { LinkifiedText } from '../../components/LinkifiedText';
+import { ObjectPhoto } from '../../components/company/ObjectPhoto';
 import { useCan } from '../../hooks/useAuth';
 import { formatCountWord } from '../../lib/format';
 import { withLegalForm } from '../../lib/legalForm';
@@ -54,7 +55,7 @@ const companyLink = (company: { id: number; name: string } | null | undefined, t
     text
   );
 
-export const ProjectPassport: FC<{ registry: IRegistryView }> = ({ registry }) => {
+export const ProjectPassport: FC<{ registry: IRegistryView; projectId: number; name: string }> = ({ registry, projectId, name }) => {
   const facts = KEY_FACTS.map(f => ({ title: f.title, value: field(registry, ...f.labels) })).filter(
     (f): f is { title: string; value: string } => f.value !== null,
   );
@@ -74,6 +75,12 @@ export const ProjectPassport: FC<{ registry: IRegistryView }> = ({ registry }) =
   return (
     <Section title="Паспорт объекта" note={`${registry.source.title}, запись ${registry.externalRef}`}>
       <div className={styles.passport}>
+        {registry.hasPhoto && (
+          <figure className={styles.passportFigure}>
+            <ObjectPhoto projectId={projectId} name={name} className={styles.passportPhoto} eager />
+            <figcaption className={styles.passportCaption}>Фото: наш.дом.рф</figcaption>
+          </figure>
+        )}
         <p className={styles.passportDate}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
         {facts.length > 0 && (
           <dl className={styles.passportFacts}>

@@ -52,6 +52,8 @@ services:
       AUTH_MODE: password
       TRUST_PROXY: 'true'
       NODE_OPTIONS: --max-old-space-size=320
+      # Фото объектов с ДОМ.РФ (ADR-012 п. 35): том registry_photos — пишет domrf, читает api.
+      REGISTRY_PHOTO_DIR: /data/photos
     command: ['node', 'dist/db/migrate.js']
     depends_on:
       db:
@@ -76,6 +78,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    # Фото объектов только читает: снимает их работник ДОМ.РФ.
+    volumes:
+      - registry_photos:/data/photos:ro
     mem_limit: 448m
     networks: [internal]
 
@@ -94,6 +99,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Фото объектов (ADR-012 п. 35): главный снимок со страницы объекта, уменьшенный до 1280 px. В резервную копию
+    # базы не входит — снимается с сайта заново; том можно удалить без потери сведений.
+    volumes:
+      - registry_photos:/data/photos
     # Chromium с одной страницей и Xvfb; /dev/shm по умолчанию (64 МБ) браузеру мало.
     mem_limit: 768m
     shm_size: 256m
@@ -111,6 +120,7 @@ services:
 
 volumes:
   db_data:
+  registry_photos:
 
 networks:
   internal:

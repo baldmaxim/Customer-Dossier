@@ -134,6 +134,9 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
       limit: 300,
       standardHeaders: true,
       legacyHeaders: false,
+      // Фото объектов — по картинке на карточку: сетка из 300 объектов иначе съела бы весь лимит минуты.
+      // Отдача — чтение файла с суточным кэшем браузера, вход и права проверяются как у остального.
+      skip: req => req.method === 'GET' && /^\/projects\/\d+\/photo$/.test(req.path),
     }),
   );
 

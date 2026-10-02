@@ -93,7 +93,7 @@ export const ProjectPage: FC = () => {
   } else {
     body = (
       <>
-        {d.registry ? <ProjectPassport registry={d.registry} /> : <ProjectRegistryMissing dossier={d} />}
+        {d.registry ? <ProjectPassport registry={d.registry} projectId={d.project.id} name={d.project.name} /> : <ProjectRegistryMissing dossier={d} />}
         {/* Статус со стройки в паспорте уже есть: строка состояния по событиям — только когда ей есть что сказать. */}
         {(!d.registry || d.state.current.length > 0) && <ProjectStateLine state={d.state} />}
         <ProjectParticipants dossier={d} period={period} onPeriodChange={changePeriod} busy={query.isFetching && query.isPlaceholderData} />

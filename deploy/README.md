@@ -34,6 +34,7 @@ tginfo-api ─► адреса openrouter.ai ─awg0─► nl3 ─► OpenRouter
 | Вход снаружи | `/opt/infra/nginx/conf.d/tginfo.conf` | общий `infra-nginx` Quantor, сеть `infra_web` |
 | Сертификат | `/opt/infra/nginx/certbot/conf/live/pulse.meridianai.ru/` | продлевает `infra-certbot` сам |
 | Резервные копии | `/opt/portals/tg-info/backups/tg_info-*.dump` | cron `/etc/cron.d/tginfo-backup`, 03:47, 14 дней |
+| Фото объектов ДОМ.РФ | том `tginfo_registry_photos` (`/data/photos` в `domrf` и `api`) | в копию не входят: снимаются с сайта заново (ADR-012 п. 35) |
 | Туннель Telegram | `/etc/amnezia/amneziawg/awg0.conf`, `awg-quick@awg0` | клиент `amnezia-awg2` на nl3 |
 | Туннель модели | пользователь `llmtunnel`, `/etc/ssh/sshd_config.d/tginfo-llmtunnel.conf`, ufw на `br-tginfo` | ключ — с домашнего ПК |
 | Домашний ПК | `C:\ProgramData\tginfo\` (ключ, `known_hosts`, `llm-tunnel.ps1`), задача «TG_Info LLM tunnel» | держит туннель к LM Studio |

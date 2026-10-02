@@ -87,6 +87,8 @@ export interface IRegistryView {
   changes: IRegistryChangeEntry[];
   coverage: { loaded: number; truncated: boolean };
   attribution: string;
+  /** Главное фото объекта снято (только у снимка объекта). */
+  hasPhoto?: boolean;
   /** Карточки портала застройщика и его группы (только у снимка объекта). */
   developerCompany?: { id: number; name: string } | null;
   groupCompany?: { id: number; name: string } | null;
@@ -118,6 +120,8 @@ export interface ICompanyObjectRegistry {
   contractor: string | null;
   developer: string | null;
   group: string | null;
+  /** Главное фото снято: GET /api/projects/:id/photo. Старый сервер поля не присылает. */
+  hasPhoto?: boolean;
 }
 
 /** Объект на вкладке «Объекты» карточки компании (02.10.2026). */

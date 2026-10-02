@@ -201,3 +201,24 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Фото паспорта: широкая полоса, не выше 360px — над числами, а не вместо них. */
+.passportFigure {
+  margin: 0;
+}
+
+.passportPhoto {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+
+.passportCaption {
+  margin-top: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}

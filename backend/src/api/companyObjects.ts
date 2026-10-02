@@ -11,6 +11,7 @@
 
 import { query } from '../db/pool.js';
 import type { IRegistryPayload } from '../registry/changes.js';
+import { hasPhoto } from '../registry/photos.js';
 
 /** Объектов на вкладке: карточка, а не каталог; что не вошло — честно числом. */
 export const OBJECTS_LIMIT = 300;
@@ -38,6 +39,8 @@ export interface ICompanyObjectRegistry {
   contractor: string | null;
   developer: string | null;
   group: string | null;
+  /** Главное фото снято (ADR-012 п. 35): отдаётся GET /api/projects/:id/photo. */
+  hasPhoto: boolean;
 }
 
 export interface ICompanyObject {
@@ -151,6 +154,7 @@ export const registrySummary = (
     contractor: field(payload, 'Генподрядчики', 'Генподрядчик'),
     developer: payload.identity.developer?.name ?? field(payload, 'Застройщик'),
     group: payload.identity.groupName ?? field(payload, 'Группа компаний'),
+    hasPhoto: hasPhoto(row.externalRef),
   };
 };
 

@@ -108,6 +108,11 @@ export const parseEnv = (source: EnvSource) => {
     // пишутся рядом с парой; MODEL_REVIEW_APPLY — вердикт применяется (слияние, отклонение, «это он / не он»),
     // кроме того, что запрещают правила: разные ИНН/ОГРН, две разные записи ДОМ.РФ. Идёт тем же заданием,
     // что разбор (PIPELINE_ENABLED). Слияние — ещё и при MERGE_APPLY_ENABLED.
+    // Фото объектов с ДОМ.РФ (02.10.2026): каталог файлов. Пусто — фото не снимаются и не отдаются. На сервере —
+    // том registry_photos (deploy/docker-compose.yml): пишет работник ДОМ.РФ, читает API. В резервную копию базы
+    // фото не входят — их всегда можно снять с сайта заново.
+    REGISTRY_PHOTO_DIR: optional(source, 'REGISTRY_PHOTO_DIR', ''),
+
     MODEL_REVIEW_ENABLED: parseStrictBool('MODEL_REVIEW_ENABLED', source.MODEL_REVIEW_ENABLED, false),
     MODEL_REVIEW_APPLY: parseStrictBool('MODEL_REVIEW_APPLY', source.MODEL_REVIEW_APPLY, false),
     MODEL_REVIEW_BATCH_SIZE: parsePositiveInt('MODEL_REVIEW_BATCH_SIZE', source.MODEL_REVIEW_BATCH_SIZE, 20),

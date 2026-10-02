@@ -51,6 +51,7 @@ import {
 import { importRegistryPayload } from './importFile.js';
 import { syncDomRfGroupRelations } from '../../registry/groupSync.js';
 import { withdrawModelExtractionOnRegistry } from '../../registry/modelArtifacts.js';
+import { PHOTO_MAX_WIDTH, hasPhoto, photosEnabled, readPhotoMeta, savePhoto } from '../../registry/photos.js';
 
 const script = (name: string): string => fs.readFileSync(fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url)), 'utf8');
 
@@ -156,6 +157,32 @@ const developerFor = async (page: Page, source: ISource, developerRef: string): 
   return (await storeCard(source, await scanCardPage(page, 'developer', developerRef))).developer;
 };
 
+/** Адрес главного снимка галереи; нет галереи — null. */
+const MAIN_PHOTO_SRC = `(() => {
+  const img = document.querySelector('img[class*="GalleryAlamics__Image"]');
+  return img ? (img.currentSrc || img.src) : null;
+})()`;
+
+/**
+ * Главный снимок объекта — файлом (ADR-012 п. 35). Тот же исходник, что в прошлый раз, повторно не
+ * скачивается. Сбой — пометка в итоге шага, а не ошибка снимка объекта: сведения важнее картинки.
+ */
+const capturePhoto = async (page: Page, externalRef: string): Promise<string> => {
+  if (!photosEnabled()) return '';
+  try {
+    const src = await page.evaluate<string | null>(MAIN_PHOTO_SRC);
+    if (!src) return '; фото на странице нет';
+    if (readPhotoMeta(externalRef)?.originalUrl === src && hasPhoto(externalRef)) return '';
+    const shot = await page.evaluate<{ base64: string; width: number; height: number }>(
+      `(${script('domrf-photo-capture.js')})(${JSON.stringify(src)}, ${PHOTO_MAX_WIDTH})`,
+    );
+    savePhoto(externalRef, { bytes: Buffer.from(shot.base64, 'base64'), width: shot.width, height: shot.height, originalUrl: src });
+    return '; фото снято';
+  } catch (err) {
+    return `; фото не снято: ${message(err)}`;
+  }
+};
+
 export interface IDomRfPassResult {
   what: string;
   outcome: string;
@@ -168,7 +195,8 @@ const captureTarget = async (target: IDomRfTarget): Promise<IDomRfPassResult> =>
     return await withPage(async page => {
       const capture = await captureObject(page, target);
       let developer: IDomRfDeveloperIdentity | null = null;
-      let note = '';
+      // Фото — с той же открытой карточки, до перехода на страницу застройщика.
+      let note = await capturePhoto(page, target.externalRef);
       if (capture.developerRef) {
         // Страница застройщика не открылась — объект всё равно сохраняется; реквизиты придут
         // со следующим чтением застройщика (requestRecaptureForDeveloper).
@@ -176,7 +204,7 @@ const captureTarget = async (target: IDomRfTarget): Promise<IDomRfPassResult> =>
           developer = await developerFor(page, source, capture.developerRef);
         } catch (err) {
           await ensureDomRfCard('developer', capture.developerRef);
-          note = `; страница застройщика не прочитана: ${message(err)}`;
+          note += `; страница застройщика не прочитана: ${message(err)}`;
         }
       }
       if (capture.groupRef) await ensureDomRfCard('group', capture.groupRef);

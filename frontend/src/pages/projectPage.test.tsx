@@ -79,6 +79,7 @@ const dossier = (inPeriod: 'overlaps' | 'no_overlap' | 'no_period_selected' = 'n
     changes: [],
     coverage: { loaded: 1, truncated: false },
     attribution: 'Проектная декларация застройщика — это заявление застройщика, а не проверенный факт.',
+    hasPhoto: true,
     developerCompany: { id: 9, name: 'СЗ Демо' },
     groupCompany: { id: 10, name: 'ГК Демо' },
   },
@@ -123,6 +124,8 @@ describe('Объект', () => {
     expect(within(passport).getByText('Сведения на 21.09.2026 (получены 21.09.2026)')).toBeTruthy();
     expect(within(passport).getByText(/не проверенный факт/)).toBeTruthy();
     expect(within(passport).getByText('Все сведения ДОМ.РФ')).toBeTruthy();
+    expect(within(passport).getByRole('img', { name: 'Фото: Корпус 12 ЖК Демо' }).getAttribute('src')).toBe('/api/projects/56/photo');
+    expect(within(passport).getByText('Фото: наш.дом.рф')).toBeTruthy();
   });
 
   it('без сведений ДОМ.РФ — словами, что их нет, и похожий объект со сведениями ссылкой', async () => {

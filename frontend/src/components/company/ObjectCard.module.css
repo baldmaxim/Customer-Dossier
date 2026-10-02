@@ -5,10 +5,24 @@
   flex-direction: column;
   gap: var(--sp-2);
   min-width: 0;
+  overflow: hidden;
   padding: var(--sp-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+/* Фото во всю ширину карточки: поля карточки компенсируются, верхние углы — как у карточки. 16:9 и
+   object-fit: cover — сетка ровная, какой бы формы ни был снимок. */
+.photo {
+  display: block;
+  width: calc(100% + 2 * var(--sp-4));
+  max-width: none;
+  aspect-ratio: 16 / 9;
+  margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-1);
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--surface-2);
+  object-fit: cover;
 }
 
 @media (hover: hover) {

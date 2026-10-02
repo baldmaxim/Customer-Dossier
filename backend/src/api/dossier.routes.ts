@@ -1,6 +1,7 @@
 // Рабочее досье (этап 08A): обращения, досье обращения, объекта и резюме компании.
 // Доступ — после входа оператора; изменяющие запросы — с CSRF (app.ts). Модель не вызывается.
 
+import fs from 'node:fs';
 import { z } from 'zod';
 
 import { getPool, query } from '../db/pool.js';
@@ -18,6 +19,7 @@ import {
 import { loadCompanySummary } from '../dossier/companySummary.js';
 import { loadCaseDossier } from '../dossier/load.js';
 import { loadProjectDossier } from '../dossier/projectDossier.js';
+import { photoFile, readPhotoMeta } from '../registry/photos.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { actorOf } from './auth.js';
@@ -165,6 +167,39 @@ dossierRouter.get('/projects/:id/dossier', async (req, res) => {
     return;
   }
   res.json(dossier);
+});
+
+/**
+ * Главное фото объекта с ДОМ.РФ (ADR-012 п. 35): файл последнего снимка объекта в реестре. Кэш браузера —
+ * сутки (поверх общего no-store /api): снимок меняется не чаще перечитывания раз в неделю; ETag — sha256.
+ * Отдаётся тем же входом, что и остальное: фото открытое, но портал — нет.
+ */
+dossierRouter.get('/projects/:id/photo', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  const ref = (
+    await query<{ external_ref: string }>(
+      `SELECT external_ref FROM registry_records WHERE project_id = $1 AND record_type = 'object' ORDER BY fetched_at DESC LIMIT 1`,
+      [id],
+    )
+  )[0]?.external_ref;
+  const file = ref ? photoFile(ref) : null;
+  if (!ref || !file) {
+    res.status(404).json({ error: 'Фото объекта нет' });
+    return;
+  }
+  const meta = readPhotoMeta(ref);
+  if (meta && req.headers['if-none-match'] === `"${meta.sha256}"`) {
+    res.status(304).end();
+    return;
+  }
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  if (meta) res.setHeader('ETag', `"${meta.sha256}"`);
+  res.type('image/jpeg');
+  fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
 });
 
 dossierRouter.get('/companies/:id/dossier-summary', async (req, res) => {

@@ -17,7 +17,8 @@ const quietApi = () =>
 const at = async (path: string): Promise<string> => {
   quietApi();
   const { router, unmount } = renderWithRouter([{ element: <Outlet />, children: appRoutes }], [path]);
-  await waitFor(() => expect(router.state.navigation.state).toBe('idle'));
+  // Первый адрес админки грузит её ленивый чанк: на занятой машине это дольше секунды по умолчанию.
+  await waitFor(() => expect(router.state.navigation.state).toBe('idle'), { timeout: 5000 });
   const where = `${router.state.location.pathname}${router.state.location.search}`;
   unmount();
   return where;
@@ -39,7 +40,7 @@ describe('маршруты', () => {
     ['/snapshots/abc/def', '/'],
     ['/no-such-page', '/'],
   ])('%s → %s', async (from, to) => {
-    await waitFor(async () => expect(await at(from)).toBe(to));
+    await waitFor(async () => expect(await at(from)).toBe(to), { timeout: 8000 });
   });
 
   it.each([

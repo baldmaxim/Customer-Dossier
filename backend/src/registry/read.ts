@@ -6,6 +6,7 @@
 
 import type { DbExecutor } from '../db/pool.js';
 import { diffPayloads, type IRegistryFieldChange, type IRegistryPayload } from './changes.js';
+import { hasPhoto } from './photos.js';
 
 /** Сколько снимков читаем для истории изменений: карточка, а не архив. */
 export const REGISTRY_HISTORY_LIMIT = 10;
@@ -30,6 +31,8 @@ export interface IRegistryView {
   /** Сколько снимков прочитано и есть ли более ранние за пределами лимита. */
   coverage: { loaded: number; truncated: boolean };
   attribution: string;
+  /** Главное фото объекта снято (ADR-012 п. 35) — только у снимка объекта. */
+  hasPhoto?: boolean;
   /** Карточки портала застройщика (по снимку) и его группы (по связи «входит в группу»): ссылки, не новые сведения. */
   developerCompany?: { id: number; name: string } | null;
   groupCompany?: { id: number; name: string } | null;
@@ -124,7 +127,9 @@ export const loadProjectRegistry = async (exec: DbExecutor, projectId: number): 
       REGISTRY_HISTORY_LIMIT,
     ])
   ).rows;
-  return rows.length === 0 ? null : { ...build(rows), ...(await loadRegistryCompanies(exec, projectId)) };
+  if (rows.length === 0) return null;
+  const view = build(rows);
+  return { ...view, hasPhoto: hasPhoto(view.externalRef), ...(await loadRegistryCompanies(exec, projectId)) };
 };
 
 /** Снимки реестра по компании: её собственная карточка застройщика. */

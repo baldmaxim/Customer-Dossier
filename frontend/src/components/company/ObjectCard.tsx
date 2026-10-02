@@ -3,7 +3,8 @@
 // источник сведений внизу. Вся карточка — ссылка на страницу объекта (row-link); ссылка на СЗ
 // поднята над ней (row-link-above) и остаётся отдельной целью.
 //
-// Сведения ДОМ.РФ — текст сайта на дату, а не проверенный факт: внизу всегда «ДОМ.РФ · на дату».
+// Сведения ДОМ.РФ — текст сайта на дату, а не проверенный факт: внизу всегда «ДОМ.РФ · на дату». Фото —
+// сверху, во всю ширину карточки, если работник ДОМ.РФ его снял (подпись «фото и сведения» — там же).
 // Без них — состояние по событиям из публикаций, если оно есть, и «только из публикаций».
 
 import { FC } from 'react';
@@ -14,6 +15,7 @@ import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, PROJECT_LEVEL_LABELS, form
 import { Badge } from '../ui/Badge';
 import { Heading } from '../ui/Heading';
 import { Icon } from '../ui/Icon';
+import { ObjectPhoto } from './ObjectPhoto';
 import styles from './ObjectCard.module.css';
 
 /** Три числа карточки — по порядку важности, только те, что реестр сообщил. */
@@ -50,6 +52,7 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
 
   return (
     <article className={`${styles.card} row-link`}>
+      {o.registry?.hasPhoto && <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} />}
       {(status || completion) && (
         <p className={styles.top}>
           {status && <span className={styles.status}>{status /* raw-ok: подпись сайта ДОМ.РФ */}</span>}
@@ -94,7 +97,9 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
       </div>
       <p className={styles.source}>
         <Icon name={o.registry ? 'building' : 'document'} size="sm" />
-        {o.registry ? `ДОМ.РФ · на ${formatDate(o.registry.asOf ?? o.registry.fetchedAt)}` : 'только из публикаций'}
+        {o.registry
+          ? `ДОМ.РФ${o.registry.hasPhoto ? ' · фото и сведения' : ''} · на ${formatDate(o.registry.asOf ?? o.registry.fetchedAt)}`
+          : 'только из публикаций'}
       </p>
     </article>
   );
