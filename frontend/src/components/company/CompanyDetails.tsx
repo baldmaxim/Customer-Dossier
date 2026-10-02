@@ -1,4 +1,4 @@
-// Вкладка «Подробно»: опознание → реестр → все события → показатели → резюме и
+// Вкладка «Подробно»: опознание → реестр → ЕГРЮЛ (Контур.Фокус) → все события → показатели → резюме и
 // противоречия → схема связей. Сверху — липкое меню разделов (AnchorNav). На телефоне раскрыт
 // только первый раздел; переход по якорю (меню, «Все события» и плитки «Обзора» —
 // #company-events и т. п.) раскрывает раздел и прокручивает к нему.
@@ -19,6 +19,7 @@ import { RegistryPanel } from '../RegistryPanel';
 import { AnchorNav } from '../ui/AnchorNav';
 import { Stack } from '../ui/Stack';
 import { CompanyEvents } from './CompanyEvents';
+import { CompanyFocus } from './CompanyFocus';
 import { CompanyIdentity } from './CompanyIdentity';
 import { DetailSection } from './DetailSection';
 import { EVENTS_SECTION_ID } from './eventOrder';
@@ -68,6 +69,8 @@ export const CompanyDetails: FC<{ companyId: number; data: ICompanyResponse }> =
           },
         ]
       : []),
+    // Сведения ЕГРЮЛ из Контур.Фокуса (ADR-015): статус, руководитель, адрес, учредители на дату проверки.
+    { id: 'company-egrul', title: 'ЕГРЮЛ — Контур.Фокус', navLabel: 'ЕГРЮЛ', render: () => <CompanyFocus companyId={companyId} /> },
     { id: EVENTS_SECTION_ID, title: 'События', render: () => <CompanyEvents companyId={companyId} /> },
     { id: 'company-signals', title: 'Показатели', render: () => <CompanySignals companyId={companyId} projectNames={projectNames} /> },
     { id: 'company-summary', title: 'Резюме и противоречия', navLabel: 'Резюме', render: () => <CompanySummary companyId={companyId} /> },

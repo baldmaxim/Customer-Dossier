@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -55,4 +55,14 @@ export const useCompanySummary = (companyId: number): UseQueryResult<ICompanySum
   useQuery({
     queryKey: ['company', companyId, 'dossier-summary'],
     queryFn: () => api.get<ICompanySummary>(`/api/companies/${companyId}/dossier-summary`),
+  });
+
+/** Сведения ЕГРЮЛ из Контур.Фокуса: шапка карточки и раздел «Подробно» читают один кэш. */
+export const companyFocusKey = (companyId: number): readonly unknown[] => ['company', companyId, 'focus'];
+
+export const useCompanyFocus = (companyId: number, enabled = true): UseQueryResult<IFocusView> =>
+  useQuery({
+    queryKey: companyFocusKey(companyId),
+    queryFn: () => api.get<IFocusView>(`/api/companies/${companyId}/focus`),
+    enabled,
   });

@@ -12,6 +12,7 @@ const starters = (): IJobStarters & { calls: string[] } => {
     domrf: vi.fn(() => void calls.push('domrf')),
     pipeline: vi.fn(() => void calls.push('pipeline')),
     metrics: vi.fn(() => void calls.push('metrics')),
+    focus: vi.fn(() => void calls.push('focus')),
     bot: vi.fn(() => void calls.push('bot')),
   };
 };
@@ -24,6 +25,7 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   HEADLINE_ENABLED: false,
   DOMRF_HINT_ENABLED: false,
   METRICS_AUTO_REFRESH: false,
+  FOCUS_ENABLED: false,
   BOT_ENABLED: false,
   TG_BOT_TOKEN: '',
   ...over,
@@ -95,5 +97,13 @@ describe('startBackgroundJobs', () => {
     const decision = startBackgroundJobs(flags({ DOMRF_BROWSER_ENABLED: true }), s, new AbortController().signal);
     expect(s.calls).toEqual(['domrf']);
     expect(decision.started).toEqual(['domrf']);
+  });
+
+  it('обновление Контур.Фокуса по расписанию — своим флагом; выключено — сказано, что остаётся кнопка', () => {
+    const on = starters();
+    expect(startBackgroundJobs(flags({ FOCUS_ENABLED: true }), on, new AbortController().signal).started).toEqual(['focus']);
+    expect(on.calls).toEqual(['focus']);
+    const off = startBackgroundJobs(flags(), starters(), new AbortController().signal);
+    expect(off.notes.some(n => n.includes('FOCUS_ENABLED=false'))).toBe(true);
   });
 });

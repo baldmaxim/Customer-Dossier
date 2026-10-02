@@ -18,7 +18,7 @@ import { CompanyOverview } from '../components/company/CompanyOverview';
 import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanySimilar } from '../components/company/CompanySimilar';
-import { useCompany, useCompanyObjects } from '../components/company/useCompanyQueries';
+import { useCompany, useCompanyFocus, useCompanyObjects } from '../components/company/useCompanyQueries';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { Button } from '../components/ui/Button';
 import { ButtonLink } from '../components/ui/ButtonLink';
@@ -50,6 +50,8 @@ export const CompanyPage: FC = () => {
   const query = useCompany(companyId, valid);
   // Число объектов — у вкладки: запрос общий с «Обзором» и вкладкой, второго нет.
   const objects = useCompanyObjects(companyId, valid && query.isSuccess);
+  // Сведения ЕГРЮЛ для шапки — после карточки; не загрузились — шапка без них, ошибку покажет раздел «Подробно».
+  const focus = useCompanyFocus(companyId, valid && Boolean(query.data?.company));
   const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'overview'));
   const patch = useUrlPatch();
   const idBase = useId();
@@ -98,7 +100,7 @@ export const CompanyPage: FC = () => {
     }));
     header = {
       title: company.name,
-      meta: <CompanyRequisites data={data} />,
+      meta: <CompanyRequisites data={data} focus={focus.data?.fields ? focus.data : null} />,
       actions: (
         <ButtonLink to={`/links?company=${company.id}`} icon="links">
           Схема связей

@@ -5,7 +5,7 @@
 // Все строки всех перечисленных таблиц хешируются целиком. Исключение колонки допускается только
 // с причиной в `excludedColumns`; сейчас исключений нет. Секретов в открытом виде в базе нет (ADR-014):
 // пароль — только хеш scrypt, идентификатор сессии — только sha256, ключ OpenRouter из админки — шифротекст
-// AES-256-GCM (app_secrets, миграция 032), ключ доступа (passkey) — только открытый ключ (user_passkeys, 034);
+// AES-256-GCM (app_secrets, миграция 032; там же ключ Контур.Фокуса, 040), ключ доступа (passkey) — только открытый ключ (user_passkeys, 034);
 // в fingerprint входит хеш от хеша или шифротекста.
 
 export const MANIFEST_VERSION = 'content-manifest@1';
@@ -87,6 +87,10 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   // Заказчики в реестре застройщиков (миграция 037)
   { table: 'domrf_company_searches', class: 'operational', why: 'поиск компании портала в реестре застройщиков: запрос, срок, ошибка' },
   { table: 'domrf_company_links', class: 'domain', why: 'найденные застройщики и группы заказчика и решения оператора: это он, не он, указан вручную' },
+  // Контур.Фокус (миграция 040, ADR-015)
+  { table: 'focus_checks', class: 'operational', why: 'что и когда спрашивали у Контур.Фокуса: срок следующей проверки, ошибка' },
+  { table: 'focus_records', class: 'domain', why: 'ответы Контур.Фокуса (ЕГРЮЛ/ЕГРИП) как есть: новая строка только при изменении' },
+  { table: 'focus_requests', class: 'history', why: 'журнал запросов к API Контур.Фокуса: расход тарифа и отказы, без ключа' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];
@@ -107,6 +111,7 @@ export const CONFIG_KEYS = [
   'DOMRF_BROWSER_ENABLED',
   'PIPELINE_ENABLED',
   'METRICS_AUTO_REFRESH',
+  'FOCUS_ENABLED',
   'BOT_ENABLED',
   'REPROCESS_AUTO_PUBLISH',
   'MERGE_APPLY_ENABLED',
@@ -135,8 +140,10 @@ export const CONFIG_DENYLIST = [
   'LMSTUDIO_BASE_URL',
   // Ключ OpenRouter (LLM_PROVIDER=openrouter): ни значением, ни хешем.
   'LLM_API_KEY',
+  // Ключ Контур.Фокуса (ADR-015): ни значением, ни хешем.
+  'FOCUS_API_KEY',
   'DATABASE_SSL_CA_PATH',
 ] as const;
 
 /** Фоновые задания: после восстановления обязаны быть выключены до ручного решения оператора. */
-export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'DOMRF_BROWSER_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED'] as const;
+export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'DOMRF_BROWSER_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'FOCUS_ENABLED', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED'] as const;

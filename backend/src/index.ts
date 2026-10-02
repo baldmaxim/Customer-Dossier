@@ -16,6 +16,8 @@ import { runHeadlinePass } from './headline/service.js';
 import { runDomRfHintPass } from './ingest/registry/domrfHints.js';
 import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
+import { startFocusScheduler } from './focus/scheduler.js';
+import { loadStoredFocusKey } from './settings/focusKey.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -146,6 +148,15 @@ const main = async (): Promise<void> => {
     console.warn('[llm] ключ OpenRouter из админки не расшифровывается (сменился пароль базы?) — задайте его в админке заново');
   }
 
+  // Ключ Контур.Фокуса из админки — тоже до фоновых заданий (ADR-015).
+  const focusKey = await loadStoredFocusKey().catch(err => {
+    console.warn(`[focus] ключ из админки не прочитан: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  });
+  if (focusKey?.problem === 'undecryptable') {
+    console.warn('[focus] ключ Контур.Фокуса из админки не расшифровывается (сменился пароль базы?) — задайте его в админке заново');
+  }
+
   const decision = startBackgroundJobs(
     env,
     {
@@ -153,6 +164,7 @@ const main = async (): Promise<void> => {
       domrf: startDomRfBrowserWorker,
       pipeline: startPipelineWorker,
       metrics: startMetricsScheduler,
+      focus: startFocusScheduler,
       bot: signal => void runBotLoop(signal),
     },
     controller.signal,

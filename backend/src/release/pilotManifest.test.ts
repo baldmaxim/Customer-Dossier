@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { pilotGate, type IPilotEnvFlags, type IPilotGateInput, type IPilotSourceRow } from './pilotManifest.js';
 
-const env: IPilotEnvFlags = { INGEST_ENABLED: false, PIPELINE_ENABLED: false, BOT_ENABLED: false, METRICS_AUTO_REFRESH: false, REPROCESS_AUTO_PUBLISH: false, MERGE_APPLY_ENABLED: false, HOST: '127.0.0.1' };
+const env: IPilotEnvFlags = { INGEST_ENABLED: false, PIPELINE_ENABLED: false, BOT_ENABLED: false, METRICS_AUTO_REFRESH: false, FOCUS_ENABLED: false, REPROCESS_AUTO_PUBLISH: false, MERGE_APPLY_ENABLED: false, HOST: '127.0.0.1' };
 
 const manifest = (over: Record<string, unknown> = {}) => ({
   contract: 'pilot-manifest@1',

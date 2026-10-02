@@ -1,0 +1,26 @@
+/* Страница Контур.Фокуса: пояснения мелким и журнал запросов строками. */
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Строка журнала: на 360px переносится по словам, текст ошибки Фокуса — строкой ниже. */
+.request {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}

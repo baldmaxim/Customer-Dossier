@@ -29,6 +29,7 @@ const ALL_PERMISSIONS: AccessPermission[] = [
   'dossier.manage',
   'users.manage',
   'llm.manage',
+  'focus.manage',
 ];
 
 /**

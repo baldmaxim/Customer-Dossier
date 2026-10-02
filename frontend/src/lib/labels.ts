@@ -11,6 +11,9 @@
 import type {
   AccessPermission,
   AssertionStatus,
+  FocusRequestOutcome,
+  FocusTargetProblem,
+  IFocusRequestRow,
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
@@ -707,7 +710,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const USER_ROLE_HINTS: Record<UserRole, string> = {
-  admin: 'всё, что может оператор, плюс пользователи, права, журнал входа и ключ модели',
+  admin: 'всё, что может оператор, плюс пользователи, права, журнал входа, ключ модели и ключ Контур.Фокуса',
   operator: 'портал и админка: источники, обработка, проверка и объединение дублей',
   viewer: 'только поиск, карточки компаний и объектов, публикации и связи',
 };
@@ -724,6 +727,7 @@ export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
   'dossier.manage': 'Обращения и снимки: изменять (раздел снят)',
   'users.manage': 'Пользователи, права и журнал входа',
   'llm.manage': 'Модель: ключ OpenRouter',
+  'focus.manage': 'Контур.Фокус: ключ доступа',
 };
 
 /**
@@ -762,6 +766,40 @@ export const LLM_KEY_PROBLEM_LABELS: Record<LlmKeyProblem, string> = {
 export const LLM_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
   store_missing: 'не применена миграция 032 (таблица app_secrets); до этого действует LLM_API_KEY из .env',
   undecryptable: 'ключ шифруется от пароля из DATABASE_URL: после смены пароля старый ключ не расшифровать',
+};
+
+/** Технические подробности ключа Фокуса — только в подсказке администратору. */
+export const FOCUS_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {
+  admin: 'хранится в базе зашифрованным; на экран возвращаются только четыре последних символа',
+  env: 'FOCUS_API_KEY в .env сервера; ключ, заданный в админке, главнее',
+  none: 'без ключа портал не обращается к Контур.Фокусу вовсе',
+};
+
+export const FOCUS_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
+  store_missing: 'не применена миграция 032 (таблица app_secrets); до этого действует FOCUS_API_KEY из .env',
+  undecryptable: 'ключ шифруется от пароля из DATABASE_URL: после смены пароля старый ключ не расшифровать',
+};
+
+export const FOCUS_TARGET_PROBLEM_LABELS: Record<FocusTargetProblem, string> = {
+  no_identifier: 'У компании нет ИНН или ОГРН — Контур.Фокус ищет только по реквизитам.',
+  several_identifiers: 'У компании несколько разных ИНН или ОГРН — пока не ясно, какой её, сведения не запрашиваются.',
+};
+
+export const FOCUS_METHOD_LABELS: Record<IFocusRequestRow['method'], string> = {
+  req: 'реквизиты и статус',
+  egrDetails: 'деятельность и учредители',
+  stat: 'проверка ключа',
+};
+
+export const FOCUS_REQUEST_OUTCOME_LABELS: Record<FocusRequestOutcome, string> = {
+  ok: 'ответ получен',
+  key_rejected: 'ключ не принят',
+  method_forbidden: 'не входит в тариф',
+  quota_exhausted: 'тариф исчерпан',
+  rate_limited: 'слишком часто',
+  bad_response: 'непонятный ответ',
+  http_error: 'ошибка Фокуса',
+  network: 'нет связи',
 };
 
 export const DOMRF_CANDIDATE_STATE_LABELS: Record<DomRfCandidateState, string> = {

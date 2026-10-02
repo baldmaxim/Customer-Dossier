@@ -11,6 +11,7 @@ export interface IJobFlags {
   HEADLINE_ENABLED: boolean;
   DOMRF_HINT_ENABLED: boolean;
   METRICS_AUTO_REFRESH: boolean;
+  FOCUS_ENABLED: boolean;
   BOT_ENABLED: boolean;
   TG_BOT_TOKEN: string;
 }
@@ -20,6 +21,7 @@ export interface IJobStarters {
   domrf: (signal: AbortSignal) => void;
   pipeline: (signal: AbortSignal) => void;
   metrics: (signal: AbortSignal) => void;
+  focus: (signal: AbortSignal) => void;
   bot: (signal: AbortSignal) => void;
 }
 
@@ -79,6 +81,14 @@ export const startBackgroundJobs = (
     decision.started.push('metrics');
   } else {
     decision.notes.push('автопересчёт метрик выключен (METRICS_AUTO_REFRESH=false)');
+  }
+
+  if (flags.FOCUS_ENABLED) {
+    // Без ключа проход ничего не запрашивает: включённый флаг сам по себе денег не тратит.
+    starters.focus(signal);
+    decision.started.push('focus');
+  } else {
+    decision.notes.push('обновление сведений Контур.Фокуса по расписанию выключено (FOCUS_ENABLED=false): только кнопкой в карточке');
   }
 
   if (flags.BOT_ENABLED && flags.TG_BOT_TOKEN !== '') {

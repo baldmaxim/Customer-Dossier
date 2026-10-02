@@ -22,6 +22,8 @@ process.env.TG_BOT_ALLOWED_USER_IDS = '';
 process.env.INGEST_ENABLED = 'false';
 process.env.PIPELINE_ENABLED = 'false';
 process.env.METRICS_AUTO_REFRESH = 'false';
+process.env.FOCUS_ENABLED = 'false';
+process.env.FOCUS_API_KEY = '';
 process.env.BOT_ENABLED = 'false';
 // Флаги записи из сессии разработчика (например, после проверки слияния) не должны
 // менять поведение unit-тестов.

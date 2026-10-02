@@ -33,6 +33,7 @@ export const adminRoutes: RouteObject[] = [
     children: [
       { path: 'sources', lazy: lazyPage(pages => pages.SourcesPage) },
       { path: 'sources/domrf', lazy: lazyPage(pages => pages.DomRfPage) },
+      { path: 'sources/focus', lazy: lazyPage(pages => pages.FocusPage) },
       { path: 'process', lazy: lazyPage(pages => pages.RunsPage) },
       { path: 'process/:id', lazy: lazyPage(pages => pages.RunPage) },
       { path: 'review', lazy: lazyPage(pages => pages.ReviewQueuePage) },

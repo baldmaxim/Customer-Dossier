@@ -1,6 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
+import type { IFocusView } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -211,10 +212,58 @@ const notComputed = {
   signals: null,
 };
 
+/** Сведения ЕГРЮЛ из Контур.Фокуса: по умолчанию Фокус не подключён — шапка и разделы как раньше. */
+export const focusView = (over: Partial<IFocusView> = {}): IFocusView => ({
+  configured: false,
+  scheduled: true,
+  refreshDays: 14,
+  identifier: { type: 'inn', value: '7701000001' },
+  problem: null,
+  check: null,
+  fetchedAt: null,
+  fields: [],
+  summary: null,
+  focusHref: null,
+  changes: [],
+  coverage: { loaded: 0, truncated: false },
+  attribution: 'Сведения ЕГРЮЛ/ЕГРИП по данным Контур.Фокуса на дату проверки. Это записи государственного реестра в изложении сервиса, а не оценка компании.',
+  ...over,
+});
+
+/** Компания найдена в Фокусе: руководитель сменился при последнем обновлении. */
+export const focusFound = (over: Partial<IFocusView> = {}): IFocusView =>
+  focusView({
+    configured: true,
+    check: { outcome: 'found', checkedAt: '2026-10-02T08:00:00Z', nextCheckAt: '2026-10-16T08:00:00Z', attemptCount: 0, lastError: null },
+    fetchedAt: '2026-10-01T08:00:00Z',
+    fields: [
+      { key: 'name', label: 'Краткое наименование', value: 'ООО "МОСТОСТРОЙ"' },
+      { key: 'status', label: 'Статус', value: 'Действующее' },
+      { key: 'heads', label: 'Руководитель', value: 'Петров Пётр Петрович — Генеральный директор, с 01.09.2026' },
+      { key: 'address', label: 'Юридический адрес', value: '420000, Респ Татарстан, г Казань, ул Баумана, д 1' },
+      { key: 'activity', label: 'Основной вид деятельности', value: '42.13 Строительство мостов и тоннелей' },
+    ],
+    summary: {
+      status: 'Действующее',
+      head: 'Петров Пётр Петрович — Генеральный директор, с 01.09.2026',
+      address: '420000, Респ Татарстан, г Казань, ул Баумана, д 1',
+    },
+    focusHref: 'https://focus.kontur.ru/entity?query=1027700000001',
+    changes: [
+      {
+        fetchedAt: '2026-10-01T08:00:00Z',
+        changes: [{ label: 'Руководитель', from: 'Иванов Иван Иванович — Генеральный директор', to: 'Петров Пётр Петрович — Генеральный директор, с 01.09.2026' }],
+      },
+    ],
+    coverage: { loaded: 3, truncated: false },
+    ...over,
+  });
+
 export const companyRoutes = ({
   withRegistry = false,
   registryOver = {},
-}: { withRegistry?: boolean; registryOver?: Record<string, unknown> } = {}): IFakeRoute[] => [
+  focus = focusView(),
+}: { withRegistry?: boolean; registryOver?: Record<string, unknown>; focus?: IFocusView } = {}): IFakeRoute[] => [
   {
     match: 'GET /api/companies/7/publications',
     respond: () => ({
@@ -236,6 +285,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },
   { match: 'GET /api/assertions/', respond: () => ({ status: 404, body: { error: 'нет в тесте' } }) },
   { match: 'GET /api/graph', respond: () => ({ status: 200, body: { nodes: [], edges: [], truncated: false, notes: [] } }) },
+  { match: 'GET /api/companies/7/focus', respond: () => ({ status: 200, body: focus }) },
   {
     match: 'GET /api/companies/7',
     respond: () => ({ status: 200, body: withRegistry ? { ...company, registry: { ...registry, ...registryOver } } : company }),

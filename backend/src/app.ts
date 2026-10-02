@@ -13,6 +13,7 @@ import { createAttachAuth, createAuthRouter, createRequireAccess, type IAuthOpti
 import { createUsersRouter } from './api/users.routes.js';
 import { llmRouter } from './api/llm.routes.js';
 import { domrfRouter } from './api/domrf.routes.js';
+import { focusRouter } from './api/focus.routes.js';
 import { passkeyRelyingParty, PasskeyService } from './auth/passkeys.js';
 import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
@@ -76,6 +77,7 @@ export const dataRouters = (service: AuthService, passkeys: PasskeyService | nul
   ['/admin', adminRouter],
   ['/admin', llmRouter],
   ['/admin', domrfRouter],
+  ['', focusRouter],
   ['', revisionsRouter],
   ['', assertionsRouter],
   ['', reprocessRouter],

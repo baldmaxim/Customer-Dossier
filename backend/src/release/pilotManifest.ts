@@ -88,6 +88,7 @@ export interface IPilotEnvFlags {
   PIPELINE_ENABLED: boolean;
   BOT_ENABLED: boolean;
   METRICS_AUTO_REFRESH: boolean;
+  FOCUS_ENABLED: boolean;
   REPROCESS_AUTO_PUBLISH: boolean;
   MERGE_APPLY_ENABLED: boolean;
   HOST: string;
@@ -149,7 +150,7 @@ export const pilotGate = (input: IPilotGateInput): IPilotGateResult => {
   }
 
   // Фон и запреты
-  for (const flag of ['INGEST_ENABLED', 'PIPELINE_ENABLED', 'BOT_ENABLED', 'METRICS_AUTO_REFRESH'] as const) {
+  for (const flag of ['INGEST_ENABLED', 'PIPELINE_ENABLED', 'BOT_ENABLED', 'METRICS_AUTO_REFRESH', 'FOCUS_ENABLED'] as const) {
     if (input.env[flag]) blockers.push(`${flag}=true: фоновые задачи в пилоте выключены, шаги запускаются вручную`);
   }
   if (input.env.REPROCESS_AUTO_PUBLISH) blockers.push('REPROCESS_AUTO_PUBLISH=true: в пилоте каждая публикация — после ручной проверки');

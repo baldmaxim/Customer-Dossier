@@ -1,0 +1,23 @@
+[
+  {
+    "inn": "7701000001",
+    "ogrn": "1027700000001",
+    "focusHref": "https://focus.kontur.ru/entity?query=1027700000001",
+    "UL": {
+      "activities": {
+        "principalActivity": { "code": "41.20", "text": "Строительство жилых и нежилых зданий", "date": "2016-07-11" },
+        "complementaryActivities": [{ "code": "43.99", "text": "Работы строительные специализированные прочие, не включенные в другие группировки", "date": "2016-07-11" }],
+        "okvedVersion": "2014"
+      },
+      "regInfo": { "ogrnDate": "2002-08-15", "regName": "Межрайонная инспекция ФНС № 46 по г. Москве" },
+      "statedCapital": { "sum": 10000, "date": "2015-03-02" },
+      "foundersFL": [
+        { "fio": "Иванов Иван Иванович", "innfl": "770100000000", "share": { "sumInRubles": 5100, "percentagePlain": 51 }, "date": "2021-04-01" },
+        { "fio": "Петров Пётр Петрович", "innfl": "770100000001", "share": { "sumInRubles": 4900, "percentagePlain": 49 }, "date": "2021-04-01" }
+      ],
+      "foundersUL": [],
+      "predecessors": [],
+      "successors": []
+    }
+  }
+]

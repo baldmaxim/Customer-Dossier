@@ -1332,7 +1332,8 @@ export type AccessPermission =
   | 'dossier.view'
   | 'dossier.manage'
   | 'users.manage'
-  | 'llm.manage';
+  | 'llm.manage'
+  | 'focus.manage';
 
 export interface IAuthUser {
   id: number;
@@ -1453,6 +1454,90 @@ export type LlmKeyVerdict = 'accepted' | 'exhausted' | 'unreachable';
 export interface ILlmKeySaved {
   key: ILlmKeyStatus;
   check: { verdict: LlmKeyVerdict; error: string | null };
+}
+
+// ─── Контур.Фокус (ADR-015) ──────────────────────────────────────────────────
+
+/** Ключ Фокуса устроен как ключ OpenRouter: источник, четыре последних символа, кто и когда задал. */
+export type IFocusKeyStatus = ILlmKeyStatus;
+
+export interface IFocusField {
+  key: string;
+  label: string;
+  value: string;
+}
+
+export interface IFocusChangeEntry {
+  fetchedAt: string;
+  changes: Array<{ label: string; from: string | null; to: string | null }>;
+}
+
+/** no_identifier — у компании нет ИНН/ОГРН; several_identifiers — их несколько разных. */
+export type FocusTargetProblem = 'no_identifier' | 'several_identifiers';
+
+/** Сведения ЕГРЮЛ/ЕГРИП о компании по данным Контур.Фокуса. */
+export interface IFocusView {
+  configured: boolean;
+  scheduled: boolean;
+  refreshDays: number;
+  identifier: { type: 'inn' | 'ogrn'; value: string } | null;
+  problem: FocusTargetProblem | null;
+  check: {
+    outcome: 'found' | 'not_found' | null;
+    checkedAt: string | null;
+    nextCheckAt: string;
+    attemptCount: number;
+    lastError: string | null;
+  } | null;
+  fetchedAt: string | null;
+  fields: IFocusField[];
+  summary: { status: string | null; head: string | null; address: string | null } | null;
+  focusHref: string | null;
+  changes: IFocusChangeEntry[];
+  coverage: { loaded: number; truncated: boolean };
+  attribution: string;
+}
+
+export interface IFocusRefreshed {
+  outcome: 'found' | 'not_found';
+  saved: number;
+  view: IFocusView;
+}
+
+export type FocusRequestOutcome =
+  | 'ok'
+  | 'key_rejected'
+  | 'method_forbidden'
+  | 'quota_exhausted'
+  | 'rate_limited'
+  | 'bad_response'
+  | 'http_error'
+  | 'network';
+
+export interface IFocusRequestRow {
+  requestedAt: string;
+  method: 'req' | 'egrDetails' | 'stat';
+  identifiersCount: number;
+  httpStatus: number | null;
+  outcome: FocusRequestOutcome;
+  error: string | null;
+  actor: string;
+}
+
+export interface IFocusSettings {
+  key: IFocusKeyStatus;
+  enabled: boolean;
+  dailyLimit: number;
+  refreshDays: number;
+  usedLastDay: number;
+  coverage: { companies: number; identifiers: number; found: number; notFound: number; due: number; failing: number };
+  recent: IFocusRequestRow[];
+}
+
+/** accepted — Фокус принял ключ; unknown — проверить не удалось, ключ сохранён. */
+export interface IFocusKeySaved {
+  key: IFocusKeyStatus;
+  check: { verdict: 'accepted' | 'unknown'; error: string | null };
 }
 
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────

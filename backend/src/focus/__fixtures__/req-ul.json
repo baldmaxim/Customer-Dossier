@@ -1,0 +1,44 @@
+[
+  {
+    "inn": "7701000001",
+    "ogrn": "1027700000001",
+    "focusHref": "https://focus.kontur.ru/entity?query=1027700000001",
+    "UL": {
+      "kpp": "770101001",
+      "okpo": "12345678",
+      "okato": "45286555000",
+      "okfs": "16",
+      "oktmo": "45375000000",
+      "okogu": "4210014",
+      "okopf": "12300",
+      "opf": "Общество с ограниченной ответственностью",
+      "legalName": {
+        "short": "ООО \"ТЕСТСТРОЙ\"",
+        "full": "ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ \"ТЕСТСТРОЙ\"",
+        "date": "2015-03-02"
+      },
+      "legalAddress": {
+        "parsedAddressRF": {
+          "zipCode": "101000",
+          "regionCode": "77",
+          "regionName": { "topoShortName": "г", "topoFullName": "город", "topoValue": "Москва" },
+          "street": { "topoShortName": "ул", "topoFullName": "улица", "topoValue": "Мясницкая" },
+          "house": { "topoShortName": "д", "topoFullName": "дом", "topoValue": "1" },
+          "flat": { "topoShortName": "офис", "topoFullName": "офис", "topoValue": "5" },
+          "kladrCode": "770000000000000"
+        },
+        "date": "2019-06-10",
+        "firstDate": "2019-06-10"
+      },
+      "status": { "statusString": "Действующее", "reorganizing": false, "dissolving": false, "dissolved": false },
+      "registrationDate": "2002-08-15",
+      "heads": [
+        { "fio": "Иванов Иван Иванович", "innfl": "770100000000", "position": "Генеральный директор", "date": "2023-01-20", "firstDate": "2021-04-01" }
+      ],
+      "managementCompanies": [],
+      "history": {}
+    },
+    "briefReport": { "summary": { "greenStatements": true, "yellowStatements": false, "redStatements": false } },
+    "contactPhones": { "count": 2 }
+  }
+]

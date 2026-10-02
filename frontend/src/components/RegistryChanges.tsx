@@ -19,9 +19,15 @@ export const registryDateText = (asOf: string | null, fetchedAt: string): string
 interface IRegistryChangesProps {
   changes: IRegistryChangeEntry[];
   title?: string;
+  /** Подпись даты изменения; по умолчанию — дата сведений реестра. */
+  dateText?: (entry: IRegistryChangeEntry) => string;
 }
 
-export const RegistryChanges: FC<IRegistryChangesProps> = ({ changes, title = 'Что изменилось в реестре' }) => {
+export const RegistryChanges: FC<IRegistryChangesProps> = ({
+  changes,
+  title = 'Что изменилось в реестре',
+  dateText = entry => registryDateText(entry.asOf, entry.fetchedAt),
+}) => {
   if (changes.length === 0) return null;
   return (
     <section className={styles.changes}>
@@ -29,7 +35,7 @@ export const RegistryChanges: FC<IRegistryChangesProps> = ({ changes, title = '�
       <ul className={styles.changeList}>
         {changes.map(entry => (
           <li key={entry.fetchedAt} className={styles.change}>
-            <span className={styles.changeDate}>{registryDateText(entry.asOf, entry.fetchedAt)}</span>
+            <span className={styles.changeDate}>{dateText(entry)}</span>
             <ul className={styles.fieldChanges}>
               {entry.changes.map(change => (
                 <li key={change.label}>

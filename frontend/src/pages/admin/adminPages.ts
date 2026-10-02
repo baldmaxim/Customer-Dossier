@@ -4,6 +4,7 @@
 export { AccountPage } from '../AccountPage';
 export { AdminLayout } from './AdminLayout';
 export { DomRfPage } from './DomRfPage';
+export { FocusPage } from './FocusPage';
 export { ModelPage } from './ModelPage';
 export { ReviewQueuePage } from './ReviewQueuePage';
 export { RunPage } from './RunPage';

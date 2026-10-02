@@ -145,6 +145,16 @@ export const parseEnv = (source: EnvSource) => {
     // роль застройщика, связь с группой. Модель не участвует. false — реестр собирается
     // снимками, но карточки из него не строятся; собранное остаётся в базе.
     REGISTRY_PUBLISH_ENABLED: parseStrictBool('REGISTRY_PUBLISH_ENABLED', source.REGISTRY_PUBLISH_ENABLED, true),
+    // Контур.Фокус (ADR-015): сведения ЕГРЮЛ/ЕГРИП о компаниях портала по ИНН/ОГРН. Сервис платный —
+    // каждый запрос списывается с тарифа. Без ключа (админка или FOCUS_API_KEY) запросов нет при любом
+    // флаге. FOCUS_ENABLED — обновление по расписанию; кнопка «Обновить» в карточке работает и без него.
+    FOCUS_ENABLED: parseStrictBool('FOCUS_ENABLED', source.FOCUS_ENABLED, true),
+    // Секрет: не логируется и не входит в manifest. Ключ из админки главнее.
+    FOCUS_API_KEY: source.FOCUS_API_KEY?.trim() ?? '',
+    // Сколько запросов к Фокусу за скользящие сутки (расписание и кнопка вместе). Компания — два запроса.
+    FOCUS_DAILY_LIMIT: parsePositiveInt('FOCUS_DAILY_LIMIT', source.FOCUS_DAILY_LIMIT, 100),
+    // Через сколько дней сведения компании запрашиваются снова.
+    FOCUS_REFRESH_DAYS: parsePositiveInt('FOCUS_REFRESH_DAYS', source.FOCUS_REFRESH_DAYS, 14),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

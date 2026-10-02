@@ -26,6 +26,8 @@ export const PERMISSIONS = [
   'users.manage',
   // Модель: ключ OpenRouter в админке (вкладка «Модель»).
   'llm.manage',
+  // Контур.Фокус: ключ API в админке («Источники» → Контур.Фокус, ADR-015).
+  'focus.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -34,8 +36,9 @@ export const ROLES = ['admin', 'operator', 'viewer'] as const;
 
 export type Role = (typeof ROLES)[number];
 
-// Только администратору: пользователи и ключ модели — ключ OpenRouter это деньги счёта.
-const ADMIN_ONLY: readonly Permission[] = ['users.manage', 'llm.manage'];
+// Только администратору: пользователи и ключи платных сервисов — ключ OpenRouter и ключ Контур.Фокуса
+// это деньги счёта.
+const ADMIN_ONLY: readonly Permission[] = ['users.manage', 'llm.manage', 'focus.manage'];
 const OPERATOR_PERMISSIONS = PERMISSIONS.filter(p => !ADMIN_ONLY.includes(p));
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {

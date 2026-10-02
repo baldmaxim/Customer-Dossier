@@ -80,6 +80,9 @@ const WRITES: Record<string, string> = {
   'POST /admin/domrf-companies/:companyId/search': 'sources.manage',
   'POST /admin/domrf-hints/permission': 'sources.manage',
   'DELETE /admin/llm/key': 'llm.manage',
+  'POST /companies/:id/focus/refresh': 'sources.manage',
+  'PUT /admin/focus/key': 'focus.manage',
+  'DELETE /admin/focus/key': 'focus.manage',
 };
 
 describe('таблица прав маршрутов', () => {
@@ -116,6 +119,14 @@ describe('таблица прав маршрутов', () => {
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('users.manage'), role).toBe(role === 'admin');
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('llm.manage'), role).toBe(role === 'admin');
     expect(permissionFor('GET', '/admin/llm')).toBe('admin.view');
+  });
+
+  it('Контур.Фокус: ключ — только администратор, «Обновить» — оператор, сведения читает любой вошедший', () => {
+    for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('focus.manage'), role).toBe(role === 'admin');
+    expect(permissionFor('GET', '/admin/focus')).toBe('admin.view');
+    expect(permissionFor('GET', '/companies/5/focus')).toBe('portal.read');
+    expect(permissionFor('POST', '/companies/5/focus/refresh')).toBe('sources.manage');
+    expect(ROLE_PERMISSIONS.viewer.includes('sources.manage')).toBe(false);
   });
 
   it('заявку на доступ рассматривает только администратор; подаёт её роутер входа, не таблица', () => {

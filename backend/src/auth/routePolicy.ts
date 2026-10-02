@@ -47,6 +47,10 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
   // Модель: ключ OpenRouter.
   { methods: 'write', pattern: /^\/admin\/llm(\/|$)/, permission: 'llm.manage' },
 
+  // Контур.Фокус (ADR-015): ключ — только администратор; «Обновить» в карточке — запрос за деньги тарифа.
+  { methods: 'write', pattern: /^\/admin\/focus(\/|$)/, permission: 'focus.manage' },
+  { methods: 'write', pattern: /^\/companies\/[^/]+\/focus\/refresh$/, permission: 'sources.manage' },
+
   // Разбор, публикация наборов, пересчёт сигналов.
   { methods: 'write', pattern: /^\/reprocess\//, permission: 'pipeline.manage' },
   { methods: 'write', pattern: /^\/admin\/metrics\/refresh$/, permission: 'pipeline.manage' },

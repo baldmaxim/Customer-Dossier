@@ -1,0 +1,14 @@
+[
+  {
+    "inn": "770100000002",
+    "ogrn": "304770000000002",
+    "focusHref": "https://focus.kontur.ru/entity?query=304770000000002",
+    "IP": {
+      "fio": "Сидоров Сидор Сидорович",
+      "okpo": "0012345678",
+      "registrationDate": "2004-02-01",
+      "dissolutionDate": "2020-12-31",
+      "status": { "statusString": "Индивидуальный предприниматель прекратил деятельность", "dissolved": true, "date": "2020-12-31" }
+    }
+  }
+]

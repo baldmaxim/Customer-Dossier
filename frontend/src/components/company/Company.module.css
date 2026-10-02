@@ -237,3 +237,21 @@
   color: var(--accent);
   font-weight: var(--fw-regular);
 }
+
+/* ─── ЕГРЮЛ (Контур.Фокус) ───
+   Ссылка на карточку в самом Фокусе — цель нажатия высотой с малую кнопку. */
+.focusLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--ctl-h-sm);
+  font-size: var(--fs-sm);
+}
+
+/* Под реквизитами шапки: откуда статус, руководитель и адрес и на какую дату. */
+.reqSource {
+  margin: var(--sp-1) 0 0;
+  max-width: var(--prose);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}

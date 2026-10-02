@@ -18,6 +18,7 @@
     "domrf:once": "tsx src/ingest/registry/browserCli.ts",
     "pipeline:once": "tsx src/pipeline/cli.ts",
     "metrics:refresh": "tsx src/metrics/cli.ts",
+    "focus": "tsx src/focus/cli.ts",
     "backfill:revisions": "tsx src/revisions/cli.ts",
     "backfill:assertions": "tsx src/assertions/cli.ts",
     "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts",

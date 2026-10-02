@@ -40,6 +40,8 @@ export const TEST_PROCESS_ENV: Readonly<Record<string, string>> = {
   INGEST_ENABLED: 'false',
   PIPELINE_ENABLED: 'false',
   METRICS_AUTO_REFRESH: 'false',
+  FOCUS_ENABLED: 'false',
+  FOCUS_API_KEY: '',
   BOT_ENABLED: 'false',
   REPROCESS_AUTO_PUBLISH: 'false',
   MERGE_APPLY_ENABLED: 'false',
