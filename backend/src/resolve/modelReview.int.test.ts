@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
-import { runModelReviewPass, type EntityMatchCaller } from './modelReview.js';
+import { applyJudgedPairs, runModelReviewPass, type EntityMatchCaller } from './modelReview.js';
 
 const company = async (name: string, inn: string | null = null): Promise<number> => {
   const id = (
@@ -84,5 +84,14 @@ describe('разбор пар «возможный дубль» моделью',
     expect(results.find(r => r.queueId === q)).toMatchObject({ verdict: 'same', action: 'blocked' });
     expect(await row(q)).toMatchObject({ status: 'pending', model_verdict: 'same' });
     expect(await runModelReviewPass({ limit: 10, apply: true, caller })).toEqual([]);
+  });
+
+  it('вердикт прогона «посмотреть» применяется потом без вызова модели', async () => {
+    const q = await pair(await company('Демо-Дельта'), await company('Демо-Дельта'));
+    await runModelReviewPass({ limit: 10, apply: false, caller: answer('different') });
+    expect(await row(q)).toMatchObject({ status: 'pending', model_verdict: 'different' });
+    const applied = await applyJudgedPairs(10);
+    expect(applied.find(r => r.queueId === q)).toMatchObject({ action: 'rejected' });
+    expect(await row(q)).toMatchObject({ status: 'rejected' });
   });
 });

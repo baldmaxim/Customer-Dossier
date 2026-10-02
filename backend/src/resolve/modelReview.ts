@@ -346,6 +346,70 @@ export const runModelReviewPass = async (
   return results;
 };
 
+const registryRefOf = async (projectId: number): Promise<string | null> =>
+  (
+    await queryOne<{ external_ref: string }>(
+      `SELECT external_ref FROM registry_records WHERE project_id = $1 AND record_type = 'object' ORDER BY fetched_at DESC LIMIT 1`,
+      [projectId],
+    )
+  )?.external_ref ?? null;
+
+/**
+ * Применить уже вынесенные вердикты нынешней модели: прогон «посмотреть» записал их без применения, а
+ * проход оценки берёт только пары без вердикта. Пары, где применить не вышло (decision_note), повторно
+ * не трогаются — их видит оператор. Модель не вызывается.
+ */
+export const applyJudgedPairs = async (limit = 500): Promise<IPairJudgement[]> => {
+  const rows = await query<IPairRow & { model_verdict: EntityMatchVerdict; model_reason: string }>(
+    `SELECT q.id, q.entity_kind, q.source_entity_id, q.target_entity_id, q.model_verdict, q.model_reason
+     FROM merge_queue q
+     WHERE q.status = 'pending' AND q.decision_note IS NULL AND q.model_verdict IN ('same', 'different')
+       AND q.model_name = $2 AND q.model_prompt_version = $3
+     ORDER BY q.score DESC, q.id
+     LIMIT $1`,
+    [limit, env.LMSTUDIO_MODEL, ENTITY_MATCH_PROMPT_VERSION],
+  );
+  const results: IPairJudgement[] = [];
+  for (const pair of rows) {
+    let preview: IMergePreview;
+    try {
+      preview = await previewMerge(pair.entity_kind, pair.source_entity_id, pair.target_entity_id);
+    } catch (err) {
+      if (err instanceof MergeNotFoundError) continue;
+      throw err;
+    }
+    // Одна из карточек уже слита другой парой — эта пара больше не про действующие карточки.
+    if (preview.source.mergedIntoId !== null || preview.target.mergedIntoId !== null) continue;
+    const base = {
+      queueId: pair.id,
+      kind: pair.entity_kind,
+      sourceId: pair.source_entity_id,
+      targetId: pair.target_entity_id,
+      sourceName: preview.source.name,
+      targetName: preview.target.name,
+      verdict: pair.model_verdict,
+      reason: pair.model_reason,
+      by: 'model' as const,
+    };
+    if (pair.model_verdict === 'different') {
+      results.push({ ...base, action: (await rejectPair(pair.id, pair.model_reason)) ? 'rejected' : 'judged', note: null });
+      continue;
+    }
+    const regs = pair.entity_kind === 'project'
+      ? [await registryRefOf(pair.source_entity_id), await registryRefOf(pair.target_entity_id)]
+      : [null, null];
+    try {
+      const merged = await mergePair(pair, preview, regs[0]!, regs[1]!, pair.model_reason);
+      results.push({ ...base, action: merged.action, note: merged.note });
+    } catch (err) {
+      const note = `слияние не выполнено: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500);
+      await noteOn(pair.id, note);
+      results.push({ ...base, action: 'blocked', note });
+    }
+  }
+  return results;
+};
+
 /** Сколько пар ждёт решения и сколько уже с вердиктом нынешней модели — для экрана и CLI. */
 export const modelReviewCounts = async (): Promise<{ judged: number; waiting: number }> =>
   (await queryOne<{ judged: number; waiting: number }>(

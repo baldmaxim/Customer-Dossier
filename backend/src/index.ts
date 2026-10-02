@@ -16,7 +16,7 @@ import { runHeadlinePass } from './headline/service.js';
 import { applyDomRfModelDecisions } from './ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from './ingest/registry/domrfHints.js';
 import { syncDomRfGroupRelations } from './registry/groupSync.js';
-import { runModelReviewPass } from './resolve/modelReview.js';
+import { applyJudgedPairs, runModelReviewPass } from './resolve/modelReview.js';
 import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 import { startFocusScheduler } from './focus/scheduler.js';
@@ -112,7 +112,9 @@ const startPipelineWorker = (signal: AbortSignal): void => {
           const sync = await syncDomRfGroupRelations();
           if (sync.linked + sync.withdrawn > 0) console.log(`[model-review] связи с группами: записано ${sync.linked}, снято ${sync.withdrawn}`);
         }
-        const pairs = await runModelReviewPass();
+        // Включили применение после прогона «посмотреть» — сначала прежние вердикты, без вызова модели.
+        const stored = env.MODEL_REVIEW_APPLY ? await applyJudgedPairs(env.MODEL_REVIEW_BATCH_SIZE) : [];
+        const pairs = [...stored, ...(await runModelReviewPass())];
         for (const p of pairs.filter(p => p.action !== 'judged')) {
           console.log(`[model-review] «${p.sourceName}» ↔ «${p.targetName}»: ${p.verdict} — ${p.action}${p.note ? ` (${p.note})` : ''}; ${p.reason}`);
         }

@@ -13,7 +13,7 @@ import { loadStoredLlmKey } from '../settings/llmKey.js';
 import { syncDomRfGroupRelations } from '../registry/groupSync.js';
 import { applyDomRfModelDecisions } from '../ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from '../ingest/registry/domrfHints.js';
-import { modelReviewCounts, runModelReviewPass } from './modelReview.js';
+import { applyJudgedPairs, modelReviewCounts, runModelReviewPass, type IPairJudgement } from './modelReview.js';
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
@@ -52,14 +52,20 @@ try {
     console.log(`ДОМ.РФ: связи «входит в группу» — записано ${sync.linked}, снято ${sync.withdrawn}`);
   }
 
-  const pairs = await runModelReviewPass({ limit, apply });
-  console.log(`\nДубли: пар разобрано — ${pairs.length}`);
+  // С --apply сначала применяются вердикты, вынесенные прогоном «посмотреть», затем оцениваются новые пары.
+  const stored: IPairJudgement[] = apply ? await applyJudgedPairs(limit) : [];
+  const pairs = [...stored, ...(await runModelReviewPass({ limit, apply }))];
+  console.log(`\nДубли: пар разобрано — ${pairs.length}${apply ? ` (по прежним вердиктам — ${stored.length})` : ''}`);
   for (const p of pairs) {
     const kind = p.kind === 'company' ? 'компании' : 'объекты';
     console.log(
       `  [${kind}] «${p.sourceName}» (№ ${p.sourceId}) ↔ «${p.targetName}» (№ ${p.targetId}): ${p.verdict}` +
         ` (${p.by === 'rule' ? 'правило' : 'модель'}) — ${p.reason}; ${ACTION_WORDS[p.action] ?? p.action}${p.note ? ` (${p.note})` : ''}`,
     );
+  }
+  if (apply) {
+    const by = (action: string): number => pairs.filter(p => p.action === action).length;
+    console.log(`Итог: слито ${by('merged')}, отклонено ${by('rejected')}, не применено ${by('blocked')}, только вердикт ${by('judged')}`);
   }
   const counts = await modelReviewCounts();
   console.log(`\nОсталось пар без вердикта нынешней модели: ${counts.waiting}; с вердиктом и ждут решения: ${counts.judged}`);
