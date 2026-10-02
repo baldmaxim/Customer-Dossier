@@ -81,6 +81,9 @@ const WRITES: Record<string, string> = {
   'POST /admin/domrf-hints/permission': 'sources.manage',
   'DELETE /admin/llm/key': 'llm.manage',
   'POST /companies/:id/focus/refresh': 'sources.manage',
+  'POST /companies/': 'companies.manage',
+  'PUT /companies/:id/watch': 'companies.manage',
+  'DELETE /companies/:id/watch': 'companies.manage',
   'PUT /admin/focus/key': 'focus.manage',
   'DELETE /admin/focus/key': 'focus.manage',
 };
@@ -143,7 +146,7 @@ describe('таблица прав маршрутов', () => {
   it('изменение без правила запрещено; чтение без правила — портал', () => {
     expect(permissionFor('POST', '/no-such-route')).toBeNull();
     expect(permissionFor('DELETE', '/companies/1')).toBeNull();
-    expect(permissionFor('OPTIONS', '/companies')).toBeNull();
+    expect(permissionFor('OPTIONS', '/contractors')).toBeNull();
     expect(permissionFor('GET', '/no-such-route')).toBe('portal.read');
     expect(permissionFor('HEAD', '/admin/sources')).toBe('admin.view');
   });

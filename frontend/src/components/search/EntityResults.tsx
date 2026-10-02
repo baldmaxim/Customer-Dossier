@@ -17,6 +17,7 @@ import { Callout } from '../ui/Callout';
 import { EmptyState } from '../ui/EmptyState';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
+import { AddCompanyByInn, missingIdentifier } from '../company/AddCompanyByInn';
 import { CompanyResults } from './CompanyResults';
 import { ProjectResults } from './ProjectResults';
 
@@ -37,6 +38,8 @@ export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
   });
   const found = companies.data?.items ?? [];
   const foundProjects = projects.data?.items ?? [];
+  // Набран реквизит, а карточки с ним нет — предложить завести компанию (ADR-016).
+  const missing = companies.isSuccess ? missingIdentifier(query, found.flatMap(c => c.identifiers ?? [])) : null;
 
   if (companies.isLoading || projects.isLoading) {
     return <LoadingSkeleton label="Ищу компании и объекты…" lines={6} height="44px" />;
@@ -62,6 +65,7 @@ export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
     );
   }
   if (found.length === 0 && foundProjects.length === 0) {
+    if (missing) return <AddCompanyByInn identifier={missing} />;
     return (
       <EmptyState title="Ничего не найдено" icon="search" action={<Button onClick={onClear}>Очистить поиск</Button>}>
         Компании и объекты не найдены. Проверьте написание или попробуйте часть названия.
@@ -73,6 +77,7 @@ export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
   const variant = wide ? 'card' : 'plain';
   return (
     <Stack gap={5}>
+      {missing && <AddCompanyByInn identifier={missing} />}
       {found.length > 0 && (
         <Section title="Компании" note={`найдено: ${formatCount(found.length)}`} variant={variant}>
           <CompanyResults items={found} wide={wide} />

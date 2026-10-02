@@ -41,6 +41,31 @@ export interface ICompany {
   mergedIntoId: number | null;
   entityType?: EntityType;
   version?: number;
+  /** Заведена по реквизиту, наименование ЕГРЮЛ ещё не пришло: имя временное («ИНН …», ADR-016). */
+  namePending?: boolean;
+}
+
+/** «На контроле» (ADR-016): кто и когда поставил. */
+export interface ICompanyWatch {
+  addedBy: string;
+  addedAt: string;
+}
+
+export type FocusStopReason = 'no_key' | 'limit' | 'key_rejected' | 'quota_exhausted' | 'rate_limited';
+
+/** Что ответил Контур.Фокус при заведении компании; заведение от ответа не зависит. */
+export type RegisterFocusOutcome =
+  | { status: 'found' | 'not_found' | 'already_checked' }
+  | { status: 'stopped'; reason: FocusStopReason }
+  | { status: 'failed'; error: string };
+
+/** Ответ POST /api/companies — компания по ИНН/ОГРН. */
+export interface ICompanyRegistered {
+  companyId: number;
+  /** false — карточка с этим реквизитом уже была. */
+  created: boolean;
+  identifier: { type: string; value: string };
+  focus: RegisterFocusOutcome;
 }
 
 export type EntityType = 'legal_entity' | 'brand' | 'group' | 'unknown';
@@ -159,6 +184,8 @@ export interface ICompanyResponse {
   relations?: ICompanyRelation[];
   registry?: IRegistryView | null;
   registryProjects?: IRegistryProjectRow[];
+  /** «На контроле»; null — не стоит. */
+  watch?: ICompanyWatch | null;
   /** Приходит вместо остального, если компания слита в другую. */
   mergedInto?: number;
 }
@@ -1349,7 +1376,8 @@ export type AccessPermission =
   | 'dossier.manage'
   | 'users.manage'
   | 'llm.manage'
-  | 'focus.manage';
+  | 'focus.manage'
+  | 'companies.manage';
 
 export interface IAuthUser {
   id: number;

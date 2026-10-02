@@ -255,3 +255,17 @@
   color: var(--muted);
   font-size: var(--fs-xs);
 }
+
+/* ─── «На контроле» (ADR-016) ───
+   Читателю без права переключения — подпись вместо кнопки, той же высоты, что малая кнопка. */
+.watchBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-full);
+  background: var(--neutral-bg);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}

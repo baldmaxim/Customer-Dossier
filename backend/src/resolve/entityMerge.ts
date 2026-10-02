@@ -183,6 +183,8 @@ export const dependencyState = async (
     // ДОМ.РФ (этап 20D): поиск компании в реестре застройщиков и найденные совпадения с решениями оператора.
     put('domRfCompanyLinks', await rows(`SELECT id || ':' || company_id || ':' || state AS k FROM domrf_company_links WHERE company_id = ANY($1::bigint[])`));
     put('domRfCompanySearches', await rows(`SELECT id || ':' || company_id AS k FROM domrf_company_searches WHERE company_id = ANY($1::bigint[])`));
+    // «На контроле» (ADR-016, миграция 042).
+    put('companyWatch', await rows(`SELECT id || ':' || company_id || ':' || coalesce(removed_at::text, '') AS k FROM company_watch WHERE company_id = ANY($1::bigint[])`));
   } else {
     put('registryRecords', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM registry_records WHERE project_id = ANY($1::bigint[])`));
     put('domRfTargets', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM domrf_targets WHERE project_id = ANY($1::bigint[])`));
@@ -551,6 +553,8 @@ const MOVABLE: Record<string, Record<string, string>> = {
   // ДОМ.РФ (этап 20D): поиск компании и совпадения с реестром застройщиков переносятся к цели.
   domrf_company_searches: { company_id: 'bigint' },
   domrf_company_links: { company_id: 'bigint' },
+  // «На контроле» (ADR-016): отметки переносятся к цели.
+  company_watch: { company_id: 'bigint' },
   entity_identifiers: { company_id: 'bigint' },
   company_relations: { from_company_id: 'bigint', to_company_id: 'bigint' },
   merge_queue: { status: 'merge_status' },
@@ -559,7 +563,7 @@ const MOVABLE: Record<string, Record<string, string>> = {
   dossier_cases: { company_id: 'bigint', claimed_client_company_id: 'bigint', project_id: 'bigint' },
 };
 
-const DELETABLE = new Set(['entity_aliases', 'mentions', 'project_participants', 'domrf_company_searches', 'domrf_company_links']);
+const DELETABLE = new Set(['entity_aliases', 'mentions', 'project_participants', 'domrf_company_searches', 'domrf_company_links', 'company_watch']);
 
 const updateColumn = async (
   client: PoolClient,
@@ -679,6 +683,20 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
     ).rows[0];
     if (search?.target) await deleteRow(client, moves, 'domrf_company_searches', search.id);
     else if (search) await updateColumn(client, moves, 'domrf_company_searches', search.id, 'company_id', s, t);
+    // «На контроле»: действующая отметка одна на компанию — у цели уже стоит, отметка источника удаляется
+    // с образом; снятые отметки — история, переносятся как есть.
+    const watches = (
+      await client.query<{ id: number; duplicate: boolean }>(
+        `SELECT w.id, (w.removed_at IS NULL AND EXISTS (
+                  SELECT 1 FROM company_watch x WHERE x.company_id = $2 AND x.removed_at IS NULL)) AS duplicate
+         FROM company_watch w WHERE w.company_id = $1 ORDER BY w.id`,
+        [s, t],
+      )
+    ).rows;
+    for (const watch of watches) {
+      if (watch.duplicate) await deleteRow(client, moves, 'company_watch', watch.id);
+      else await updateColumn(client, moves, 'company_watch', watch.id, 'company_id', s, t);
+    }
   } else {
     for (const id of await idsOf(client, 'SELECT id FROM domrf_targets WHERE project_id = $1 ORDER BY id', [s])) {
       await updateColumn(client, moves, 'domrf_targets', id, 'project_id', s, t);

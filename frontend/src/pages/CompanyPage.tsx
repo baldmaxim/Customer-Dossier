@@ -19,6 +19,7 @@ import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanySimilar } from '../components/company/CompanySimilar';
 import { useCompany, useCompanyFocus, useCompanyObjects } from '../components/company/useCompanyQueries';
+import { WatchToggle } from '../components/company/WatchToggle';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { Button } from '../components/ui/Button';
 import { ButtonLink } from '../components/ui/ButtonLink';
@@ -102,9 +103,12 @@ export const CompanyPage: FC = () => {
       title: company.name,
       meta: <CompanyRequisites data={data} focus={focus.data?.fields ? focus.data : null} />,
       actions: (
-        <ButtonLink to={`/links?company=${company.id}`} icon="links">
-          Схема связей
-        </ButtonLink>
+        <>
+          <WatchToggle companyId={company.id} watch={data.watch ?? null} />
+          <ButtonLink to={`/links?company=${company.id}`} icon="links">
+            Схема связей
+          </ButtonLink>
+        </>
       ),
       children: (
         <>

@@ -138,8 +138,8 @@ const TAX_ID_SQL = `(SELECT ei.value FROM entity_identifiers ei
 const ROLES_SQL = `SELECT company_id, array_agg(DISTINCT role ORDER BY role) AS roles FROM card_participations_v WHERE is_current GROUP BY company_id`;
 
 /**
- * Следующая компания к поиску: ещё не искали или срок вышел, и нет подтверждённой страницы. Сначала —
- * чей срок пришёл («Искать снова», повтор после ошибки, месячный пересмотр), затем ещё не искавшиеся
+ * Следующая компания к поиску: ещё не искали или срок вышел, и нет подтверждённой страницы. Компании
+ * «на контроле» (ADR-016) — вне очереди. Затем — чей срок пришёл («Искать снова», повтор после ошибки, месячный пересмотр), затем ещё не искавшиеся
  * по пользе: заказчики и застройщики, с реквизитом, группы и бренды, остальные участники, остальные.
  * Название без отличительных слов не ищется — помечается для оператора. Аренда — next_search_at на
  * 10 минут вперёд; строки компаний не блокируются: работник один.
@@ -156,7 +156,8 @@ export const claimDomRfCompanySearch = async (): Promise<IDomRfCompanyToSearch |
          WHERE c.merged_into_id IS NULL
            AND (s.company_id IS NULL OR s.next_search_at <= now())
            AND NOT EXISTS (SELECT 1 FROM domrf_company_links l WHERE l.company_id = c.id AND l.state = 'confirmed')
-         ORDER BY s.next_search_at NULLS LAST,
+         ORDER BY EXISTS (SELECT 1 FROM company_watch w WHERE w.company_id = c.id AND w.removed_at IS NULL) DESC,
+                  s.next_search_at NULLS LAST,
                   coalesce(r.roles && ARRAY['customer', 'developer'], false) DESC,
                   (${TAX_ID_SQL} IS NOT NULL) DESC,
                   (c.entity_type IN ('group', 'brand')) DESC,

@@ -12,6 +12,7 @@ import type {
   AccessPermission,
   AssertionStatus,
   FocusRequestOutcome,
+  FocusStopReason,
   FocusTargetProblem,
   IFocusRequestRow,
   LlmKeyProblem,
@@ -728,6 +729,7 @@ export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
   'users.manage': 'Пользователи, права и журнал входа',
   'llm.manage': 'Модель: ключ OpenRouter',
   'focus.manage': 'Контур.Фокус: ключ доступа',
+  'companies.manage': 'Компании: завести по ИНН, поставить на контроль',
 };
 
 /**
@@ -783,6 +785,19 @@ export const FOCUS_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
 export const FOCUS_TARGET_PROBLEM_LABELS: Record<FocusTargetProblem, string> = {
   no_identifier: 'У компании нет ИНН или ОГРН — Контур.Фокус ищет только по реквизитам.',
   several_identifiers: 'У компании несколько разных ИНН или ОГРН — пока не ясно, какой её, сведения не запрашиваются.',
+};
+
+/** Чем кончился запрос Фокуса при заведении компании по ИНН (ADR-016) — фраза для тоста. */
+export const REGISTER_FOCUS_LABELS: Record<'found' | 'not_found' | 'already_checked' | 'failed' | FocusStopReason, string> = {
+  found: 'Сведения ЕГРЮЛ получены из Контур.Фокуса.',
+  not_found: 'Контур.Фокус не знает компанию с этим реквизитом — проверьте цифры.',
+  already_checked: 'Сведения ЕГРЮЛ уже были получены раньше.',
+  failed: 'Контур.Фокус не ответил — сведения придут с обновлением по расписанию.',
+  no_key: 'Контур.Фокус не подключён — наименование и сведения ЕГРЮЛ появятся, когда администратор задаст ключ.',
+  limit: 'Суточный лимит запросов к Контур.Фокусу исчерпан — сведения придут позже.',
+  key_rejected: 'Контур.Фокус не принял ключ — его нужно заменить в админке.',
+  quota_exhausted: 'Тариф Контур.Фокуса исчерпан.',
+  rate_limited: 'Контур.Фокус просит обращаться реже — сведения придут позже.',
 };
 
 export const FOCUS_METHOD_LABELS: Record<IFocusRequestRow['method'], string> = {

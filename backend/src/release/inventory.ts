@@ -66,6 +66,7 @@ export const COUNTED_TABLES = [
   'focus_checks',
   'focus_records',
   'focus_requests',
+  'company_watch',
   'bot_processed_updates',
   'source_policy_log',
   'backfill_checkpoints',

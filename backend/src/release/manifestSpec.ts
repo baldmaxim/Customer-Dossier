@@ -91,6 +91,8 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'focus_checks', class: 'operational', why: 'что и когда спрашивали у Контур.Фокуса: срок следующей проверки, ошибка' },
   { table: 'focus_records', class: 'domain', why: 'ответы Контур.Фокуса (ЕГРЮЛ/ЕГРИП) как есть: новая строка только при изменении' },
   { table: 'focus_requests', class: 'history', why: 'журнал запросов к API Контур.Фокуса: расход тарифа и отказы, без ключа' },
+  // Портал от компании (миграция 042, ADR-016)
+  { table: 'company_watch', class: 'domain', why: 'компании «на контроле»: кто и когда поставил и снял' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];

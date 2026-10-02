@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
 import { getPool } from '../db/pool.js';
 import { focusApiKey, loadStoredFocusKey } from '../settings/focusKey.js';
 import { FOCUS_METHODS } from './client.js';
+import { syncFocusIdentity } from './identity.js';
 import { newPassState, refreshFocusTarget, type FocusRefreshResult } from './refresh.js';
 import { pgFocusStore, SCHEDULER_ACTOR } from './store.js';
 import { dueFocusTargets } from './targets.js';
@@ -54,6 +55,8 @@ export const runFocusPass = async (signal?: AbortSignal): Promise<IFocusPassRepo
       state,
     });
     results.push({ identifier: `${target.type}:${target.value}`, result });
+    // Наименование ЕГРЮЛ — в написания компании и в имя карточки, заведённой по реквизиту (ADR-016).
+    if (result.status === 'found') await syncFocusIdentity(getPool(), target);
     if (result.status === 'stopped') break;
   }
   return { skipped: null, results };

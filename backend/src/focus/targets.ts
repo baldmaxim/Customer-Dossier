@@ -60,8 +60,9 @@ const ROLES_SQL = `roles AS MATERIALIZED (
 )`;
 
 /**
- * Чья очередь: срок проверки пришёл или не спрашивали никогда. Заказчики и застройщики — первыми
- * (портал про то, «как дела у Заказчика»), среди них — ни разу не спрошенные, затем самые давние.
+ * Чья очередь: срок проверки пришёл или не спрашивали никогда. Компании «на контроле» (ADR-016) — первыми,
+ * затем заказчики и застройщики (портал про то, «как дела у Заказчика»), среди них — ни разу не спрошенные,
+ * затем самые давние.
  */
 export const dueFocusTargets = async (db: DbExecutor, limit: number): Promise<IFocusIdentifier[]> => {
   const rows = (
@@ -70,10 +71,12 @@ export const dueFocusTargets = async (db: DbExecutor, limit: number): Promise<IF
        SELECT t.kind, t.value
        FROM targets t
        LEFT JOIN roles r ON r.company_id = t.company_id
+       LEFT JOIN company_watch w ON w.company_id = t.company_id AND w.removed_at IS NULL
        LEFT JOIN focus_checks f ON f.identifier_type = t.kind AND f.identifier = t.value
        WHERE t.kind IS NOT NULL AND (f.id IS NULL OR f.next_check_at <= now())
        GROUP BY t.kind, t.value
-       ORDER BY bool_or(coalesce(r.roles && ARRAY['customer', 'developer'], false)) DESC,
+       ORDER BY bool_or(w.id IS NOT NULL) DESC,
+                bool_or(coalesce(r.roles && ARRAY['customer', 'developer'], false)) DESC,
                 (min(f.next_check_at) IS NULL) DESC, min(f.next_check_at), t.value
        LIMIT $1`,
       [limit],

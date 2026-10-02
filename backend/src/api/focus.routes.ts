@@ -11,6 +11,7 @@ import { actorOfContext, LOCAL_CONTEXT } from '../auth/service.js';
 import { env } from '../config/env.js';
 import { getPool, query } from '../db/pool.js';
 import { checkFocusKey } from '../focus/client.js';
+import { syncFocusIdentity } from '../focus/identity.js';
 import { loadCompanyFocus } from '../focus/read.js';
 import { refreshFocusTarget, type FocusStopReason } from '../focus/refresh.js';
 import { pgFocusStore } from '../focus/store.js';
@@ -97,6 +98,7 @@ focusRouter.post('/companies/:id/focus/refresh', async (req, res) => {
     sendError(res, 502, `Контур.Фокус не ответил: ${result.error}`, 'focus_failed');
     return;
   }
+  if (result.status === 'found') await syncFocusIdentity(getPool(), target);
   res.json({ outcome: result.status, saved: result.saved, view: await loadCompanyFocus(getPool(), id) });
 });
 

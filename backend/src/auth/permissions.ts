@@ -28,6 +28,8 @@ export const PERMISSIONS = [
   'llm.manage',
   // Контур.Фокус: ключ API в админке («Источники» → Контур.Фокус, ADR-015).
   'focus.manage',
+  // Компании: завести по ИНН/ОГРН, поставить на контроль и снять (ADR-016).
+  'companies.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
