@@ -1,8 +1,8 @@
-// Карточка компании: шапка (имя, реквизиты сеткой, «Схема связей») и вкладки — «Обзор · Объекты ·
-// Публикации · Подробно». Вкладка, открытый пост и фильтры объектов — в адресе (?tab=, ?post=,
-// ?orole=, ?osrc=): «Назад»
-// возвращает прежнюю вкладку, ссылкой можно поделиться. Содержимое вкладок — в
-// components/company/*, здесь только сборка и состояния загрузки.
+// Карточка компании: шапка (наименование по ЕГРЮЛ, реквизиты сеткой, «На контроле», «Схема связей») и
+// вкладки в порядке сути портала (ADR-016) — «Сведения · Объекты · Публикации · Подробно»: сначала
+// юрлицо, потом его объекты, потом публикации. Вкладка, открытый пост и фильтры объектов — в адресе
+// (?tab=, ?post=, ?orole=, ?osrc=): «Назад» возвращает прежнюю вкладку, ссылкой можно поделиться.
+// Содержимое вкладок — в components/company/*, здесь только сборка и состояния загрузки.
 //
 // Шапка одна во всех состояниях и стоит на том же месте дерева: заголовок страницы (h1)
 // остаётся тем же элементом, пока данные грузятся, — фокус после перехода не теряется,
@@ -14,7 +14,7 @@ import { Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { CompanyDetails } from '../components/company/CompanyDetails';
 import { CompanyObjects } from '../components/company/CompanyObjects';
-import { CompanyOverview } from '../components/company/CompanyOverview';
+import { CompanyInfo } from '../components/company/CompanyInfo';
 import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanySimilar } from '../components/company/CompanySimilar';
@@ -32,11 +32,11 @@ import { enumParam, useUrlPatch, useUrlState } from '../hooks/useUrlState';
 import { describeLoadError } from '../lib/loadError';
 import styles from './CompanyPage.module.css';
 
-const TAB_VALUES = ['overview', 'objects', 'publications', 'details'] as const;
+const TAB_VALUES = ['info', 'objects', 'publications', 'details'] as const;
 type Tab = (typeof TAB_VALUES)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
-  overview: 'Обзор',
+  info: 'Сведения',
   objects: 'Объекты',
   publications: 'Публикации',
   details: 'Подробно',
@@ -53,7 +53,7 @@ export const CompanyPage: FC = () => {
   const objects = useCompanyObjects(companyId, valid && query.isSuccess);
   // Сведения ЕГРЮЛ для шапки — после карточки; не загрузились — шапка без них, ошибку покажет раздел «Подробно».
   const focus = useCompanyFocus(companyId, valid && Boolean(query.data?.company));
-  const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'overview'));
+  const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'info'));
   const patch = useUrlPatch();
   const idBase = useId();
 
@@ -92,7 +92,7 @@ export const CompanyPage: FC = () => {
   } else {
     const { company } = data;
     const selectTab = (next: Tab): void =>
-      patch({ tab: next === 'overview' ? null : next, post: null, orole: null, osrc: null }, { history: 'push' });
+      patch({ tab: next === 'info' ? null : next, post: null, orole: null, osrc: null }, { history: 'push' });
     const objectsTotal = objects.data?.coverage.total;
     const tabs = TAB_VALUES.map(value => ({
       value,
@@ -100,7 +100,8 @@ export const CompanyPage: FC = () => {
       count: value === 'objects' && objectsTotal !== undefined && objectsTotal > 0 ? objectsTotal : undefined,
     }));
     header = {
-      title: company.name,
+      // Наименование по ЕГРЮЛ, если Фокус его прислал; имя из публикаций — строкой реквизитов.
+      title: data.egrul?.name ?? company.name,
       meta: <CompanyRequisites data={data} focus={focus.data?.fields ? focus.data : null} />,
       actions: (
         <>
@@ -112,17 +113,17 @@ export const CompanyPage: FC = () => {
       ),
       children: (
         <>
-          {/* Похожие — только на «Обзоре»: в «Подробно» они в «Опознании», а на читалке каждая
+          {/* Похожие — только на «Сведениях»: в «Подробно» они в «Опознании», а на читалке каждая
               строка высоты отнята у поста. */}
-          {tab === 'overview' && <CompanySimilar companyId={company.id} />}
+          {tab === 'info' && <CompanySimilar companyId={company.id} />}
           {/* Вкладки — записи истории: стрелки только ведут фокус, выбор — Enter или пробел. */}
           <Tabs label="Разделы компании" idBase={idBase} items={tabs} value={tab} onChange={selectTab} activation="manual" />
         </>
       ),
     };
     body = (
-      <TabPanel idBase={idBase} value={tab} focusable={tab === 'overview'} className={reader ? styles.readerPanel : styles.panel}>
-        {tab === 'overview' && <CompanyOverview companyId={company.id} />}
+      <TabPanel idBase={idBase} value={tab} focusable={tab === 'info'} className={reader ? styles.readerPanel : styles.panel}>
+        {tab === 'info' && <CompanyInfo companyId={company.id} data={data} />}
         {tab === 'objects' && <CompanyObjects companyId={company.id} />}
         {tab === 'publications' && <CompanyPublications companyId={company.id} />}
         {tab === 'details' && <CompanyDetails companyId={company.id} data={data} />}

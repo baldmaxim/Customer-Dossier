@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
-import { loadCompanyWatch } from '../companies/watch.js';
+import { loadCardExtras } from '../companies/cardExtras.js';
 import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
@@ -229,9 +229,9 @@ companiesRouter.get('/:id', async (req, res) => {
   // Реестр: карточка застройщика и его объекты по снимкам (этап 20B).
   const registry = await loadCompanyRegistry(getPool(), id);
   const registryProjects = await loadCompanyRegistryProjects(getPool(), id);
-  // «На контроле» (ADR-016): кто и когда поставил; null — не стоит.
-  const watch = await loadCompanyWatch(getPool(), id);
-  res.json({ company, aliases, identifiers, relations, registry, registryProjects, watch });
+  // ADR-016: «На контроле» и наименование со статусом по ЕГРЮЛ (заголовок карточки); null — нет.
+  const { watch, egrul } = await loadCardExtras(getPool(), id);
+  res.json({ company, aliases, identifiers, relations, registry, registryProjects, watch, egrul });
 });
 
 /**

@@ -1,5 +1,5 @@
 // Сведения ЕГРЮЛ из Контур.Фокуса на карточке компании (ADR-015): в шапке — статус, руководитель и
-// юридический адрес с подписью, откуда они и на какую дату; в «Подробно» — раздел «ЕГРЮЛ» с атрибуцией,
+// юридический адрес с подписью, откуда они и на какую дату; на первой вкладке «Сведения» (ADR-016) — раздел «ЕГРЮЛ» с атрибуцией,
 // «было — стало» и ссылкой на Фокус. «Обновить» — только тому, у кого sources.manage. Фокус не
 // подключён — шапка как раньше, раздел говорит это словами.
 
@@ -27,7 +27,7 @@ const as = (permissions: AccessPermission[], ui: ReactElement): ReactElement => 
 );
 
 const egrulSection = async (): Promise<HTMLElement> =>
-  (await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 })).closest('details')!;
+  (await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 })).closest('section')!;
 
 describe('Контур.Фокус на карточке компании', () => {
   it('шапка: статус, руководитель и юридический адрес — с подписью источника и даты', async () => {
@@ -44,7 +44,7 @@ describe('Контур.Фокус на карточке компании', () =>
 
   it('Фокус не подключён — в шапке строк ЕГРЮЛ нет; раздел говорит это словами', async () => {
     fakeApi(companyRoutes());
-    renderWithProviders(card(), '/company/7?tab=details');
+    renderWithProviders(card(), '/company/7');
 
     const section = await egrulSection();
     expect(await within(section).findByText(/Контур\.Фокус не подключён/)).toBeTruthy();
@@ -52,9 +52,9 @@ describe('Контур.Фокус на карточке компании', () =>
     expect(within(section).queryByRole('button', { name: /Обновить из Контур\.Фокуса/ })).toBeNull();
   });
 
-  it('«Подробно» → ЕГРЮЛ: строки, атрибуция, «было — стало», ссылка только на сам Фокус', async () => {
+  it('«Сведения» → ЕГРЮЛ: строки, атрибуция, «было — стало», ссылка только на сам Фокус', async () => {
     fakeApi(companyRoutes({ focus: focusFound() }));
-    renderWithProviders(card(), '/company/7?tab=details');
+    renderWithProviders(card(), '/company/7');
 
     const section = await egrulSection();
     expect(await within(section).findByText('42.13 Строительство мостов и тоннелей')).toBeTruthy();
@@ -79,7 +79,7 @@ describe('Контур.Фокус на карточке компании', () =>
       },
       ...companyRoutes({ focus: focusView({ configured: true }) }),
     ]);
-    renderWithProviders(card(), '/company/7?tab=details');
+    renderWithProviders(card(), '/company/7');
 
     const section = await egrulSection();
     expect(await within(section).findByText(/ещё не запрашивались — придут с обновлением по расписанию/)).toBeTruthy();
@@ -98,22 +98,32 @@ describe('Контур.Фокус на карточке компании', () =>
       },
       ...companyRoutes({ focus: focusView({ configured: true }) }),
     ]);
-    renderWithProviders(card(), '/company/7?tab=details');
+    renderWithProviders(card(), '/company/7');
     fireEvent.click(await within(await egrulSection()).findByRole('button', { name: 'Обновить из Контур.Фокуса' }));
     expect(await screen.findByText('Лимит запросов к Контур.Фокусу на сутки исчерпан')).toBeTruthy();
   });
 
   it('читатель видит сведения, но не кнопку', async () => {
     fakeApi(companyRoutes({ focus: focusFound() }));
-    renderWithProviders(as(['portal.read'], card()), '/company/7?tab=details');
+    renderWithProviders(as(['portal.read'], card()), '/company/7');
     const section = await egrulSection();
     expect(await within(section).findByText('42.13 Строительство мостов и тоннелей')).toBeTruthy();
     expect(within(section).queryByRole('button', { name: /Обновить/ })).toBeNull();
   });
 
-  it('у компании нет ИНН и ОГРН — так и сказано', async () => {
-    fakeApi(companyRoutes({ focus: focusView({ configured: true, identifier: null, problem: 'no_identifier' }) }));
-    renderWithProviders(card(), '/company/7?tab=details');
-    expect(await within(await egrulSection()).findByText(/нет ИНН или ОГРН/)).toBeTruthy();
+  it('у имени нет ИНН и ОГРН — вместо ЕГРЮЛ «Юрлицо не установлено» (ADR-016)', async () => {
+    fakeApi(companyRoutes({ focus: focusView({ configured: true, identifier: null, problem: 'no_identifier' }), companyOver: { identifiers: [] } }));
+    renderWithProviders(card(), '/company/7');
+    const section = (await screen.findByRole('heading', { name: 'Юрлицо не установлено', level: 2 })).closest('section')!;
+    expect(within(section).getByText(/имя из публикаций без ИНН/)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус' })).toBeNull();
+  });
+
+  it('заголовок — наименование по ЕГРЮЛ, имя из публикаций — строкой реквизитов', async () => {
+    fakeApi(companyRoutes({ focus: focusFound(), companyOver: { egrul: { name: 'ООО "МОСТОСТРОЙ"', fullName: null, status: 'Действующее', fetchedAt: '2026-10-02T08:00:00Z' } } }));
+    renderWithProviders(card(), '/company/7');
+    expect(await screen.findByRole('heading', { level: 1, name: 'ООО "МОСТОСТРОЙ"' })).toBeTruthy();
+    const requisites = screen.getByLabelText('Реквизиты');
+    expect(within(requisites).getByText('В публикациях').nextElementSibling?.textContent).toBe('ООО «Мостострой»');
   });
 });

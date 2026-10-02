@@ -45,6 +45,14 @@ export interface ICompany {
   namePending?: boolean;
 }
 
+/** Наименование и статус по ЕГРЮЛ — заголовок карточки (ADR-016); из последнего ответа Контур.Фокуса. */
+export interface ICompanyEgrul {
+  name: string | null;
+  fullName: string | null;
+  status: string | null;
+  fetchedAt: string;
+}
+
 /** «На контроле» (ADR-016): кто и когда поставил. */
 export interface ICompanyWatch {
   addedBy: string;
@@ -215,6 +223,8 @@ export interface ICompanyResponse {
   registryProjects?: IRegistryProjectRow[];
   /** «На контроле»; null — не стоит. */
   watch?: ICompanyWatch | null;
+  /** Наименование по ЕГРЮЛ; null — реквизита или ответа Фокуса нет. */
+  egrul?: ICompanyEgrul | null;
   /** Приходит вместо остального, если компания слита в другую. */
   mergedInto?: number;
 }

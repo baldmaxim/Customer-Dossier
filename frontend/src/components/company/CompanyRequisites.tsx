@@ -53,6 +53,9 @@ export const CompanyRequisites: FC<{ data: ICompanyResponse; focus?: IFocusView 
         ? [{ key: 'tax', label: 'ИНН/ОГРН', value: <CopyValue label="ИНН/ОГРН" value={company.taxId} /> }]
         : [{ key: 'tax', label: 'Реквизиты', value: 'не установлены' }];
 
+  // Заголовок — наименование ЕГРЮЛ (ADR-016); под каким именем компания в публикациях — здесь.
+  const egrulName = data.egrul?.name ?? null;
+  if (egrulName && egrulName !== company.name && !company.namePending) rows.push({ key: 'text-name', label: 'В публикациях', value: company.name });
   const kind = company.entityType && company.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[company.entityType] : null;
   const egrul = focus?.summary ?? null;
   if (egrul?.status) rows.push({ key: 'egrul-status', label: 'Статус в ЕГРЮЛ', value: egrul.status });

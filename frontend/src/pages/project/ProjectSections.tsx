@@ -1,5 +1,5 @@
-// Второстепенное об объекте — разделами: «Не учтено как участие», договоры, события, история
-// состояния и схема связей. Раздел, где есть что показать (до OPEN_UP_TO строк), раскрыт сразу:
+// Второстепенное об объекте — разделами: публикации об объекте (общей ленты нет, ADR-016), «Не учтено
+// как участие», договоры, события, история состояния и схема связей. Раздел, где есть что показать (до OPEN_UP_TO строк), раскрыт сразу:
 // закрытые пустые и непустые выглядели одинаково, и страница казалась пустой. Схема строится,
 // только когда её раскрыли.
 
@@ -9,6 +9,7 @@ import type { IProjectDossier } from '../../api/types';
 import { GraphPanel } from '../../components/GraphPanel';
 import { StatementList } from '../../components/StatementList';
 import { formatCount } from '../../lib/format';
+import { ProjectPublications } from './ProjectPublications';
 import { ProjectStateHistory } from './ProjectStateHistory';
 import { SectionDisclosure } from './SectionDisclosure';
 import styles from '../ProjectPage.module.css';
@@ -23,6 +24,9 @@ export const ProjectSections: FC<{ dossier: IProjectDossier }> = ({ dossier: d }
   const [graphOpen, setGraphOpen] = useState(false);
   return (
     <div className={styles.sections}>
+      <SectionDisclosure summary="Публикации об объекте" defaultOpen>
+        <ProjectPublications projectId={d.project.id} />
+      </SectionDisclosure>
       {d.notCounted.length > 0 && (
         <SectionDisclosure summary="Не учтено как участие" meta={countText(d.notCounted.length)}>
           <p className={styles.note}>Отрицание, план или слух: такие сообщения в участники не входят.</p>

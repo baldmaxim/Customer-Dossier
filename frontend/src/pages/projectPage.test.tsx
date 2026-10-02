@@ -94,6 +94,20 @@ const setup = (url: string, over: IFakeRoute[] = []) => {
     },
     { match: 'GET /api/assertions/5', respond: () => ({ status: 200, body: assertionResponse(5) }) },
     { match: 'GET /api/graph', respond: () => ({ status: 200, body: { nodes: [], edges: [], truncated: false, notes: [] } }) },
+    {
+      match: 'GET /api/projects/56/publications',
+      respond: () => ({
+        status: 200,
+        body: {
+          items: [{
+            itemId: 900, revisionId: 901, documentId: 902, title: null, topic: 'Начато строительство корпуса 2', publishedAt: '2026-09-20T09:00:00Z',
+            observedAt: '2026-09-20T09:05:00Z', sourceTitle: 'stroi_news', sourceKind: 'telegram', sourceKey: 'stroi_news', url: null,
+            completeness: 'full', snippet: 'Текст поста', facts: [], moreFacts: 0,
+          }],
+          nextCursor: null,
+        },
+      }),
+    },
   ]);
   const view = renderWithRouter([{ path: '/projects/:id', element: <ProjectPage /> }], [url]);
   return { api, ...view };
@@ -199,6 +213,15 @@ describe('Объект', () => {
     fireEvent.click(graph.querySelector('summary')!);
     graph.dispatchEvent(new Event('toggle'));
     await waitFor(() => expect(api.calls.some(c => c.url.startsWith('/api/graph?projectId=56'))).toBe(true));
+  });
+
+  it('публикации об объекте — разделом страницы (общей ленты нет): тема, канал, дата, ссылка на публикацию', async () => {
+    setup('/projects/56');
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Публикации об объекте' })).closest('details')!;
+    expect(section.open).toBe(true);
+    const link = await within(section).findByRole('link', { name: 'Начато строительство корпуса 2' });
+    expect(link.getAttribute('href')).toBe('/documents/902');
+    expect(within(section).getByText('@stroi_news · 20.09.2026')).toBeTruthy();
   });
 
   it('404 — «Объект не найден», сбой сервера — ошибка словами и «Повторить»', async () => {

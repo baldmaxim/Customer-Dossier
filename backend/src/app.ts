@@ -14,6 +14,7 @@ import { createUsersRouter } from './api/users.routes.js';
 import { llmRouter } from './api/llm.routes.js';
 import { domrfRouter } from './api/domrf.routes.js';
 import { focusRouter } from './api/focus.routes.js';
+import { projectPublicationsRouter } from './api/projectPublications.js';
 import { passkeyRelyingParty, PasskeyService } from './auth/passkeys.js';
 import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
@@ -82,6 +83,7 @@ export const dataRouters = (service: AuthService, passkeys: PasskeyService | nul
   ['/admin', llmRouter],
   ['/admin', domrfRouter],
   ['', focusRouter],
+  ['', projectPublicationsRouter],
   ['', revisionsRouter],
   ['', assertionsRouter],
   ['', reprocessRouter],

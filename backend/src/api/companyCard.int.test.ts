@@ -249,3 +249,22 @@ describe('каталог компаний от юрлица', () => {
     expect((await call('/api/catalog/companies?view=everything')).status).toBe(400);
   });
 });
+
+// Публикации объекта (ADR-016, этап 23C): общей ленты нет — объект показывает свои публикации сам.
+describe('публикации объекта', () => {
+  it('объект отдаёт обе публикации, где он назван, в форме ленты компании', async () => {
+    const project = (await getPool().query<{ id: number }>(`SELECT id FROM projects WHERE name ILIKE '%Картадемо%' AND merged_into_id IS NULL ORDER BY id LIMIT 1`)).rows[0]!;
+    const res = await call(`/api/projects/${project.id}/publications?limit=10`);
+    expect(res.status).toBe(200);
+    const items = res.body.items as Array<{ itemId: number; snippet: string; facts: unknown[] }>;
+    expect(items).toHaveLength(2);
+    expect(items.every(i => i.facts.length === 0)).toBe(true);
+    expect(items.map(i => i.snippet).join(' ')).toContain('Картасервис');
+    expect((await call('/api/projects/abc/publications')).status).toBe(400);
+  });
+
+  it('карточка компании отдаёт отметку «на контроле» и наименование ЕГРЮЛ (нет снимка Фокуса — null)', async () => {
+    const res = await call(`/api/companies/${companyId}`);
+    expect(res.body).toMatchObject({ watch: null, egrul: null });
+  });
+});

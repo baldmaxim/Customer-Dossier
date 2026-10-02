@@ -142,7 +142,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             label="Реестр"
             value={formatCount((company?.registryProjects ?? []).length)}
             detail={joinDetail(['объектов в реестре', registry.asOf ? `на ${formatDate(registry.asOf)}` : null])}
-            to={{ search: '?tab=details', hash: 'company-registry' }}
+            to={{ search: '', hash: 'company-registry' }}
             linkText="Сведения реестра"
           />
         )}

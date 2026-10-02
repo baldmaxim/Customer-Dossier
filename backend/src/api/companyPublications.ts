@@ -59,7 +59,7 @@ export interface IPublicationRow {
 /** Сколько утверждений показываем в строке ленты: остальное — на странице публикации. */
 const FACTS_PER_ITEM = 3;
 
-interface IItemRow {
+export interface IItemRow {
   itemId: number;
   revisionId: number;
   documentId: number | null;

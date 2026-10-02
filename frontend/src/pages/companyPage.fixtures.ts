@@ -6,7 +6,7 @@ import type { IFocusView } from '../api/types';
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
   aliases: [{ alias: 'Мостострой', hits: 3 }],
-  identifiers: [{ jurisdiction: 'RU', type: 'inn', value: '1655000000', validationStatus: 'checksum_ok', origin: 'registry' }],
+  identifiers: [{ jurisdiction: 'RU', type: 'inn', value: '1655000000', validationStatus: 'checksum_valid', origin: 'registry' }],
   relations: [],
   registry: null,
   mergedInto: null,
@@ -263,7 +263,8 @@ export const companyRoutes = ({
   withRegistry = false,
   registryOver = {},
   focus = focusView(),
-}: { withRegistry?: boolean; registryOver?: Record<string, unknown>; focus?: IFocusView } = {}): IFakeRoute[] => [
+  companyOver = {},
+}: { withRegistry?: boolean; registryOver?: Record<string, unknown>; focus?: IFocusView; companyOver?: Record<string, unknown> } = {}): IFakeRoute[] => [
   {
     match: 'GET /api/companies/7/publications',
     respond: () => ({
@@ -288,6 +289,9 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/focus', respond: () => ({ status: 200, body: focus }) },
   {
     match: 'GET /api/companies/7',
-    respond: () => ({ status: 200, body: withRegistry ? { ...company, registry: { ...registry, ...registryOver } } : company }),
+    respond: () => ({
+      status: 200,
+      body: { ...(withRegistry ? { ...company, registry: { ...registry, ...registryOver } } : company), ...companyOver },
+    }),
   },
 ];

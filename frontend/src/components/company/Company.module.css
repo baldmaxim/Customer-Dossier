@@ -269,3 +269,9 @@
   color: var(--text);
   font-size: var(--fs-sm);
 }
+
+/* «Юрлицо не установлено»: пояснение длиной в абзац — по ширине читаемого текста. */
+.unidentifiedText {
+  margin: 0;
+  max-width: var(--prose);
+}

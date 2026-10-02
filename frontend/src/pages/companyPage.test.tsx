@@ -1,11 +1,10 @@
-// Карточка компании: вкладки «Обзор · Объекты · Публикации · Подробно» (TG_Info CLAUDE.md), вкладка,
-// открытый пост и фильтры объектов — в адресе.
+// Карточка компании: вкладки «Сведения · Объекты · Публикации · Подробно» (ADR-016: сначала юрлицо,
+// потом объекты, потом публикации), вкладка, открытый пост и фильтры объектов — в адресе.
 //
-// Проверяется то, ради чего карточку пересобрали: обзор отвечает «как дела» (сводка, последние
-// события по дате, первые объекты карточками и переход на вкладку, контрагенты с цитатой по
-// раскрытию), «Объекты» — карточки со сведениями ДОМ.РФ и объектами застройщиков группы, публикации —
-// читалкой, «Подробно» — опознание, реестр, ЕГРЮЛ, все события, показатели, резюме и схема;
-// ошибка загрузки не выдаётся за «не найдена».
+// «Сведения» — ЕГРЮЛ, реестр застройщика, сводка-плитки и контрагенты с цитатой по раскрытию;
+// «Объекты» — карточки со сведениями ДОМ.РФ и объектами застройщиков группы, публикации — читалкой,
+// «Подробно» — опознание, все события, показатели, резюме и схема; ошибка загрузки не выдаётся за
+// «не найдена».
 
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
@@ -48,16 +47,17 @@ const phone = (): void => {
 };
 
 describe('Карточка компании', () => {
-  it('четыре вкладки, у «Объектов» — число; обзор — сводка, объекты и контрагенты, без ленты публикаций', async () => {
+  it('четыре вкладки, первая — «Сведения»: ЕГРЮЛ, сводка и контрагенты, без ленты публикаций', async () => {
     fakeApi(companyRoutes());
     renderCard();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'ООО «Мостострой»' })).toBeTruthy();
     const tabs = screen.getByRole('tablist', { name: 'Разделы компании' });
     await waitFor(() =>
-      expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Обзор', 'Объекты1', 'Публикации', 'Подробно']),
+      expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Сведения', 'Объекты1', 'Публикации', 'Подробно']),
     );
-    expect(within(tabs).getByRole('tab', { name: 'Обзор' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(tabs).getByRole('tab', { name: 'Сведения' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 })).toBeTruthy();
     expect(await screen.findByText('ООО «Дорсервис»')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Коротко о компании' })).toBeTruthy();
     expect(screen.queryByText('Подряд на развязку передан другой фирме')).toBeNull();
@@ -104,22 +104,6 @@ describe('Карточка компании', () => {
     expect(within(requisites).getByText('Адрес в реестре').nextElementSibling?.textContent).toBe('Казань, ул. Баумана, 1');
   });
 
-  it('объекты на обзоре — карточки-ссылки на страницу объекта, роли ярлыками; «Все объекты» ведёт на вкладку', async () => {
-    fakeApi(companyRoutes());
-    renderCard();
-
-    const section = (await screen.findByRole('heading', { name: 'Объекты', level: 2 })).closest('section')!;
-    const links = await within(section).findAllByRole('link', { name: 'Развязка на М-7' });
-    expect(links).toHaveLength(1);
-    expect(links[0]!.getAttribute('href')).toBe('/projects/55');
-    expect(links[0]!.closest('article')?.className).toContain('row-link');
-    expect(within(section).getByText('генподрядчик')).toBeTruthy();
-    expect(within(section).getByText('заказчик')).toBeTruthy();
-    expect(within(section).getByText('Строится')).toBeTruthy();
-    expect(within(section).getByText('только из публикаций')).toBeTruthy();
-    expect(within(section).getByRole('link', { name: 'Все объекты — 1' }).getAttribute('href')).toBe('/company/7?tab=objects');
-  });
-
   it('объект из события виден без выдуманной роли участия', async () => {
     fakeApi(
       replace('GET /api/companies/7/objects', () => ({
@@ -127,7 +111,7 @@ describe('Карточка компании', () => {
         body: objectsBody([objectRow({ projectId: 56, name: 'ЖК Бадаевский', basis: 'event', roles: [], state: null })]),
       })),
     );
-    renderCard();
+    renderCard('/company/7?tab=objects');
 
     const card = (await screen.findByRole('link', { name: 'ЖК Бадаевский' })).closest('article')!;
     expect(within(card).getByText('упомянут в событиях, роль не названа')).toBeTruthy();
@@ -246,7 +230,10 @@ describe('Карточка компании', () => {
     const brief = (await screen.findByRole('heading', { name: 'Коротко о компании' })).closest('section')!;
     const tile = (await within(brief).findByText('Реестр')).closest('div')!;
     expect(within(tile).getByText('объектов в реестре · на 20.09.2026')).toBeTruthy();
-    expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7?tab=details#company-registry');
+    // Реестр застройщика — на той же вкладке «Сведения»: плитка ведёт якорем к разделу.
+    expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7#company-registry');
+    const registry = screen.getByRole('heading', { name: 'Сведения реестра о застройщике' }).closest('section')!;
+    expect(within(registry).getByText('1655000000')).toBeTruthy();
   });
 
   it('контрагенты: первые шесть, «Показать ещё»; полный ответ сервера — ссылка «Все связи»', async () => {
@@ -264,34 +251,6 @@ describe('Карточка компании', () => {
     expect(within(section).getByText(/остальные в «Связях»/)).toBeTruthy();
   });
 
-  it('последние события — три по дате события, а не по «тяжести»; «Все события» ведёт в «Подробно»', async () => {
-    fakeApi(
-      replace('GET /api/companies/7/events', () => ({
-        status: 200,
-        body: {
-          items: [
-            event({ id: 1, type: 'court_case', occurredOn: '2025-01-10', severity: 3 }),
-            event({ id: 2, type: 'delay', occurredOn: null, severity: 2 }),
-            event({ id: 3, type: 'commissioning', occurredOn: '2026-09-01', severity: 1 }),
-            event({ id: 4, type: 'tender_award', occurredOn: '2026-05-01', severity: 1 }),
-            event({ id: 5, type: 'milestone', occurredOn: '2026-07-15', severity: 0 }),
-          ],
-        },
-      })),
-    );
-    renderCard();
-
-    const section = (await screen.findByRole('heading', { name: 'Последние события' })).closest('section')!;
-    await within(section).findByText('Ввод в эксплуатацию');
-    const types = within(section).getAllByRole('listitem').map(li => li.querySelector('span')?.textContent);
-    expect(types).toEqual(['Ввод в эксплуатацию', 'Этап работ', 'Победа в тендере']);
-    const all = within(section).getByRole('link', { name: 'Все события — 5' });
-    // Ссылка — концовкой блока, под списком, а не в шапке раздела.
-    expect(all.closest('ol')).toBeNull();
-    expect(section.lastElementChild?.contains(all)).toBe(true);
-    expect(all.getAttribute('href')).toBe('/company/7?tab=details#company-events');
-  });
-
   it('событие показывает имя источника, объект — ссылкой', async () => {
     fakeApi(
       replace('GET /api/companies/7/events', () => ({
@@ -299,17 +258,17 @@ describe('Карточка компании', () => {
         body: { items: [event({ id: 501, url: 'https://t.me/stroi_news/501', sourceTitle: 'Стройки — и точка', sourceKey: 'stroi_news', sourceKind: 'telegram' })] },
       })),
     );
-    renderCard();
+    renderCard('/company/7?tab=details');
 
     const source = await screen.findByRole('link', { name: 'Стройки — и точка — открыть публикацию' });
     expect(within(source).getByText('Стройки — и точка')).toBeTruthy();
     expect(source.getAttribute('href')).toBe('https://t.me/stroi_news/501');
     expect(source.getAttribute('rel')).toBe('noopener noreferrer');
-    const section = screen.getByRole('heading', { name: 'Последние события' }).closest('section')!;
+    const section = screen.getByRole('heading', { name: 'События', level: 2 }).closest('details')!;
     expect(within(section).getByRole('link', { name: 'Развязка на М-7' }).getAttribute('href')).toBe('/projects/55');
   });
 
-  it('похожие компании — одной строкой на обзоре и не занимают место читалки', async () => {
+  it('похожие компании — одной строкой на «Сведениях» и не занимают место читалки', async () => {
     fakeApi(replace('GET /api/companies/7/similar', () => ({ status: 200, body: { items: [{ id: 8, name: 'Мостострой-2', city: null }] } })));
     renderCard();
 
@@ -376,11 +335,11 @@ describe('Карточка компании', () => {
     await waitFor(() => expect(document.activeElement?.textContent).toContain('Второй пост'));
   });
 
-  it('«Подробно»: опознание, реестр, ЕГРЮЛ, все события, показатели, резюме и схема связей', async () => {
+  it('«Подробно»: опознание, все события, показатели, резюме и схема связей (ЕГРЮЛ и реестр — в «Сведениях»)', async () => {
     fakeApi(companyRoutes({ withRegistry: true }));
     renderCard('/company/7?tab=details');
 
-    for (const name of ['Опознание', 'Реестр', 'ЕГРЮЛ — Контур.Фокус', 'События', 'Показатели', 'Резюме и противоречия', 'Схема связей']) {
+    for (const name of ['Опознание', 'События', 'Показатели', 'Резюме и противоречия', 'Схема связей']) {
       expect(await screen.findByRole('heading', { name, level: 2 })).toBeTruthy();
     }
     // Схема — свёрнутый раздел: граф грузится только после раскрытия.
@@ -389,8 +348,7 @@ describe('Карточка компании', () => {
     expect((await screen.findByRole('link', { name: 'Открыть в «Связях»' })).getAttribute('href')).toBe('/links?company=7');
     expect(await screen.findByText('Нужна проверка')).toBeTruthy();
     expect(screen.getByText(/противоречий — 1/)).toBeTruthy();
-    const registry = screen.getByRole('heading', { name: 'Сведения реестра о застройщике' }).closest('section')!;
-    expect(within(registry).getByText('1655000000')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус' })).toBeNull();
     // В «Проверку» ведёт только тем, кому доступна админка.
     expect(screen.getByRole('link', { name: 'Открыть «Проверку»' }).getAttribute('href')).toBe('/admin/review');
   });
@@ -403,8 +361,6 @@ describe('Карточка компании', () => {
     const nav = await screen.findByRole('navigation', { name: 'Разделы' });
     expect(within(nav).getAllByRole('link').map(a => a.textContent)).toEqual([
       'Опознание',
-      'Реестр',
-      'ЕГРЮЛ',
       'События',
       'Показатели',
       'Резюме',
