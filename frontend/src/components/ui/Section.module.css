@@ -36,6 +36,16 @@
   margin-inline-start: auto;
 }
 
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+
 @media (min-width: 600px) {
   .card {
     padding: var(--sp-5);

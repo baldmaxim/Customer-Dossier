@@ -1,5 +1,5 @@
 // «Последние события» на обзоре: три самых свежих по дате события — главный ответ на
-// «как дела у компании». Все события — во вкладке «Подробно».
+// «как дела у компании». Все события — во вкладке «Подробно», ссылка — концовкой блока.
 
 import { FC } from 'react';
 
@@ -27,11 +27,11 @@ export const CompanyLatestEvents: FC<{ companyId: number }> = ({ companyId }) =>
     <Section
       title="Последние события"
       note={events.length > 0 ? `всего ${formatCount(events.length)}` : undefined}
-      actions={
+      footer={
         events.length > LATEST && (
           // Настоящая ссылка на вкладку «Подробно» к разделу событий: её можно открыть в новой вкладке.
           <ButtonLink to={{ search: '?tab=details', hash: EVENTS_SECTION_ID }} viewTransition={false} variant="link" iconEnd="forward">
-            Все события
+            Все события — {formatCount(events.length)}
           </ButtonLink>
         )
       }

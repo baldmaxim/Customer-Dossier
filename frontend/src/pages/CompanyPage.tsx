@@ -1,4 +1,4 @@
-// Карточка компании: шапка (имя, реквизиты, «Схема связей») и три вкладки — «Обзор ·
+// Карточка компании: шапка (имя, реквизиты сеткой, «Схема связей») и три вкладки — «Обзор ·
 // Публикации · Подробно». Вкладка и открытый пост — в адресе (?tab=, ?post=): «Назад»
 // возвращает прежнюю вкладку, ссылкой можно поделиться. Содержимое вкладок — в
 // components/company/*, здесь только сборка и состояния загрузки.
@@ -12,9 +12,9 @@ import { Navigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../api/client';
 import { CompanyDetails } from '../components/company/CompanyDetails';
-import { CompanyMeta } from '../components/company/CompanyMeta';
 import { CompanyOverview } from '../components/company/CompanyOverview';
 import { CompanyPublications } from '../components/company/CompanyPublications';
+import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanySimilar } from '../components/company/CompanySimilar';
 import { useCompany } from '../components/company/useCompanyQueries';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -87,7 +87,7 @@ export const CompanyPage: FC = () => {
       patch({ tab: next === 'overview' ? null : next, post: null }, { history: 'push' });
     header = {
       title: company.name,
-      meta: <CompanyMeta company={company} identifiers={data.identifiers ?? []} />,
+      meta: <CompanyRequisites data={data} />,
       actions: (
         <ButtonLink to={`/links?company=${company.id}`} icon="links">
           Схема связей

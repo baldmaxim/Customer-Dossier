@@ -1,4 +1,4 @@
-// Раздел страницы: заголовок, пояснение, действия и содержимое на карточке.
+// Раздел страницы: заголовок, пояснение, действия, содержимое на карточке и концовка.
 // Уровень заголовка — из контекста (h2 на странице, h3 внутри другого раздела); содержимое
 // получает уровень на единицу глубже. Явный level — только если глубина известна заранее.
 //
@@ -19,6 +19,8 @@ export interface ISectionProps {
   /** Кнопки раздела справа от заголовка (на телефоне — под ним). */
   actions?: ReactNode;
   level?: HeadingLevel;
+  /** Концовка раздела под чертой: «Все события — 12», «Показать все». */
+  footer?: ReactNode;
   /** card — на карточке (по умолчанию); plain — прямо на полотне, без рамки. */
   variant?: 'card' | 'plain';
   id?: string;
@@ -26,7 +28,7 @@ export interface ISectionProps {
   children: ReactNode;
 }
 
-export const Section: FC<ISectionProps> = ({ title, note, actions, level, variant = 'card', id, className, children }) => {
+export const Section: FC<ISectionProps> = ({ title, note, actions, footer, level, variant = 'card', id, className, children }) => {
   const contextLevel = useHeadingLevel();
   const own = level ?? contextLevel;
   return (
@@ -43,6 +45,7 @@ export const Section: FC<ISectionProps> = ({ title, note, actions, level, varian
         </div>
       )}
       <HeadingLevelContext.Provider value={deeper(own)}>{children}</HeadingLevelContext.Provider>
+      {footer && <div className={styles.foot}>{footer}</div>}
     </section>
   );
 };

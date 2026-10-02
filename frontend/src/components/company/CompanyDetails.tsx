@@ -1,8 +1,11 @@
 // Вкладка «Подробно»: опознание → реестр → все события → показатели → резюме и
-// противоречия → схема связей. На телефоне раскрыт только первый раздел; ссылка «Все
-// события» с «Обзора» (#company-events) раскрывает события и прокручивает к ним.
+// противоречия → схема связей. Сверху — липкое меню разделов (AnchorNav). На телефоне раскрыт
+// только первый раздел; переход по якорю (меню, «Все события» и плитки «Обзора» —
+// #company-events и т. п.) раскрывает раздел и прокручивает к нему.
+//
+// Разделы описаны одним списком: из него строятся и меню, и сами разделы — разойтись им негде.
 
-import { FC, useEffect } from 'react';
+import { FC, ReactNode, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import type { ICompanyResponse } from '../../api/types';
@@ -13,6 +16,7 @@ import { CompanySignals } from '../CompanySignals';
 import { CompanySummary } from '../CompanySummary';
 import { GraphPanel } from '../GraphPanel';
 import { RegistryPanel } from '../RegistryPanel';
+import { AnchorNav } from '../ui/AnchorNav';
 import { Stack } from '../ui/Stack';
 import { CompanyEvents } from './CompanyEvents';
 import { CompanyIdentity } from './CompanyIdentity';
@@ -20,42 +24,77 @@ import { DetailSection } from './DetailSection';
 import { EVENTS_SECTION_ID } from './eventOrder';
 import { useCompanyProjects } from './useCompanyQueries';
 
+interface IDetailSpec {
+  id: string;
+  title: string;
+  /** Короткая подпись в меню, если заголовок длинный. */
+  navLabel?: string;
+  /** Раскрыт всегда, а не только на широком экране. */
+  alwaysOpen?: boolean;
+  bare?: boolean;
+  lazy?: boolean;
+  render: () => ReactNode;
+}
+
 export const CompanyDetails: FC<{ companyId: number; data: ICompanyResponse }> = ({ companyId, data }) => {
   const wide = useMediaQuery(MQ.sm);
-  const { hash } = useLocation();
-  const toEvents = hash === `#${EVENTS_SECTION_ID}`;
+  const location = useLocation();
+  const target = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
   const projects = useCompanyProjects(companyId);
   const projectNames = new Map((projects.data?.items ?? []).map(p => [p.id, p.name]));
 
-  // Пришли по «Все события»: раздел уже раскрыт (defaultOpen), остаётся довести до него взгляд.
+  // Разделы, к которым переходили по якорю, остаются раскрытыми: множество только растёт,
+  // поэтому следующий переход не захлопнет раздел, который человек уже читает.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set(target ? [target] : []));
+  if (target && !opened.has(target)) setOpened(new Set([...opened, target]));
+
+  // Раздел уже раскрыт (defaultOpen), остаётся довести до него взгляд. Ключ перехода —
+  // location.key: повторное нажатие того же пункта меню снова приводит к разделу.
   useEffect(() => {
-    if (!toEvents) return;
-    document.getElementById(EVENTS_SECTION_ID)?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
-  }, [toEvents]);
+    if (!target) return;
+    document.getElementById(target)?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
+  }, [location.key, target]);
+
+  const registry = data.registry;
+  const sections: IDetailSpec[] = [
+    { id: 'company-identity', title: 'Опознание', alwaysOpen: true, render: () => <CompanyIdentity companyId={companyId} data={data} /> },
+    ...(registry
+      ? [
+          {
+            id: 'company-registry',
+            title: 'Реестр',
+            bare: true,
+            render: () => <RegistryPanel registry={registry} title="Сведения реестра о застройщике" />,
+          },
+        ]
+      : []),
+    { id: EVENTS_SECTION_ID, title: 'События', render: () => <CompanyEvents companyId={companyId} /> },
+    { id: 'company-signals', title: 'Показатели', render: () => <CompanySignals companyId={companyId} projectNames={projectNames} /> },
+    { id: 'company-summary', title: 'Резюме и противоречия', navLabel: 'Резюме', render: () => <CompanySummary companyId={companyId} /> },
+    // Схема — таким же разделом, как остальные, но граф грузится только после раскрытия.
+    {
+      id: 'company-graph',
+      title: 'Схема связей',
+      lazy: true,
+      render: () => <GraphPanel companyId={companyId} defaultOpen title={null} variant="plain" linksPageLink />,
+    },
+  ];
 
   return (
     <Stack gap={4}>
-      <DetailSection id="company-identity" title="Опознание" defaultOpen>
-        <CompanyIdentity companyId={companyId} data={data} />
-      </DetailSection>
-      {data.registry && (
-        <DetailSection id="company-registry" title="Реестр" defaultOpen={wide} bare>
-          <RegistryPanel registry={data.registry} title="Сведения реестра о застройщике" />
+      <AnchorNav label="Разделы" items={sections.map(s => ({ id: s.id, label: s.navLabel ?? s.title }))} />
+      {sections.map(s => (
+        <DetailSection
+          key={s.id}
+          id={s.id}
+          title={s.title}
+          defaultOpen={Boolean(s.alwaysOpen) || (wide && !s.lazy) || opened.has(s.id)}
+          bare={s.bare}
+          lazy={s.lazy}
+        >
+          {s.render()}
         </DetailSection>
-      )}
-      <DetailSection id={EVENTS_SECTION_ID} title="События" defaultOpen={wide || toEvents}>
-        <CompanyEvents companyId={companyId} />
-      </DetailSection>
-      <DetailSection id="company-signals" title="Показатели" defaultOpen={wide}>
-        <CompanySignals companyId={companyId} projectNames={projectNames} />
-      </DetailSection>
-      <DetailSection id="company-summary" title="Резюме и противоречия" defaultOpen={wide}>
-        <CompanySummary companyId={companyId} />
-      </DetailSection>
-      {/* Схема — таким же разделом, как остальные, но граф грузится только после раскрытия. */}
-      <DetailSection id="company-graph" title="Схема связей" defaultOpen={false} lazy>
-        <GraphPanel companyId={companyId} defaultOpen title={null} variant="plain" linksPageLink />
-      </DetailSection>
+      ))}
     </Stack>
   );
 };

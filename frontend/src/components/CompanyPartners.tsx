@@ -3,8 +3,9 @@
 // Договор, корпоративная связь и совместное участие на объекте — разные вещи: две фирмы на
 // одном объекте могут не иметь отношений между собой. Сервер отдаёт первые 12 контрагентов —
 // если их ровно столько, список честно называет себя неполным и ведёт в «Связи».
+// На обзоре видно первых SHOWN, остальные — «Показать ещё» концовкой блока.
 
-import { FC } from 'react';
+import { CSSProperties, FC, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -26,6 +27,8 @@ import styles from './CompanyPartners.module.css';
 
 /** Сколько контрагентов просим у сервера: ровно столько вернулось — значит, список усечён. */
 const PARTNERS_LIMIT = 12;
+/** Контрагентов видно до «Показать ещё». */
+const SHOWN = 6;
 /** Связей одного контрагента на обзоре; остальные — числом. */
 const LINKS_SHOWN = 4;
 
@@ -47,13 +50,35 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
   });
   const items = partners.data?.items ?? [];
   const truncated = items.length >= PARTNERS_LIMIT;
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? items : items.slice(0, SHOWN);
+  const hidden = items.length - visible.length;
   // Виды связей, которые есть в показанных строках, — в пояснение под списком.
-  const kinds = [...new Set(items.flatMap(p => p.links.slice(0, LINKS_SHOWN).map(l => l.kind)))]
+  const kinds = [...new Set(visible.flatMap(p => p.links.slice(0, LINKS_SHOWN).map(l => l.kind)))]
     .filter(kind => PARTNER_KIND_HINTS[kind])
     .sort((a, b) => (KIND_ORDER[a] ?? 9) - (KIND_ORDER[b] ?? 9));
 
   return (
-    <Section title="С кем связана" note={truncated ? `первые ${formatCount(PARTNERS_LIMIT)}` : undefined}>
+    <Section
+      title="С кем связана"
+      note={truncated ? `первые ${formatCount(PARTNERS_LIMIT)}` : undefined}
+      footer={
+        (hidden > 0 || truncated) && (
+          <>
+            {hidden > 0 && (
+              <Button variant="link" iconEnd="chevron" aria-expanded={false} onClick={() => setExpanded(true)}>
+                Показать ещё {formatCount(hidden)}
+              </Button>
+            )}
+            {truncated && (
+              <ButtonLink to={`/links?company=${companyId}`} variant="link" iconEnd="forward">
+                Все связи
+              </ButtonLink>
+            )}
+          </>
+        )
+      }
+    >
       {partners.isLoading && (
         <LoadingSkeleton label="Загружаю контрагентов…" lines={4} height="40px" />
       )}
@@ -78,10 +103,15 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
 
       {items.length > 0 && (
         <ul className={styles.list}>
-          {items.map(partner => {
+          {visible.map((partner, i) => {
             const links = [...partner.links].sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9));
+            const added = i >= SHOWN;
             return (
-              <li key={partner.companyId} className={styles.item}>
+              <li
+                key={partner.companyId}
+                className={added ? `${styles.item} appear` : styles.item}
+                style={added ? ({ '--i': i - SHOWN } as CSSProperties) : undefined}
+              >
                 <div className={styles.head}>
                   <Link className={styles.name} to={`/company/${partner.companyId}`} viewTransition>
                     {partner.name}
@@ -127,13 +157,8 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
         </ul>
       )}
 
-      {truncated && (
-        <p className={styles.note}>
-          Показаны первые {formatCount(PARTNERS_LIMIT)} контрагентов.{' '}
-          <ButtonLink to={`/links?company=${companyId}`} variant="link" size="sm">
-            Все связи — в «Связях»
-          </ButtonLink>
-        </p>
+      {truncated && expanded && (
+        <p className={styles.note}>Показаны первые {formatCount(PARTNERS_LIMIT)} контрагентов — остальные в «Связях».</p>
       )}
       {kinds.length > 0 && (
         <ul className={styles.legend} aria-label="Виды связей">

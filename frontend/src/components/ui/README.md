@@ -19,6 +19,7 @@
 | Отдельная задача поверх страницы (новый пароль, форма) | `Dialog` (на телефоне — лист) | `window.prompt` |
 | Свернуть второстепенное на месте | `Disclosure` | кнопку-переключатель с `useState` |
 | Пары «подпись — значение» | `DescriptionList` | свои `Row`/`Line`/`dl.facts` |
+| Меню разделов длинной страницы («Подробно») | `AnchorNav` | `Tabs` (разделы на одной странице — не вкладки) |
 | Широкая таблица | `TableScroll` на ≥ 600, `CardList` на < 600 | таблицу без прокрутки |
 | Загрузка | `Loading` (+ `Skeleton`) | «Загрузка…» голым текстом, «пусто», «0» |
 | Пусто | `EmptyState` (словами + действие) | команды CLI и имена env |
@@ -74,7 +75,8 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
   (кнопки, ярлыки, мета-строка без разделителей «·»).
 - `Grid` — `{ min?: '240px', gap? }` — `repeat(auto-fit, minmax(min(100%, min), 1fr))`, на телефоне одна колонка.
 - `Card` — `{ as?, padding?: 'none'|'sm'|'md'|'lg', tone?: 'default'|'muted'|'accent', elevated?, interactive?, selected? }`.
-- `Section` — `{ title?, note?, actions?, level?, variant?: 'card'|'plain', id? }`. Уровень заголовка — из контекста
+- `Section` — `{ title?, note?, actions?, footer?, level?, variant?: 'card'|'plain', id? }`. `footer` — концовка под чертой:
+  «Все события — 12 →», «Показать все» (длинный блок показывает первые строки и кончается ссылкой на полный список). Уровень заголовка — из контекста
   (h2 на странице, h3 в разделе раздела); содержимое получает уровень глубже. `Heading` — заголовок с уровнем из контекста
   (для переиспользуемых блоков вместо зашитых h3/h4), `HeadingLevelContext` — задать уровень вручную.
 - `PageHeader` — `{ title, titleHidden?, eyebrow?, meta?, lead?, actions?, docTitle?, children? (вкладки под шапкой) }`.
@@ -93,6 +95,10 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
 - `Segmented` — `{ label, items: {value,label,hint?,disabled?}[], value, onChange, size?, fill? }` — `role="group"` +
   `aria-pressed`; не помещается — прокрутка в строку. `fill` — пункты поровну во всю ширину (режимы на телефоне).
 - `ButtonLink` — `Link` в виде кнопки: пропсы `Link` + `variant/size/icon/iconEnd/block`; `viewTransition` по умолчанию.
+- `AnchorNav` — `{ label, items: {id,label}[] }` — липкое меню разделов длинной страницы: якоря текущего адреса (запрос
+  сохраняется, `replace`), текущий раздел — `aria-current="location"` (IntersectionObserver). Раскрыть свёрнутый раздел
+  по hash и прокрутить к нему — дело страницы (образец — `company/CompanyDetails.tsx`); разделам —
+  `scroll-margin-top` на высоту меню.
 
 **Действия**
 - `Button` — `{ variant?: 'primary'|'secondary'|'ghost'|'danger'|'danger-solid'|'link', size?: 'sm'|'md'|'lg', icon?, iconEnd?,
@@ -122,6 +128,8 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
 **Показ данных**
 - `Badge` — `{ tone?: StatusTone | 'accent', hint? }`. Тон статуса — `toneOf(X_TONE, value)` из `lib/statusTone.ts`, подпись —
   из `labels.ts`. С `hint` ярлык — кнопка (цель 24px: 44px перекрывали бы соседние ссылки). `positive`/`warn` — устаревшие имена.
+- `CopyValue` — `{ value, label }` — значение, которое копируют (ИНН, ОГРН): само значение — кнопка со значком, итог —
+  тостом «ИНН скопирован». Без Clipboard API — просто текст.
 - `Term` — машинное значение → подпись из словаря (+ пояснение). `Hint` — значок «?» (цель 44px) с пояснением.
 - `DescriptionList` — `{ items: {label,value,hint?,key?}[], layout?: 'stacked'|'inline'|'auto', dense? }`; пустое — «—».
 - `TableScroll` — `{ label?, caption?, captionVisible?, minWidth?, stickyHead? }`. В ячейках: `className="num"` — числа и даты

@@ -4,8 +4,11 @@
 // а не повтор объекта на каждую роль. Роль берётся только из card_participations_v;
 // событие без участия оставляет роль неизвестной. Строка — настоящая ссылка на страницу
 // объекта (вся строка кликается): объект живёт только на своей странице.
+//
+// Сначала — первые SHOWN объектов, остальные — «Показать все» концовкой блока: длинный список
+// отодвигал «С кем связана» и события на телефоне на несколько экранов вниз.
 
-import { FC } from 'react';
+import { CSSProperties, FC, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { IProjectRow } from '../api/types';
@@ -32,6 +35,9 @@ interface IProjectGroup {
   roles: Array<{ role: string; isCurrent: boolean }>;
 }
 
+/** Сколько объектов видно до «Показать все». */
+const SHOWN = 5;
+
 const groupByProject = (rows: IProjectRow[]): IProjectGroup[] => {
   const groups = new Map<number, IProjectGroup>();
   for (const row of rows) {
@@ -54,9 +60,28 @@ const metaText = (p: IProjectRow): string =>
 
 export const CompanyProjects: FC<ICompanyProjectsProps> = ({ projects, isLoading, error, onRetry }) => {
   const groups = groupByProject(projects);
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? groups : groups.slice(0, SHOWN);
 
   return (
-    <Section title="Объекты" note={groups.length > 0 ? formatCount(groups.length) : undefined}>
+    <Section
+      id="company-projects"
+      title="Объекты"
+      note={groups.length > 0 ? formatCount(groups.length) : undefined}
+      footer={
+        groups.length > SHOWN && (
+          <Button
+            variant="link"
+            iconEnd="chevron"
+            aria-expanded={expanded}
+            className={expanded ? styles.less : undefined}
+            onClick={() => setExpanded(v => !v)}
+          >
+            {expanded ? 'Свернуть' : `Показать все — ${formatCount(groups.length)}`}
+          </Button>
+        )
+      }
+    >
       {isLoading && (
         <LoadingSkeleton label="Загружаю объекты…" lines={3} height="56px" />
       )}
@@ -83,8 +108,12 @@ export const CompanyProjects: FC<ICompanyProjectsProps> = ({ projects, isLoading
 
       {groups.length > 0 && (
         <ul className={styles.list}>
-          {groups.map(({ project: p, roles }) => (
-            <li key={p.id} className={`${styles.item} row-link`}>
+          {visible.map(({ project: p, roles }, i) => (
+            <li
+              key={p.id}
+              className={`${styles.item} row-link${i >= SHOWN ? ' appear' : ''}`}
+              style={i >= SHOWN ? ({ '--i': i - SHOWN } as CSSProperties) : undefined}
+            >
               <Link className={`row-link-target ${styles.name}`} to={`/projects/${p.id}`} viewTransition>
                 {p.name}
               </Link>

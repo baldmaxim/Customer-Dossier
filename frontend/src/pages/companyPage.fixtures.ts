@@ -129,13 +129,52 @@ const summary = {
   cases: [],
 };
 
+/** Показатель, посчитанный правилами: число без окна и знаменателя — для плиток сводки хватает. */
+const agg = (value: number) => ({ value, status: 'ok', rule: 'test', window: null, denominator: null, ids: [], idsTruncated: false });
+
+/**
+ * Посчитанные показатели signals@2 — только то, что читает «Обзор» (плитки сводки). «Подробно»
+ * с этим ответом не открывать: его разделам нужен полный снимок.
+ */
+export const computedSignals = {
+  status: 'ok',
+  refresh: {
+    active: { id: 1, rulesVersion: 'signals@2', cutoffAt: '2026-10-01T12:00:00Z', finishedAt: '2026-10-01T12:01:00Z' },
+    lastFailure: null,
+    running: false,
+    stale: false,
+    staleReasons: [],
+  },
+  signals: {
+    experience: { byRole: { general_contractor: agg(1), customer: agg(1) }, counterparties: agg(3), contractsCount: agg(2), corporateCount: agg(1) },
+    media: {
+      publications: agg(14),
+      publications90d: agg(4),
+      latestPublishedAt: { value: '2026-09-30T12:00:00Z', status: 'ok', rule: 'test', sourceItemId: 11 },
+      eventsDated12m: agg(2),
+      legalCasesCount: agg(3),
+      courtRoles: { plaintiff: 1, defendant: 2, other: 0, unknown: 0 },
+    },
+  },
+};
+
+/** Строка объекта и контрагент с другим id — для списков длиннее порога «Показать все». */
+export const manyProjects = (n: number) =>
+  Array.from({ length: n }, (_, i) => projectRow({ id: 100 + i, name: `Объект ${i + 1}`, counterparties: null }));
+
+export const manyPartners = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({ ...partner, companyId: 200 + i, name: `ООО «Партнёр ${i + 1}»`, links: [] }));
+
 const notComputed = {
   status: 'not_computed',
   refresh: { active: null, lastFailure: null, running: false, stale: true, staleReasons: [] },
   signals: null,
 };
 
-export const companyRoutes = ({ withRegistry = false }: { withRegistry?: boolean } = {}): IFakeRoute[] => [
+export const companyRoutes = ({
+  withRegistry = false,
+  registryOver = {},
+}: { withRegistry?: boolean; registryOver?: Record<string, unknown> } = {}): IFakeRoute[] => [
   {
     match: 'GET /api/companies/7/publications',
     respond: () => ({
@@ -158,6 +197,6 @@ export const companyRoutes = ({ withRegistry = false }: { withRegistry?: boolean
   { match: 'GET /api/graph', respond: () => ({ status: 200, body: { nodes: [], edges: [], truncated: false, notes: [] } }) },
   {
     match: 'GET /api/companies/7',
-    respond: () => ({ status: 200, body: withRegistry ? { ...company, registry } : company }),
+    respond: () => ({ status: 200, body: withRegistry ? { ...company, registry: { ...registry, ...registryOver } } : company }),
   },
 ];

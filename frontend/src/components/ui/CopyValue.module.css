@@ -1,0 +1,40 @@
+/* Значение-кнопка: выглядит как текст со значком, нажимается как кнопка. */
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--ctl-h-sm);
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.value {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.icon {
+  flex: none;
+  color: var(--muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .copy:hover .icon {
+    color: var(--accent);
+  }
+}
+
+.copy:active .icon {
+  transform: scale(0.9);
+}

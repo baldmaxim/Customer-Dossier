@@ -156,6 +156,17 @@ describe('Section и уровни заголовков', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Подробно' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: 'Реестр' })).toBeTruthy();
   });
+
+  it('концовка — после содержимого, последним элементом раздела', () => {
+    const { container } = render(
+      <Section title="Объекты" footer={<button type="button">Показать все</button>}>
+        <p>список</p>
+      </Section>,
+    );
+    const section = container.querySelector('section')!;
+    expect(section.lastElementChild?.textContent).toBe('Показать все');
+    expect(screen.getByText('список').compareDocumentPosition(screen.getByRole('button'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
 });
 
 describe('Disclosure', () => {

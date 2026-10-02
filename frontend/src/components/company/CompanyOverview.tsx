@@ -1,4 +1,4 @@
-// Вкладка «Обзор»: коротко о компании, последние события, объекты; с 900px справа —
+// Вкладка «Обзор»: плитки-итоги, последние события, объекты; с 900px справа —
 // «С кем связана». Реестр, опознание, показатели и схема — во вкладке «Подробно».
 
 import { FC } from 'react';
@@ -8,17 +8,19 @@ import { CompanyPartners } from '../CompanyPartners';
 import { CompanyProjects } from '../CompanyProjects';
 import { Stack } from '../ui/Stack';
 import { CompanyLatestEvents } from './CompanyLatestEvents';
-import { useCompanyProjects } from './useCompanyQueries';
+import { useCompany, useCompanyProjects } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 export const CompanyOverview: FC<{ companyId: number }> = ({ companyId }) => {
   const projects = useCompanyProjects(companyId);
+  // Карточка уже загружена страницей: ответ берётся из кэша, второго запроса нет.
+  const company = useCompany(companyId, true).data;
   const rows = projects.data?.items ?? [];
 
   return (
     <div className={styles.overview}>
       <Stack gap={4} className={styles.overviewMain}>
-        <CompanyBrief companyId={companyId} projects={rows} projectsKnown={projects.isSuccess} />
+        <CompanyBrief companyId={companyId} projects={rows} projectsKnown={projects.isSuccess} company={company} />
         <CompanyLatestEvents companyId={companyId} />
         <CompanyProjects
           projects={rows}

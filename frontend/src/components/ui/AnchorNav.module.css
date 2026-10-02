@@ -1,0 +1,80 @@
+/* Полоса якорей: прилипает под шапкой портала, фон страницы под ней не просвечивает.
+   Поля страницы (--gutter) по бокам закрыты тенями цвета фона — иначе в щелях слева и справа
+   проезжали бы края карточек. Нижняя черта — тенью внутрь, как у вкладок. */
+.nav {
+  position: sticky;
+  top: var(--sticky-top);
+  z-index: var(--z-sticky);
+  min-width: 0;
+  padding-block: var(--sp-1);
+  background: var(--bg);
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    calc(var(--gutter) * -1) 0 0 var(--bg),
+    var(--gutter) 0 0 var(--bg);
+}
+
+/* Не влезает — прокрутка в одну строку, без переноса и без прокрутки страницы вбок. */
+.list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--sp-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  flex: none;
+}
+
+.link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h);
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-full);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-tight);
+  text-decoration: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+/* Контур внутрь: снаружи его срезал бы край прокручиваемой полосы. */
+.link:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* Текущий раздел: фон, цвет и вес — не один цвет. */
+.link[aria-current='location'] {
+  background: var(--selected-bg);
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: none;
+  }
+
+  .link:hover:not([aria-current='location']) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
