@@ -5,7 +5,9 @@
 //  - legal        — юрлица: действующий ИНН/ОГРН/ОГРНИП с верной контрольной суммой или «на контроле»;
 //  - groups       — группы компаний (entity_type = 'group'): у группы нет своего ИНН, это круг юрлиц;
 //  - unidentified — «Без ИНН»: имена из публикаций без реквизита. Это не компании, а упоминания, которые
-//                   ждут решения человека (ADR-016 п. 3); сначала те, о ком больше пишут.
+//                   ждут решения человека (ADR-016 п. 3); сначала те, о ком больше пишут. Отмеченные
+//                   «не компания» (этап 23D) не показываются ни в одном виде — только числом;
+//                   у строки — сколько кандидатов ждёт решения (подсказки Фокуса и пары «возможный дубль»).
 //
 // Числа строки — из тех же источников, что карточка: объекты и роли — card_participations_v (текущие),
 // публикации — опубликованные утверждения и legacy-упоминания, статус и наименование — последний ответ
@@ -52,6 +54,8 @@ export interface ICatalogRow {
   lastPublishedAt: string | null;
   watched: boolean;
   namePending: boolean;
+  /** Кандидатов для назначения: подсказки Фокуса по названию и пары «возможный дубль». */
+  hints: number;
 }
 
 export interface ICatalogResponse {
@@ -60,7 +64,7 @@ export interface ICatalogResponse {
   /** Строк в виде с фильтрами; показано не больше CATALOG_LIMIT. */
   total: number;
   /** Сколько в каждом виде без фильтров роли и контроля — подписи вкладок. */
-  counts: Record<CatalogView, number> & { watched: number };
+  counts: Record<CatalogView, number> & { watched: number; dismissed: number };
 }
 
 const BASE_SQL = `
@@ -75,14 +79,19 @@ const BASE_SQL = `
   watched AS MATERIALIZED (
     SELECT company_id FROM company_watch WHERE removed_at IS NULL
   ),
+  dismissed AS MATERIALIZED (
+    SELECT company_id FROM company_dismissals WHERE revoked_at IS NULL
+  ),
   base AS MATERIALIZED (
     SELECT c.id, c.name, c.city, c.entity_type, c.name_pending, ids.inn, ids.ogrn, (w.company_id IS NOT NULL) AS watched,
            CASE WHEN c.entity_type = 'group' THEN 'groups'
                 WHEN ids.company_id IS NOT NULL OR w.company_id IS NOT NULL THEN 'legal'
+                WHEN d.company_id IS NOT NULL THEN 'dismissed'
                 ELSE 'unidentified' END AS view
     FROM companies c
     LEFT JOIN ids ON ids.company_id = c.id
     LEFT JOIN watched w ON w.company_id = c.id
+    LEFT JOIN dismissed d ON d.company_id = c.id
     WHERE c.merged_into_id IS NULL
   )`;
 
@@ -107,18 +116,28 @@ const ROWS_SQL = `
     FROM touched t JOIN source_items si ON si.id = t.item_id
     GROUP BY t.company_id
   ),
+  hints AS MATERIALIZED (
+    SELECT company_id, count(*)::int AS n FROM (
+      SELECT company_id FROM company_name_suggestions
+      UNION ALL
+      SELECT source_entity_id FROM merge_queue WHERE entity_kind = 'company' AND status = 'pending'
+      UNION ALL
+      SELECT target_entity_id FROM merge_queue WHERE entity_kind = 'company' AND status = 'pending'
+    ) x GROUP BY company_id
+  ),
   filtered AS (
     SELECT b.*, coalesce(p.roles, '{}') AS roles, coalesce(p.objects, 0) AS objects,
-           coalesce(u.publications, 0) AS publications, u.last_at
+           coalesce(u.publications, 0) AS publications, u.last_at, coalesce(h.n, 0) AS hints
     FROM base b
     LEFT JOIN parts p ON p.company_id = b.id
     LEFT JOIN pubs u ON u.company_id = b.id
+    LEFT JOIN hints h ON h.company_id = b.id
     WHERE b.view = $1
       AND (NOT $2::boolean OR b.watched)
       AND ($3::text IS NULL OR $3::text = ANY(p.roles))
   )
   SELECT f.id AS "companyId", f.name, f.city, f.entity_type AS "entityType", f.name_pending AS "namePending",
-         f.inn, f.ogrn, f.watched, f.roles, f.objects, f.publications, f.last_at AS "lastAt",
+         f.inn, f.ogrn, f.watched, f.roles, f.objects, f.publications, f.last_at AS "lastAt", f.hints,
          count(*) OVER ()::int AS total,
          fr.legal_name, fr.ul_status, fr.ip
   FROM filtered f
@@ -159,6 +178,7 @@ interface IRowSql {
   objects: number;
   publications: number;
   lastAt: Date | null;
+  hints: number;
   total: number;
   legal_name: unknown;
   ul_status: unknown;
@@ -200,10 +220,15 @@ export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogRespons
         lastPublishedAt: row.lastAt?.toISOString() ?? null,
         watched: row.watched,
         namePending: row.namePending,
+        hints: row.hints,
       };
     }),
     total: rows[0]?.total ?? 0,
-    counts: { ...byView, watched: counts.reduce((sum, c) => sum + c.watched, 0) },
+    counts: {
+      ...byView,
+      watched: counts.reduce((sum, c) => sum + c.watched, 0),
+      dismissed: counts.find(c => (c.view as string) === 'dismissed')?.n ?? 0,
+    },
   };
 };
 

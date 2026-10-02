@@ -93,6 +93,10 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'focus_requests', class: 'history', why: 'журнал запросов к API Контур.Фокуса: расход тарифа и отказы, без ключа' },
   // Портал от компании (миграция 042, ADR-016)
   { table: 'company_watch', class: 'domain', why: 'компании «на контроле»: кто и когда поставил и снял' },
+  // Назначение имён без ИНН (миграция 043, ADR-016)
+  { table: 'company_name_searches', class: 'operational', why: 'поиск юрлица по названию в Контур.Фокусе: запрос, срок, ошибка' },
+  { table: 'company_name_suggestions', class: 'operational', why: 'подсказки Контур.Фокуса по названию: кэш платного ответа, не решение' },
+  { table: 'company_dismissals', class: 'domain', why: '«не компания»: решение человека по имени без ИНН, кто, когда, почему' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];

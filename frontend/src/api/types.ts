@@ -96,13 +96,50 @@ export interface ICatalogRow {
   lastPublishedAt: string | null;
   watched: boolean;
   namePending: boolean;
+  /** Кандидатов для назначения: подсказки Фокуса по названию и пары «возможный дубль». */
+  hints: number;
 }
 
 export interface ICatalogResponse {
   view: CatalogView;
   items: ICatalogRow[];
   total: number;
-  counts: Record<CatalogView, number> & { watched: number };
+  counts: Record<CatalogView, number> & { watched: number; dismissed: number };
+}
+
+/** Назначение имени без ИНН (ADR-016, этап 23D): GET /api/companies/:id/assignment. */
+export type AssignmentState = 'unidentified' | 'identified' | 'group' | 'dismissed';
+
+export interface IPortalCandidate {
+  companyId: number;
+  name: string;
+  inn: string | null;
+  ogrn: string | null;
+  city: string | null;
+  entityType: string;
+  similarity: number | null;
+  mergeQueueId: number | null;
+  modelVerdict: 'same' | 'different' | 'unsure' | null;
+  modelReason: string | null;
+}
+
+export interface IEgrulCandidate {
+  inn: string | null;
+  ogrn: string | null;
+  name: string | null;
+  address: string | null;
+  status: string | null;
+  existingCompanyId: number | null;
+  existingCompanyName: string | null;
+}
+
+export interface IAssignmentView {
+  state: AssignmentState;
+  dismissal: { reason: string; by: string; at: string } | null;
+  portal: IPortalCandidate[];
+  egrul: IEgrulCandidate[];
+  search: { query: string; searchedAt: string | null; nextSearchAt: string; lastError: string | null } | null;
+  focusConfigured: boolean;
 }
 
 export type EntityType = 'legal_entity' | 'brand' | 'group' | 'unknown';
@@ -1599,7 +1636,7 @@ export type FocusRequestOutcome =
 
 export interface IFocusRequestRow {
   requestedAt: string;
-  method: 'req' | 'egrDetails' | 'stat';
+  method: 'req' | 'egrDetails' | 'stat' | 'suggest';
   identifiersCount: number;
   httpStatus: number | null;
   outcome: FocusRequestOutcome;

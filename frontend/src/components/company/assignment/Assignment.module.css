@@ -1,0 +1,89 @@
+/* Назначение имени без ИНН (ADR-016): кандидаты списком, у каждого — одна кнопка решения справа. */
+
+.lead {
+  margin: 0;
+  max-width: var(--prose);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+/* Открытое слияние — рамка акцентом, чтобы было видно, к какому кандидату относится сравнение. */
+.selected {
+  border-color: var(--accent);
+}
+
+.candidateHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.candidateText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* строки одного кандидата — теснее, чем кандидаты между собой */
+  min-width: 0;
+}
+
+.candidateTitle {
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.candidateMeta,
+.candidateNote,
+.muted {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.candidateNote {
+  font-style: italic;
+}
+
+.muted {
+  margin: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-width: 28rem;
+}
+
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+@media (min-width: 600px) {
+  .candidateHead {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .formRow {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}

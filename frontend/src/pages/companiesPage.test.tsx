@@ -26,10 +26,11 @@ const row = (over: Partial<ICatalogRow> = {}): ICatalogRow => ({
   lastPublishedAt: '2026-09-20T09:00:00Z',
   watched: false,
   namePending: false,
+  hints: 0,
   ...over,
 });
 
-const counts = { legal: 76, groups: 12, unidentified: 2725, watched: 3 };
+const counts = { legal: 76, groups: 12, unidentified: 2725, watched: 3, dismissed: 4 };
 
 const routes = (items: ICatalogRow[] = [row()], total = items.length): IFakeRoute[] => [
   {

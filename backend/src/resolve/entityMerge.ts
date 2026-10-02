@@ -185,6 +185,10 @@ export const dependencyState = async (
     put('domRfCompanySearches', await rows(`SELECT id || ':' || company_id AS k FROM domrf_company_searches WHERE company_id = ANY($1::bigint[])`));
     // «На контроле» (ADR-016, миграция 042).
     put('companyWatch', await rows(`SELECT id || ':' || company_id || ':' || coalesce(removed_at::text, '') AS k FROM company_watch WHERE company_id = ANY($1::bigint[])`));
+    // Назначение имени без ИНН (ADR-016, миграция 043): поиск по названию, подсказки Фокуса, «не компания».
+    put('companyNameSearches', await rows(`SELECT id || ':' || company_id AS k FROM company_name_searches WHERE company_id = ANY($1::bigint[])`));
+    put('companyNameSuggestions', await rows(`SELECT id || ':' || company_id AS k FROM company_name_suggestions WHERE company_id = ANY($1::bigint[])`));
+    put('companyDismissals', await rows(`SELECT id || ':' || company_id || ':' || coalesce(revoked_at::text, '') AS k FROM company_dismissals WHERE company_id = ANY($1::bigint[])`));
   } else {
     put('registryRecords', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM registry_records WHERE project_id = ANY($1::bigint[])`));
     put('domRfTargets', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM domrf_targets WHERE project_id = ANY($1::bigint[])`));
@@ -555,6 +559,10 @@ const MOVABLE: Record<string, Record<string, string>> = {
   domrf_company_links: { company_id: 'bigint' },
   // «На контроле» (ADR-016): отметки переносятся к цели.
   company_watch: { company_id: 'bigint' },
+  // Назначение имени без ИНН (ADR-016, этап 23D).
+  company_name_searches: { company_id: 'bigint' },
+  company_name_suggestions: { company_id: 'bigint' },
+  company_dismissals: { company_id: 'bigint' },
   entity_identifiers: { company_id: 'bigint' },
   company_relations: { from_company_id: 'bigint', to_company_id: 'bigint' },
   merge_queue: { status: 'merge_status' },
@@ -563,7 +571,17 @@ const MOVABLE: Record<string, Record<string, string>> = {
   dossier_cases: { company_id: 'bigint', claimed_client_company_id: 'bigint', project_id: 'bigint' },
 };
 
-const DELETABLE = new Set(['entity_aliases', 'mentions', 'project_participants', 'domrf_company_searches', 'domrf_company_links', 'company_watch']);
+const DELETABLE = new Set([
+  'entity_aliases',
+  'mentions',
+  'project_participants',
+  'domrf_company_searches',
+  'domrf_company_links',
+  'company_watch',
+  'company_name_searches',
+  'company_name_suggestions',
+  'company_dismissals',
+]);
 
 const updateColumn = async (
   client: PoolClient,
@@ -696,6 +714,31 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
     for (const watch of watches) {
       if (watch.duplicate) await deleteRow(client, moves, 'company_watch', watch.id);
       else await updateColumn(client, moves, 'company_watch', watch.id, 'company_id', s, t);
+    }
+    // Назначение имени (ADR-016): упоминание вошло в цель — его подсказки по названию больше ни о чём,
+    // удаляются с образом; поиск — один на компанию (как поиск ДОМ.РФ); действующая «не компания»
+    // источника цель не скрывает — удаляется с образом, снятые отметки переносятся историей.
+    for (const id of await idsOf(client, 'SELECT id FROM company_name_suggestions WHERE company_id = $1 ORDER BY id', [s])) {
+      await deleteRow(client, moves, 'company_name_suggestions', id);
+    }
+    const nameSearch = (
+      await client.query<{ id: number; target: boolean }>(
+        `SELECT x.id, EXISTS (SELECT 1 FROM company_name_searches y WHERE y.company_id = $2) AS target
+         FROM company_name_searches x WHERE x.company_id = $1`,
+        [s, t],
+      )
+    ).rows[0];
+    if (nameSearch?.target) await deleteRow(client, moves, 'company_name_searches', nameSearch.id);
+    else if (nameSearch) await updateColumn(client, moves, 'company_name_searches', nameSearch.id, 'company_id', s, t);
+    const dismissals = (
+      await client.query<{ id: number; active: boolean }>(
+        'SELECT id, revoked_at IS NULL AS active FROM company_dismissals WHERE company_id = $1 ORDER BY id',
+        [s],
+      )
+    ).rows;
+    for (const d of dismissals) {
+      if (d.active) await deleteRow(client, moves, 'company_dismissals', d.id);
+      else await updateColumn(client, moves, 'company_dismissals', d.id, 'company_id', s, t);
     }
   } else {
     for (const id of await idsOf(client, 'SELECT id FROM domrf_targets WHERE project_id = $1 ORDER BY id', [s])) {

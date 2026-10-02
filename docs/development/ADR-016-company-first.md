@@ -1,6 +1,6 @@
 # ADR-016 — Портал от компании: юрлицо → сведения → объекты → публикации
 
-Статус: **принято 02.10.2026** (решения владельца — раздел «Решения владельца»). Этапы 23A–23D — в коде по мере выполнения.
+Статус: **принято 02.10.2026** (решения владельца — раздел «Решения владельца»). Этапы 23A–23D — в коде (раздел «Как сделано»); 23E — по решению о тарифе.
 
 ## Контекст
 
@@ -104,6 +104,21 @@
    решает человек» — п. 3: новое имя из текста не становится компанией каталога, пока его не назначит человек.
 3. Общей ленты нет: публикации — только в компании и объекте.
 4. Подсказки Фокуса по названию — автоматически, в пределах суточного лимита.
+
+## Как сделано (02.10.2026)
+
+- **23A** — миграция 042 (`company_watch`, `companies.name_pending`, `entity_aliases.source = 'focus'`), `companies/register.ts`,
+  `companies/watch.ts`, `focus/identity.ts`; `POST /api/companies`, `PUT|DELETE /api/companies/:id/watch`.
+- **23B** — `api/companyCatalog.ts` (`GET /api/catalog/companies`: виды legal/groups/unidentified, числа из тех же источников,
+  что карточка, CTE только MATERIALIZED), `pages/CompaniesPage.tsx`; переключатель «Публикации» и ссылка «Публикации» у
+  источника сняты (тексты источника — в его «Разборах»).
+- **23C** — `companies/cardExtras.ts` (наименование ЕГРЮЛ в ответе карточки), `CompanyInfo`, `CompanyUnidentified`,
+  `api/projectPublications.ts`, `ProjectPublications`.
+- **23D** — миграция 043 (`company_name_searches`, `company_name_suggestions`, `company_dismissals`, метод `suggest` в
+  `focus_requests`), `focus/suggest.ts`, `companies/assignment.ts`; `GET /api/companies/:id/assignment`,
+  `POST /api/companies/:id/identify | name-search`, `PUT|DELETE /api/companies/:id/dismissal`; `MergePreview` принимает
+  любую пару (`adhoc`). Поиск по названию по расписанию берёт не больше половины суточного лимита (`SUGGEST_SHARE`), по
+  5 имён за проход, сначала имена с большим числом публикаций, повтор — через 30 дней.
 
 ## Последствия
 

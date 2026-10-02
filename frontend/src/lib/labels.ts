@@ -800,10 +800,18 @@ export const REGISTER_FOCUS_LABELS: Record<'found' | 'not_found' | 'already_chec
   rate_limited: 'Контур.Фокус просит обращаться реже — сведения придут позже.',
 };
 
+/** Вердикт модели по паре «возможный дубль» (entity-match@1) — подпись кандидата в назначении имени. */
+export const MODEL_VERDICT_HINTS: Record<'same' | 'different' | 'unsure', string> = {
+  same: 'модель: скорее та же компания',
+  different: 'модель: скорее другая компания',
+  unsure: 'модель: не уверена',
+};
+
 export const FOCUS_METHOD_LABELS: Record<IFocusRequestRow['method'], string> = {
   req: 'реквизиты и статус',
   egrDetails: 'деятельность и учредители',
   stat: 'проверка ключа',
+  suggest: 'поиск по названию',
 };
 
 export const FOCUS_REQUEST_OUTCOME_LABELS: Record<FocusRequestOutcome, string> = {

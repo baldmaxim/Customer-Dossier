@@ -1,6 +1,9 @@
 // Сравнение двух карточек перед объединением: что с чем объединится, что переедет, что мешает.
 // Объединяется ровно то, что сравнили: сервер примет только токен этого сравнения, а если
 // карточки успели измениться — откажет, и сравнение обновится.
+//
+// Пара — из «Проверка → Дубли» (pair) или любая (adhoc): «это компания X» в карточке имени без ИНН
+// (ADR-016) — тот же предпросмотр и то же применение через /api/entities/merge*.
 
 import { FC, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,8 +24,13 @@ import { MergeEntityCard } from './MergeEntityCard';
 import styles from './Merge.module.css';
 
 interface IMergePreviewProps {
-  pair: IPendingMerge;
+  /** Пара очереди «Дубли». */
+  pair?: IPendingMerge;
+  /** Любая пара компаний: источник войдёт в цель. */
+  adhoc?: { sourceId: number; targetId: number };
   onDone: () => void;
+  /** Тост после объединения; по умолчанию — про «Историю объединений» ниже. */
+  doneText?: string;
 }
 
 const failureText = (err: unknown): string => {
@@ -35,7 +43,7 @@ const failureText = (err: unknown): string => {
   return err instanceof ApiError && err.status < 500 ? err.message : describeLoadError(err);
 };
 
-export const MergePreview: FC<IMergePreviewProps> = ({ pair, onDone }) => {
+export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, doneText }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -43,28 +51,42 @@ export const MergePreview: FC<IMergePreviewProps> = ({ pair, onDone }) => {
   const [key] = useState(() => newKey('merge'));
   const [error, setError] = useState<string | null>(null);
 
+  const previewUrl = pair
+    ? `/api/admin/merges/${pair.id}/preview`
+    : `/api/entities/merge-preview?kind=company&sourceId=${adhoc?.sourceId}&targetId=${adhoc?.targetId}`;
   const previewQuery = useQuery({
-    queryKey: ['merge-preview', pair.id],
-    queryFn: () => api.get<IMergePreview>(`/api/admin/merges/${pair.id}/preview`),
+    queryKey: pair ? ['merge-preview', pair.id] : ['merge-preview', 'adhoc', adhoc?.sourceId, adhoc?.targetId],
+    queryFn: () => api.get<IMergePreview>(previewUrl),
     // Сравнение не подменяется молча фоновым обновлением: объединяется ровно то, что видели.
     refetchOnWindowFocus: false,
     staleTime: Infinity,
   });
 
   const apply = useMutation({
-    mutationFn: (preview: IMergePreview) =>
-      api.post<{ mergeId: number; replayed: boolean }>(`/api/admin/merges/${pair.id}/merge`, {
+    mutationFn: (preview: IMergePreview) => {
+      const body = {
         expectedSourceVersion: preview.source.version,
         expectedTargetVersion: preview.target.version,
         idempotencyKey: key,
         expectedPreviewToken: preview.previewToken,
-      }),
+      };
+      return pair
+        ? api.post<{ mergeId: number; replayed: boolean }>(`/api/admin/merges/${pair.id}/merge`, body)
+        : api.post<{ mergeId: number; replayed: boolean }>('/api/entities/merge', {
+            ...body,
+            kind: 'company',
+            sourceId: adhoc?.sourceId,
+            targetId: adhoc?.targetId,
+          });
+    },
     onSuccess: result => {
       void queryClient.invalidateQueries({ queryKey: ['merges'] });
       void queryClient.invalidateQueries({ queryKey: ['merge-history'] });
       toast.show({
         tone: 'success',
-        text: result.replayed ? 'Эти карточки уже объединены.' : 'Карточки объединены. Отменить можно в «Истории объединений» ниже.',
+        text: result.replayed
+          ? 'Эти карточки уже объединены.'
+          : (doneText ?? 'Карточки объединены. Отменить можно в «Истории объединений» ниже.'),
       });
       onDone();
     },

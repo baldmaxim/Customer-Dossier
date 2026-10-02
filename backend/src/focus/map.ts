@@ -104,7 +104,7 @@ export const formatAddress = (value: unknown): string | null => {
 
 // --- Метод req ---------------------------------------------------------------------------------------
 
-const statusText = (value: unknown): string | null => {
+export const statusText = (value: unknown): string | null => {
   const status = obj(value);
   if (!status) return null;
   const text = str(status.statusString) ?? (status.dissolved === true ? 'Прекратило деятельность' : status.dissolving === true ? 'В стадии ликвидации' : null);

@@ -112,6 +112,32 @@ export const callFocus = async (
   return { ok: true, httpStatus: res.status, items };
 };
 
+/**
+ * Поиск юрлица по названию (метод suggest, «автодополнение — поисковые подсказки», ADR-016): q — строка,
+ * ответ — список найденных. Имена полей элемента в открытом описании API не названы, поэтому разбор
+ * терпимый: реквизиты — из inn/ogrn верхнего уровня, остальное хранится как есть и читается картой
+ * focus/suggest.ts. Перед включением — `npm run focus -- --suggest <название>` (живой платный запрос).
+ */
+export const callFocusSuggest = async (q: string, key: string, deps: ISafeFetchDeps = {}): Promise<FocusCallResult> => {
+  const res = await request('suggest', { q }, key, deps);
+  if (!res.ok) return res;
+  let data: unknown;
+  try {
+    data = JSON.parse(res.text);
+  } catch {
+    return { ok: false, failure: 'bad_response', httpStatus: res.status, error: 'ответ не похож на список подсказок' };
+  }
+  // Подсказки могут прийти списком или списком внутри объекта ({ items: [...] }).
+  const list = Array.isArray(data) ? data : Array.isArray(asObject(data)?.items) ? (asObject(data)!.items as unknown[]) : null;
+  if (list === null) return { ok: false, failure: 'bad_response', httpStatus: res.status, error: 'ответ не похож на список подсказок' };
+  const items: IFocusItem[] = [];
+  for (const element of list) {
+    const payload = asObject(element);
+    if (payload) items.push({ inn: asIdentifier(payload.inn), ogrn: asIdentifier(payload.ogrn), payload });
+  }
+  return { ok: true, httpStatus: res.status, items };
+};
+
 export type FocusKeyVerdict = 'accepted' | 'rejected' | 'unknown';
 
 /**

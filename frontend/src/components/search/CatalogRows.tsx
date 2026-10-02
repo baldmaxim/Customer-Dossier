@@ -33,6 +33,7 @@ const nameNote = (row: ICatalogRow): string | null => {
     row.egrulName && row.egrulName !== row.name && !row.namePending ? `в публикациях — «${row.name}»` : null,
     row.namePending && !row.egrulName ? 'наименование из ЕГРЮЛ ещё не получено' : null,
     row.watched ? 'на контроле' : null,
+    row.hints > 0 ? `кандидатов: ${formatCount(row.hints)}` : null,
   ].filter(Boolean);
   return notes.length > 0 ? notes.join(' · ') : null;
 };
@@ -63,6 +64,7 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
                 unidentified ? null : row.egrulStatus,
                 rolesText(row.roles),
                 row.watched ? 'на контроле' : null,
+                row.hints > 0 ? `кандидатов: ${formatCount(row.hints)}` : null,
               ]
                 .filter(Boolean)
                 .join(' · ') || undefined

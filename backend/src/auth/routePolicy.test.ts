@@ -84,6 +84,10 @@ const WRITES: Record<string, string> = {
   'POST /companies/': 'companies.manage',
   'PUT /companies/:id/watch': 'companies.manage',
   'DELETE /companies/:id/watch': 'companies.manage',
+  'POST /companies/:id/identify': 'companies.manage',
+  'POST /companies/:id/name-search': 'companies.manage',
+  'PUT /companies/:id/dismissal': 'companies.manage',
+  'DELETE /companies/:id/dismissal': 'companies.manage',
   'PUT /admin/focus/key': 'focus.manage',
   'DELETE /admin/focus/key': 'focus.manage',
 };

@@ -54,6 +54,8 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
   // Компании от оператора (ADR-016): завести по реквизиту, «На контроле».
   { methods: 'write', pattern: /^\/companies$/, permission: 'companies.manage' },
   { methods: 'write', pattern: /^\/companies\/[^/]+\/watch$/, permission: 'companies.manage' },
+  // Назначение имени без ИНН (этап 23D): реквизит, поиск по названию (запрос тарифа), «не компания».
+  { methods: 'write', pattern: /^\/companies\/[^/]+\/(identify|name-search|dismissal)$/, permission: 'companies.manage' },
 
   // Разбор, публикация наборов, пересчёт сигналов.
   { methods: 'write', pattern: /^\/reprocess\//, permission: 'pipeline.manage' },

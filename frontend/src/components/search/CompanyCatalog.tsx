@@ -91,6 +91,7 @@ export const CompanyCatalog: FC = () => {
           {total > rows.length
             ? `Показаны первые ${formatCount(CATALOG_LIMIT)} из ${formatCount(total)} — уточните поиск по названию или ИНН.`
             : `Показано: ${formatCountWord(rows.length, ROW_FORMS)}.`}
+          {view === 'unidentified' && (counts?.dismissed ?? 0) > 0 && ` Отмечено «не компания» и не показано: ${formatCount(counts?.dismissed ?? 0)}.`}
         </p>
       </>
     );

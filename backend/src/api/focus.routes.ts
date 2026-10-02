@@ -34,7 +34,7 @@ const parseId = (raw: string | undefined): number | null => {
   return Number.isFinite(id) && id > 0 ? id : null;
 };
 
-const STOP_ERRORS: Record<FocusStopReason, { status: number; error: string }> = {
+export const STOP_ERRORS: Record<FocusStopReason, { status: number; error: string }> = {
   no_key: { status: 409, error: 'Контур.Фокус не подключён: ключ не задан' },
   limit: { status: 429, error: 'Лимит запросов к Контур.Фокусу на сутки исчерпан' },
   key_rejected: { status: 502, error: 'Контур.Фокус не принял ключ — его нужно заменить в админке' },

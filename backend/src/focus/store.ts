@@ -21,7 +21,7 @@ export type FocusJournalOutcome =
   | 'network';
 
 export interface IFocusJournalEntry {
-  method: FocusMethod | 'stat';
+  method: FocusMethod | 'stat' | 'suggest';
   identifiersCount: number;
   httpStatus: number | null;
   outcome: FocusJournalOutcome;
