@@ -1,0 +1,20 @@
+/* Главная «Компании»: поиск первым, под ним каталог. */
+
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  min-width: 0;
+}
+
+.search {
+  min-width: 0;
+}
+
+@media (min-width: 600px) {
+  /* Поле — для названия или реквизита: шире 36rem оно только растягивает взгляд. */
+  .search {
+    max-width: 36rem;
+  }
+}

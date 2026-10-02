@@ -1,10 +1,9 @@
-// Фильтры каталога: роль, порядок, «только с публикациями». С 600px — одной строкой; на
-// телефоне свёрнуты в строку-сводку («Все роли · по числу объектов»): развёрнутые они
-// занимали полэкрана до первой компании.
+// Фильтры каталога: «только на контроле», роль, порядок. С 600px — одной строкой; на телефоне свёрнуты
+// в строку-сводку («Все роли · по числу объектов»): развёрнутые они занимали полэкрана до первой компании.
 //
-// Роль — свойство связи, а не компании: одна фирма бывает заказчиком на одном объекте и
-// подрядчиком на другом. Поэтому фильтр подписан «выступала в роли», и компания честно
-// попадает сразу в несколько фильтров.
+// Роль — свойство связи, а не компании: одна фирма бывает заказчиком на одном объекте и подрядчиком на
+// другом. Поэтому фильтр подписан «выступала в роли», и компания честно попадает сразу в несколько фильтров.
+// «На контроле» у имён без ИНН не бывает: отметка ставится компании, и имя с ней — уже в «Юрлицах».
 
 import { FC, useId } from 'react';
 
@@ -28,16 +27,12 @@ export const CatalogFilters: FC<ICatalogFiltersProps> = ({ params }) => {
 
   const controls = (
     <div className={styles.filters} role="group" aria-label="Фильтры каталога">
+      {params.view !== 'unidentified' && <Checkbox label="Только на контроле" checked={params.watch} onChange={params.setWatch} />}
       <div className={styles.roleField}>
         <label htmlFor={roleId} className={styles.fieldLabel}>
           Выступала в роли
         </label>
-        <Select
-          id={roleId}
-          value={params.role}
-          block={!wide}
-          onChange={e => params.setRole(e.target.value as CatalogRole)}
-        >
+        <Select id={roleId} value={params.role} block={!wide} onChange={e => params.setRole(e.target.value as CatalogRole)}>
           {CATALOG_ROLES.map(role => (
             <option key={role.value} value={role.value}>
               {role.label}
@@ -46,7 +41,6 @@ export const CatalogFilters: FC<ICatalogFiltersProps> = ({ params }) => {
         </Select>
       </div>
       <Segmented label="Порядок" items={CATALOG_SORTS} value={params.sort} onChange={params.setSort} size={wide ? 'md' : 'sm'} fill={!wide} />
-      <Checkbox label="Только с публикациями" checked={!params.all} onChange={checked => params.setAll(!checked)} />
     </div>
   );
 
@@ -58,7 +52,7 @@ export const CatalogFilters: FC<ICatalogFiltersProps> = ({ params }) => {
       summary={
         <>
           <VisuallyHidden>Фильтры: </VisuallyHidden>
-          {catalogSummary(params)}
+          {catalogSummary({ ...params, watch: params.view !== 'unidentified' && params.watch })}
         </>
       }
     >

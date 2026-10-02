@@ -70,7 +70,7 @@ export const ProjectPage: FC = () => {
         title="Такого объекта нет"
         action={
           <ButtonLink to="/" variant="primary">
-            К поиску
+            К компаниям
           </ButtonLink>
         }
       >

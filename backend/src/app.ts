@@ -19,6 +19,7 @@ import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
+import { catalogRouter } from './api/companyCatalog.js';
 import { companyManageRouter } from './api/companyManage.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { graphRouter } from './api/graph.routes.js';
@@ -72,6 +73,7 @@ const defaultAuthOptions = (): IAuthOptions => {
  */
 export const dataRouters = (service: AuthService, passkeys: PasskeyService | null = null): ReadonlyArray<readonly [string, IRouter]> => [
   ['/manual', manualRouter],
+  ['/catalog', catalogRouter],
   ['/companies', companiesRouter],
   ['/companies', companyManageRouter],
   ['/contractors', contractorsRouter],

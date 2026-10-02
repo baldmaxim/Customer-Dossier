@@ -94,6 +94,7 @@ test('связи: схема строится вокруг одного цент
 test('T18-05 узкое окно: основные экраны без горизонтальной прокрутки', async ({ page }) => {
   for (const path of [
     '/',
+    '/?view=unidentified',
     '/links',
     '/contractors',
     '/admin',

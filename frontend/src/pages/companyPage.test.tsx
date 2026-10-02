@@ -451,11 +451,11 @@ describe('Карточка компании', () => {
     expect(screen.queryByText('Компания не найдена')).toBeNull();
   });
 
-  it('404 — «Компания не найдена» и путь к поиску', async () => {
+  it('404 — «Компания не найдена» и путь к компаниям', async () => {
     fakeApi(replace('GET /api/companies/7', () => ({ status: 404, body: { error: 'not found' } })));
     renderCard();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Компания не найдена' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'К поиску' }).getAttribute('href')).toBe('/');
+    expect(screen.getByRole('link', { name: 'К компаниям' }).getAttribute('href')).toBe('/');
   });
 });

@@ -104,8 +104,8 @@ describe('вход', () => {
     const viewer = renderWithProviders(gate());
     await screen.findByText('Портал');
     expect(screen.queryAllByRole('link', { name: 'Админка' })).toHaveLength(0);
-    // Главная — «Поиск»: на ней два режима (компании и публикации), пункт один.
-    expect(screen.getAllByRole('link', { name: 'Поиск' }).length).toBeGreaterThan(0);
+    // Главная — «Компании» (ADR-016).
+    expect(screen.getAllByRole('link', { name: 'Компании' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Профиль' })[0]?.getAttribute('href')).toBe('/admin/account');
     viewer.unmount();
 

@@ -68,6 +68,35 @@ export interface ICompanyRegistered {
   focus: RegisterFocusOutcome;
 }
 
+/** Вид каталога компаний (ADR-016): юрлица, группы, имена без ИНН. */
+export type CatalogView = 'legal' | 'groups' | 'unidentified';
+
+/** Строка каталога GET /api/catalog/companies. */
+export interface ICatalogRow {
+  companyId: number;
+  name: string;
+  /** Краткое наименование по ЕГРЮЛ (Контур.Фокус); null — сведений нет. */
+  egrulName: string | null;
+  egrulStatus: string | null;
+  inn: string | null;
+  ogrn: string | null;
+  city: string | null;
+  entityType: string;
+  roles: string[];
+  objects: number;
+  publications: number;
+  lastPublishedAt: string | null;
+  watched: boolean;
+  namePending: boolean;
+}
+
+export interface ICatalogResponse {
+  view: CatalogView;
+  items: ICatalogRow[];
+  total: number;
+  counts: Record<CatalogView, number> & { watched: number };
+}
+
 export type EntityType = 'legal_entity' | 'brand' | 'group' | 'unknown';
 
 export interface ICompanyIdentifier {

@@ -1,5 +1,6 @@
-// Действия с источником — рядом тихих кнопок: публикации и разборы источника, подробности
-// состояния (окном), проверка сайта, удаление пустого источника.
+// Действия с источником — рядом тихих кнопок: разборы источника (его тексты и что из них взято),
+// подробности состояния (окном), проверка сайта, удаление пустого источника. Ссылки «Публикации»
+// больше нет: общей ленты в портале нет (ADR-016), тексты источника — в его разборах.
 //
 // Где места мало — на телефоне и в таблице уже 1280px, — в строке остаётся одно «Подробнее»:
 // окно подробностей несёт все действия (place="dialog"), так что ничего не теряется, а строка
@@ -28,8 +29,6 @@ interface ISourceRowActionsProps {
 
 export const SourceRowActions: FC<ISourceRowActionsProps> = ({ source, actions, place = 'row' }) => {
   const name = sourceName(source);
-  // Поиск по публикациям находит и название канала: так открываются его посты в ленте.
-  const publications = `/?view=publications&q=${encodeURIComponent(source.title)}`;
   // Чья это кнопка — диктору: в таблице десяток одинаковых «Подробнее». В окне источник назван
   // в заголовке — там уточнение не нужно.
   const of = place === 'dialog' ? null : <VisuallyHidden> «{name}»</VisuallyHidden>;
@@ -43,9 +42,6 @@ export const SourceRowActions: FC<ISourceRowActionsProps> = ({ source, actions, 
   const inDialog = place === 'dialog';
   return (
     <div className={styles.actions}>
-      <ButtonLink to={publications} size="sm" variant={inDialog ? 'secondary' : 'ghost'}>
-        Публикации{of}
-      </ButtonLink>
       <ButtonLink to={`/admin/process?source=${source.id}`} size="sm" variant={inDialog ? 'secondary' : 'ghost'}>
         Разборы{of}
       </ButtonLink>

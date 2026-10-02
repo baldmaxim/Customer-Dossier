@@ -26,9 +26,10 @@ import { describeLoadError } from '../lib/loadError';
 import { SourceSwitcher } from './document/SourceSwitcher';
 import styles from './DocumentPage.module.css';
 
+// Общей ленты нет (ADR-016): публикацию открывают из компании или объекта, без них — к компаниям.
 const toPublications = (
-  <ButtonLink to="/?view=publications" variant="primary">
-    К публикациям
+  <ButtonLink to="/" variant="primary">
+    К компаниям
   </ButtonLink>
 );
 

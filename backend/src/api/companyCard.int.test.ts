@@ -205,3 +205,47 @@ describe('объекты компании из событий', () => {
     expect(eventStatements[0]?.quotes[0]).toMatchObject({ sourceTitle: 'card_demo', sourceKey: 'card_demo', revisionId: expect.any(Number), observedAt: expect.any(String) });
   });
 });
+
+// Каталог от юрлица (ADR-016, этап 23B): юрлицо с ИНН — в «Юрлицах» со своими числами, имя без реквизита —
+// в «Без ИНН», группа — в «Группах»; «на контроле» поднимает компанию наверх и даёт фильтр.
+describe('каталог компаний от юрлица', () => {
+  type Row = { companyId: number; name: string; inn: string | null; objects: number; publications: number; roles: string[]; watched: boolean };
+
+  it('виды: юрлица, «Без ИНН», группы; числа — из тех же источников, что карточка', async () => {
+    const group = (await getPool().query<{ id: number }>(
+      `INSERT INTO companies (name, name_norm, name_latin, entity_type) VALUES ('Картагруппа', 'картагруппа', 'kartagruppa', 'group') RETURNING id`,
+    )).rows[0]!.id;
+
+    const legal = await call('/api/catalog/companies');
+    expect(legal.status).toBe(200);
+    const legalRows = legal.body.items as Row[];
+    expect(legalRows.find(r => r.companyId === companyId)).toMatchObject({ inn: INN_A, objects: 1, publications: 1, roles: ['general_contractor'] });
+    expect(legalRows.some(r => r.companyId === partnerId)).toBe(false);
+
+    const unidentified = await call('/api/catalog/companies?view=unidentified');
+    expect((unidentified.body.items as Row[]).find(r => r.companyId === partnerId)).toMatchObject({ inn: null, publications: 1 });
+
+    const groups = await call('/api/catalog/companies?view=groups');
+    expect((groups.body.items as Row[]).map(r => r.companyId)).toContain(group);
+
+    const counts = legal.body.counts as Record<string, number>;
+    expect(counts.legal).toBeGreaterThanOrEqual(1);
+    expect(counts.unidentified).toBeGreaterThanOrEqual(1);
+    expect(counts.groups).toBeGreaterThanOrEqual(1);
+  });
+
+  it('«на контроле»: имя без ИНН переходит в юрлица, фильтр оставляет только отмеченные', async () => {
+    await getPool().query(`INSERT INTO company_watch (company_id, added_by) VALUES ($1, 'test')`, [partnerId]);
+    const watched = await call('/api/catalog/companies?watch=1');
+    expect((watched.body.items as Row[]).map(r => r.companyId)).toEqual([partnerId]);
+    const all = await call('/api/catalog/companies');
+    expect((all.body.items as Row[])[0]).toMatchObject({ companyId: partnerId, watched: true });
+    await getPool().query(`UPDATE company_watch SET removed_at = now(), removed_by = 'test' WHERE company_id = $1`, [partnerId]);
+  });
+
+  it('фильтр роли и неверный вид', async () => {
+    const gc = await call('/api/catalog/companies?role=general_contractor');
+    expect((gc.body.items as Row[]).map(r => r.companyId)).toEqual([companyId]);
+    expect((await call('/api/catalog/companies?view=everything')).status).toBe(400);
+  });
+});

@@ -144,7 +144,7 @@ describe('Страница публикации', () => {
     fakeApi(routes([]));
     renderPage();
     expect(await screen.findByText('Текст не сохранён — откройте оригинал.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'К публикациям' }).getAttribute('href')).toBe('/?view=publications');
+    expect(screen.getByRole('link', { name: 'К компаниям' }).getAttribute('href')).toBe('/');
   });
 
   it('404 — «Публикация не найдена», а не пустая страница', async () => {

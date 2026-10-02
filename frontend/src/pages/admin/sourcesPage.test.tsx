@@ -179,13 +179,13 @@ describe('Админка: источники', () => {
     expect(within(picker).getByRole('option', { name: 'весь архив' })).toBeTruthy();
   });
 
-  it('строка ведёт к публикациям источника и к его разборам', async () => {
+  it('строка ведёт к разборам источника; ссылки на общую ленту нет (ADR-016)', async () => {
     fakeApi(routes());
     renderWithProviders(<SourcesPage />, '/admin/sources');
 
-    const publications = await screen.findByRole('link', { name: 'Публикации «Недвижимость изнутри»' });
-    expect(publications.getAttribute('href')).toBe(`/?view=publications&q=${encodeURIComponent('Недвижимость изнутри')}`);
-    expect(screen.getByRole('link', { name: 'Разборы «Недвижимость изнутри»' }).getAttribute('href')).toBe('/admin/process?source=1');
+    const runs = await screen.findByRole('link', { name: 'Разборы «Недвижимость изнутри»' });
+    expect(runs.getAttribute('href')).toBe('/admin/process?source=1');
+    expect(screen.queryByRole('link', { name: 'Публикации «Недвижимость изнутри»' })).toBeNull();
   });
 
   it('удалить можно только источник без публикаций — и только после подтверждения', async () => {
@@ -329,9 +329,6 @@ describe('Админка: источники — плотный вид', () => {
     expect(within(dialog).getByText('Telegram-канал · t.me/infra_russia')).toBeTruthy();
     expect(within(dialog).getByText('сбор работает с ошибками')).toBeTruthy();
     expect(within(dialog).getByText('t.me/s/infra_russia отвечает 403')).toBeTruthy();
-    expect(within(dialog).getByRole('link', { name: 'Публикации' }).getAttribute('href')).toBe(
-      `/?view=publications&q=${encodeURIComponent('Инфраструктура России')}`,
-    );
     expect(within(dialog).getByRole('link', { name: 'Разборы' }).getAttribute('href')).toBe('/admin/process?source=4');
     // 2210 публикаций — удалять нечего предлагать.
     expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();

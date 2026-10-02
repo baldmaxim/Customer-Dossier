@@ -64,13 +64,13 @@ describe('оболочка', () => {
     expect(document.activeElement).toBe(screen.getByRole('main'));
   });
 
-  it('меню в шапке и нижняя панель — одни пункты; «Поиск» активен и в режиме публикаций', () => {
-    renderWithRouter(routes(), ['/?view=publications']);
+  it('меню в шапке и нижняя панель — одни пункты; «Компании» — первый пункт (ADR-016)', () => {
+    renderWithRouter(routes(), ['/?view=unidentified']);
     const header = screen.getByRole('navigation', { name: 'Основная навигация' });
     const tabbar = screen.getByRole('navigation', { name: 'Навигация' });
     for (const nav of [header, tabbar]) {
-      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Поиск', 'Связи', 'Админка']);
-      expect(within(nav).getByRole('link', { name: 'Поиск' }).getAttribute('aria-current')).toBe('page');
+      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Компании', 'Связи', 'Админка']);
+      expect(within(nav).getByRole('link', { name: 'Компании' }).getAttribute('aria-current')).toBe('page');
     }
   });
 
@@ -92,14 +92,14 @@ describe('оболочка', () => {
 
   it('на разделах верхнего уровня возврата нет', () => {
     renderWithRouter(routes(), ['/links']);
-    expect(screen.queryByRole('link', { name: /^К (поиску|публикациям|разборам)$/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^К (компаниям|разборам)$/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Назад' })).toBeNull();
   });
 
   it.each([
-    ['/company/7', 'К поиску', '/'],
-    ['/projects/55', 'К поиску', '/'],
-    ['/documents/31', 'К публикациям', '/?view=publications'],
+    ['/company/7', 'К компаниям', '/'],
+    ['/projects/55', 'К компаниям', '/'],
+    ['/documents/31', 'К компаниям', '/'],
     ['/admin/process/501', 'К разборам', '/admin/process'],
   ])('без истории %s ведёт к родительскому списку', (path, label, href) => {
     renderWithRouter(routes(), [path]);

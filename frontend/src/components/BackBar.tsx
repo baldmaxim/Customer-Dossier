@@ -22,9 +22,10 @@ interface IDetailRoute {
 }
 
 export const DETAIL_ROUTES: ReadonlyArray<IDetailRoute> = [
-  { pattern: '/company/:id', parent: '/', parentLabel: 'К поиску' },
-  { pattern: '/projects/:id', parent: '/', parentLabel: 'К поиску' },
-  { pattern: '/documents/:id', parent: '/?view=publications', parentLabel: 'К публикациям' },
+  { pattern: '/company/:id', parent: '/', parentLabel: 'К компаниям' },
+  { pattern: '/projects/:id', parent: '/', parentLabel: 'К компаниям' },
+  // Общей ленты нет (ADR-016): без истории публикация возвращает к компаниям.
+  { pattern: '/documents/:id', parent: '/', parentLabel: 'К компаниям' },
   { pattern: '/admin/process/:id', parent: '/admin/process', parentLabel: 'К разборам' },
   { pattern: '/admin/users/:id', parent: '/admin/users', parentLabel: 'К пользователям' },
   { pattern: '/admin/sources/domrf', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },

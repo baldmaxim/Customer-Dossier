@@ -80,7 +80,7 @@ export const CompanyPage: FC = () => {
       <EmptyState
         action={
           <ButtonLink to="/" icon="search">
-            К поиску
+            К компаниям
           </ButtonLink>
         }
       >

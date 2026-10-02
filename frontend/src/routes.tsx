@@ -4,14 +4,14 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 
 import { adminRoutes } from './pages/admin/routes';
+import { CompaniesPage } from './pages/CompaniesPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LinksPage } from './pages/LinksPage';
 import { ProjectPage } from './pages/ProjectPage';
-import { SearchPage } from './pages/SearchPage';
 
 export const portalRoutes: RouteObject[] = [
-  { path: '/', element: <SearchPage /> },
+  { path: '/', element: <CompaniesPage /> },
   { path: '/company/:id', element: <CompanyPage /> },
   { path: '/links', element: <LinksPage /> },
   { path: '/documents/:id', element: <DocumentPage /> },

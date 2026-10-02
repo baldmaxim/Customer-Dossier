@@ -130,7 +130,7 @@ export const LinksPage: FC = () => {
           title="Выберите центр схемы"
           action={
             <ButtonLink to="/" variant="secondary">
-              К поиску компаний
+              К компаниям
             </ButtonLink>
           }
         >

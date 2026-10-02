@@ -7,11 +7,12 @@ import { fakeApi, renderWithProviders } from '../test/render';
 import { PublicationSourceButton } from './PublicationModal';
 import { TelegramPost } from './TelegramPost';
 
-const revision = (body: string) => ({
+const revision = (body: string, over: Record<string, unknown> = {}) => ({
   revision: {
     id: 9, sourceItemId: 5, revisionNo: 1, title: null, body, representation: 'telegram_web_text@1', bodyHash: 'x',
     completeness: 'full', completenessReason: null, attachments: [], publishedAt: '2026-09-20T09:00:00Z', sourceModifiedAt: null,
     firstObservedAt: '2026-09-20T09:05:00Z', chronology: 'observed_order', sameContentAsRevisionId: null, legacyDocumentId: 19, origin: 'ingest',
+    ...over,
   },
 });
 
@@ -30,6 +31,23 @@ const post = (over: Partial<Parameters<typeof TelegramPost>[0]> = {}) => (
 );
 
 describe('TelegramPost', () => {
+  it('снимок ДОМ.РФ: характеристики и генподрядчик отдельно от исходного текста', async () => {
+    fakeApi([{
+      match: 'GET /api/revisions/9',
+      respond: () => ({ status: 200, body: revision(
+        'Объект: «СОБЫТИЕ» (ID 68275 в реестре)\nСдача дома: I кв. 2029\nКоличество квартир: 507\nГенподрядчики: ООО СУ-10 (ИНН: 7736255508)',
+        { title: 'СОБЫТИЕ', representation: 'registry_object_browser@1', completeness: 'excerpt', publishedAt: null },
+      ) }),
+    }]);
+    renderWithProviders(post({ sourceKind: 'website', sourceTitle: 'наш.дом.рф', sourceKey: 'domrf', url: null }));
+
+    const heading = await screen.findByRole('heading', { name: 'Характеристики объекта' });
+    const panel = heading.parentElement!;
+    expect(panel.textContent).toContain('ГенподрядчикиООО СУ-10 (ИНН: 7736255508)');
+    expect(panel.textContent).toContain('Сдача домаI кв. 2029');
+    expect(screen.getByText(/^Исходный текст/).closest('details')?.open).toBe(false);
+  });
+
   it('http(s)-адреса в тексте — ссылки наружу, другие схемы остаются текстом', async () => {
     fakeApi([{ match: 'GET /api/revisions/9', respond: () => ({ status: 200, body: revision('Подробнее: https://example.ru/news/1. И javascript:alert(1)') }) }]);
     renderWithProviders(post());
