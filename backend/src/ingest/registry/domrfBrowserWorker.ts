@@ -49,6 +49,7 @@ import {
   type IDomRfTarget,
 } from './domrfTargets.js';
 import { importRegistryPayload } from './importFile.js';
+import { syncDomRfGroupRelations } from '../../registry/groupSync.js';
 
 const script = (name: string): string => fs.readFileSync(fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url)), 'utf8');
 
@@ -279,6 +280,11 @@ let passNo = 0;
 export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   const queued = await autoConfirmLinkedDomRfCandidates();
   const prefix: IDomRfPassResult[] = queued > 0 ? [{ what: 'объекты подтверждённых страниц', outcome: `в сбор поставлено ${queued}` }] : [];
+  // Связи «застройщик входит в группу» — к компании, подтверждённой для страницы группы (ADR-012 п. 33).
+  const groups = await syncDomRfGroupRelations();
+  if (groups.linked + groups.withdrawn > 0) {
+    prefix.push({ what: 'связи с группами', outcome: `записано ${groups.linked}, снято ${groups.withdrawn}` });
+  }
   passNo += 1;
   const objectsFirst = passNo % PAGES_EVERY !== 0;
   if (objectsFirst) {

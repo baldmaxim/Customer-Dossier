@@ -1,6 +1,6 @@
 // Очередь ручного слияния: просмотр, отклонение и применение пары через
-// безопасное слияние (resolve/entityMerge.ts). Вызывается ТОЛЬКО человеком —
-// автоматического пути сюда нет по замыслу.
+// безопасное слияние (resolve/entityMerge.ts). Отсюда — действия оператора; с 02.10.2026 (решение
+// владельца) пары разбирает и модель (resolve/modelReview.ts) тем же entityMerge, от своего имени.
 
 import { query, withTransaction } from '../db/pool.js';
 import { assertMergeAllowed } from '../pipeline/guard.js';
@@ -99,6 +99,11 @@ export interface IPendingMerge {
   sourceId: number;
   targetId: number;
   sampleDocumentId: number | null;
+  /** Вердикт модели (entity-match@1) и причина; null — модель пару ещё не смотрела. */
+  modelVerdict: 'same' | 'different' | 'unsure' | null;
+  modelReason: string | null;
+  /** Почему вердикт не применён: например, предпросмотр слияния нашёл препятствие. */
+  decisionNote: string | null;
 }
 
 /** Очередь на подтверждение, самые уверенные пары сверху. Пары со слитыми сущностями не показываются. */
@@ -111,6 +116,9 @@ export const listPendingMerges = async (limit = 50): Promise<IPendingMerge[]> =>
             q.source_entity_id     AS "sourceId",
             q.target_entity_id     AS "targetId",
             q.sample_document_id   AS "sampleDocumentId",
+            q.model_verdict        AS "modelVerdict",
+            q.model_reason         AS "modelReason",
+            q.decision_note        AS "decisionNote",
             coalesce(cs.name, ps.name) AS "sourceName",
             coalesce(ct.name, pt.name) AS "targetName"
      FROM merge_queue q

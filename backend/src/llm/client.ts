@@ -14,6 +14,8 @@ import { buildSemanticSystemMessage, buildSemanticUserMessage } from './semantic
 import { HEADLINE_JSON_SCHEMA, headlineSchema, type IHeadline } from './headline/schema.js';
 import { buildHeadlineSystemMessage, buildHeadlineUserMessage } from './headline/prompt.js';
 import { DOMRF_HINT_JSON_SCHEMA, domRfHintSchema, type IDomRfHint } from './domrfHint/schema.js';
+import { buildEntityMatchSystemMessage, buildEntityMatchUserMessage } from './entityMatch/prompt.js';
+import { ENTITY_MATCH_JSON_SCHEMA, entityMatchSchema, type IEntityMatch } from './entityMatch/schema.js';
 import { buildDomRfHintSystemMessage, buildDomRfHintUserMessage } from './domrfHint/prompt.js';
 import { checkOpenRouter, requestHeaders, requestRouting, type ILlmConnection, type ILlmTarget } from './endpoint.js';
 
@@ -116,6 +118,15 @@ export const DOMRF_HINT_SPEC: IExtractSpec<IDomRfHint> = {
   validator: domRfHintSchema,
   system: buildDomRfHintSystemMessage,
   user: body => buildDomRfHintUserMessage(body),
+};
+
+/** Пара «возможный дубль»: две карточки уже собраны текстом (formatEntityMatchInput). */
+export const ENTITY_MATCH_SPEC: IExtractSpec<IEntityMatch> = {
+  schemaName: 'tg_info_entity_match',
+  jsonSchema: ENTITY_MATCH_JSON_SCHEMA,
+  validator: entityMatchSchema,
+  system: buildEntityMatchSystemMessage,
+  user: body => buildEntityMatchUserMessage(body),
 };
 
 export interface IExtractOptions {
@@ -302,6 +313,9 @@ export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<IS
 
 /** domrf-hint@1 — подсказка инженеру «он / не он». Канон не трогает: результат — на строке совпадения. */
 export const extractDomRfHint = (options: IExtractOptions): Promise<ILlmResult<IDomRfHint>> => extractWith(options, DOMRF_HINT_SPEC);
+
+/** entity-match@1 — одна ли сущность в паре «возможный дубль». Вердикт применяет resolve/modelReview.ts. */
+export const extractEntityMatch = (options: IExtractOptions): Promise<ILlmResult<IEntityMatch>> => extractWith(options, ENTITY_MATCH_SPEC);
 
 /** headline@1 — тема публикации. Канон не трогает: результат живёт в revision_headlines. */
 export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>

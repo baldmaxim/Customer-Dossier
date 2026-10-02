@@ -111,3 +111,15 @@
   padding-left: var(--sp-5);
   font-size: var(--fs-md);
 }
+
+/* Вердикт модели под парой: ярлык и причина одной строкой, «не применено» — приглушённо. */
+.modelVerdict {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+}
+
+.modelNote {
+  color: var(--muted);
+}

@@ -890,3 +890,18 @@ export const AUTH_ACTOR_LABELS: Record<string, string> = {
   anonymous: '—',
   operator: 'локальный оператор',
 };
+
+/** Вердикт модели по паре «возможный дубль» (entity-match@1, 02.10.2026). */
+export const MODEL_VERDICT_LABELS: Record<string, string> = {
+  same: 'модель: это одно и то же',
+  different: 'модель: это разные',
+  unsure: 'модель: не уверена',
+};
+
+/** Кто принял решение: модель подписывается своим именем («model:…»), правило сбора — «auto». */
+export const actorLabel = (actor: string | null | undefined): string => {
+  if (!actor) return '—';
+  if (actor.startsWith('model:')) return `модель (${actor.slice('model:'.length)})`;
+  if (actor === 'auto') return 'автоматически';
+  return actor;
+};

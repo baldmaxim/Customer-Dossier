@@ -12,7 +12,7 @@
 import type { PoolClient } from 'pg';
 
 import { query, withTransaction } from '../../db/pool.js';
-import { domRfObjectUrl, type DomRfCardKind, type IDomRfCardCapture } from './domrfCards.js';
+import { AUTO_CONFIRM_ACTOR, domRfObjectUrl, type DomRfCardKind, type IDomRfCardCapture } from './domrfCards.js';
 import { DomRfTargetError, parseDomRfObjectUrl, registerDomRfTarget } from './domrfTargets.js';
 
 export type DomRfCandidateState = 'pending' | 'confirmed' | 'rejected' | 'replaced';
@@ -188,8 +188,7 @@ export const replaceDomRfCandidate = async (
   });
 };
 
-/** Кто подтвердил кандидата сам: в списке решений видно, что это правило, а не оператор. */
-export const AUTO_CONFIRM_ACTOR = 'auto';
+export { AUTO_CONFIRM_ACTOR };
 export const AUTO_CONFIRM_NOTE = 'страница компании подтверждена оператором — её объекты собираются';
 /** Кандидатов за один шаг: тысячи с больших групп разойдутся за несколько минут короткими транзакциями. */
 const AUTO_CONFIRM_BATCH = 500;

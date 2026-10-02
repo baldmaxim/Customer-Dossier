@@ -13,7 +13,10 @@ import { startMetricsScheduler } from './metrics/refresh.js';
 import { lmStudioProvider } from './reprocess/provider.js';
 import { runReprocessPass } from './reprocess/worker.js';
 import { runHeadlinePass } from './headline/service.js';
+import { applyDomRfModelDecisions } from './ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from './ingest/registry/domrfHints.js';
+import { syncDomRfGroupRelations } from './registry/groupSync.js';
+import { runModelReviewPass } from './resolve/modelReview.js';
 import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 import { startFocusScheduler } from './focus/scheduler.js';
@@ -99,6 +102,22 @@ const startPipelineWorker = (signal: AbortSignal): void => {
       const hinted = hints.filter(h => h.outcome === 'saved').length;
       if (hinted > 0) console.log(`[domrf-hint] подсказок к совпадениям: ${hinted}`);
       for (const h of hints.filter(h => h.outcome !== 'saved')) console.warn(`[domrf-hint] совпадение ${h.linkId}: ${h.outcome} — ${h.reason}`);
+      // Разбор разногласий моделью (02.10.2026): совпадения с ДОМ.РФ и пары «возможный дубль» — тем же
+      // заданием и последним, по той же причине. Без MODEL_REVIEW_APPLY — только вердикты рядом с записями.
+      if (env.MODEL_REVIEW_ENABLED) {
+        const decisions = await applyDomRfModelDecisions(env.MODEL_REVIEW_APPLY);
+        const applied = decisions.filter(d => d.applied);
+        for (const d of applied) console.log(`[model-review] ${d.companyName}: ${d.action === 'confirm' ? 'это он' : 'не он'} — ${d.record}; ${d.reason}`);
+        if (applied.length > 0) {
+          const sync = await syncDomRfGroupRelations();
+          if (sync.linked + sync.withdrawn > 0) console.log(`[model-review] связи с группами: записано ${sync.linked}, снято ${sync.withdrawn}`);
+        }
+        const pairs = await runModelReviewPass();
+        for (const p of pairs.filter(p => p.action !== 'judged')) {
+          console.log(`[model-review] «${p.sourceName}» ↔ «${p.targetName}»: ${p.verdict} — ${p.action}${p.note ? ` (${p.note})` : ''}; ${p.reason}`);
+        }
+        if (pairs.length > 0) console.log(`[model-review] пар с вердиктом: ${pairs.length}`);
+      }
     } catch (err) {
       console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

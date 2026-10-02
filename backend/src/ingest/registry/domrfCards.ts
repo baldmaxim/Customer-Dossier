@@ -149,6 +149,9 @@ export interface IDomRfCardRow {
 const cardColumns = `id, kind, external_ref AS "externalRef", url, name, inn, ogrn, group_ref AS "groupRef",
   group_name AS "groupName", object_refs AS "objectRefs", scanned_at AS "scannedAt", attempt_count AS "attemptCount", last_error AS "lastError"`;
 
+/** Кто подтвердил кандидата сам (ADR-012 п. 32): в списке решений видно, что это правило, а не оператор. */
+export const AUTO_CONFIRM_ACTOR = 'auto';
+
 /** Пометка у объектов, снятых вместе со страницей: по ней они и возвращаются, когда страница снова нужна. */
 export const WITHDRAWN_NOTE = 'страница застройщика или группы снята: у компании выбрана другая запись или «Не он»';
 
@@ -210,8 +213,21 @@ export const withdrawDomRfCardIfOrphaned = async (client: PoolClient, kind: DomR
                        WHERE d.withdrawn_at IS NULL AND NOT (d.kind = $1 AND d.external_ref = $2) AND c.external_ref = ANY (d.object_refs))`,
     [kind, externalRef, actor, WITHDRAWN_NOTE],
   );
+  // Поставленные в сбор правилом «Это он» (ADR-012 п. 32) и ещё не снятые — уходят вместе со страницей:
+  // в очередь их поставила только она. Вернётся страница — вернутся и они (ensureDomRfCard → автоподтверждение).
+  const queued = await client.query(
+    `WITH auto AS (
+       UPDATE domrf_candidates c SET state = 'rejected', decided_by = $3, decided_at = now(), decision_note = $4
+       WHERE c.state = 'confirmed' AND c.decided_by = $5 AND c.found_via_kind = $1 AND c.found_via_ref = $2
+         AND EXISTS (SELECT 1 FROM domrf_targets t WHERE t.external_ref = c.external_ref AND t.captured_at IS NULL)
+         AND NOT EXISTS (SELECT 1 FROM domrf_cards d
+                         WHERE d.withdrawn_at IS NULL AND NOT (d.kind = $1 AND d.external_ref = $2) AND c.external_ref = ANY (d.object_refs))
+       RETURNING c.external_ref)
+     DELETE FROM domrf_targets t USING auto WHERE t.external_ref = auto.external_ref AND t.captured_at IS NULL`,
+    [kind, externalRef, actor, WITHDRAWN_NOTE, AUTO_CONFIRM_ACTOR],
+  );
   const fromGroup = kind === 'developer' && card.group_ref ? await withdrawDomRfCardIfOrphaned(client, 'group', card.group_ref, actor) : 0;
-  return (objects.rowCount ?? 0) + fromGroup;
+  return (objects.rowCount ?? 0) + (queued.rowCount ?? 0) + fromGroup;
 };
 
 export const getDomRfCard = async (kind: DomRfCardKind, externalRef: string): Promise<IDomRfCardRow | null> =>

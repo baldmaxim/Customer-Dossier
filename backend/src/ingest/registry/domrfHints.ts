@@ -34,17 +34,20 @@ export const domRfHintPermission = async (): Promise<IDomRfHintPermission> => {
   return { sourceId: source.id, allowed: decision.allowed, reason: decision.allowed ? null : (decision.reason ?? 'ИИ-обработка не разрешена') };
 };
 
-/** Совпадения, ждущие решения, без подсказки нынешней модели и версии промпта. */
+/**
+ * Совпадения без подсказки нынешней модели и версии промпта: ждущие решения и — с разбором разногласий моделью
+ * (MODEL_REVIEW_ENABLED, 02.10.2026) — уже подтверждённые: ошибочное «Это он» по названию тоже нужно увидеть.
+ */
 export const linksToHint = async (limit: number): Promise<number[]> =>
   (
     await query<{ id: number }>(
       `SELECT l.id FROM domrf_company_links l
        JOIN companies c ON c.id = l.company_id AND c.merged_into_id IS NULL
-       WHERE l.state = 'pending'
+       WHERE (l.state = 'pending' OR ($4 AND l.state = 'confirmed'))
          AND (l.hint_model IS DISTINCT FROM $2 OR l.hint_prompt_version IS DISTINCT FROM $3)
-       ORDER BY l.id
+       ORDER BY (l.state = 'pending') DESC, l.id
        LIMIT $1`,
-      [limit, env.LMSTUDIO_MODEL, DOMRF_HINT_PROMPT_VERSION],
+      [limit, env.LMSTUDIO_MODEL, DOMRF_HINT_PROMPT_VERSION, env.MODEL_REVIEW_ENABLED],
     )
   ).map(row => row.id);
 

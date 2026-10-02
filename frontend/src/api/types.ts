@@ -415,6 +415,10 @@ export interface IPendingMerge {
   sourceId: number;
   targetId: number;
   sampleDocumentId: number | null;
+  /** Вердикт модели и причина (02.10.2026); старый сервер полей не присылает. */
+  modelVerdict?: 'same' | 'different' | 'unsure' | null;
+  modelReason?: string | null;
+  decisionNote?: string | null;
 }
 
 export type PermissionStatus = 'unknown' | 'approved' | 'blocked' | 'revoked' | 'expired';

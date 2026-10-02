@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from '../../api/client';
 import type { ICompensatingPlan, IMergeHistoryItem } from '../../api/types';
 import { formatCount } from '../../lib/format';
-import { formatDateTime } from '../../lib/labels';
+import { actorLabel, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -86,7 +86,7 @@ export const MergeHistory: FC = () => {
             </Cluster>
             <Cluster gap={2} justify="between">
               <span className={styles.muted}>
-                {formatDateTime(h.createdAt)} · {h.actor}
+                {formatDateTime(h.createdAt)} · {actorLabel(h.actor)}
               </span>
               {h.status === 'applied' && (
                 <Button size="sm" variant="ghost" loading={undo.isPending && undo.variables === h.id} onClick={() => void askUndo(h)}>

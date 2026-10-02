@@ -16,7 +16,7 @@ import type { PoolClient } from 'pg';
 
 import { addEvidence, upsertAssertion } from '../assertions/repository.js';
 import type { IAssertionContent } from '../assertions/model.js';
-import { locateQuote, sliceByCodePoints, type IEvidenceSpan } from '../assertions/span.js';
+import { locateQuote, sliceByCodePoints } from '../assertions/span.js';
 import type { IRegistryRecord } from '../ingest/registry/map.js';
 import { companyTitle, developerLine, groupLine, requisitesLine } from '../ingest/registry/render.js';
 import { resolveCompany } from '../resolve/company.js';
@@ -70,7 +70,7 @@ const participation = (companyId: number, projectId: number): IAssertionContent 
   polarity: 'positive',
 });
 
-const memberOfGroup = (companyId: number, groupId: number): IAssertionContent => ({
+export const memberOfGroup = (companyId: number, groupId: number): IAssertionContent => ({
   predicate: 'corporate_relation',
   role: 'member_of_group',
   eventType: null,
@@ -94,6 +94,61 @@ const memberOfGroup = (companyId: number, groupId: number): IAssertionContent =>
 });
 
 /**
+ * Утверждение реестра со строкой-основанием из текста редакции. Строка не нашлась однозначно — false,
+ * утверждения нет. Повтор той же строки не плодит доказательств (снятое — возвращается, addEvidence).
+ */
+export const writeRegistryAssertion = async (
+  client: PoolClient,
+  input: { revisionId: number; body: string; content: IAssertionContent; line: string },
+): Promise<boolean> => {
+  const found = locateQuote(input.body, input.line);
+  const span = found.kind === 'unique' ? sliceByCodePoints(input.body, found.span) : null;
+  if (!span) return false;
+  const assertion = await upsertAssertion(client, input.content, { origin: 'registry', confidenceExtraction: null, confidenceIdentity: null });
+  await addEvidence(client, {
+    assertionId: assertion.id,
+    revisionId: input.revisionId,
+    stance: 'supports',
+    span,
+    origin: 'registry',
+    extractionId: null,
+    legacyKind: null,
+    legacyId: null,
+  });
+  return true;
+};
+
+/**
+ * Компания портала для страницы группы ДОМ.РФ — та, что подтверждена как эта группа («Это он» оператора
+ * или модели). Подтверждена за несколько компаний или ни за одну — null: группу без реквизитов по
+ * названию не угадываем — ДОНСТРОЙ из Москвы и «Донстрой» из Ростова — разные группы с одним именем
+ * (02.10.2026, ADR-012 п. 33).
+ */
+export const confirmedDomRfGroupCompany = async (client: PoolClient, groupRef: string | null): Promise<number | null> => {
+  if (!groupRef) return null;
+  const rows = (
+    await client.query<{ id: string }>(
+      `SELECT DISTINCT coalesce(c.merged_into_id, c.id) AS id
+       FROM domrf_company_links l JOIN companies c ON c.id = l.company_id
+       WHERE l.kind = 'group' AND l.external_ref = $1 AND l.state = 'confirmed'`,
+      [groupRef],
+    )
+  ).rows;
+  return rows.length === 1 ? Number(rows[0]!.id) : null;
+};
+
+/** Страница группы ДОМ.РФ для снимка со страницы сайта — по странице его застройщика (domrf_cards.group_ref). */
+export const domRfGroupRefOf = async (client: PoolClient, record: IRegistryRecord): Promise<string | null> => {
+  const cardRef = record.payload.developerCardRef;
+  const developerRef = record.type === 'developer' ? record.identity.externalRef : typeof cardRef === 'string' ? cardRef : null;
+  if (!developerRef) return null;
+  return (
+    (await client.query<{ group_ref: string | null }>(`SELECT group_ref FROM domrf_cards WHERE kind = 'developer' AND external_ref = $1`, [developerRef]))
+      .rows[0]?.group_ref ?? null
+  );
+};
+
+/**
  * Публикация записи реестра. Вызывается в той же транзакции, что и запись
  * редакции и снимка: канон не должен ссылаться на редакцию, которой нет.
  */
@@ -101,29 +156,11 @@ export const publishRegistryRecord = async (client: PoolClient, input: IRegistry
   const { record, body, revisionId } = input;
   const out: IRegistryPublishOutcome = { projectId: null, companyId: null, groupCompanyId: null, assertions: 0, skipped: [] };
 
-  /** Цитата — целая строка рендера. Не нашлась однозначно — утверждения не будет. */
-  const span = (line: string): IEvidenceSpan | null => {
-    const found = locateQuote(body, line);
-    return found.kind === 'unique' ? sliceByCodePoints(body, found.span) : null;
-  };
-
   const write = async (content: IAssertionContent, line: string, what: string): Promise<void> => {
-    const located = span(line);
-    if (!located) {
+    if (!(await writeRegistryAssertion(client, { revisionId, body, content, line }))) {
       out.skipped.push({ what, reason: 'строка-основание не найдена в тексте редакции однозначно' });
       return;
     }
-    const assertion = await upsertAssertion(client, content, { origin: 'registry', confidenceExtraction: null, confidenceIdentity: null });
-    await addEvidence(client, {
-      assertionId: assertion.id,
-      revisionId,
-      stance: 'supports',
-      span: located,
-      origin: 'registry',
-      extractionId: null,
-      legacyKind: null,
-      legacyId: null,
-    });
     out.assertions += 1;
   };
 
@@ -189,15 +226,25 @@ export const publishRegistryRecord = async (client: PoolClient, input: IRegistry
   const groupName = record.identity.groupName;
   if (groupName && out.companyId !== null && developer) {
     const title = companyTitle(developer.name, developer.legalForm);
-    // Группа компаний — имя без реквизитов: резолвер не прикрепит его к одноимённому юрлицу (ADR-005).
-    const group = await resolveCompany(client, { surface: groupName, revisionId });
-    if (!group) {
-      out.skipped.push({ what: 'группа компаний', reason: `название «${groupName}» не годится для идентификации` });
-    } else if (group.companyId === out.companyId) {
+    // Страница сайта ДОМ.РФ: группа — компания, подтверждённая для страницы группы, а не одноимённая
+    // (ADR-012 п. 33). Запись API-профиля: группа — имя без реквизитов, резолвер не прикрепит его к
+    // одноимённому юрлицу (ADR-005).
+    const browser = record.payload.captureMethod === 'browser_page';
+    const groupId = browser
+      ? await confirmedDomRfGroupCompany(client, await domRfGroupRefOf(client, record))
+      : ((await resolveCompany(client, { surface: groupName, revisionId }))?.companyId ?? null);
+    if (groupId === null) {
+      out.skipped.push({
+        what: 'группа компаний',
+        reason: browser
+          ? 'страница группы ДОМ.РФ не сопоставлена с компанией портала — связь появится после «Это он» по группе'
+          : `название «${groupName}» не годится для идентификации`,
+      });
+    } else if (groupId === out.companyId) {
       out.skipped.push({ what: 'группа компаний', reason: 'группа и застройщик распознаны как одна компания' });
     } else {
-      out.groupCompanyId = group.companyId;
-      await write(memberOfGroup(out.companyId, group.companyId), groupLine(title, groupName), 'принадлежность к группе компаний');
+      out.groupCompanyId = groupId;
+      await write(memberOfGroup(out.companyId, groupId), groupLine(title, groupName), 'принадлежность к группе компаний');
     }
   }
 

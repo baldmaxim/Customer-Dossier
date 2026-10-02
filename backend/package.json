@@ -17,6 +17,7 @@
     "registry:preview": "tsx src/ingest/registry/browserPreview.ts",
     "domrf:once": "tsx src/ingest/registry/browserCli.ts",
     "pipeline:once": "tsx src/pipeline/cli.ts",
+    "review:model": "tsx src/resolve/modelReviewCli.ts",
     "metrics:refresh": "tsx src/metrics/cli.ts",
     "focus": "tsx src/focus/cli.ts",
     "backfill:revisions": "tsx src/revisions/cli.ts",

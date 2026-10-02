@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import type { IPendingMerge } from '../../api/types';
-import { formatPercent } from '../../lib/labels';
+import { MODEL_VERDICT_LABELS, formatPercent } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -60,6 +60,13 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
           <span className={styles.entityName}>{pair.targetName}</span>
           <Badge tone="neutral">сходство {formatPercent(Number(pair.score))}</Badge>
         </Cluster>
+        {pair.modelVerdict && (
+          <p className={styles.modelVerdict}>
+            <Badge tone={pair.modelVerdict === 'unsure' ? 'neutral' : 'info'}>{MODEL_VERDICT_LABELS[pair.modelVerdict] ?? pair.modelVerdict}</Badge>{' '}
+            {pair.modelReason}
+            {pair.decisionNote && <span className={styles.modelNote}> Не применено: {pair.decisionNote}</span>}
+          </p>
+        )}
         <Cluster gap={2}>
           <Button aria-expanded={open} iconEnd="chevron" onClick={() => onToggle(!open)}>
             {open ? 'Скрыть сравнение' : 'Сравнить'}

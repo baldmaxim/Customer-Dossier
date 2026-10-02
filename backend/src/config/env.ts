@@ -103,6 +103,15 @@ export const parseEnv = (source: EnvSource) => {
     DOMRF_HINT_ENABLED: parseStrictBool('DOMRF_HINT_ENABLED', source.DOMRF_HINT_ENABLED, true),
     DOMRF_HINT_BATCH_SIZE: parsePositiveInt('DOMRF_HINT_BATCH_SIZE', source.DOMRF_HINT_BATCH_SIZE, 10),
 
+    // Разбор разногласий моделью (02.10.2026, решение владельца): пары «возможный дубль» компаний и объектов
+    // и совпадения компаний с записями ДОМ.РФ. MODEL_REVIEW_ENABLED — модель оценивает, вердикт и причина
+    // пишутся рядом с парой; MODEL_REVIEW_APPLY — вердикт применяется (слияние, отклонение, «это он / не он»),
+    // кроме того, что запрещают правила: разные ИНН/ОГРН, две разные записи ДОМ.РФ. Идёт тем же заданием,
+    // что разбор (PIPELINE_ENABLED). Слияние — ещё и при MERGE_APPLY_ENABLED.
+    MODEL_REVIEW_ENABLED: parseStrictBool('MODEL_REVIEW_ENABLED', source.MODEL_REVIEW_ENABLED, false),
+    MODEL_REVIEW_APPLY: parseStrictBool('MODEL_REVIEW_APPLY', source.MODEL_REVIEW_APPLY, false),
+    MODEL_REVIEW_BATCH_SIZE: parsePositiveInt('MODEL_REVIEW_BATCH_SIZE', source.MODEL_REVIEW_BATCH_SIZE, 20),
+
     TG_FETCH_DELAY_MS: parsePositiveInt('TG_FETCH_DELAY_MS', source.TG_FETCH_DELAY_MS, 4000),
     INGEST_USER_AGENT: optional(
       source,

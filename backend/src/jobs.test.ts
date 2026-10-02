@@ -24,6 +24,8 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   REPROCESS_AUTO_PUBLISH: false,
   HEADLINE_ENABLED: false,
   DOMRF_HINT_ENABLED: false,
+  MODEL_REVIEW_ENABLED: false,
+  MODEL_REVIEW_APPLY: false,
   METRICS_AUTO_REFRESH: false,
   FOCUS_ENABLED: false,
   BOT_ENABLED: false,
@@ -79,6 +81,14 @@ describe('startBackgroundJobs', () => {
 
     const on = startBackgroundJobs(flags({ PIPELINE_ENABLED: true, DOMRF_HINT_ENABLED: true }), starters(), new AbortController().signal);
     expect(on.notes.join(' ')).toContain('при ИИ-допуске источника (DOMRF_HINT_ENABLED=true)');
+  });
+
+  it('разбор разногласий моделью: выключен, только вердикты или с применением — словами', () => {
+    const notes = (over: Partial<IJobFlags>): string =>
+      startBackgroundJobs(flags({ PIPELINE_ENABLED: true, ...over }), starters(), new AbortController().signal).notes.join(' ');
+    expect(notes({})).toContain('MODEL_REVIEW_ENABLED=false');
+    expect(notes({ MODEL_REVIEW_ENABLED: true })).toContain('решения не применяются (MODEL_REVIEW_APPLY=false)');
+    expect(notes({ MODEL_REVIEW_ENABLED: true, MODEL_REVIEW_APPLY: true })).toContain('решает модель');
   });
 
   it('явные флаги включают ровно свои задания', () => {

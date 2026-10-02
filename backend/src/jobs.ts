@@ -10,6 +10,8 @@ export interface IJobFlags {
   REPROCESS_AUTO_PUBLISH: boolean;
   HEADLINE_ENABLED: boolean;
   DOMRF_HINT_ENABLED: boolean;
+  MODEL_REVIEW_ENABLED: boolean;
+  MODEL_REVIEW_APPLY: boolean;
   METRICS_AUTO_REFRESH: boolean;
   FOCUS_ENABLED: boolean;
   BOT_ENABLED: boolean;
@@ -71,6 +73,13 @@ export const startBackgroundJobs = (
       flags.DOMRF_HINT_ENABLED
         ? 'к найденному в реестре ДОМ.РФ модель подсказывает «он / не он» — при ИИ-допуске источника (DOMRF_HINT_ENABLED=true)'
         : 'подсказок к найденному в реестре ДОМ.РФ нет (DOMRF_HINT_ENABLED=false)',
+    );
+    decision.notes.push(
+      !flags.MODEL_REVIEW_ENABLED
+        ? 'разбора разногласий моделью нет (MODEL_REVIEW_ENABLED=false)'
+        : flags.MODEL_REVIEW_APPLY
+          ? 'разногласия разбирает и решает модель: дубли сливаются и отклоняются, «это он / не он» по ДОМ.РФ (MODEL_REVIEW_APPLY=true)'
+          : 'модель ставит вердикты дублям и совпадениям ДОМ.РФ, решения не применяются (MODEL_REVIEW_APPLY=false)',
     );
   } else {
     decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false): темы публикаций тоже не составляются, подсказок ДОМ.РФ нет');

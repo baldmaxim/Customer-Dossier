@@ -11,7 +11,7 @@ import { api } from '../../api/client';
 import type { DomRfCandidateState, IDomRfCandidate, IDomRfCandidates, IDomRfCandidateSource } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCountWord } from '../../lib/format';
-import { DOMRF_CANDIDATE_STATE_LABELS, DOMRF_CARD_KIND_LABELS, formatDateTime } from '../../lib/labels';
+import { actorLabel, formatDateTime, DOMRF_CANDIDATE_STATE_LABELS, DOMRF_CARD_KIND_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
@@ -150,7 +150,7 @@ export const DomRfCandidates: FC = () => {
 
   const decidedMeta = (item: IDomRfCandidate): string =>
     [
-      item.decidedBy,
+      item.decidedBy ? actorLabel(item.decidedBy) : null,
       item.decidedAt ? formatDateTime(item.decidedAt) : null,
       item.replacementRef ? `вместо него — №${item.replacementRef}` : null,
       item.decisionNote,
