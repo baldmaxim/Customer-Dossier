@@ -69,7 +69,7 @@ describe('callFocus', () => {
 });
 
 describe('checkFocusKey', () => {
-  it('2xx — принят, 401/403 — не принят, остальное — неизвестно (ключ сохраняется)', async () => {
+  it('2xx — принят, 400/401/403 — не принят, остальное — неизвестно (ключ сохраняется)', async () => {
     let path = '';
     const ok: SafeTransport = async url => {
       path = url.pathname;
@@ -78,6 +78,11 @@ describe('checkFocusKey', () => {
     expect(await checkFocusKey(KEY, { transport: ok })).toMatchObject({ verdict: 'accepted', failure: null });
     expect(path).toBe('/api3/stat');
     expect(await checkFocusKey(KEY, { transport: respond(403, 'denied') })).toMatchObject({ verdict: 'rejected', failure: 'forbidden' });
+    // Так stat отвечает на неверный ключ на самом деле (проверено с сервера 02.10.2026).
+    expect(await checkFocusKey(KEY, { transport: respond(400, "Param 'key' not specified or invalid") })).toMatchObject({
+      verdict: 'rejected',
+      failure: 'forbidden',
+    });
     expect(await checkFocusKey(KEY, { transport: respond(503, 'busy') })).toMatchObject({ verdict: 'unknown', failure: 'http_error' });
   });
 });

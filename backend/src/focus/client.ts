@@ -116,7 +116,9 @@ export type FocusKeyVerdict = 'accepted' | 'rejected' | 'unknown';
 
 /**
  * Проверка ключа методом stat (статистика расхода): реквизитов не передаёт и, по описанию API,
- * запросов тарифа не тратит. Сеть или сбой Фокуса — unknown: ключ сохраняется, проверим проходом.
+ * запросов тарифа не тратит. Неверный ключ stat отвергает не 403, а 400 «Param 'key' not specified or
+ * invalid» (проверено 02.10.2026 с сервера): других параметров у stat нет, так что 400 — тоже отказ.
+ * Сеть или сбой Фокуса — unknown: ключ сохраняется, проверим проходом.
  */
 export const checkFocusKey = async (
   key: string,
@@ -124,5 +126,6 @@ export const checkFocusKey = async (
 ): Promise<{ verdict: FocusKeyVerdict; httpStatus: number | null; failure: FocusCallFailure | null; error: string | null }> => {
   const res = await request('stat', {}, key, deps);
   if (res.ok) return { verdict: 'accepted', httpStatus: res.status, failure: null, error: null };
-  return { verdict: res.failure === 'forbidden' ? 'rejected' : 'unknown', httpStatus: res.httpStatus, failure: res.failure, error: res.error };
+  const rejected = res.failure === 'forbidden' || res.httpStatus === 400;
+  return { verdict: rejected ? 'rejected' : 'unknown', httpStatus: res.httpStatus, failure: rejected ? 'forbidden' : res.failure, error: res.error };
 };
