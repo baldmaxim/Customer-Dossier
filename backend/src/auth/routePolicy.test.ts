@@ -75,6 +75,7 @@ const WRITES: Record<string, string> = {
   'POST /admin/domrf-candidates/:id/replace': 'sources.manage',
   'POST /admin/domrf-company-links/:id/confirm': 'sources.manage',
   'POST /admin/domrf-company-links/:id/reject': 'sources.manage',
+  'POST /admin/domrf-company-links/:id/undo': 'sources.manage',
   'POST /admin/domrf-companies/:companyId/link': 'sources.manage',
   'POST /admin/domrf-companies/:companyId/search': 'sources.manage',
   'POST /admin/domrf-hints/permission': 'sources.manage',

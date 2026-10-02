@@ -139,7 +139,8 @@ const storeCard = async (source: ISource, card: IDomRfCardCapture): Promise<{ de
     if (imported.publishError) throw new Error(`снимок застройщика сохранён, но компания не обновлена: ${imported.publishError}`);
   }
   const candidates = await withTransaction(async client => {
-    await saveScannedDomRfCard(client, card);
+    // Сняли с чтения, пока браузер читал (выбрана другая запись): объекты страницы в «Объекты» не идут.
+    if (await saveScannedDomRfCard(client, card)) return 0;
     return upsertDomRfCandidates(client, card);
   });
   if (card.kind === 'developer' && card.groupRef) await ensureDomRfCard('group', card.groupRef);

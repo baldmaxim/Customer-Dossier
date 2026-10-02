@@ -149,12 +149,69 @@ export interface IDomRfCardRow {
 const cardColumns = `id, kind, external_ref AS "externalRef", url, name, inn, ogrn, group_ref AS "groupRef",
   group_name AS "groupName", object_refs AS "objectRefs", scanned_at AS "scannedAt", attempt_count AS "attemptCount", last_error AS "lastError"`;
 
-/** Страница уже известна — не трогаем; новая — в очередь на чтение. */
+/** Пометка у объектов, снятых вместе со страницей: по ней они и возвращаются, когда страница снова нужна. */
+export const WITHDRAWN_NOTE = 'страница застройщика или группы снята: у компании выбрана другая запись или «Не он»';
+
+/**
+ * Страница — в очередь чтения. Снятая с чтения (withdrawn_at) возвращается сразу, и её объекты, снятые
+ * вместе с ней, — снова в «Объекты»: ссылка на страницу опять есть.
+ */
 export const ensureDomRfCard = async (kind: DomRfCardKind, externalRef: string): Promise<void> => {
-  await query(
-    `INSERT INTO domrf_cards (kind, external_ref, url) VALUES ($1, $2, $3) ON CONFLICT (kind, external_ref) DO NOTHING`,
-    [kind, externalRef, domRfCardUrl(kind, externalRef)],
+  await withTransaction(async client => {
+    const card = (
+      await client.query<{ returned: boolean }>(
+        `INSERT INTO domrf_cards (kind, external_ref, url) VALUES ($1, $2, $3)
+         ON CONFLICT (kind, external_ref) DO UPDATE SET withdrawn_at = NULL, next_scan_at = now(), updated_at = now()
+           WHERE domrf_cards.withdrawn_at IS NOT NULL
+         RETURNING (xmax <> 0) AS returned`,
+        [kind, externalRef, domRfCardUrl(kind, externalRef)],
+      )
+    ).rows[0];
+    if (!card?.returned) return;
+    await client.query(
+      `UPDATE domrf_candidates SET state = 'pending', decided_by = NULL, decided_at = NULL, decision_note = NULL
+       WHERE found_via_kind = $1 AND found_via_ref = $2 AND state = 'rejected' AND decision_note = $3`,
+      [kind, externalRef, WITHDRAWN_NOTE],
+    );
+  });
+};
+
+/**
+ * Страница больше не нужна — снять с чтения, если на неё никто не ссылается: ни подтверждённое совпадение
+ * компании, ни карточка объекта в сборе (developer_ref/group_ref), а у группы — ни одна страница её
+ * застройщика, оставшаяся в чтении. Её объекты, ещё ждущие решения, уходят из «Объектов» с пометкой
+ * WITHDRAWN_NOTE, кроме тех, что есть и на другой странице в чтении. Снятый застройщик проверяет свою группу.
+ * Возвращает, сколько объектов ушло.
+ */
+export const withdrawDomRfCardIfOrphaned = async (client: PoolClient, kind: DomRfCardKind, externalRef: string, actor: string): Promise<number> => {
+  const kept = (
+    await client.query<{ kept: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM domrf_company_links WHERE kind = $1 AND external_ref = $2 AND state = 'confirmed')
+           OR EXISTS (SELECT 1 FROM domrf_targets
+                      WHERE ($1 = 'developer' AND developer_ref = $2) OR ($1 = 'group' AND group_ref = $2))
+           OR ($1 = 'group' AND EXISTS (SELECT 1 FROM domrf_cards d
+                                        WHERE d.kind = 'developer' AND d.group_ref = $2 AND d.withdrawn_at IS NULL)) AS kept`,
+      [kind, externalRef],
+    )
+  ).rows[0]?.kept;
+  if (kept) return 0;
+  const card = (
+    await client.query<{ group_ref: string | null }>(
+      `UPDATE domrf_cards SET withdrawn_at = now(), updated_at = now()
+       WHERE kind = $1 AND external_ref = $2 AND withdrawn_at IS NULL RETURNING group_ref`,
+      [kind, externalRef],
+    )
+  ).rows[0];
+  if (!card) return 0;
+  const objects = await client.query(
+    `UPDATE domrf_candidates c SET state = 'rejected', decided_by = $3, decided_at = now(), decision_note = $4
+     WHERE c.state = 'pending' AND c.found_via_kind = $1 AND c.found_via_ref = $2
+       AND NOT EXISTS (SELECT 1 FROM domrf_cards d
+                       WHERE d.withdrawn_at IS NULL AND NOT (d.kind = $1 AND d.external_ref = $2) AND c.external_ref = ANY (d.object_refs))`,
+    [kind, externalRef, actor, WITHDRAWN_NOTE],
   );
+  const fromGroup = kind === 'developer' && card.group_ref ? await withdrawDomRfCardIfOrphaned(client, 'group', card.group_ref, actor) : 0;
+  return (objects.rowCount ?? 0) + fromGroup;
 };
 
 export const getDomRfCard = async (kind: DomRfCardKind, externalRef: string): Promise<IDomRfCardRow | null> =>
@@ -175,7 +232,7 @@ export const claimDueDomRfCard = async (): Promise<IDomRfCardRow | null> =>
   withTransaction(async client => {
     const row = (
       await client.query<IDomRfCardRow>(
-        `SELECT ${cardColumns} FROM domrf_cards WHERE next_scan_at <= now()
+        `SELECT ${cardColumns} FROM domrf_cards WHERE next_scan_at <= now() AND withdrawn_at IS NULL
          ORDER BY next_scan_at, id FOR UPDATE SKIP LOCKED LIMIT 1`,
       )
     ).rows[0];
@@ -197,15 +254,17 @@ export const failDomRfCard = async (id: number, error: string, attempts: number)
 };
 
 /** Прочитанная страница: сведения, список объектов и следующее чтение через CARD_TTL_DAYS. */
-export const saveScannedDomRfCard = async (client: PoolClient, card: IDomRfCardCapture): Promise<void> => {
+/** Прочитанная страница; true — её успели снять с чтения, пока браузер её читал: объекты не берём. */
+export const saveScannedDomRfCard = async (client: PoolClient, card: IDomRfCardCapture): Promise<boolean> => {
   const developer = developerIdentity(card);
-  await client.query(
+  const saved = await client.query<{ withdrawn: boolean }>(
     `INSERT INTO domrf_cards (kind, external_ref, url, name, inn, ogrn, group_ref, group_name, object_refs, scanned_at, next_scan_at, attempt_count, last_error)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now() + ($10::int * interval '1 day'), 0, NULL)
      ON CONFLICT (kind, external_ref) DO UPDATE SET
        url = EXCLUDED.url, name = EXCLUDED.name, inn = EXCLUDED.inn, ogrn = EXCLUDED.ogrn,
        group_ref = EXCLUDED.group_ref, group_name = EXCLUDED.group_name, object_refs = EXCLUDED.object_refs, scanned_at = now(),
-       next_scan_at = EXCLUDED.next_scan_at, attempt_count = 0, last_error = NULL, updated_at = now()`,
+       next_scan_at = EXCLUDED.next_scan_at, attempt_count = 0, last_error = NULL, updated_at = now()
+     RETURNING withdrawn_at IS NOT NULL AS withdrawn`,
     [
       card.kind,
       card.externalRef,
@@ -219,4 +278,5 @@ export const saveScannedDomRfCard = async (client: PoolClient, card: IDomRfCardC
       CARD_TTL_DAYS,
     ],
   );
+  return saved.rows[0]?.withdrawn === true;
 };

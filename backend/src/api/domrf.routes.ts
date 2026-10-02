@@ -22,6 +22,7 @@ import {
   listDomRfCompanies,
   rejectDomRfCompanyLink,
   requestDomRfCompanySearch,
+  undoDomRfCompanyLink,
 } from '../ingest/registry/domrfCompanies.js';
 import { domRfHintCounts, domRfHintPermission } from '../ingest/registry/domrfHints.js';
 import { SourcePolicyValidationError, setSourceAiProcessing } from '../ingest/sources.js';
@@ -127,7 +128,7 @@ domrfRouter.post('/domrf-candidates/:id/replace', async (req, res) => {
 const linkSchema = z.object({ url: z.string().trim().min(1).max(1000) }).strict();
 
 const companiesQuerySchema = z.object({
-  filter: z.enum(['pending', 'notFound', 'confirmed', 'all']).default('pending'),
+  filter: z.enum(['pending', 'notFound', 'confirmed', 'several', 'all']).default('pending'),
   q: z.string().trim().max(200).default(''),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
@@ -148,8 +149,7 @@ domrfRouter.post('/domrf-company-links/:id/confirm', async (req, res) => {
     return;
   }
   try {
-    await confirmDomRfCompanyLink(id, actorOf(req));
-    res.json({ ok: true });
+    res.json({ ok: true, ...(await confirmDomRfCompanyLink(id, actorOf(req))) });
   } catch (err) {
     sendDecisionError(res, err);
   }
@@ -162,8 +162,21 @@ domrfRouter.post('/domrf-company-links/:id/reject', async (req, res) => {
     return;
   }
   try {
-    await rejectDomRfCompanyLink(id, actorOf(req));
-    res.json({ ok: true });
+    res.json({ ok: true, ...(await rejectDomRfCompanyLink(id, actorOf(req))) });
+  } catch (err) {
+    sendDecisionError(res, err);
+  }
+});
+
+/** «Отменить»: решение по записи снимается, она снова ждёт решения (undoDomRfCompanyLink). */
+domrfRouter.post('/domrf-company-links/:id/undo', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный ID' });
+    return;
+  }
+  try {
+    res.json({ ok: true, ...(await undoDomRfCompanyLink(id, actorOf(req))) });
   } catch (err) {
     sendDecisionError(res, err);
   }

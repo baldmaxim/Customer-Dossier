@@ -7,7 +7,7 @@ import { FC, useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { DomRfCompanyFilter, IDomRfCompanies, IDomRfCompanyLink, IDomRfCompanyRow } from '../../api/types';
+import type { DomRfCompanyFilter, IDomRfCompanies, IDomRfCompanyLink, IDomRfCompanyRow, IDomRfDecisionResult } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { useDebounced } from '../../hooks/useDebounced';
 import { enumParam, stringParam, useUrlState } from '../../hooks/useUrlState';
@@ -27,6 +27,7 @@ import { SearchInput } from '../ui/SearchInput';
 import { Section } from '../ui/Section';
 import { Segmented } from '../ui/Segmented';
 import { Stack } from '../ui/Stack';
+import { useConfirm } from '../ui/confirm';
 import { useToast } from '../ui/toast';
 import { actionError } from './actionError';
 import { DomRfCompanyLinks } from './DomRfCompanyLinks';
@@ -35,7 +36,24 @@ import styles from './Found.module.css';
 
 const QUERY_KEY = ['domrf-companies'];
 
-const FILTERS: readonly DomRfCompanyFilter[] = ['pending', 'notFound', 'confirmed', 'all'];
+const FILTERS: readonly DomRfCompanyFilter[] = ['pending', 'notFound', 'confirmed', 'several', 'all'];
+
+/** Что ещё сделало решение: закрытые записи, вернувшиеся в «ждёт решения», ушедшие из «Объектов» объекты. */
+const consequences = (result: IDomRfDecisionResult): string =>
+  [
+    result.closed > 0 ? `другие записи компании — «не он»: ${formatCount(result.closed)}` : '',
+    result.reopened > 0 ? `снова ждут решения: ${formatCount(result.reopened)}` : '',
+    result.withdrawnObjects > 0 ? `ушло из «Объектов»: ${formatCount(result.withdrawnObjects)}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+
+const withConsequences = (text: string, result: IDomRfDecisionResult): string => {
+  const more = consequences(result);
+  return more ? `${text} ${more[0]!.toUpperCase()}${more.slice(1)}.` : text;
+};
+
+const nameOf = (link: IDomRfCompanyLink): string => link.name ?? `№${link.externalRef}`;
 
 const HINT =
   'Каждую компанию портала браузер ищет в едином реестре застройщиков ДОМ.РФ — заказчиков и застройщиков первыми: по ИНН, если он есть, иначе по названию. Из выдачи по названию предлагаются только застройщики и группы, совпавшие с названием, — выберите своего. Подтверждённый уходит в чтение, его объекты появятся во вкладке «Объекты».';
@@ -53,6 +71,7 @@ const searchMeta = (row: IDomRfCompanyRow): string => {
 
 const emptyText = (filter: DomRfCompanyFilter, q: string): string => {
   if (q) return `Компаний «${q}» здесь нет.`;
+  if (filter === 'several') return 'Разобрано: у каждой компании отмечено не больше одной записи.';
   return filter === 'pending' ? 'Решать пока нечего: поиск идёт в фоне, по три компании в минуту.' : 'Таких компаний нет.';
 };
 
@@ -60,6 +79,7 @@ export const DomRfCompanies: FC = () => {
   const client = useQueryClient();
   const toast = useToast();
   const canDecide = useCan('sources.manage');
+  const ask = useConfirm();
   const [filter, setFilter] = useUrlState('filter', enumParam(FILTERS, 'pending'));
   const [q, setQ] = useUrlState('q', stringParam());
   const [input, setInput] = useState(q);
@@ -77,23 +97,35 @@ export const DomRfCompanies: FC = () => {
     refetchInterval: 30_000,
   });
 
-  const after = (text: string) => (): void => {
-    toast.show({ tone: 'success', text });
+  const refresh = (): void => {
     void client.invalidateQueries({ queryKey: QUERY_KEY });
     void client.invalidateQueries({ queryKey: ['domrf-candidates'] });
     void client.invalidateQueries({ queryKey: DOMRF_SUMMARY_KEY });
+  };
+  const after = (text: string) => (): void => {
+    toast.show({ tone: 'success', text });
+    refresh();
+  };
+  const afterDecision = (text: string) => (result: IDomRfDecisionResult): void => {
+    toast.show({ tone: 'success', text: withConsequences(text, result) });
+    refresh();
   };
   const fail = (err: Error): void => {
     toast.show({ tone: 'danger', text: actionError(err) });
   };
   const confirm = useMutation({
-    mutationFn: (link: IDomRfCompanyLink) => api.post(`/api/admin/domrf-company-links/${link.id}/confirm`, {}),
-    onSuccess: after('Подтверждено — портал прочитает страницу, объекты появятся во вкладке «Объекты».'),
+    mutationFn: (link: IDomRfCompanyLink) => api.post<IDomRfDecisionResult>(`/api/admin/domrf-company-links/${link.id}/confirm`, {}),
+    onSuccess: afterDecision('Подтверждено — портал прочитает страницу, объекты появятся во вкладке «Объекты».'),
     onError: fail,
   });
   const reject = useMutation({
-    mutationFn: (link: IDomRfCompanyLink) => api.post(`/api/admin/domrf-company-links/${link.id}/reject`, {}),
-    onSuccess: after('Отклонено: при повторном поиске не вернётся.'),
+    mutationFn: (link: IDomRfCompanyLink) => api.post<IDomRfDecisionResult>(`/api/admin/domrf-company-links/${link.id}/reject`, {}),
+    onSuccess: afterDecision('Отклонено: при повторном поиске не вернётся.'),
+    onError: fail,
+  });
+  const undo = useMutation({
+    mutationFn: (link: IDomRfCompanyLink) => api.post<IDomRfDecisionResult>(`/api/admin/domrf-company-links/${link.id}/undo`, {}),
+    onSuccess: afterDecision('Отменено — запись снова ждёт решения.'),
     onError: fail,
   });
   const manual = useMutation({
@@ -106,7 +138,35 @@ export const DomRfCompanies: FC = () => {
     onSuccess: after('Компания — первая в очереди поиска.'),
     onError: fail,
   });
-  const busy = confirm.isPending || reject.isPending || manual.isPending || again.isPending;
+  const busy = confirm.isPending || reject.isPending || undo.isPending || manual.isPending || again.isPending;
+
+  // «Это он» при уже отмеченной записи — замена выбора, «Оставить только эту» — закрыть остальные: оба
+  // снимают чужие страницы и их объекты, поэтому — с вопросом.
+  const choose = async (row: IDomRfCompanyRow, link: IDomRfCompanyLink): Promise<void> => {
+    const chosen = row.links.filter(l => l.state === 'confirmed' && l.id !== link.id);
+    if (chosen.length > 0) {
+      const keepOnly = link.state === 'confirmed';
+      const ok = await ask({
+        title: keepOnly ? `Оставить только «${nameOf(link)}»?` : `Заменить выбор у «${row.name}»?`,
+        body: `${chosen.map(nameOf).join(', ')} — станет «не он». Объекты ${chosen.length > 1 ? 'их страниц' : 'её страницы'}, ещё ждущие решения, уйдут из «Объектов».`,
+        confirmLabel: keepOnly ? 'Оставить только эту' : 'Заменить',
+      });
+      if (!ok) return;
+    }
+    confirm.mutate(link);
+  };
+
+  const cancel = async (link: IDomRfCompanyLink): Promise<void> => {
+    if (link.state === 'confirmed') {
+      const ok = await ask({
+        title: `Отменить «это он» у «${nameOf(link)}»?`,
+        body: 'Запись снова будет ждать решения. Объекты её страницы, ещё ждущие решения, уйдут из «Объектов»; закрытые этим выбором записи тоже вернутся в «ждёт решения».',
+        confirmLabel: 'Отменить отметку',
+      });
+      if (!ok) return;
+    }
+    undo.mutate(link);
+  };
 
   const totals = data.data?.totals;
   const items = data.data?.items ?? [];
@@ -125,6 +185,8 @@ export const DomRfCompanies: FC = () => {
               { value: 'pending', label: `Ждут решения${count(totals?.withPending)}` },
               { value: 'notFound', label: `Не найдены${count(totals?.notFound)}` },
               { value: 'confirmed', label: `Найдены${count(totals?.confirmed)}` },
+              // Пока есть что разбирать: отмеченные до правила «одна запись на компанию».
+              ...(totals?.several || filter === 'several' ? [{ value: 'several' as const, label: `Отмечено несколько${count(totals?.several)}` }] : []),
               { value: 'all', label: 'Все' },
             ]}
             value={filter}
@@ -159,8 +221,9 @@ export const DomRfCompanies: FC = () => {
                   company={row}
                   canDecide={canDecide}
                   busy={busy}
-                  onConfirm={link => confirm.mutate(link)}
+                  onConfirm={link => void choose(row, link)}
                   onReject={link => reject.mutate(link)}
+                  onUndo={link => void cancel(link)}
                   onManual={url => manual.mutate({ companyId: row.companyId, url })}
                   onSearchAgain={() => again.mutate(row.companyId)}
                 />

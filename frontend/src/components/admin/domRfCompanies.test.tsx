@@ -1,6 +1,6 @@
 // «Компании на ДОМ.РФ» (этап 20D, шаг 2): найденное поиском — «Это он» / «Не он», ссылка вручную,
 // повторный поиск; фильтр и поиск по названию — на сервере; без права sources.manage решений нет.
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -35,6 +35,7 @@ const DATA: IDomRfCompanies = {
           state: 'pending',
           decidedBy: null,
           decidedAt: null,
+          decisionNote: null,
           hint: { verdict: 'match', reason: 'Совпадает название группы, объекты в Москве.', error: null, model: 'demo-model', at: '2026-10-02T10:00:00Z' },
         },
         {
@@ -49,13 +50,14 @@ const DATA: IDomRfCompanies = {
           state: 'pending',
           decidedBy: null,
           decidedAt: null,
+          decisionNote: null,
           hint: { verdict: null, reason: null, error: 'schema_error: verdict', model: 'demo-model', at: '2026-10-02T10:00:00Z' },
         },
       ],
     },
   ],
   matched: 1,
-  totals: { companies: 2801, searched: 1, withPending: 1, confirmed: 0, notFound: 0 },
+  totals: { companies: 2801, searched: 1, withPending: 1, confirmed: 0, notFound: 0, several: 0 },
 };
 
 const as = (permissions: AccessPermission[], ui: ReactElement) => (
@@ -143,5 +145,49 @@ describe('Компании на ДОМ.РФ', () => {
 
     fireEvent.change(screen.getByLabelText('Компания по названию'), { target: { value: 'Демо' } });
     await waitFor(() => expect(api.calls.some(c => c.url === `/api/admin/domrf-companies?filter=all&q=${encodeURIComponent('Демо')}`)).toBe(true));
+  });
+
+  it('отмечено несколько: «Оставить только эту» и «Отменить» — с вопросом; закрытая выбором — «Отменить» без вопроса', async () => {
+    const link = (id: number, name: string, state: 'confirmed' | 'rejected', decisionNote: string | null = null) => ({
+      ...DATA.items[0]!.links[0]!,
+      id,
+      externalRef: String(id),
+      name,
+      state,
+      decidedBy: 'leonsky',
+      decidedAt: '2026-10-02T06:40:00Z',
+      decisionNote,
+      hint: null,
+    });
+    const several: IDomRfCompanies = {
+      items: [{ ...DATA.items[0]!, name: 'Атлант', links: [link(1, 'ООО СЗ АТЛАНТ', 'confirmed'), link(2, 'ООО СЗ АТЛАНТ-ДВ', 'confirmed'), link(3, 'АТЛАНТ', 'rejected', 'выбрана другая запись')] }],
+      matched: 1,
+      totals: { ...DATA.totals, several: 1 },
+    };
+    const decision = { status: 200, body: { ok: true, closed: 1, reopened: 0, withdrawnObjects: 3 } };
+    const api = fakeApi([
+      { match: 'GET /api/admin/domrf-companies', respond: () => ({ status: 200, body: several }) },
+      { match: 'POST /api/admin/domrf-company-links/1/confirm', respond: () => decision },
+      { match: 'POST /api/admin/domrf-company-links/2/undo', respond: () => decision },
+      { match: 'POST /api/admin/domrf-company-links/3/undo', respond: () => decision },
+    ]);
+    renderWithProviders(as(OPERATOR, <DomRfCompanies />), '/?filter=several');
+
+    expect(await screen.findByText('выбрана другая запись')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /^Отмечено несколько: 1/ })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Оставить только эту — ООО СЗ АТЛАНТ' }));
+    const keep = await screen.findByRole('dialog');
+    expect(within(keep).getByText(/ООО СЗ АТЛАНТ-ДВ — станет «не он»/)).not.toBeNull();
+    fireEvent.click(within(keep).getByRole('button', { name: 'Оставить только эту' }));
+    await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/domrf-company-links/1/confirm')).toBe(true));
+    expect(await screen.findByText(/Другие записи компании — «не он»: 1; ушло из «Объектов»: 3\./)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить — ООО СЗ АТЛАНТ-ДВ' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Отменить отметку' }));
+    await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/domrf-company-links/2/undo')).toBe(true));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить — АТЛАНТ' }));
+    await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/domrf-company-links/3/undo')).toBe(true));
   });
 });

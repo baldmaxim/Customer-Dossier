@@ -1,5 +1,7 @@
 // Одна компания на ДОМ.РФ: что нашёл поиск в реестре застройщиков и решения оператора — «Это он»,
-// «Не он», «Указать вручную», «Искать снова» (ещё не искали — «Искать сейчас»). Подтверждённый
+// «Не он», «Указать вручную», «Искать снова» (ещё не искали — «Искать сейчас»). Компании соответствует
+// одна запись: «Это он» закрывает остальные, у решённой — «Отменить», при нескольких отмеченных —
+// «Оставить только эту». Подтверждённый
 // застройщик или группа уходит в очередь чтения, и их объекты появляются во вкладке «Объекты».
 // Под строкой — что ещё выдача показала рядом с названием и подсказка модели: подсказка, а не решение.
 
@@ -22,6 +24,7 @@ interface IDomRfCompanyLinksProps {
   busy: boolean;
   onConfirm: (link: IDomRfCompanyLink) => void;
   onReject: (link: IDomRfCompanyLink) => void;
+  onUndo: (link: IDomRfCompanyLink) => void;
   onManual: (url: string) => void;
   onSearchAgain: () => void;
 }
@@ -41,7 +44,7 @@ const LinkHint: FC<{ hint: IDomRfLinkHint | null }> = ({ hint }) => {
   );
 };
 
-export const DomRfCompanyLinks: FC<IDomRfCompanyLinksProps> = ({ company, canDecide, busy, onConfirm, onReject, onManual, onSearchAgain }) => {
+export const DomRfCompanyLinks: FC<IDomRfCompanyLinksProps> = ({ company, canDecide, busy, onConfirm, onReject, onUndo, onManual, onSearchAgain }) => {
   const [manual, setManual] = useState(false);
   const [url, setUrl] = useState('');
 
@@ -49,6 +52,27 @@ export const DomRfCompanyLinks: FC<IDomRfCompanyLinksProps> = ({ company, canDec
     event.preventDefault();
     if (url.trim()) onManual(url.trim());
   };
+
+  // Отмечено несколько (до правила «одна запись») — у каждой отмеченной «Оставить только эту».
+  const several = company.links.filter(l => l.state === 'confirmed').length > 1;
+  const label = (link: IDomRfCompanyLink): string => link.name ?? link.externalRef;
+
+  const decided = (link: IDomRfCompanyLink): ReactNode => (
+    <>
+      <Badge tone={STATE_TONE[link.state]}>{DOMRF_COMPANY_LINK_STATE_LABELS[link.state]}</Badge>
+      {link.decisionNote && <span className={styles.muted}>{link.decisionNote}</span>}
+      {canDecide && link.state === 'confirmed' && several && (
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => onConfirm(link)}>
+          Оставить только эту<VisuallyHidden> — {label(link)}</VisuallyHidden>
+        </Button>
+      )}
+      {canDecide && (
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => onUndo(link)}>
+          Отменить<VisuallyHidden> — {label(link)}</VisuallyHidden>
+        </Button>
+      )}
+    </>
+  );
 
   const linkRow = (link: IDomRfCompanyLink): ReactNode => (
     <li key={link.id}>
@@ -64,14 +88,14 @@ export const DomRfCompanyLinks: FC<IDomRfCompanyLinksProps> = ({ company, canDec
           {link.state === 'pending' && canDecide ? (
             <>
               <Button size="sm" variant="primary" disabled={busy} onClick={() => onConfirm(link)}>
-                Это он<VisuallyHidden> — {link.name ?? link.externalRef}</VisuallyHidden>
+                Это он<VisuallyHidden> — {label(link)}</VisuallyHidden>
               </Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => onReject(link)}>
-                Не он<VisuallyHidden> — {link.name ?? link.externalRef}</VisuallyHidden>
+                Не он<VisuallyHidden> — {label(link)}</VisuallyHidden>
               </Button>
             </>
           ) : (
-            <Badge tone={STATE_TONE[link.state]}>{DOMRF_COMPANY_LINK_STATE_LABELS[link.state]}</Badge>
+            decided(link)
           )}
         </Cluster>
         {link.details && <p className={styles.muted}>{link.details}</p>}

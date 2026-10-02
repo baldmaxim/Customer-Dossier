@@ -2,7 +2,9 @@
 // Ищутся все компании — заказчики первыми; с ИНН — по ИНН, без — по названию, общее название не ищется.
 // Выдача по названию — только совпавшее с названием; решения оператора не перезаписываются повторным
 // поиском; подтверждённая страница уходит в очередь чтения. «Искать сейчас» ставит компанию в начало
-// очереди. Слияние компаний переносит совпадения и поиск, дубль той же страницы у цели удаляется.
+// очереди. «Это он» — одна запись на компанию: выбор закрывает остальные, страница закрытой снимается с
+// чтения вместе с ещё не решёнными объектами; «Отменить» возвращает всё как было. Слияние компаний переносит
+// совпадения и поиск, дубль той же страницы у цели удаляется.
 // Данные синтетические, сети нет.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -11,6 +13,7 @@ import { closeDb, getPool } from '../../db/pool.js';
 import { resetAndMigrate } from '../../__tests__/integration/db.js';
 import { applyEntityMerge } from '../../resolve/entityMerge.js';
 import {
+  CHOSEN_OTHER_NOTE,
   DomRfCompanyError,
   claimDomRfCompanySearch,
   confirmDomRfCompanyLink,
@@ -21,8 +24,9 @@ import {
   rejectDomRfCompanyLink,
   requestDomRfCompanySearch,
   saveDomRfCompanySearch,
+  undoDomRfCompanyLink,
 } from './domrfCompanies.js';
-import { domRfCardUrl } from './domrfCards.js';
+import { WITHDRAWN_NOTE, domRfCardUrl } from './domrfCards.js';
 
 const INN = '7700001235';
 const pool = getPool;
@@ -90,8 +94,9 @@ describe('поиск компаний в реестре застройщиков
     const found = results(['group', '55', 'Группа компаний «ДЕМО-АЛЬФА»'], ['developer', '901', 'ООО СЗ ДЕМО-АЛЬФА ДЕВЕЛОПМЕНТ'], ['developer', '902', 'ООО СЗ ДЕМО-БЕТА']);
     expect(await saveDomRfCompanySearch(searching, found)).toBe(2);
 
-    await confirmDomRfCompanyLink(await linkId(alpha, 'group', '55'), 'oper');
-    await rejectDomRfCompanyLink(await linkId(alpha, 'developer', '901'), 'oper');
+    // Выбор группы закрывает застройщика: компании соответствует одна запись.
+    expect(await confirmDomRfCompanyLink(await linkId(alpha, 'group', '55'), 'oper')).toEqual({ closed: 1, reopened: 0, withdrawnObjects: 0 });
+    await expect(rejectDomRfCompanyLink(await linkId(alpha, 'developer', '901'), 'oper')).rejects.toBeInstanceOf(DomRfCompanyError);
     const card = await pool().query(`SELECT url FROM domrf_cards WHERE kind = 'group' AND external_ref = '55'`);
     expect(card.rows[0]?.url).toBe(domRfCardUrl('group', '55'));
 
@@ -102,6 +107,7 @@ describe('поиск компаний в реестре застройщиков
       ['group', '55', 'confirmed'],
       ['developer', '901', 'rejected'],
     ]);
+    expect(items[0]!.links[1]!.decisionNote).toBe(CHOSEN_OTHER_NOTE);
     expect(items[0]!.roles).toEqual(['customer']);
     expect(totals).toMatchObject({ companies: 5, confirmed: 1 });
     await expect(confirmDomRfCompanyLink(await linkId(alpha, 'group', '55'), 'oper')).rejects.toBeInstanceOf(DomRfCompanyError);
@@ -112,6 +118,52 @@ describe('поиск компаний в реестре застройщиков
     const row = (await listDomRfCompanies({ filter: 'confirmed' })).items.find(i => i.companyId === beta)!;
     expect(row.links).toEqual([expect.objectContaining({ kind: 'developer', externalRef: '777', state: 'confirmed', foundBy: 'manual' })]);
     await expect(linkDomRfCompanyManually(beta, 'https://example.com/застройщик/1', 'oper')).rejects.toBeInstanceOf(DomRfCompanyError);
+  });
+
+  it('одна запись на компанию: другой выбор снимает прежнюю страницу и её объекты; «Отменить» возвращает', async () => {
+    const add = async (kind: 'developer' | 'group', ref: string): Promise<number> =>
+      (
+        await pool().query<{ id: number }>(
+          `INSERT INTO domrf_company_links (company_id, kind, external_ref, name, found_by, rank) VALUES ($1, $2, $3, 'ГАММА', 'name', 1) RETURNING id`,
+          [other, kind, ref],
+        )
+      ).rows[0]!.id;
+    const [first, second, group] = [await add('developer', '801'), await add('developer', '802'), await add('group', '803')];
+    expect(await confirmDomRfCompanyLink(first, 'oper')).toMatchObject({ closed: 2 });
+
+    // Страница 801 прочитана: два объекта ждут решения, второй есть и на другой странице в чтении.
+    await pool().query(`UPDATE domrf_cards SET object_refs = '{5001,5002}', scanned_at = now() WHERE kind = 'developer' AND external_ref = '801'`);
+    await pool().query(`INSERT INTO domrf_cards (kind, external_ref, url, object_refs) VALUES ('group', '999', $1, '{5002}')`, [domRfCardUrl('group', '999')]);
+    for (const ref of ['5001', '5002']) {
+      await pool().query(
+        `INSERT INTO domrf_candidates (external_ref, url, label, found_via_kind, found_via_ref) VALUES ($1, $2, $1, 'developer', '801')`,
+        [ref, `https://example.invalid/${ref}`],
+      );
+    }
+    const objects = async (): Promise<Array<{ external_ref: string; state: string; decision_note: string | null }>> =>
+      (await pool().query('SELECT external_ref, state, decision_note FROM domrf_candidates WHERE external_ref IN ($1, $2) ORDER BY external_ref', ['5001', '5002'])).rows;
+    const withdrawn = async (ref: string): Promise<boolean> =>
+      (await pool().query<{ w: boolean }>(`SELECT withdrawn_at IS NOT NULL AS w FROM domrf_cards WHERE kind = 'developer' AND external_ref = $1`, [ref])).rows[0]!.w;
+
+    // Инженер передумал: «Это он» — второй застройщик. Первый закрыт, его страница снята, объект только с неё — тоже.
+    expect(await confirmDomRfCompanyLink(second, 'oper')).toEqual({ closed: 1, reopened: 0, withdrawnObjects: 1 });
+    expect(await withdrawn('801')).toBe(true);
+    expect(await objects()).toEqual([
+      { external_ref: '5001', state: 'rejected', decision_note: WITHDRAWN_NOTE },
+      { external_ref: '5002', state: 'pending', decision_note: null },
+    ]);
+
+    // «Отменить» у выбранного: закрытые его выбором снова ждут решения, его страница снята.
+    expect(await undoDomRfCompanyLink(second, 'oper')).toEqual({ closed: 0, reopened: 2, withdrawnObjects: 0 });
+    const states = (await pool().query<{ id: number; state: string }>('SELECT id, state FROM domrf_company_links WHERE id = ANY($1::bigint[]) ORDER BY id', [[first, second, group]])).rows;
+    expect(states.map(r => r.state)).toEqual(['pending', 'pending', 'pending']);
+    expect(await withdrawn('802')).toBe(true);
+    await expect(undoDomRfCompanyLink(second, 'oper')).rejects.toBeInstanceOf(DomRfCompanyError);
+
+    // Снова выбрали первого: страница вернулась в чтение, её объект — в «Объекты».
+    await confirmDomRfCompanyLink(first, 'oper');
+    expect(await withdrawn('801')).toBe(false);
+    expect((await objects())[0]).toEqual({ external_ref: '5001', state: 'pending', decision_note: null });
   });
 
   it('слияние переносит совпадения и поиск к цели; та же страница у цели — строка источника удаляется', async () => {

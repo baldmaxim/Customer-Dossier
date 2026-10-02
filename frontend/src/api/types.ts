@@ -1473,7 +1473,17 @@ export interface IDomRfCompanyLink {
   state: DomRfCompanyLinkState;
   decidedBy: string | null;
   decidedAt: string | null;
+  /** Закрыто без отдельного решения: «выбрана другая запись». */
+  decisionNote: string | null;
   hint: IDomRfLinkHint | null;
+}
+
+/** Итог решения по записи: что ещё закрылось, вернулось и ушло из «Объектов». */
+export interface IDomRfDecisionResult {
+  ok: true;
+  closed: number;
+  reopened: number;
+  withdrawnObjects: number;
 }
 
 /** Компания портала и её поиск в едином реестре застройщиков. */
@@ -1490,7 +1500,7 @@ export interface IDomRfCompanyRow {
   links: IDomRfCompanyLink[];
 }
 
-export type DomRfCompanyFilter = 'pending' | 'notFound' | 'confirmed' | 'all';
+export type DomRfCompanyFilter = 'pending' | 'notFound' | 'confirmed' | 'several' | 'all';
 
 /** Страница ДОМ.РФ: числа вкладок и состояние подсказок модели. */
 export interface IDomRfSummary {
@@ -1515,5 +1525,5 @@ export interface IDomRfCompanies {
   items: IDomRfCompanyRow[];
   /** Сколько компаний подошло под фильтр и поиск; в items — первые из них. */
   matched: number;
-  totals: { companies: number; searched: number; withPending: number; confirmed: number; notFound: number };
+  totals: { companies: number; searched: number; withPending: number; confirmed: number; notFound: number; several: number };
 }

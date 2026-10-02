@@ -107,7 +107,7 @@ const routes = (items: unknown[] = sources) => [
 ];
 
 const SUMMARY = {
-  companies: { companies: 2867, searched: 33, withPending: 12, confirmed: 5, notFound: 9 },
+  companies: { companies: 2867, searched: 33, withPending: 12, confirmed: 5, notFound: 9, several: 0 },
   objects: { pending: 315 },
   cards: { waiting: 0, total: 3 },
   hints: { running: true, sourceId: 14, allowed: false, reason: 'нет разрешения', provider: 'openrouter', model: 'qwen/qwen3-30b-a3b-instruct-2507', hinted: 0, waiting: 50 },
