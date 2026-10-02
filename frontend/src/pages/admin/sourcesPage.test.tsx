@@ -106,6 +106,13 @@ const routes = (items: unknown[] = sources) => [
   { match: 'DELETE /api/admin/sources/', respond: () => ({ status: 200, body: { ok: true } }) },
 ];
 
+const SUMMARY = {
+  companies: { companies: 2867, searched: 33, withPending: 12, confirmed: 5, notFound: 9 },
+  objects: { pending: 315 },
+  cards: { waiting: 0, total: 3 },
+  hints: { running: true, sourceId: 14, allowed: false, reason: 'нет разрешения', provider: 'openrouter', model: 'qwen/qwen3-30b-a3b-instruct-2507', hinted: 0, waiting: 50 },
+};
+
 describe('Админка: источники', () => {
   it('вкладки разделяют каналы и сайты; канал назван именем, без имени — «@ключ»', async () => {
     fakeApi(routes());
@@ -200,22 +207,17 @@ describe('Админка: источники', () => {
     await waitFor(() => expect(api.calls).toContainEqual({ method: 'DELETE', url: '/api/admin/sources/2', body: null }));
   });
 
-  it('сохраняет ссылку ДОМ.РФ и номер существующего объекта портала', async () => {
-    const api = fakeApi(routes());
+  it('на «Сайтах» — вход на страницу наш.дом.рф: сколько ждёт решения; имя источника ведёт туда же', async () => {
+    fakeApi([
+      ...routes([...sources, source({ id: 14, kind: 'website', key: 'xn--80az8a.xn--d1aqf.xn--p1ai', title: 'наш.дом.рф' })]),
+      { match: 'GET /api/admin/domrf-summary', respond: () => ({ status: 200, body: SUMMARY }) },
+    ]);
     renderWithProviders(<SourcesPage />, '/admin/sources?tab=website');
-    expect(await screen.findByRole('link', { name: '№62087 (откроется в новой вкладке)' })).toBeTruthy();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Ссылка на объект ДОМ.РФ' }), {
-      target: { value: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62088' },
-    });
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Номер объекта в портале (необязательно)' }), { target: { value: '42' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить ссылку' }));
-    await waitFor(() =>
-      expect(api.calls).toContainEqual({
-        method: 'POST',
-        url: '/api/admin/domrf-targets',
-        body: { url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62088', projectId: 42 },
-      }),
-    );
+    expect(await screen.findByText('Ждут решения: компании — 12, объекты — 315. Проверено компаний 33 из 2 867.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Открыть наш.дом.рф' }).getAttribute('href')).toBe('/admin/sources/domrf');
+    expect(screen.getAllByRole('link', { name: 'наш.дом.рф' })[0]!.getAttribute('href')).toBe('/admin/sources/domrf');
+    // Списки ДОМ.РФ — на его странице, не под таблицей сайтов.
+    expect(screen.queryByRole('textbox', { name: 'Ссылка на объект ДОМ.РФ' })).toBeNull();
   });
 
   it('«Проверить сайт» показывает отчёт в окне и ничего не сохраняет', async () => {

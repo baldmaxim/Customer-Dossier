@@ -69,6 +69,8 @@ const searchSchema = z
             kind: z.enum(['developer', 'group']),
             ref: z.string().regex(/^[0-9]{1,18}$/),
             name: z.string().trim().max(300).nullable(),
+            // Строки карточки результата рядом с названием; у снимков до 02.10.2026 поля нет.
+            details: z.string().trim().max(400).nullable().optional(),
           })
           .strict(),
       )
@@ -215,12 +217,13 @@ export const saveDomRfCompanySearch = async (company: IDomRfCompanyToSearch, sea
     let inserted = 0;
     for (const [rank, result] of results.entries()) {
       const row = await client.query<{ inserted: boolean }>(
-        `INSERT INTO domrf_company_links (company_id, kind, external_ref, name, found_by, rank)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO domrf_company_links (company_id, kind, external_ref, name, details, found_by, rank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (company_id, kind, external_ref) DO UPDATE SET
-           name = coalesce(EXCLUDED.name, domrf_company_links.name), rank = EXCLUDED.rank, last_seen_at = now()
+           name = coalesce(EXCLUDED.name, domrf_company_links.name),
+           details = coalesce(EXCLUDED.details, domrf_company_links.details), rank = EXCLUDED.rank, last_seen_at = now()
          RETURNING (xmax = 0) AS inserted`,
-        [company.companyId, result.kind, result.ref, result.name, company.foundBy, rank + 1],
+        [company.companyId, result.kind, result.ref, result.name, result.details ?? null, company.foundBy, rank + 1],
       );
       if (row.rows[0]?.inserted) inserted += 1;
     }
@@ -300,11 +303,15 @@ export interface IDomRfCompanyLink {
   externalRef: string;
   url: string;
   name: string | null;
+  /** Строки карточки результата поиска рядом с названием: реквизиты, регион. */
+  details: string | null;
   foundBy: 'inn' | 'name' | 'manual';
   rank: number | null;
   state: 'pending' | 'confirmed' | 'rejected';
   decidedBy: string | null;
   decidedAt: string | null;
+  /** Подсказка модели (domrf-hint@1): не решение, на экране подписана как подсказка. */
+  hint: { verdict: 'match' | 'no_match' | 'unsure' | null; reason: string | null; error: string | null; model: string; at: string } | null;
 }
 
 export interface IDomRfCompanyRow {
@@ -347,6 +354,20 @@ export interface IDomRfCompaniesQuery {
   limit?: number;
 }
 
+/** Счётчики по всем компаниям портала: для вкладок и сводки на «Сайтах». */
+export const domRfCompanyTotals = async (): Promise<IDomRfCompaniesTotals> =>
+  (
+    await query<IDomRfCompaniesTotals>(
+      `SELECT count(*)::int AS companies,
+              count(*) FILTER (WHERE s.searched_at IS NOT NULL)::int AS searched,
+              count(*) FILTER (WHERE ${HAS_PENDING})::int AS "withPending",
+              count(*) FILTER (WHERE ${HAS_CONFIRMED})::int AS confirmed,
+              count(*) FILTER (WHERE ${NOT_FOUND})::int AS "notFound"
+       FROM companies c LEFT JOIN domrf_company_searches s ON s.company_id = c.id
+       WHERE c.merged_into_id IS NULL`,
+    )
+  )[0]!;
+
 /**
  * Компании для экрана — по фильтру и подстроке названия, не больше `limit` (всего подошло — `matched`);
  * счётчики — по всем компаниям портала. Заказчики и застройщики сверху, затем участники объектов.
@@ -362,9 +383,11 @@ export const listDomRfCompanies = async ({
             s.searched_at AS "searchedAt", s.result_count AS "resultCount", s.last_error AS "lastError",
             coalesce((
               SELECT json_agg(json_build_object(
-                       'id', l.id, 'kind', l.kind, 'externalRef', l.external_ref, 'name', l.name, 'foundBy', l.found_by,
-                       'rank', l.rank, 'state', l.state, 'decidedBy', l.decided_by, 'decidedAt', l.decided_at)
-                     ORDER BY (l.state = 'confirmed') DESC, l.rank NULLS LAST, l.id)
+                       'id', l.id, 'kind', l.kind, 'externalRef', l.external_ref, 'name', l.name, 'details', l.details,
+                       'foundBy', l.found_by, 'rank', l.rank, 'state', l.state, 'decidedBy', l.decided_by, 'decidedAt', l.decided_at,
+                       'hint', CASE WHEN l.hinted_at IS NULL THEN NULL ELSE json_build_object(
+                         'verdict', l.hint_verdict, 'reason', l.hint_reason, 'error', l.hint_error, 'model', l.hint_model, 'at', l.hinted_at) END)
+                     ORDER BY (l.state = 'confirmed') DESC, (l.hint_verdict = 'match') DESC NULLS LAST, l.rank NULLS LAST, l.id)
               FROM domrf_company_links l WHERE l.company_id = c.id
             ), '[]'::json) AS links,
             count(*) OVER ()::int AS matched
@@ -376,17 +399,7 @@ export const listDomRfCompanies = async ({
      LIMIT $1`,
     [Math.min(Math.max(limit, 1), 500), q.trim() ? likePattern(q.trim()) : null],
   );
-  const totals = (
-    await query<IDomRfCompaniesTotals>(
-      `SELECT count(*)::int AS companies,
-              count(*) FILTER (WHERE s.searched_at IS NOT NULL)::int AS searched,
-              count(*) FILTER (WHERE ${HAS_PENDING})::int AS "withPending",
-              count(*) FILTER (WHERE ${HAS_CONFIRMED})::int AS confirmed,
-              count(*) FILTER (WHERE ${NOT_FOUND})::int AS "notFound"
-       FROM companies c LEFT JOIN domrf_company_searches s ON s.company_id = c.id
-       WHERE c.merged_into_id IS NULL`,
-    )
-  )[0]!;
+  const totals = await domRfCompanyTotals();
   return {
     items: rows.map(({ matched: _matched, ...row }) => ({ ...row, links: row.links.map(link => ({ ...link, url: domRfCardUrlOf(link.kind, link.externalRef) })) })),
     matched: rows[0]?.matched ?? 0,

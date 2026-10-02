@@ -13,6 +13,7 @@ import { startMetricsScheduler } from './metrics/refresh.js';
 import { lmStudioProvider } from './reprocess/provider.js';
 import { runReprocessPass } from './reprocess/worker.js';
 import { runHeadlinePass } from './headline/service.js';
+import { runDomRfHintPass } from './ingest/registry/domrfHints.js';
 import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 
@@ -91,6 +92,11 @@ const startPipelineWorker = (signal: AbortSignal): void => {
       const headlines = await runHeadlinePass();
       const saved = headlines.filter(h => h.outcome === 'saved').length;
       if (saved > 0) console.log(`[headline] тем составлено: ${saved}`);
+      // Подсказки к найденному в реестре ДОМ.РФ — тем же заданием и после тем, по той же причине.
+      const hints = await runDomRfHintPass();
+      const hinted = hints.filter(h => h.outcome === 'saved').length;
+      if (hinted > 0) console.log(`[domrf-hint] подсказок к совпадениям: ${hinted}`);
+      for (const h of hints.filter(h => h.outcome !== 'saved')) console.warn(`[domrf-hint] совпадение ${h.linkId}: ${h.outcome} — ${h.reason}`);
     } catch (err) {
       console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

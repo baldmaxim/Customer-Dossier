@@ -1,5 +1,5 @@
-// Объекты, найденные на страницах застройщика и группы ДОМ.РФ, и заказчики портала в реестре застройщиков
-// (этап 20D): списки и решения оператора.
+// Объекты, найденные на страницах застройщика и группы ДОМ.РФ, и компании портала в реестре застройщиков
+// (этап 20D): списки, решения оператора, сводка для страницы ДОМ.РФ и допуск подсказок модели.
 // Чтение — admin.view, решения — sources.manage (auth/routePolicy.ts), как и ссылки ДОМ.РФ.
 // Сети здесь нет: подтверждение ставит ссылку в очередь, страницу открывает браузерный работник.
 
@@ -17,11 +17,16 @@ import {
 import {
   DomRfCompanyError,
   confirmDomRfCompanyLink,
+  domRfCompanyTotals,
   linkDomRfCompanyManually,
   listDomRfCompanies,
   rejectDomRfCompanyLink,
   requestDomRfCompanySearch,
 } from '../ingest/registry/domrfCompanies.js';
+import { domRfHintCounts, domRfHintPermission } from '../ingest/registry/domrfHints.js';
+import { SourcePolicyValidationError, setSourceAiProcessing } from '../ingest/sources.js';
+import { env } from '../config/env.js';
+import { query } from '../db/pool.js';
 import { DomRfTargetError } from '../ingest/registry/domrfTargets.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { actorOf } from './auth.js';
@@ -192,4 +197,63 @@ domrfRouter.post('/domrf-companies/:companyId/search', async (req, res) => {
     return;
   }
   res.json({ ok: true });
+});
+
+// ─── Страница ДОМ.РФ: сводка и подсказки модели (шаг 3) ──────────────────────────────────
+
+/** Числа для вкладок «Компании · Объекты · Карточки» и строки на «Сайтах»; состояние подсказок модели. */
+domrfRouter.get('/domrf-summary', async (_req, res) => {
+  const [companies, objects, cards, permission, hints] = await Promise.all([
+    domRfCompanyTotals(),
+    query<{ pending: number }>(`SELECT count(*)::int AS pending FROM domrf_candidates WHERE state = 'pending'`),
+    query<{ waiting: number; total: number }>(
+      `SELECT count(*) FILTER (WHERE captured_at IS NULL OR captured_at < requested_at)::int AS waiting, count(*)::int AS total FROM domrf_targets`,
+    ),
+    domRfHintPermission(),
+    domRfHintCounts(),
+  ]);
+  res.json({
+    companies,
+    objects: { pending: objects[0]?.pending ?? 0 },
+    cards: { waiting: cards[0]?.waiting ?? 0, total: cards[0]?.total ?? 0 },
+    hints: {
+      // Подсказки идут заданием разбора: без него их не составит никто, при любом допуске.
+      running: env.DOMRF_HINT_ENABLED && env.PIPELINE_ENABLED,
+      sourceId: permission.sourceId,
+      allowed: permission.allowed,
+      reason: permission.reason,
+      provider: env.LLM_PROVIDER,
+      model: env.LMSTUDIO_MODEL,
+      ...hints,
+    },
+  });
+});
+
+const hintPermissionSchema = z.object({ allowed: z.boolean() }).strict();
+
+/**
+ * «Разрешить подсказки модели»: ИИ-обработка источника наш.дом.рф — решение оператора, записывается в журнал
+ * допуска. Сбор и расписание источника не меняются (setSourceAiProcessing).
+ */
+domrfRouter.post('/domrf-hints/permission', async (req, res) => {
+  const parsed = hintPermissionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Укажите allowed: true или false' });
+    return;
+  }
+  const { sourceId } = await domRfHintPermission();
+  if (sourceId === null) {
+    res.status(404).json({ error: 'Источник наш.дом.рф не зарегистрирован' });
+    return;
+  }
+  try {
+    await setSourceAiProcessing(sourceId, parsed.data.allowed, actorOf(req));
+  } catch (err) {
+    if (err instanceof SourcePolicyValidationError) {
+      res.status(422).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+  res.json(await domRfHintPermission());
 });

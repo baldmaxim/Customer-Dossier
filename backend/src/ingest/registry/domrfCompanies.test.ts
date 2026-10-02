@@ -32,6 +32,13 @@ describe('поиск в реестре застройщиков', () => {
       ],
     });
     expect(search.results.map(r => `${r.kind}:${r.ref}`)).toEqual(['group:55', 'developer:901']);
+    expect(search.results[0]!.details).toBeUndefined();
+    const withDetails = parseDomRfSearchCapture({
+      format: 'domrf-search-browser@1',
+      url: domRfSearchUrl('Демо'),
+      results: [{ kind: 'developer', ref: '901', name: 'ООО СЗ ДЕМО', details: 'ИНН 7700001235 · Москва' }],
+    });
+    expect(withDetails.results[0]!.details).toBe('ИНН 7700001235 · Москва');
     expect(() => parseDomRfSearchCapture({ format: 'domrf-search-browser@1', url: 'https://example.com/?search=x', results: [] })).toThrow(/наш.дом.рф/);
     expect(() =>
       parseDomRfSearchCapture({ format: 'domrf-search-browser@1', url: domRfSearchUrl('x'), results: [{ kind: 'object', ref: '1', name: null }] }),

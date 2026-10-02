@@ -97,6 +97,12 @@ export const parseEnv = (source: EnvSource) => {
     // а короткий вход держит вызов дешёвым на 8 ГБ VRAM.
     HEADLINE_INPUT_CHARS: parsePositiveInt('HEADLINE_INPUT_CHARS', source.HEADLINE_INPUT_CHARS, 1200),
 
+    // Подсказка модели к найденному в реестре ДОМ.РФ (domrf-hint@1): «скорее он / не он / не уверена».
+    // Решает инженер, подсказка в канон не идёт. Идёт тем же заданием, что разбор (PIPELINE_ENABLED), и
+    // только при ИИ-допуске источника наш.дом.рф. false — новых подсказок нет, прежние остаются на экране.
+    DOMRF_HINT_ENABLED: parseStrictBool('DOMRF_HINT_ENABLED', source.DOMRF_HINT_ENABLED, true),
+    DOMRF_HINT_BATCH_SIZE: parsePositiveInt('DOMRF_HINT_BATCH_SIZE', source.DOMRF_HINT_BATCH_SIZE, 10),
+
     TG_FETCH_DELAY_MS: parsePositiveInt('TG_FETCH_DELAY_MS', source.TG_FETCH_DELAY_MS, 4000),
     INGEST_USER_AGENT: optional(
       source,

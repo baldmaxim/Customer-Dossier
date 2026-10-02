@@ -22,6 +22,7 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   PIPELINE_ENABLED: false,
   REPROCESS_AUTO_PUBLISH: false,
   HEADLINE_ENABLED: false,
+  DOMRF_HINT_ENABLED: false,
   METRICS_AUTO_REFRESH: false,
   BOT_ENABLED: false,
   TG_BOT_TOKEN: '',
@@ -68,6 +69,14 @@ describe('startBackgroundJobs', () => {
       new AbortController().signal,
     );
     expect(on.notes.join(' ')).toContain('HEADLINE_ENABLED=true');
+  });
+
+  it('подсказки ДОМ.РФ идут с разбором и только при ИИ-допуске источника', () => {
+    const off = startBackgroundJobs(flags({ DOMRF_HINT_ENABLED: true }), starters(), new AbortController().signal);
+    expect(off.notes.join(' ')).toContain('подсказок ДОМ.РФ нет');
+
+    const on = startBackgroundJobs(flags({ PIPELINE_ENABLED: true, DOMRF_HINT_ENABLED: true }), starters(), new AbortController().signal);
+    expect(on.notes.join(' ')).toContain('при ИИ-допуске источника (DOMRF_HINT_ENABLED=true)');
   });
 
   it('явные флаги включают ровно свои задания', () => {

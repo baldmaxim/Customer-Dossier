@@ -13,6 +13,8 @@ import { SEMANTIC_JSON_SCHEMA, semanticExtractionSchema, type ISemanticExtractio
 import { buildSemanticSystemMessage, buildSemanticUserMessage } from './semantic/prompt.js';
 import { HEADLINE_JSON_SCHEMA, headlineSchema, type IHeadline } from './headline/schema.js';
 import { buildHeadlineSystemMessage, buildHeadlineUserMessage } from './headline/prompt.js';
+import { DOMRF_HINT_JSON_SCHEMA, domRfHintSchema, type IDomRfHint } from './domrfHint/schema.js';
+import { buildDomRfHintSystemMessage, buildDomRfHintUserMessage } from './domrfHint/prompt.js';
 import { checkOpenRouter, requestHeaders, requestRouting, type ILlmConnection, type ILlmTarget } from './endpoint.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
@@ -105,6 +107,15 @@ export const HEADLINE_SPEC: IExtractSpec<IHeadline> = {
   validator: headlineSchema,
   system: buildHeadlineSystemMessage,
   user: buildHeadlineUserMessage,
+};
+
+/** Подсказка к совпадению с реестром ДОМ.РФ: данные запроса уже собраны текстом (formatDomRfHintInput). */
+export const DOMRF_HINT_SPEC: IExtractSpec<IDomRfHint> = {
+  schemaName: 'tg_info_domrf_hint',
+  jsonSchema: DOMRF_HINT_JSON_SCHEMA,
+  validator: domRfHintSchema,
+  system: buildDomRfHintSystemMessage,
+  user: body => buildDomRfHintUserMessage(body),
 };
 
 export interface IExtractOptions {
@@ -288,6 +299,9 @@ export const extractFromText = (options: IExtractOptions): Promise<ILlmResult> =
 /** extract@3 — типизированные связи и события (этап 06). */
 export const extractSemantic = (options: IExtractOptions): Promise<ILlmResult<ISemanticExtraction>> =>
   extractWith(options, options.promptVariant ? { ...SEMANTIC_SPEC, system: () => buildSemanticSystemMessage(options.promptVariant ?? null) } : SEMANTIC_SPEC);
+
+/** domrf-hint@1 — подсказка инженеру «он / не он». Канон не трогает: результат — на строке совпадения. */
+export const extractDomRfHint = (options: IExtractOptions): Promise<ILlmResult<IDomRfHint>> => extractWith(options, DOMRF_HINT_SPEC);
 
 /** headline@1 — тема публикации. Канон не трогает: результат живёт в revision_headlines. */
 export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>

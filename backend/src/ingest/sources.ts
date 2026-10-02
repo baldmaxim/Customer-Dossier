@@ -471,6 +471,46 @@ export const setSourceEnabled = async (
   return updated;
 };
 
+/** Основание по умолчанию, когда ИИ-обработку источника разрешают кнопкой подсказок ДОМ.РФ. */
+export const AI_TOGGLE_BASIS = 'ИИ-обработка разрешена оператором в админке портала';
+
+/**
+ * Разрешить или отозвать только ИИ-обработку источника: сбор, расписание и срок разрешения остаются как
+ * были. Нужна там, где источник собирает не расписание, а свой работник (наш.дом.рф: браузер на сервере),
+ * и общий переключатель «включить источник целиком» поставил бы его в расписание. Журнал — тот же
+ * updateSourcePolicy; основание и ответственный подставляются, только если оператор не записал своих.
+ */
+export const setSourceAiProcessing = async (sourceId: number, allowed: boolean, changedBy: string): Promise<ISource | null> => {
+  const current = await queryOne<{
+    accessStatus: PermissionStatus;
+    policyBasis: string | null;
+    policyOwner: string | null;
+    policyReference: string | null;
+    policyScope: string | null;
+    policyExpiresAt: Date | null;
+  }>(
+    `SELECT access_status AS "accessStatus", policy_basis AS "policyBasis", policy_owner AS "policyOwner",
+            policy_reference AS "policyReference", policy_scope AS "policyScope", policy_expires_at AS "policyExpiresAt"
+     FROM sources WHERE id = $1`,
+    [sourceId],
+  );
+  if (!current) return null;
+  return updateSourcePolicy(
+    sourceId,
+    {
+      accessStatus: current.accessStatus,
+      aiProcessingStatus: allowed ? 'approved' : 'revoked',
+      scope: current.policyScope,
+      basis: current.policyBasis?.trim() ? current.policyBasis : allowed ? AI_TOGGLE_BASIS : null,
+      reference: current.policyReference,
+      owner: current.policyOwner?.trim() ? current.policyOwner : allowed ? TOGGLE_OWNER : null,
+      // Истёкший срок не продлевается молча: разрешение с ним updateSourcePolicy не примет.
+      expiresAt: current.policyExpiresAt,
+    },
+    changedBy,
+  );
+};
+
 /** Глубина истории в днях; null — только новое (канал) / весь архив пагинации (сайт). */
 export const setSourceHistoryDays = async (sourceId: number, days: number | null): Promise<boolean> =>
   (await execute(`UPDATE sources SET history_days = $2, updated_at = now() WHERE id = $1`, [sourceId, days])) > 0;

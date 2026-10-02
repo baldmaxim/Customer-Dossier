@@ -1447,6 +1447,18 @@ export type DomRfCompanyLinkState = 'pending' | 'confirmed' | 'rejected';
 
 export type DomRfFoundBy = 'inn' | 'name' | 'manual';
 
+export type DomRfHintVerdict = 'match' | 'no_match' | 'unsure';
+
+/** Подсказка модели к совпадению (domrf-hint@1): не решение, на экране подписана как подсказка. */
+export interface IDomRfLinkHint {
+  verdict: DomRfHintVerdict | null;
+  reason: string | null;
+  /** Ответ не по форме — подсказки нет. */
+  error: string | null;
+  model: string;
+  at: string;
+}
+
 /** Застройщик или группа из реестра, найденные для заказчика; решение — за оператором. */
 export interface IDomRfCompanyLink {
   id: number;
@@ -1454,11 +1466,14 @@ export interface IDomRfCompanyLink {
   externalRef: string;
   url: string;
   name: string | null;
+  /** Строки карточки результата поиска рядом с названием: реквизиты, регион. */
+  details: string | null;
   foundBy: DomRfFoundBy;
   rank: number | null;
   state: DomRfCompanyLinkState;
   decidedBy: string | null;
   decidedAt: string | null;
+  hint: IDomRfLinkHint | null;
 }
 
 /** Компания портала и её поиск в едином реестре застройщиков. */
@@ -1476,6 +1491,25 @@ export interface IDomRfCompanyRow {
 }
 
 export type DomRfCompanyFilter = 'pending' | 'notFound' | 'confirmed' | 'all';
+
+/** Страница ДОМ.РФ: числа вкладок и состояние подсказок модели. */
+export interface IDomRfSummary {
+  companies: IDomRfCompanies['totals'];
+  objects: { pending: number };
+  cards: { waiting: number; total: number };
+  hints: {
+    /** Задание разбора и флаг подсказок включены: без них подсказок нет при любом допуске. */
+    running: boolean;
+    sourceId: number | null;
+    /** ИИ-обработка источника наш.дом.рф разрешена. */
+    allowed: boolean;
+    reason: string | null;
+    provider: LlmProvider;
+    model: string;
+    hinted: number;
+    waiting: number;
+  };
+}
 
 export interface IDomRfCompanies {
   items: IDomRfCompanyRow[];

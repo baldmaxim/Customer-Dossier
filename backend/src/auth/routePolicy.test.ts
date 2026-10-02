@@ -77,6 +77,7 @@ const WRITES: Record<string, string> = {
   'POST /admin/domrf-company-links/:id/reject': 'sources.manage',
   'POST /admin/domrf-companies/:companyId/link': 'sources.manage',
   'POST /admin/domrf-companies/:companyId/search': 'sources.manage',
+  'POST /admin/domrf-hints/permission': 'sources.manage',
   'DELETE /admin/llm/key': 'llm.manage',
 };
 

@@ -1,4 +1,4 @@
-// Возврат — только на детальных страницах: карточка компании, объект, публикация, разбор, пользователь.
+// Возврат — только на детальных страницах: карточка компании, объект, публикация, разбор, пользователь, ДОМ.РФ.
 // На разделах верхнего уровня (поиск, связи, админка) он дублировал меню.
 //
 // Есть история — шаг назад (туда, откуда пришли: поиск с тем же запросом, прежняя вкладка).
@@ -27,6 +27,7 @@ export const DETAIL_ROUTES: ReadonlyArray<IDetailRoute> = [
   { pattern: '/documents/:id', parent: '/?view=publications', parentLabel: 'К публикациям' },
   { pattern: '/admin/process/:id', parent: '/admin/process', parentLabel: 'К разборам' },
   { pattern: '/admin/users/:id', parent: '/admin/users', parentLabel: 'К пользователям' },
+  { pattern: '/admin/sources/domrf', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
 ];
 
 export const BackBar: FC = () => {

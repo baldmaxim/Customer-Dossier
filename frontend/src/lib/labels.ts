@@ -16,6 +16,7 @@ import type {
   LlmProvider,
   DomRfCandidateState,
   DomRfCardKind,
+  DomRfHintVerdict,
   DomRfCompanyLinkState,
   DomRfFoundBy,
   Role,
@@ -780,6 +781,13 @@ export const DOMRF_FOUND_BY_LABELS: Record<DomRfFoundBy, string> = {
   inn: 'по ИНН',
   name: 'по названию',
   manual: 'указано вручную',
+};
+
+/** Подсказка модели — со строчной: стоит после «Модель:». */
+export const DOMRF_HINT_VERDICT_LABELS: Record<DomRfHintVerdict, string> = {
+  match: 'скорее он',
+  no_match: 'скорее не он',
+  unsure: 'не уверена',
 };
 
 export const DOMRF_CARD_KIND_LABELS: Record<DomRfCardKind, string> = {

@@ -1,15 +1,16 @@
 // Компании на ДОМ.РФ (этап 20D, шаг 2): каждую компанию портала браузер ищет в едином реестре
 // застройщиков — заказчиков и застройщиков первыми, по ИНН, если он есть, иначе по названию. Найденное —
 // предложения: «Это он» отправляет страницу застройщика или группы в чтение, и её объекты приходят
-// в «Найдено на ДОМ.РФ». Компаний тысячи: фильтр и поиск — на сервере, на экране — первые сто.
+// во вкладку «Объекты». Компаний тысячи: фильтр и поиск — на сервере, на экране — первые сто; оба — в адресе.
 
-import { FC, useState } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import type { DomRfCompanyFilter, IDomRfCompanies, IDomRfCompanyLink, IDomRfCompanyRow } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { useDebounced } from '../../hooks/useDebounced';
+import { enumParam, stringParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
 import { ASSERTION_ROLE_LABELS, DOMRF_FOUND_BY_LABELS, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -29,12 +30,15 @@ import { Stack } from '../ui/Stack';
 import { useToast } from '../ui/toast';
 import { actionError } from './actionError';
 import { DomRfCompanyLinks } from './DomRfCompanyLinks';
+import { DOMRF_SUMMARY_KEY } from './domRfSummary';
 import styles from './Found.module.css';
 
 const QUERY_KEY = ['domrf-companies'];
 
+const FILTERS: readonly DomRfCompanyFilter[] = ['pending', 'notFound', 'confirmed', 'all'];
+
 const HINT =
-  'Каждую компанию портала браузер ищет в едином реестре застройщиков ДОМ.РФ — заказчиков и застройщиков первыми: по ИНН, если он есть, иначе по названию. Из выдачи по названию предлагаются только застройщики и группы, совпавшие с названием, — выберите своего. Подтверждённый уходит в чтение, его объекты появятся в «Найдено на ДОМ.РФ».';
+  'Каждую компанию портала браузер ищет в едином реестре застройщиков ДОМ.РФ — заказчиков и застройщиков первыми: по ИНН, если он есть, иначе по названию. Из выдачи по названию предлагаются только застройщики и группы, совпавшие с названием, — выберите своего. Подтверждённый уходит в чтение, его объекты появятся во вкладке «Объекты».';
 
 const searchMeta = (row: IDomRfCompanyRow): string => {
   const roles = row.roles.map(role => ASSERTION_ROLE_LABELS[role] ?? role).join(', ');
@@ -56,9 +60,15 @@ export const DomRfCompanies: FC = () => {
   const client = useQueryClient();
   const toast = useToast();
   const canDecide = useCan('sources.manage');
-  const [filter, setFilter] = useState<DomRfCompanyFilter>('pending');
-  const [input, setInput] = useState('');
-  const q = useDebounced(input.trim());
+  const [filter, setFilter] = useUrlState('filter', enumParam(FILTERS, 'pending'));
+  const [q, setQ] = useUrlState('q', stringParam());
+  const [input, setInput] = useState(q);
+  const typed = useDebounced(input.trim());
+  // Набранное уходит в адрес с задержкой: «Назад» с карточки компании возвращает к тому же поиску.
+  // Только при наборе: смена адреса снаружи не должна возвращать в него старый текст поля.
+  useEffect(() => {
+    setQ(typed);
+  }, [typed, setQ]);
   const params = new URLSearchParams({ filter, ...(q ? { q } : {}) });
   const data = useQuery({
     queryKey: [...QUERY_KEY, filter, q],
@@ -71,13 +81,14 @@ export const DomRfCompanies: FC = () => {
     toast.show({ tone: 'success', text });
     void client.invalidateQueries({ queryKey: QUERY_KEY });
     void client.invalidateQueries({ queryKey: ['domrf-candidates'] });
+    void client.invalidateQueries({ queryKey: DOMRF_SUMMARY_KEY });
   };
   const fail = (err: Error): void => {
     toast.show({ tone: 'danger', text: actionError(err) });
   };
   const confirm = useMutation({
     mutationFn: (link: IDomRfCompanyLink) => api.post(`/api/admin/domrf-company-links/${link.id}/confirm`, {}),
-    onSuccess: after('Подтверждено — портал прочитает страницу, объекты появятся в «Найдено на ДОМ.РФ».'),
+    onSuccess: after('Подтверждено — портал прочитает страницу, объекты появятся во вкладке «Объекты».'),
     onError: fail,
   });
   const reject = useMutation({

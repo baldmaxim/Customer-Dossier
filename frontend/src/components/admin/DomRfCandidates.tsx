@@ -32,6 +32,7 @@ import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
 import { actionError } from './actionError';
 import { DomRfReplaceForm } from './DomRfReplaceForm';
+import { DOMRF_SUMMARY_KEY } from './domRfSummary';
 
 type View = 'pending' | 'decided';
 
@@ -73,6 +74,7 @@ export const DomRfCandidates: FC = () => {
   const refresh = (): void => {
     void client.invalidateQueries({ queryKey: ['domrf-candidates'] });
     void client.invalidateQueries({ queryKey: ['domrf-targets'] });
+    void client.invalidateQueries({ queryKey: DOMRF_SUMMARY_KEY });
   };
   const done = (text: string) => (): void => {
     toast.show({ tone: 'success', text });

@@ -23,8 +23,34 @@ const DATA: IDomRfCompanies = {
       resultCount: 2,
       lastError: null,
       links: [
-        { id: 7, kind: 'group', externalRef: '55', url: `${HOST}/группа/55`, name: 'ДЕМО-ГРУППА', foundBy: 'name', rank: 1, state: 'pending', decidedBy: null, decidedAt: null },
-        { id: 8, kind: 'developer', externalRef: '901', url: `${HOST}/застройщик/901`, name: 'ООО СЗ ДЕМО', foundBy: 'name', rank: 2, state: 'pending', decidedBy: null, decidedAt: null },
+        {
+          id: 7,
+          kind: 'group',
+          externalRef: '55',
+          url: `${HOST}/группа/55`,
+          name: 'ДЕМО-ГРУППА',
+          details: 'Москва · объектов 12',
+          foundBy: 'name',
+          rank: 1,
+          state: 'pending',
+          decidedBy: null,
+          decidedAt: null,
+          hint: { verdict: 'match', reason: 'Совпадает название группы, объекты в Москве.', error: null, model: 'demo-model', at: '2026-10-02T10:00:00Z' },
+        },
+        {
+          id: 8,
+          kind: 'developer',
+          externalRef: '901',
+          url: `${HOST}/застройщик/901`,
+          name: 'ООО СЗ ДЕМО',
+          details: null,
+          foundBy: 'name',
+          rank: 2,
+          state: 'pending',
+          decidedBy: null,
+          decidedAt: null,
+          hint: { verdict: null, reason: null, error: 'schema_error: verdict', model: 'demo-model', at: '2026-10-02T10:00:00Z' },
+        },
       ],
     },
   ],
@@ -55,6 +81,11 @@ describe('Компании на ДОМ.РФ', () => {
     expect(await screen.findByText(NOTE)).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Демо-Девелопмент' }).getAttribute('href')).toBe('/company/42');
     expect(screen.getByText(/^заказчик, застройщик · по названию «Демо-Девелопмент»/)).not.toBeNull();
+    // Рядом с найденным — строки выдачи и подсказка модели, подписанная как подсказка.
+    expect(screen.getByText('Москва · объектов 12')).not.toBeNull();
+    expect(screen.getByText('Модель: скорее он')).not.toBeNull();
+    expect(screen.getByText(/Совпадает название группы/)).not.toBeNull();
+    expect(screen.getByText('Подсказки модели нет: ответ пришёл не по форме.')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Это он — ДЕМО-ГРУППА' }));
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/domrf-company-links/7/confirm')).toBe(true));

@@ -3,7 +3,7 @@
 // было большой плашкой над списком, а форма добавления — отдельной карточкой под ним.
 //
 // На «Вручную» сначала вставка текста — там это главное действие, список способов вторичен;
-// на «Сайтах» под списком — карточки ДОМ.РФ.
+// на «Сайтах» под списком — вход на страницу наш.дом.рф (компании, объекты и карточки — там, вкладками).
 
 import { FC } from 'react';
 
@@ -17,9 +17,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { Hint } from '../ui/Hint';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
-import { DomRfTargets } from './DomRfTargets';
-import { DomRfCandidates } from './DomRfCandidates';
-import { DomRfCompanies } from './DomRfCompanies';
+import { DomRfEntry } from './DomRfEntry';
 import { MANUAL_HINT, ManualPaste } from './ManualPaste';
 import { SourceAdd } from './SourceAdd';
 import { SourceCards } from './SourceCards';
@@ -115,9 +113,7 @@ export const SourcesPanel: FC<ISourcesPanelProps> = ({ kind, sources, actions, l
         )}
       </Section>
 
-      {kind === 'website' && <DomRfTargets />}
-      {kind === 'website' && <DomRfCompanies />}
-      {kind === 'website' && <DomRfCandidates />}
+      {kind === 'website' && <DomRfEntry />}
     </Stack>
   );
 };

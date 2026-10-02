@@ -9,6 +9,7 @@ export interface IJobFlags {
   PIPELINE_ENABLED: boolean;
   REPROCESS_AUTO_PUBLISH: boolean;
   HEADLINE_ENABLED: boolean;
+  DOMRF_HINT_ENABLED: boolean;
   METRICS_AUTO_REFRESH: boolean;
   BOT_ENABLED: boolean;
   TG_BOT_TOKEN: string;
@@ -64,8 +65,13 @@ export const startBackgroundJobs = (
         ? 'тема публикации составляется моделью после разбора (HEADLINE_ENABLED=true)'
         : 'тема публикации не составляется (HEADLINE_ENABLED=false)',
     );
+    decision.notes.push(
+      flags.DOMRF_HINT_ENABLED
+        ? 'к найденному в реестре ДОМ.РФ модель подсказывает «он / не он» — при ИИ-допуске источника (DOMRF_HINT_ENABLED=true)'
+        : 'подсказок к найденному в реестре ДОМ.РФ нет (DOMRF_HINT_ENABLED=false)',
+    );
   } else {
-    decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false): темы публикаций тоже не составляются');
+    decision.notes.push('разбор моделью выключен (PIPELINE_ENABLED=false): темы публикаций тоже не составляются, подсказок ДОМ.РФ нет');
   }
 
   if (flags.METRICS_AUTO_REFRESH) {
