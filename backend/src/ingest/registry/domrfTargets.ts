@@ -114,13 +114,24 @@ export const removeDomRfTarget = async (id: number): Promise<boolean> =>
     return (result.rowCount ?? 0) > 0;
   });
 
-/** Атомарная аренда одной карточки: второй процесс не возьмёт её до истечения lease. */
+/**
+ * Снятая карточка объекта перечитывается раз в неделю (решение владельца 02.10.2026): статус стройки,
+ * срок сдачи и распроданность меняются. Повтор без изменений новой редакции не создаёт (store.ts).
+ */
+export const TARGET_TTL_DAYS = 7;
+
+/**
+ * Атомарная аренда одной карточки: второй процесс не возьмёт её до истечения lease. Сначала —
+ * поставленные и не снятые (новые и «Повторить»), затем те, чей снимок старше недели, от самых старых.
+ */
 export const claimDomRfTarget = async (): Promise<IDomRfTarget | null> => withTransaction(async client => {
   const row = (await client.query<IDomRfTarget>(
     `SELECT ${columns} FROM domrf_targets t LEFT JOIN projects p ON p.id = t.project_id
-     WHERE (t.captured_at IS NULL OR t.captured_at < t.requested_at)
+     WHERE (t.captured_at IS NULL OR t.captured_at < t.requested_at OR t.captured_at < now() - make_interval(days => $1))
        AND (t.next_attempt_at IS NULL OR t.next_attempt_at <= now())
-     ORDER BY t.requested_at, t.id FOR UPDATE OF t SKIP LOCKED LIMIT 1`,
+     ORDER BY (t.captured_at IS NULL OR t.captured_at < t.requested_at) DESC, t.requested_at, t.captured_at, t.id
+     FOR UPDATE OF t SKIP LOCKED LIMIT 1`,
+    [TARGET_TTL_DAYS],
   )).rows[0];
   if (!row) return null;
   await client.query(

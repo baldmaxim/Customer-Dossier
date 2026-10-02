@@ -1,5 +1,6 @@
-// Карточка компании: шапка (имя, реквизиты сеткой, «Схема связей») и три вкладки — «Обзор ·
-// Публикации · Подробно». Вкладка и открытый пост — в адресе (?tab=, ?post=): «Назад»
+// Карточка компании: шапка (имя, реквизиты сеткой, «Схема связей») и вкладки — «Обзор · Объекты ·
+// Публикации · Подробно». Вкладка, открытый пост и фильтры объектов — в адресе (?tab=, ?post=,
+// ?orole=, ?osrc=): «Назад»
 // возвращает прежнюю вкладку, ссылкой можно поделиться. Содержимое вкладок — в
 // components/company/*, здесь только сборка и состояния загрузки.
 //
@@ -12,11 +13,12 @@ import { Navigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../api/client';
 import { CompanyDetails } from '../components/company/CompanyDetails';
+import { CompanyObjects } from '../components/company/CompanyObjects';
 import { CompanyOverview } from '../components/company/CompanyOverview';
 import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanySimilar } from '../components/company/CompanySimilar';
-import { useCompany } from '../components/company/useCompanyQueries';
+import { useCompany, useCompanyObjects } from '../components/company/useCompanyQueries';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { Button } from '../components/ui/Button';
 import { ButtonLink } from '../components/ui/ButtonLink';
@@ -29,14 +31,15 @@ import { enumParam, useUrlPatch, useUrlState } from '../hooks/useUrlState';
 import { describeLoadError } from '../lib/loadError';
 import styles from './CompanyPage.module.css';
 
-const TAB_VALUES = ['overview', 'publications', 'details'] as const;
+const TAB_VALUES = ['overview', 'objects', 'publications', 'details'] as const;
 type Tab = (typeof TAB_VALUES)[number];
 
-const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
-  { value: 'overview', label: 'Обзор' },
-  { value: 'publications', label: 'Публикации' },
-  { value: 'details', label: 'Подробно' },
-];
+const TAB_LABELS: Record<Tab, string> = {
+  overview: 'Обзор',
+  objects: 'Объекты',
+  publications: 'Публикации',
+  details: 'Подробно',
+};
 
 const notFound = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
 
@@ -45,6 +48,8 @@ export const CompanyPage: FC = () => {
   const companyId = Number(id);
   const valid = Number.isInteger(companyId) && companyId > 0;
   const query = useCompany(companyId, valid);
+  // Число объектов — у вкладки: запрос общий с «Обзором» и вкладкой, второго нет.
+  const objects = useCompanyObjects(companyId, valid && query.isSuccess);
   const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'overview'));
   const patch = useUrlPatch();
   const idBase = useId();
@@ -84,7 +89,13 @@ export const CompanyPage: FC = () => {
   } else {
     const { company } = data;
     const selectTab = (next: Tab): void =>
-      patch({ tab: next === 'overview' ? null : next, post: null }, { history: 'push' });
+      patch({ tab: next === 'overview' ? null : next, post: null, orole: null, osrc: null }, { history: 'push' });
+    const objectsTotal = objects.data?.coverage.total;
+    const tabs = TAB_VALUES.map(value => ({
+      value,
+      label: TAB_LABELS[value],
+      count: value === 'objects' && objectsTotal !== undefined && objectsTotal > 0 ? objectsTotal : undefined,
+    }));
     header = {
       title: company.name,
       meta: <CompanyRequisites data={data} />,
@@ -99,13 +110,14 @@ export const CompanyPage: FC = () => {
               строка высоты отнята у поста. */}
           {tab === 'overview' && <CompanySimilar companyId={company.id} />}
           {/* Вкладки — записи истории: стрелки только ведут фокус, выбор — Enter или пробел. */}
-          <Tabs label="Разделы компании" idBase={idBase} items={TABS} value={tab} onChange={selectTab} activation="manual" />
+          <Tabs label="Разделы компании" idBase={idBase} items={tabs} value={tab} onChange={selectTab} activation="manual" />
         </>
       ),
     };
     body = (
       <TabPanel idBase={idBase} value={tab} focusable={tab === 'overview'} className={reader ? styles.readerPanel : styles.panel}>
         {tab === 'overview' && <CompanyOverview companyId={company.id} />}
+        {tab === 'objects' && <CompanyObjects companyId={company.id} />}
         {tab === 'publications' && <CompanyPublications companyId={company.id} />}
         {tab === 'details' && <CompanyDetails companyId={company.id} data={data} />}
       </TabPanel>

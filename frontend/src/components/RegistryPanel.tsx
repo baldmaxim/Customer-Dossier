@@ -34,7 +34,8 @@ const GENERAL_CONTRACTOR = new Set(['Генподрядчики', 'Генпод�
 const BRIEF_ORDER = ['address', 'developer', 'Генподрядчики', 'Генподрядчик', 'Статус строительства', 'Сдача дома', 'Срок сдачи', 'Количество квартир'];
 const BRIEF_SIZE = 6;
 
-const rowsOf = (registry: IRegistryView): Array<IDescriptionItem & { key: string }> => {
+/** Все поля снимка подписью и значением — в порядке: адрес, застройщик, реквизиты, группа, генподрядчик, остальное. */
+export const registryRows = (registry: IRegistryView): Array<IDescriptionItem & { key: string }> => {
   const rows: Array<IDescriptionItem & { key: string }> = [];
   if (registry.address) rows.push({ key: 'address', label: 'Адрес', value: registry.address });
   if (registry.developer) {
@@ -67,7 +68,7 @@ const briefOf = <T extends IDescriptionItem & { key: string }>(rows: T[]): T[] =
 
 export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Данные реестра', variant = 'full' }) => {
   if (!registry) return null;
-  const rows = rowsOf(registry);
+  const rows = registryRows(registry);
   const brief = variant === 'brief';
   const updates = ['обновления', 'обновлений', 'обновлений'] as const;
 

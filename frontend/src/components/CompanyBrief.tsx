@@ -12,9 +12,9 @@
 
 import { FC } from 'react';
 
-import type { ICompanyResponse, IProjectRow, ISignalAggregate, Role } from '../api/types';
+import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, ROLE_LABELS, formatDate, formatDateTime } from '../lib/labels';
+import { ASSERTION_ROLE_LABELS, formatDate, formatDateTime } from '../lib/labels';
 import { BriefTile } from './company/BriefTile';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
 import { useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
@@ -25,27 +25,26 @@ import styles from './CompanyBrief.module.css';
 
 interface ICompanyBriefProps {
   companyId: number;
-  projects: IProjectRow[];
+  /** Объекты вкладки «Объекты» (свои и застройщиков группы). */
+  objects: ICompanyObject[];
+  /** Сколько объектов всего, включая не вошедшие в выборку. */
+  objectsTotal: number;
   /** Список объектов пришёл: до этого «—», а не «0». */
-  projectsKnown: boolean;
+  objectsKnown: boolean;
   /** Ответ карточки (из кэша): реестр и его объекты. */
   company?: ICompanyResponse;
 }
 
-/** Роли по объектам карточки: запасной путь, когда показатели не посчитаны. */
-const rolesFromProjects = (projects: IProjectRow[]): string[] => {
-  const counts = new Map<Role, number>();
-  const seen = new Set<string>();
-  for (const p of projects) {
-    if (p.role === null) continue;
-    const key = `${p.id}:${p.role}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    counts.set(p.role, (counts.get(p.role) ?? 0) + 1);
+/** Роли по своим объектам карточки: запасной путь, когда показатели не посчитаны. Роли СЗ группы — не её. */
+const rolesFromObjects = (objects: ICompanyObject[]): string[] => {
+  const counts = new Map<string, number>();
+  for (const o of objects) {
+    if (o.via) continue;
+    for (const r of o.roles) counts.set(r.role, (counts.get(r.role) ?? 0) + 1);
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([role, n]) => `${ROLE_LABELS[role] ?? ASSERTION_ROLE_LABELS[role] ?? role} — ${n}`);
+    .map(([role, n]) => `${ASSERTION_ROLE_LABELS[role] ?? role} — ${n}`);
 };
 
 /** Число показателя: посчитано — числом, нет данных или нет показателя — «—». */
@@ -65,7 +64,7 @@ const joinDetail = (parts: Array<string | null>): string | null => {
 const known = (label: string, aggregate: ISignalAggregate | undefined): string | null =>
   aggregate?.status === 'ok' ? `${label} — ${formatCount(aggregate.value)}` : null;
 
-export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, projects, projectsKnown, company }) => {
+export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objectsTotal, objectsKnown, company }) => {
   const query = useCompanySignals(companyId);
   const events = useCompanyEvents(companyId);
   const signals = query.data?.signals ?? null;
@@ -76,13 +75,12 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, projects, proj
         .filter(([, agg]) => (agg.value ?? 0) > 0)
         .sort((a, b) => (b[1].value ?? 0) - (a[1].value ?? 0))
         .map(([role, agg]) => `${ASSERTION_ROLE_LABELS[role] ?? role} — ${agg.value}`)
-    : rolesFromProjects(projects);
-  const cities = [...new Set(projects.map(p => p.city).filter((c): c is string => Boolean(c)))];
+    : rolesFromObjects(objects);
+  const cities = [...new Set(objects.filter(o => !o.via).map(o => o.city).filter((c): c is string => Boolean(c)))];
 
   const media = signals?.media;
   const experience = signals?.experience;
   const latest = media?.latestPublishedAt;
-  const projectCount = new Set(projects.map(p => p.id)).size;
   const registry = company?.registry ?? null;
   const cases = media?.legalCasesCount;
 
@@ -97,9 +95,9 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, projects, proj
       <dl className={styles.tiles}>
         <BriefTile
           label="Объекты"
-          value={projectsKnown ? formatCount(projectCount) : '—'}
+          value={objectsKnown ? formatCount(objectsTotal) : '—'}
           detail={joinDetail(roles.slice(0, 2))}
-          to={{ hash: 'company-projects' }}
+          to={{ search: '?tab=objects' }}
           linkText="Все объекты"
         />
         <BriefTile

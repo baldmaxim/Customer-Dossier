@@ -1,14 +1,18 @@
 // Этап 20D на настоящей базе (миграция 035): кандидаты со страниц застройщика и группы ДОМ.РФ.
 // Объект, уже стоящий в сборе, кандидатом не становится; решение оператора не перезаписывается
 // следующим чтением страницы; «подтвердить» и «заменить» ставят ссылку в обычную очередь сбора;
-// заказчик находится по ИНН со страницы застройщика. Данные синтетические, сети нет.
+// заказчик находится по ИНН со страницы застройщика. Объекты страницы, которую оператор подтвердил
+// как страницу компании («Это он»), встают в сбор сами (ADR-012 п. 32); снятая карточка объекта
+// перечитывается через неделю. Данные синтетические, сети нет.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getPool, withTransaction } from '../../db/pool.js';
 import { resetAndMigrate } from '../../__tests__/integration/db.js';
 import {
+  AUTO_CONFIRM_ACTOR,
   DomRfCandidateError,
+  autoConfirmLinkedDomRfCandidates,
   confirmDomRfCandidate,
   confirmDomRfCandidates,
   listDomRfCandidates,
@@ -17,16 +21,16 @@ import {
   upsertDomRfCandidates,
 } from './domrfCandidates.js';
 import { domRfCardUrl, domRfObjectUrl, parseDomRfCardCapture, saveScannedDomRfCard } from './domrfCards.js';
-import { listDomRfTargets, registerDomRfTarget } from './domrfTargets.js';
+import { TARGET_TTL_DAYS, claimDomRfTarget, listDomRfTargets, markDomRfCaptured, registerDomRfTarget } from './domrfTargets.js';
 
 const INN = '7700001235';
 
-const card = (objects: string[]) =>
+const card = (objects: string[], ref = '901') =>
   parseDomRfCardCapture({
     format: 'domrf-card-browser@1',
-    url: domRfCardUrl('developer', '901'),
+    url: domRfCardUrl('developer', ref),
     kind: 'developer',
-    externalRef: '901',
+    externalRef: ref,
     title: 'ООО СЗ ДЕМО-ПРАКТИКА',
     documentTitle: 'ООО СЗ ДЕМО-ПРАКТИКА',
     inn: INN,
@@ -38,9 +42,9 @@ const card = (objects: string[]) =>
     objects: objects.map(ref => ({ ref, status: 'Строится', name: `Демо-дом ${ref}`, place: 'г. Москва' })),
   });
 
-const scan = (objects: string[]): Promise<number> =>
+const scan = (objects: string[], ref = '901'): Promise<number> =>
   withTransaction(async client => {
-    const capture = card(objects);
+    const capture = card(objects, ref);
     await saveScannedDomRfCard(client, capture);
     return upsertDomRfCandidates(client, capture);
   });
@@ -108,5 +112,70 @@ describe('domrf_candidates', () => {
   it('база держит инварианты: неизвестное состояние и решение без даты не записать', async () => {
     await expect(getPool().query(`UPDATE domrf_candidates SET state = 'unknown' WHERE external_ref = '7005'`)).rejects.toThrow(/domrf_candidates_state/);
     await expect(getPool().query(`UPDATE domrf_candidates SET decided_at = NULL WHERE external_ref = '7005'`)).rejects.toThrow(/domrf_candidates_decided/);
+  });
+});
+
+describe('объекты подтверждённой страницы компании (ADR-012 п. 32)', () => {
+  it('«Это он» по странице — её кандидаты в сборе без отдельного решения; отклонённый остаётся отклонённым', async () => {
+    const company = (
+      await getPool().query<{ id: number }>(
+        `INSERT INTO companies (name, name_norm, name_latin) VALUES ('ООО СЗ Авто', 'сз авто', 'sz avto') RETURNING id`,
+      )
+    ).rows[0]!.id;
+    expect(await scan(['7101', '7102', '7103'], '902')).toBe(3);
+    await rejectDomRfCandidate(await idOf('7103'), 'alpha', 'не наш дом');
+
+    // Страница ещё не подтверждена — ничего не происходит.
+    expect(await autoConfirmLinkedDomRfCandidates()).toBe(0);
+
+    await getPool().query(
+      `INSERT INTO domrf_company_links (company_id, kind, external_ref, name, found_by, state, decided_by, decided_at)
+       VALUES ($1, 'developer', '902', 'ООО СЗ АВТО', 'inn', 'confirmed', 'alpha', now())`,
+      [company],
+    );
+    expect(await autoConfirmLinkedDomRfCandidates()).toBe(2);
+    expect(await autoConfirmLinkedDomRfCandidates()).toBe(0);
+
+    const decided = (await listDomRfCandidates('decided')).items.filter(i => i.foundViaRef === '902');
+    expect(decided.map(i => [i.externalRef, i.state, i.decidedBy])).toEqual([
+      ['7101', 'confirmed', AUTO_CONFIRM_ACTOR],
+      ['7102', 'confirmed', AUTO_CONFIRM_ACTOR],
+      ['7103', 'rejected', 'alpha'],
+    ]);
+    const targets = (await listDomRfTargets()).map(t => t.externalRef);
+    expect(targets).toEqual(expect.arrayContaining(['7101', '7102']));
+    expect(targets).not.toContain('7103');
+  });
+
+  it('страница снята с чтения — её кандидаты сами в сбор не идут', async () => {
+    const company = (
+      await getPool().query<{ id: number }>(
+        `INSERT INTO companies (name, name_norm, name_latin) VALUES ('ООО СЗ Снято', 'сз снято', 'sz snyato') RETURNING id`,
+      )
+    ).rows[0]!.id;
+    expect(await scan(['7201'], '903')).toBe(1);
+    await getPool().query(
+      `INSERT INTO domrf_company_links (company_id, kind, external_ref, name, found_by, state, decided_by, decided_at)
+       VALUES ($1, 'developer', '903', 'ООО СЗ СНЯТО', 'inn', 'confirmed', 'alpha', now())`,
+      [company],
+    );
+    await getPool().query(`UPDATE domrf_cards SET withdrawn_at = now() WHERE kind = 'developer' AND external_ref = '903'`);
+    expect(await autoConfirmLinkedDomRfCandidates()).toBe(0);
+    expect((await listDomRfCandidates('pending')).items.map(i => i.externalRef)).toContain('7201');
+  });
+
+  it('снятая карточка объекта перечитывается, когда снимку больше недели', async () => {
+    // Все поставленные — сняты: очередь пуста.
+    for (const t of await listDomRfTargets()) {
+      await withTransaction(client => markDomRfCaptured(client, t.externalRef, null, null));
+    }
+    expect(await claimDomRfTarget()).toBeNull();
+
+    await getPool().query(
+      `UPDATE domrf_targets SET captured_at = now() - make_interval(days => $1 + 1), requested_at = now() - make_interval(days => $1 + 2)
+       WHERE external_ref = '7101'`,
+      [TARGET_TTL_DAYS],
+    );
+    expect((await claimDomRfTarget())?.externalRef).toBe('7101');
   });
 });

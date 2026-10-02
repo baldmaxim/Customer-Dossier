@@ -2,8 +2,12 @@
 //
 // Портал предлагает, оператор решает: «подтвердить» ставит ссылку в обычную очередь сбора
 // (domrfTargets.ts), «отклонить» убирает кандидата из списка, «заменить» ставит вместо найденной
-// карточки ту, что указал оператор. Без решения карточка не открывается и в карточки портала
-// ничего не попадает. Отклонённый кандидат при следующем чтении страницы не возвращается.
+// карточки ту, что указал оператор. Отклонённый кандидат при следующем чтении страницы не возвращается.
+//
+// Решение владельца 02.10.2026 (ADR-012 п. 32): «Это он» по компании — согласие собирать объекты её
+// страницы. Кандидаты со страницы, которую оператор подтвердил как страницу компании портала,
+// подтверждаются сами (autoConfirmLinkedDomRfCandidates); вручную решаются только найденные на
+// страницах без такого решения. Отклонить отдельный объект оператор может по-прежнему.
 
 import type { PoolClient } from 'pg';
 
@@ -183,6 +187,49 @@ export const replaceDomRfCandidate = async (
     await decide(client, id, 'replaced', actor, { replacementRef: parsed.externalRef });
   });
 };
+
+/** Кто подтвердил кандидата сам: в списке решений видно, что это правило, а не оператор. */
+export const AUTO_CONFIRM_ACTOR = 'auto';
+export const AUTO_CONFIRM_NOTE = 'страница компании подтверждена оператором — её объекты собираются';
+/** Кандидатов за один шаг: тысячи с больших групп разойдутся за несколько минут короткими транзакциями. */
+const AUTO_CONFIRM_BATCH = 500;
+
+/**
+ * Кандидаты со страниц, которые оператор подтвердил как страницы компаний портала («Это он»), — в сбор
+ * без отдельного решения. Страница, снятая с чтения, не в счёт; отклонённые и решённые не трогаются.
+ * Ссылка в очередь и решение по кандидату — одной транзакцией. Возвращает, сколько подтверждено.
+ */
+export const autoConfirmLinkedDomRfCandidates = async (limit = AUTO_CONFIRM_BATCH): Promise<number> =>
+  withTransaction(async client => {
+    const picked = (
+      await client.query<{ id: number; external_ref: string; url: string }>(
+        `SELECT c.id, c.external_ref, c.url
+         FROM domrf_candidates c
+         JOIN domrf_cards d ON d.kind = c.found_via_kind AND d.external_ref = c.found_via_ref AND d.withdrawn_at IS NULL
+         WHERE c.state = 'pending'
+           AND EXISTS (
+             SELECT 1 FROM domrf_company_links l
+             WHERE l.kind = c.found_via_kind AND l.external_ref = c.found_via_ref AND l.state = 'confirmed')
+         ORDER BY c.id
+         LIMIT $1
+         FOR UPDATE OF c SKIP LOCKED`,
+        [limit],
+      )
+    ).rows;
+    if (picked.length === 0) return 0;
+    await client.query(
+      `INSERT INTO domrf_targets (external_ref, url)
+       SELECT ref, url FROM unnest($1::text[], $2::text[]) AS o(ref, url)
+       ON CONFLICT (external_ref) DO NOTHING`,
+      [picked.map(p => p.external_ref), picked.map(p => p.url)],
+    );
+    await client.query(
+      `UPDATE domrf_candidates SET state = 'confirmed', decided_by = $2, decided_at = now(), decision_note = $3
+       WHERE id = ANY($1::bigint[])`,
+      [picked.map(p => p.id), AUTO_CONFIRM_ACTOR, AUTO_CONFIRM_NOTE],
+    );
+    return picked.length;
+  });
 
 /** Подтверждение пачкой: каждый кандидат — своим решением; ошибка одного не останавливает остальные. */
 export const confirmDomRfCandidates = async (

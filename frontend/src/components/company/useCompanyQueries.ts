@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyResponse, ICompanySummary, IEventRow, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -23,6 +23,14 @@ export const useCompanyProjects = (companyId: number): UseQueryResult<{ items: I
   useQuery({
     queryKey: ['company', companyId, 'projects'],
     queryFn: () => api.get<{ items: IProjectRow[] }>(`/api/companies/${companyId}/projects`),
+  });
+
+/** Объекты вкладки «Объекты» — свои и застройщиков группы, со сводкой ДОМ.РФ. Ключ общий с «Обзором». */
+export const useCompanyObjects = (companyId: number, enabled = true): UseQueryResult<ICompanyObjectsResponse> =>
+  useQuery({
+    queryKey: ['company', companyId, 'objects'],
+    queryFn: () => api.get<ICompanyObjectsResponse>(`/api/companies/${companyId}/objects`),
+    enabled,
   });
 
 export const useCompanyEvents = (companyId: number): UseQueryResult<{ items: IEventRow[] }> =>

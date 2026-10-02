@@ -13,7 +13,7 @@ import { withTransaction } from '../../db/pool.js';
 import { evaluateSourcePolicy } from '../policy.js';
 import { getSourceByKey, type ISource } from '../sources.js';
 import { type IDomRfBrowserCapture } from './browserCapture.js';
-import { upsertDomRfCandidates } from './domrfCandidates.js';
+import { autoConfirmLinkedDomRfCandidates, upsertDomRfCandidates } from './domrfCandidates.js';
 import {
   claimDomRfCompanySearch,
   domRfSearchUrl,
@@ -264,18 +264,37 @@ const sourceApproved = (): Promise<boolean> => approvedSource().then(
 );
 
 /**
- * Один шаг: сначала подтверждённые оператором карточки объектов, затем страницы застройщиков и групп,
- * затем серия поисков компаний портала в реестре застройщиков. Поиск — фоновый обход без решения
- * оператора: без допуска сбора компании не берутся вовсе, иначе каждая получила бы ошибку.
+ * Каждый PAGES_EVERY-й шаг страницы застройщиков и поиск идут раньше объектов: после «Это он» по
+ * большой группе в очереди тысячи объектов, и без этого страницы и поиск стояли бы сутками.
+ */
+const PAGES_EVERY = 4;
+let passNo = 0;
+
+/**
+ * Один шаг: карточки объектов, страницы застройщиков и групп, серия поисков компаний портала в
+ * реестре застройщиков. Поиск — фоновый обход без решения оператора: без допуска сбора компании не
+ * берутся вовсе, иначе каждая получила бы ошибку. Перед шагом объекты подтверждённых оператором
+ * страниц ставятся в сбор (ADR-012 п. 32).
  */
 export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
-  const target = await claimDomRfTarget();
-  if (target) return [await captureTarget(target)];
+  const queued = await autoConfirmLinkedDomRfCandidates();
+  const prefix: IDomRfPassResult[] = queued > 0 ? [{ what: 'объекты подтверждённых страниц', outcome: `в сбор поставлено ${queued}` }] : [];
+  passNo += 1;
+  const objectsFirst = passNo % PAGES_EVERY !== 0;
+  if (objectsFirst) {
+    const target = await claimDomRfTarget();
+    if (target) return [...prefix, await captureTarget(target)];
+  }
   const card = await claimDueDomRfCard();
-  if (card) return [await scanDueCard(card)];
-  if (!(await sourceApproved())) return [];
-  const company = await claimDomRfCompanySearch();
-  return company ? searchCompanies(company) : [];
+  if (card) return [...prefix, await scanDueCard(card)];
+  const approved = await sourceApproved();
+  const company = approved ? await claimDomRfCompanySearch() : null;
+  if (company) return [...prefix, ...(await searchCompanies(company))];
+  if (!objectsFirst) {
+    const target = await claimDomRfTarget();
+    if (target) return [...prefix, await captureTarget(target)];
+  }
+  return prefix;
 };
 
 /** Один обработчик на сервер: база выдаёт отдельную аренду для каждого процесса. */

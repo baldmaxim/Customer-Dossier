@@ -158,9 +158,49 @@ export const computedSignals = {
   },
 };
 
-/** Строка объекта и контрагент с другим id — для списков длиннее порога «Показать все». */
-export const manyProjects = (n: number) =>
-  Array.from({ length: n }, (_, i) => projectRow({ id: 100 + i, name: `Объект ${i + 1}`, counterparties: null }));
+/** Объект вкладки «Объекты»: свой, с двумя ролями, без сведений ДОМ.РФ. */
+export const objectRow = (over: Record<string, unknown> = {}) => ({
+  projectId: 55,
+  name: 'Развязка на М-7',
+  city: 'Казань',
+  level: 'complex',
+  basis: 'participation',
+  roles: [
+    { role: 'general_contractor', isCurrent: true, origin: 'published' },
+    { role: 'customer', isCurrent: true, origin: 'published' },
+  ],
+  via: null,
+  registry: null,
+  state: { state: 'construction', validFrom: '2026-01-01' },
+  ...over,
+});
+
+/** Сводка ДОМ.РФ объекта: поля сайта на дату. */
+export const objectRegistry = (over: Record<string, unknown> = {}) => ({
+  externalRef: '71431',
+  sourceTitle: 'наш.дом.рф',
+  asOf: null,
+  fetchedAt: '2026-09-20T09:00:00.000Z',
+  address: 'Москва город, Мосфильмовская ул., д. 70',
+  status: 'Строится',
+  completion: 'IV кв. 2027',
+  keys: null,
+  apartments: '472',
+  pricePerSqm: '933 425 ₽',
+  propertyClass: 'Бизнес',
+  floors: '24',
+  sold: null,
+  contractor: null,
+  developer: 'ООО «СЗ Развитие»',
+  group: 'Донстрой',
+  ...over,
+});
+
+export const objectsBody = (items: unknown[], members: unknown[] = []) => ({
+  items,
+  members,
+  coverage: { loaded: items.length, total: items.length, truncated: false },
+});
 
 export const manyPartners = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ ...partner, companyId: 200 + i, name: `ООО «Партнёр ${i + 1}»`, links: [] }));
@@ -190,6 +230,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: [partner] } }) },
   { match: 'GET /api/companies/7/projects', respond: () => ({ status: 200, body: { items: [projectRow(), projectRow({ role: 'customer', counterparties: null })] } }) },
   { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
+  { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },

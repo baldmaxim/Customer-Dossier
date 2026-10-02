@@ -1,8 +1,9 @@
-// Карточка компании: три вкладки — «Обзор · Публикации · Подробно» (решение владельца, TG_Info
-// CLAUDE.md), вкладка и открытый пост — в адресе.
+// Карточка компании: вкладки «Обзор · Объекты · Публикации · Подробно» (TG_Info CLAUDE.md), вкладка,
+// открытый пост и фильтры объектов — в адресе.
 //
 // Проверяется то, ради чего карточку пересобрали: обзор отвечает «как дела» (сводка, последние
-// события по дате, объекты ссылками, контрагенты с цитатой по раскрытию), публикации —
+// события по дате, первые объекты карточками и переход на вкладку, контрагенты с цитатой по
+// раскрытию), «Объекты» — карточки со сведениями ДОМ.РФ и объектами застройщиков группы, публикации —
 // читалкой, «Подробно» — опознание, реестр, все события, показатели, резюме и схема;
 // ошибка загрузки не выдаётся за «не найдена».
 
@@ -12,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { companyRoutes, computedSignals, event, manyPartners, manyProjects } from './companyPage.fixtures';
+import { companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -47,13 +48,15 @@ const phone = (): void => {
 };
 
 describe('Карточка компании', () => {
-  it('три вкладки; обзор — сводка, объекты и контрагенты, без ленты публикаций', async () => {
+  it('четыре вкладки, у «Объектов» — число; обзор — сводка, объекты и контрагенты, без ленты публикаций', async () => {
     fakeApi(companyRoutes());
     renderCard();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'ООО «Мостострой»' })).toBeTruthy();
     const tabs = screen.getByRole('tablist', { name: 'Разделы компании' });
-    expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Обзор', 'Публикации', 'Подробно']);
+    await waitFor(() =>
+      expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Обзор', 'Объекты1', 'Публикации', 'Подробно']),
+    );
     expect(within(tabs).getByRole('tab', { name: 'Обзор' }).getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('ООО «Дорсервис»')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Коротко о компании' })).toBeTruthy();
@@ -101,31 +104,80 @@ describe('Карточка компании', () => {
     expect(within(requisites).getByText('Адрес в реестре').nextElementSibling?.textContent).toBe('Казань, ул. Баумана, 1');
   });
 
-  it('объекты — строки-ссылки на страницу объекта, роли ярлыками, объект один раз', async () => {
+  it('объекты на обзоре — карточки-ссылки на страницу объекта, роли ярлыками; «Все объекты» ведёт на вкладку', async () => {
     fakeApi(companyRoutes());
     renderCard();
 
-    const section = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
+    const section = (await screen.findByRole('heading', { name: 'Объекты', level: 2 })).closest('section')!;
     const links = await within(section).findAllByRole('link', { name: 'Развязка на М-7' });
     expect(links).toHaveLength(1);
     expect(links[0]!.getAttribute('href')).toBe('/projects/55');
-    expect(links[0]!.closest('li')?.className).toContain('row-link');
+    expect(links[0]!.closest('article')?.className).toContain('row-link');
     expect(within(section).getByText('генподрядчик')).toBeTruthy();
     expect(within(section).getByText('заказчик')).toBeTruthy();
-    expect(within(section).getByText(/строится/)).toBeTruthy();
+    expect(within(section).getByText('Строится')).toBeTruthy();
+    expect(within(section).getByText('только из публикаций')).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Все объекты — 1' }).getAttribute('href')).toBe('/company/7?tab=objects');
   });
 
   it('объект из события виден без выдуманной роли участия', async () => {
     fakeApi(
-      replace('GET /api/companies/7/projects', () => ({
+      replace('GET /api/companies/7/objects', () => ({
         status: 200,
-        body: { items: [{ id: 56, name: 'ЖК Бадаевский', kind: 'residential', stage: 'construction', city: 'Москва', plannedCompletion: null, actualCompletion: null, role: null, confidence: null, isCurrent: null, basis: 'event', counterparties: null }] },
+        body: objectsBody([objectRow({ projectId: 56, name: 'ЖК Бадаевский', basis: 'event', roles: [], state: null })]),
       })),
     );
     renderCard();
 
-    const row = (await screen.findByRole('link', { name: 'ЖК Бадаевский' })).closest('li')!;
-    expect(within(row).getByText('упомянут в событиях, роль не названа')).toBeTruthy();
+    const card = (await screen.findByRole('link', { name: 'ЖК Бадаевский' })).closest('article')!;
+    expect(within(card).getByText('упомянут в событиях, роль не названа')).toBeTruthy();
+  });
+
+  it('вкладка «Объекты»: сведения ДОМ.РФ на карточке, объекты застройщика группы «через», фильтры в адресе', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/objects', () => ({
+        status: 200,
+        body: objectsBody(
+          [
+            objectRow({
+              projectId: 60,
+              name: 'Река',
+              roles: [{ role: 'developer', isCurrent: true, origin: 'registry' }],
+              via: { companyId: 70, name: 'ООО «СЗ Развитие»' },
+              registry: objectRegistry(),
+              state: null,
+            }),
+            objectRow(),
+          ],
+          [{ companyId: 70, name: 'ООО «СЗ Развитие»' }],
+        ),
+      })),
+    );
+    const { router } = renderWithRouter(cardRoutes, ['/company/7?tab=objects']);
+
+    const reka = (await screen.findByRole('link', { name: 'Река' })).closest('article')!;
+    expect(within(reka).getByText('Строится')).toBeTruthy();
+    expect(within(reka).getByText('сдача: IV кв. 2027')).toBeTruthy();
+    expect(within(reka).getByText('Москва город, Мосфильмовская ул., д. 70')).toBeTruthy();
+    expect(within(reka).getByText('Квартир').nextElementSibling?.textContent).toBe('472');
+    expect(within(reka).getByText('ДОМ.РФ · на 20.09.2026')).toBeTruthy();
+    expect(within(reka).getByRole('link', { name: 'ООО «СЗ Развитие»' }).getAttribute('href')).toBe('/company/70');
+    expect(screen.getByText(/Вместе с объектами застройщиков группы: ООО «СЗ Развитие»/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Только публикации' }));
+    await waitFor(() => expect(router.state.location.search).toContain('osrc=publications'));
+    expect(screen.queryByRole('link', { name: 'Река' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Развязка на М-7' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Все' }));
+    fireEvent.click(screen.getByRole('button', { name: 'застройщик' }));
+    await waitFor(() => expect(router.state.location.search).toContain('orole=developer'));
+    expect(screen.getByRole('link', { name: 'Река' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Развязка на М-7' })).toBeNull();
+
+    // Смена вкладки сбрасывает фильтры объектов.
+    fireEvent.click(screen.getByRole('tab', { name: 'Подробно' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=details'));
   });
 
   it('контрагент: вид связи ярлыком, объект словом; цитата грузится только по «Откуда известно»', async () => {
@@ -152,7 +204,7 @@ describe('Карточка компании', () => {
     expect(await screen.findByText(/Показатели ещё не посчитаны/)).toBeTruthy();
     const brief = screen.getByRole('heading', { name: 'Коротко о компании' }).closest('section')!;
     expect(within(brief).getByText('Публикации').nextElementSibling?.textContent).toBe('—');
-    expect(within(brief).getByText('Объекты').nextElementSibling?.textContent).toBe('1');
+    await waitFor(() => expect(within(brief).getByText('Объекты').nextElementSibling?.textContent).toBe('1'));
     await waitFor(() => expect(within(brief).getByText('События').nextElementSibling?.textContent).toBe('0'));
     // Числа правил signals@2 без расчёта не появляются: плиток «Связи» и «Суды» нет, а не «0».
     expect(within(brief).queryByText('Связи')).toBeNull();
@@ -176,7 +228,7 @@ describe('Карточка компании', () => {
     expect(tile('Связи').className).toContain('row-link');
 
     const href = (name: string): string | null => within(brief).getByRole('link', { name }).getAttribute('href');
-    expect(href('Все объекты')).toBe('/company/7#company-projects');
+    expect(href('Все объекты')).toBe('/company/7?tab=objects');
     expect(href('Все события')).toBe('/company/7?tab=details#company-events');
     expect(href('Все публикации')).toBe('/company/7?tab=publications');
     expect(href('Все связи')).toBe('/links?company=7');
@@ -193,21 +245,6 @@ describe('Карточка компании', () => {
     const tile = (await within(brief).findByText('Реестр')).closest('div')!;
     expect(within(tile).getByText('объектов в реестре · на 20.09.2026')).toBeTruthy();
     expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7?tab=details#company-registry');
-  });
-
-  it('объекты: первые пять, остальные — «Показать все» концовкой блока', async () => {
-    fakeApi(replace('GET /api/companies/7/projects', () => ({ status: 200, body: { items: manyProjects(7) } })));
-    renderCard();
-
-    const section = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
-    await within(section).findByRole('link', { name: 'Объект 1' });
-    expect(within(section).getAllByRole('link')).toHaveLength(5);
-    const more = within(section).getByRole('button', { name: 'Показать все — 7' });
-    expect(more.getAttribute('aria-expanded')).toBe('false');
-
-    fireEvent.click(more);
-    expect(within(section).getAllByRole('link')).toHaveLength(7);
-    expect(within(section).getByRole('button', { name: 'Свернуть' }).getAttribute('aria-expanded')).toBe('true');
   });
 
   it('контрагенты: первые шесть, «Показать ещё»; полный ответ сервера — ссылка «Все связи»', async () => {

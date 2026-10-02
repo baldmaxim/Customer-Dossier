@@ -79,6 +79,57 @@ export interface IRegistryView {
   changes: IRegistryChangeEntry[];
   coverage: { loaded: number; truncated: boolean };
   attribution: string;
+  /** Карточки портала застройщика и его группы (только у снимка объекта). */
+  developerCompany?: { id: number; name: string } | null;
+  groupCompany?: { id: number; name: string } | null;
+}
+
+/** Похожий объект со сведениями реестра: подсказка «возможно, это тот же», не подстановка данных. */
+export interface IRegistryLookalike {
+  projectId: number;
+  name: string;
+  city: string | null;
+  reason: 'merge_queue' | 'name';
+}
+
+/** Сводка последнего снимка ДОМ.РФ по объекту — поля сайта на дату, не проверенный факт. */
+export interface ICompanyObjectRegistry {
+  externalRef: string;
+  sourceTitle: string;
+  asOf: string | null;
+  fetchedAt: string;
+  address: string | null;
+  status: string | null;
+  completion: string | null;
+  keys: string | null;
+  apartments: string | null;
+  pricePerSqm: string | null;
+  propertyClass: string | null;
+  floors: string | null;
+  sold: string | null;
+  contractor: string | null;
+  developer: string | null;
+  group: string | null;
+}
+
+/** Объект на вкладке «Объекты» карточки компании (02.10.2026). */
+export interface ICompanyObject {
+  projectId: number;
+  name: string;
+  city: string | null;
+  level: string | null;
+  basis: 'participation' | 'event';
+  roles: Array<{ role: string; isCurrent: boolean; origin: string }>;
+  /** Объект застройщика из группы компании: роль у него, а не у самой компании. */
+  via: { companyId: number; name: string } | null;
+  registry: ICompanyObjectRegistry | null;
+  state: { state: string; validFrom: string | null } | null;
+}
+
+export interface ICompanyObjectsResponse {
+  items: ICompanyObject[];
+  members: Array<{ companyId: number; name: string }>;
+  coverage: { loaded: number; total: number; truncated: boolean };
 }
 
 export interface IRegistryProjectRow {
@@ -945,6 +996,8 @@ export interface IProjectDossier {
   events: IStatement[];
   cases: Array<{ id: number; title: string; status: string }>;
   registry: IRegistryView | null;
+  /** Своего снимка нет — похожие объекты со сведениями реестра. Старый сервер поля не присылает. */
+  registryLookalikes?: IRegistryLookalike[];
 }
 
 export interface ICompanySummary {

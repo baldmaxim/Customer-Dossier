@@ -1,5 +1,7 @@
-// Второстепенное об объекте — под раскрытием: «Не учтено как участие», договоры, события,
-// история состояния и схема связей. Схема строится, только когда её раскрыли.
+// Второстепенное об объекте — разделами: «Не учтено как участие», договоры, события, история
+// состояния и схема связей. Раздел, где есть что показать (до OPEN_UP_TO строк), раскрыт сразу:
+// закрытые пустые и непустые выглядели одинаково, и страница казалась пустой. Схема строится,
+// только когда её раскрыли.
 
 import { FC, useState } from 'react';
 
@@ -13,6 +15,10 @@ import styles from '../ProjectPage.module.css';
 
 const countText = (n: number): string => (n > 0 ? formatCount(n) : 'нет');
 
+/** Длиннее — раздел остаётся свёрнутым: длинный список не должен отодвигать остальное. */
+const OPEN_UP_TO = 10;
+const openIf = (n: number): boolean => n > 0 && n <= OPEN_UP_TO;
+
 export const ProjectSections: FC<{ dossier: IProjectDossier }> = ({ dossier: d }) => {
   const [graphOpen, setGraphOpen] = useState(false);
   return (
@@ -23,11 +29,11 @@ export const ProjectSections: FC<{ dossier: IProjectDossier }> = ({ dossier: d }
           <StatementList items={d.notCounted} />
         </SectionDisclosure>
       )}
-      <SectionDisclosure summary="Договоры по сообщениям источников" meta={countText(d.contracts.length)}>
+      <SectionDisclosure summary="Договоры по сообщениям источников" meta={countText(d.contracts.length)} defaultOpen={openIf(d.contracts.length)}>
         <StatementList items={d.contracts} empty="Договоров по объекту в собранных публикациях нет." />
         {d.coParticipationNote && <p className={styles.note}>{d.coParticipationNote}</p>}
       </SectionDisclosure>
-      <SectionDisclosure summary="События объекта" meta={countText(d.events.length)}>
+      <SectionDisclosure summary="События объекта" meta={countText(d.events.length)} defaultOpen={openIf(d.events.length)}>
         <StatementList items={d.events} empty="Событий объекта в собранных публикациях не найдено." />
       </SectionDisclosure>
       {d.state.history.length > 1 && (

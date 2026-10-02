@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
+import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
 import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
@@ -309,6 +310,19 @@ companiesRouter.get('/:id/projects', async (req, res) => {
   );
 
   res.json({ items: rows });
+});
+
+/**
+ * Вкладка «Объекты»: объекты компании и застройщиков её группы со сводкой ДОМ.РФ (02.10.2026).
+ * /projects остаётся для «Подробно» и прежних клиентов.
+ */
+companiesRouter.get('/:id/objects', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  res.json(await loadCompanyObjects(id));
 });
 
 const feedSchema = z.object({

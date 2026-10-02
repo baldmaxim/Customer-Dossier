@@ -1,5 +1,6 @@
-// Объект: шапка (уровень, родитель, город, очереди), реестр кратко, состояние одной строкой,
-// участники с «Откуда известно» у строки; остальное — под раскрытием. Период — в адресе.
+// Объект: шапка (уровень, родитель, город, очереди), паспорт ДОМ.РФ первым (02.10.2026) — или
+// словами, что его нет, и похожие объекты со сведениями; состояние по событиям, участники с «Откуда
+// известно» у строки; остальное — разделами, где есть что показать, раскрытыми. Период — в адресе.
 
 import { FC, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +8,6 @@ import { Navigate, useParams } from 'react-router-dom';
 
 import { ApiError, api } from '../api/client';
 import type { IProjectDossier } from '../api/types';
-import { RegistryPanel } from '../components/RegistryPanel';
 import { Button } from '../components/ui/Button';
 import { ButtonLink } from '../components/ui/ButtonLink';
 import { Callout } from '../components/ui/Callout';
@@ -19,6 +19,7 @@ import { describeLoadError } from '../lib/loadError';
 import type { IPeriod } from './project/PeriodFilter';
 import { ProjectHeader } from './project/ProjectHeader';
 import { ProjectParticipants } from './project/ProjectParticipants';
+import { ProjectPassport, ProjectRegistryMissing } from './project/ProjectPassport';
 import { ProjectSections } from './project/ProjectSections';
 import { ProjectStateLine } from './project/ProjectState';
 import styles from './ProjectPage.module.css';
@@ -92,8 +93,9 @@ export const ProjectPage: FC = () => {
   } else {
     body = (
       <>
-        {d.registry && <RegistryPanel registry={d.registry} title="Реестр" variant="brief" />}
-        <ProjectStateLine state={d.state} />
+        {d.registry ? <ProjectPassport registry={d.registry} /> : <ProjectRegistryMissing dossier={d} />}
+        {/* Статус со стройки в паспорте уже есть: строка состояния по событиям — только когда ей есть что сказать. */}
+        {(!d.registry || d.state.current.length > 0) && <ProjectStateLine state={d.state} />}
         <ProjectParticipants dossier={d} period={period} onPeriodChange={changePeriod} busy={query.isFetching && query.isPlaceholderData} />
         <ProjectSections dossier={d} />
       </>

@@ -1,5 +1,6 @@
-// Объект: шапка с уровнем и родителем, реестр кратко, участники (карточки на телефоне, таблица шире)
-// с «Откуда известно» у строки, период в адресе, второстепенное — под раскрытиями.
+// Объект: шапка с уровнем и родителем, паспорт ДОМ.РФ первым (или словами, что его нет, и похожие
+// объекты со сведениями), участники (карточки на телефоне, таблица шире) с «Откуда известно» у строки,
+// период в адресе, разделы с содержимым раскрыты, схема строится только по раскрытию.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -78,6 +79,8 @@ const dossier = (inPeriod: 'overlaps' | 'no_overlap' | 'no_period_selected' = 'n
     changes: [],
     coverage: { loaded: 1, truncated: false },
     attribution: 'Проектная декларация застройщика — это заявление застройщика, а не проверенный факт.',
+    developerCompany: { id: 9, name: 'СЗ Демо' },
+    groupCompany: { id: 10, name: 'ГК Демо' },
   },
 });
 
@@ -107,15 +110,36 @@ describe('Объект', () => {
     expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
   });
 
-  it('реестр кратко: шесть полей, форма собственности не дублируется, остальное — «Все сведения реестра»', async () => {
+  it('паспорт ДОМ.РФ первым: главные числа, застройщик и группа — ссылками, дата и атрибуция; остальное — раскрытием', async () => {
     setup('/projects/56');
-    const registry = (await screen.findByRole('heading', { name: 'Реестр' })).closest('section')!;
-    const brief = within(registry).getAllByRole('term').filter(t => !t.closest('details'));
-    expect(brief.map(t => t.textContent)).toEqual(['Адрес', 'Застройщик', 'Генподрядчики', 'Статус строительства', 'Сдача дома', 'Количество квартир']);
-    expect(within(registry).getAllByText('Общество с ограниченной ответственностью «СЗ Демо»').length).toBeGreaterThan(0);
-    expect(within(registry).queryByText(/^ООО Общество/)).toBeNull();
-    expect(within(registry).getByText('Все сведения реестра')).toBeTruthy();
-    expect(within(registry).getByText('Сведения на 21.09.2026 (получены 21.09.2026)')).toBeTruthy();
+    const passport = (await screen.findByRole('heading', { name: 'Паспорт объекта' })).closest('section')!;
+    const terms = within(passport).getAllByRole('term').filter(t => !t.closest('details'));
+    expect(terms.map(t => t.textContent)).toEqual(['Статус', 'Сдача дома', 'Квартир', 'Класс', 'Адрес', 'Застройщик', 'Группа компаний', 'Генподрядчик']);
+    expect(terms[0]!.nextElementSibling?.textContent).toBe('Строится');
+    const developer = within(passport).getByRole('link', { name: 'Общество с ограниченной ответственностью «СЗ Демо»' });
+    expect(developer.getAttribute('href')).toBe('/company/9');
+    expect(within(passport).getByRole('link', { name: 'ГК Демо' }).getAttribute('href')).toBe('/company/10');
+    expect(within(passport).queryByText(/^ООО Общество/)).toBeNull();
+    expect(within(passport).getByText('Сведения на 21.09.2026 (получены 21.09.2026)')).toBeTruthy();
+    expect(within(passport).getByText(/не проверенный факт/)).toBeTruthy();
+    expect(within(passport).getByText('Все сведения ДОМ.РФ')).toBeTruthy();
+  });
+
+  it('без сведений ДОМ.РФ — словами, что их нет, и похожий объект со сведениями ссылкой', async () => {
+    setup('/projects/56', [
+      {
+        match: 'GET /api/projects/56/dossier',
+        respond: () => ({
+          status: 200,
+          body: { ...dossier(), registry: null, registryLookalikes: [{ projectId: 60, name: 'ЖК Демо-2', city: 'Москва', reason: 'name' }] },
+        }),
+      },
+    ]);
+    const note = (await screen.findByText('Сведений ДОМ.РФ по объекту нет')).closest('[class]')!.parentElement!;
+    expect(within(note).getByRole('link', { name: 'ЖК Демо-2' }).getAttribute('href')).toBe('/projects/60');
+    expect(within(note).getByRole('link', { name: '«Проверка» → «Дубли»' }).getAttribute('href')).toBe('/admin/review?tab=duplicates');
+    expect(screen.queryByRole('heading', { name: 'Паспорт объекта' })).toBeNull();
+    expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
   });
 
   it('на широком экране — таблица: строка ведёт на компанию, «Откуда известно» раскрывает цитаты', async () => {
@@ -159,10 +183,11 @@ describe('Объект', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''));
   });
 
-  it('второстепенное — под раскрытиями; схема не строится, пока её не открыли', async () => {
+  it('раздел с содержимым раскрыт, пустой — свёрнут; схема не строится, пока её не открыли', async () => {
     const { api } = setup('/projects/56');
     await screen.findByRole('table');
-    for (const name of ['Договоры по сообщениям источников', 'События объекта', 'История состояния', 'Схема связей']) {
+    expect(screen.getByRole('heading', { level: 2, name: 'Договоры по сообщениям источников' }).closest('details')?.open).toBe(true);
+    for (const name of ['События объекта', 'История состояния', 'Схема связей']) {
       expect(screen.getByRole('heading', { level: 2, name }).closest('details')?.open).toBe(false);
     }
     expect(api.calls.some(c => c.url.startsWith('/api/graph'))).toBe(false);

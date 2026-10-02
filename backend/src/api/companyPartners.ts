@@ -7,6 +7,7 @@
 //
 // Схема связей (graph/*) отвечает на тот же вопрос обходом в глубину; здесь —
 // только соседи первого шага, чтобы карточка отвечала «кто рядом» без схемы.
+// Корпоративные связи из реестра (СЗ ↔ группа, ДОМ.РФ) — отдельной веткой: их нет в наборах конвейера.
 
 import { query } from '../db/pool.js';
 
@@ -57,12 +58,34 @@ const DIRECT_SQL = `
     AND pa.subject_company_id IS NOT NULL AND pa.object_company_id IS NOT NULL
     AND pa.subject_company_id <> pa.object_company_id`;
 
+/**
+ * Корпоративные связи из реестра (ДОМ.РФ: СЗ «входит в группу»). Публикуются при снимке, а не
+ * набором конвейера, поэтому published_assertions_v их не видит — та же ветка, что у ролей в
+ * card_participations_v (миграция 036): не отклонено, положительное, есть действующее подтверждающее
+ * доказательство, и конвейер не опубликовал то же утверждение сам.
+ */
+const REGISTRY_CORPORATE_SQL = `
+  SELECT 'corporate' AS kind,
+         CASE WHEN a.subject_company_id = $1::bigint THEN a.object_company_id ELSE a.subject_company_id END AS "companyId",
+         CASE WHEN a.subject_company_id = $1::bigint THEN a.counterparty_role ELSE a.role END AS role,
+         CASE WHEN a.subject_company_id = $1::bigint THEN a.role ELSE a.counterparty_role END AS "ownRole",
+         NULL::bigint AS "projectId", NULL::text AS "projectName",
+         a.id AS "assertionId", a.modality::text AS modality, a.status::text AS status
+  FROM assertions a
+  WHERE a.origin = 'registry' AND a.predicate = 'corporate_relation'
+    AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
+    AND (a.subject_company_id = $1::bigint OR a.object_company_id = $1::bigint)
+    AND a.subject_company_id IS NOT NULL AND a.object_company_id IS NOT NULL
+    AND a.subject_company_id <> a.object_company_id
+    AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
+    AND NOT EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id)`;
+
 interface IDirectRow extends IPartnerLink {
   companyId: number | null;
 }
 
 export const loadCompanyPartners = async (companyId: number, limit: number): Promise<IPartnerRow[]> => {
-  const direct = await query<IDirectRow>(DIRECT_SQL, [companyId]);
+  const direct = [...(await query<IDirectRow>(DIRECT_SQL, [companyId])), ...(await query<IDirectRow>(REGISTRY_CORPORATE_SQL, [companyId]))];
 
   const byCompany = new Map<number, IPartnerLink[]>();
   const push = (id: number | null, link: IPartnerLink): void => {
