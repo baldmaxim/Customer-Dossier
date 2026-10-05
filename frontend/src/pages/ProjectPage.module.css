@@ -7,6 +7,35 @@
   min-width: 0;
 }
 
+/* Тело страницы: до 1280px — одна колонка (паспорт первым); с 1280px при паспорте — основная колонка слева,
+   паспорт справа колонкой не уже 22rem. Без сведений ДОМ.РФ — одна колонка на любой ширине. */
+.layout,
+.layoutSingle,
+.layoutMain,
+.layoutAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 26rem);
+    grid-template-areas: 'main aside';
+    align-items: start;
+  }
+
+  .layout > .layoutMain {
+    grid-area: main;
+  }
+
+  .layout > .layoutAside {
+    grid-area: aside;
+  }
+}
+
 /* Родитель в надписи над названием — обычным регистром: заглавными длинное название не читается. */
 .eyebrowLink {
   font-weight: var(--fw-medium);
@@ -165,7 +194,7 @@
   flex-direction: column;
   gap: 2px; /* 2px: подпись и значение — одна пара, шаг шкалы (4px) их разносит */
   min-width: 0;
-  padding: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
@@ -196,13 +225,47 @@
   padding-inline-start: var(--sp-5);
 }
 
+/* Фото и числа: на телефоне друг под другом, с 600px — рядом (фото 2 : числа 3), в колонке справа с
+   1280px — снова друг под другом. */
+.passportTop,
+.passportTopSingle,
+.passportSummary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+@media (min-width: 600px) {
+  .passportTop {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+
 @media (min-width: 900px) {
   .passportFacts {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  /* Рядом с фото числам — половина ширины: по два в ряд. */
+  .passportTop .passportFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-/* Фото паспорта: широкая полоса, не выше 360px — над числами, а не вместо них. */
+@media (min-width: 1280px) {
+  .layoutAside .passportTop {
+    display: flex;
+  }
+
+  .layoutAside .passportFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Фото паспорта: 200px на телефоне, 240px рядом с числами — над числами или сбоку, а не вместо них. */
 .passportFigure {
   margin: 0;
 }
@@ -210,11 +273,17 @@
 .passportPhoto {
   display: block;
   width: 100%;
-  max-height: 360px;
+  max-height: 200px;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius);
   background: var(--surface-2);
   object-fit: cover;
+}
+
+@media (min-width: 600px) {
+  .passportPhoto {
+    max-height: 240px;
+  }
 }
 
 .passportCaption {

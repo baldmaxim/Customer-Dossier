@@ -75,23 +75,28 @@ export const ProjectPassport: FC<{ registry: IRegistryView; projectId: number; n
   return (
     <Section title="Паспорт объекта" note={`${registry.source.title}, запись ${registry.externalRef}`}>
       <div className={styles.passport}>
-        {registry.hasPhoto && (
-          <figure className={styles.passportFigure}>
-            <ObjectPhoto projectId={projectId} name={name} className={styles.passportPhoto} eager />
-            <figcaption className={styles.passportCaption}>Фото: наш.дом.рф</figcaption>
-          </figure>
-        )}
-        <p className={styles.passportDate}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
-        {facts.length > 0 && (
-          <dl className={styles.passportFacts}>
-            {facts.map(f => (
-              <div key={f.title} className={styles.passportFact}>
-                <dt>{f.title}</dt>
-                <dd>{f.value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        {/* Фото и главные числа — рядом с 600px (в колонке справа с 1280px — снова друг под другом). */}
+        <div className={registry.hasPhoto ? styles.passportTop : styles.passportTopSingle}>
+          {registry.hasPhoto && (
+            <figure className={styles.passportFigure}>
+              <ObjectPhoto projectId={projectId} name={name} className={styles.passportPhoto} eager />
+              <figcaption className={styles.passportCaption}>Фото: наш.дом.рф</figcaption>
+            </figure>
+          )}
+          <div className={styles.passportSummary}>
+            <p className={styles.passportDate}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
+            {facts.length > 0 && (
+              <dl className={styles.passportFacts}>
+                {facts.map(f => (
+                  <div key={f.title} className={styles.passportFact}>
+                    <dt>{f.title}</dt>
+                    <dd>{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        </div>
         {lines.length > 0 && <DescriptionList items={lines} />}
         <Callout tone="neutral">{registry.attribution}</Callout>
         <RegistryChanges changes={registry.changes.slice(0, 1)} title="Последнее изменение на ДОМ.РФ" />

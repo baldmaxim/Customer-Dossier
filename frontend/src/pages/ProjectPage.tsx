@@ -1,6 +1,8 @@
 // Объект: шапка (уровень, родитель, город, очереди), паспорт ДОМ.РФ первым (02.10.2026) — или
 // словами, что его нет, и похожие объекты со сведениями; состояние по событиям, участники с «Откуда
 // известно» у строки; остальное — разделами, где есть что показать, раскрытыми. Период — в адресе.
+// С 1280px паспорт — колонкой справа, участники и разделы — слева (05.10.2026: одной колонкой на широком
+// экране паспорт с фото отодвигал участников на второй экран). Порядок в разметке прежний — паспорт первым.
 
 import { FC, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -92,13 +94,17 @@ export const ProjectPage: FC = () => {
     );
   } else {
     body = (
-      <>
-        {d.registry ? <ProjectPassport registry={d.registry} projectId={d.project.id} name={d.project.name} /> : <ProjectRegistryMissing dossier={d} />}
-        {/* Статус со стройки в паспорте уже есть: строка состояния по событиям — только когда ей есть что сказать. */}
-        {(!d.registry || d.state.current.length > 0) && <ProjectStateLine state={d.state} />}
-        <ProjectParticipants dossier={d} period={period} onPeriodChange={changePeriod} busy={query.isFetching && query.isPlaceholderData} />
-        <ProjectSections dossier={d} />
-      </>
+      <div className={d.registry ? styles.layout : styles.layoutSingle}>
+        <div className={styles.layoutAside}>
+          {d.registry ? <ProjectPassport registry={d.registry} projectId={d.project.id} name={d.project.name} /> : <ProjectRegistryMissing dossier={d} />}
+        </div>
+        <div className={styles.layoutMain}>
+          {/* Статус со стройки в паспорте уже есть: строка состояния по событиям — только когда ей есть что сказать. */}
+          {(!d.registry || d.state.current.length > 0) && <ProjectStateLine state={d.state} />}
+          <ProjectParticipants dossier={d} period={period} onPeriodChange={changePeriod} busy={query.isFetching && query.isPlaceholderData} />
+          <ProjectSections dossier={d} />
+        </div>
+      </div>
     );
   }
 
