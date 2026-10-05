@@ -57,19 +57,24 @@ interface IMembersToggleProps {
   onToggle: () => void;
 }
 
-/** «23 юрлица внутри» — над накладкой строки: нажатие раскрывает список, а не открывает карточку. */
+/**
+ * «23 юрлица внутри» — своей строкой под названием (не вплотную к нему) и над накладкой строки: нажатие
+ * раскрывает список, а не открывает карточку. Над накладкой — только сама кнопка, а не вся строка под названием.
+ */
 const MembersToggle: FC<IMembersToggleProps> = ({ row, open, onToggle }) =>
   row.members.length === 0 ? null : (
-    <Button
-      size="sm"
-      variant="link"
-      iconEnd="chevron"
-      className={`row-link-above ${styles.membersToggle} ${open ? styles.membersOpen : ''}`}
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      {`${formatCountWord(row.members.length, MEMBER_FORMS)} внутри`}
-    </Button>
+    <div className={styles.membersLine}>
+      <Button
+        size="sm"
+        variant="link"
+        iconEnd="chevron"
+        className={`row-link-above ${styles.membersToggle} ${open ? styles.membersOpen : ''}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        {`${formatCountWord(row.members.length, MEMBER_FORMS)} внутри`}
+      </Button>
+    </div>
   );
 
 interface ICatalogRowsProps {

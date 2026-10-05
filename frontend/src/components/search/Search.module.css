@@ -120,10 +120,17 @@
 }
 
 /* Юрлица внутри главной компании или группы (05.10.2026): кнопка раскрытия под названием, строки — с отступом. */
+/* Своя строка под названием: кнопка не прилипает к имени компании. */
+.membersLine {
+  display: block;
+  margin-top: var(--sp-1);
+}
+
 .membersToggle {
   display: inline-flex;
-  margin-top: var(--sp-1);
   padding-inline: 0;
+  font-size: var(--fs-sm);
+  text-decoration: none;
 }
 
 /* Раскрыто — шеврон вверх. */

@@ -107,6 +107,8 @@ describe('Главная «Компании»', () => {
     renderWithProviders(<CompaniesPage />);
     const toggle = await screen.findByRole('button', { name: '2\u00a0юрлица внутри' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    // Своей строкой под названием, а не вплотную к нему.
+    expect(toggle.parentElement?.contains(screen.getByRole('link', { name: 'Донстрой' }))).toBe(false);
     expect(screen.queryByRole('link', { name: 'СЗ ДОНСТРОЙ' })).toBeNull();
     fireEvent.click(toggle);
     expect(screen.getByRole('link', { name: 'СЗ ДОНСТРОЙ' }).getAttribute('href')).toBe('/company/51');
