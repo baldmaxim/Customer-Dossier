@@ -82,6 +82,19 @@ describe('GraphPanel', () => {
     expect(container.textContent).not.toMatch(/legal_entity|complex/);
   });
 
+  it('колесо мыши меняет масштаб схемы, а не прокручивает страницу; подсказка про мышь видна', async () => {
+    fakeApi(routes());
+    renderWithProviders(<GraphPanel companyId={1} defaultOpen />);
+    const schema = await screen.findByRole('group', { name: /^Схема связей/ });
+    const zoom = screen.getByRole('group', { name: 'Масштаб схемы' });
+    const before = within(zoom).getByText(/%$/).textContent;
+    const wheel = new WheelEvent('wheel', { deltaY: -200, bubbles: true, cancelable: true });
+    schema.parentElement!.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(true);
+    await waitFor(() => expect(within(zoom).getByText(/%$/).textContent).not.toBe(before));
+    expect(screen.getByText('Колесо мыши — масштаб, левая кнопка — перетащить схему.')).toBeTruthy();
+  });
+
   it('типы связей видны сразу и служат легендой, остальное — под «Ещё фильтры»', async () => {
     fakeApi(routes());
     renderWithProviders(<GraphPanel companyId={1} defaultOpen />);

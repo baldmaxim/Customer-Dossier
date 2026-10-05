@@ -55,6 +55,20 @@
   max-height: 72dvh;
 }
 
+/* Мышью схему тянут, как карту: рука — «можно тянуть», сжатая — «тянется»; текст при этом не выделяется. */
+.pannable {
+  cursor: grab;
+}
+
+.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.dragging * {
+  cursor: grabbing;
+}
+
 .busy {
   opacity: 0.55;
 }

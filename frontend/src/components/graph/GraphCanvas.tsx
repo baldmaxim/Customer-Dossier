@@ -2,8 +2,13 @@
 // Раньше был <svg role="img"> с фокусируемыми рёбрами: у img потомки презентационные, и диктор
 // их не видел (axe nested-interactive). id маркеров — через useId: две схемы на одной странице
 // больше не делят один «graph-arrow».
+//
+// Мышью — как карта (05.10.2026, просьба владельца): колесо — масштаб вокруг курсора, левая кнопка —
+// перетаскивание схемы. Короткий клик по узлу и линии работает как раньше; клик, которым закончилось
+// перетаскивание, гасится — иначе отпущенная над узлом кнопка перестраивала бы схему. На телефоне —
+// прежнее листание пальцем.
 
-import { FC, KeyboardEvent, ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { FC, KeyboardEvent, PointerEvent, ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { IGraph, IGraphEdge } from '../../api/types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -16,9 +21,13 @@ import { edgeName } from './graphText';
 import { GraphNode, type NodeHighlight } from './GraphNode';
 import styles from './GraphCanvas.module.css';
 
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 2;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 3;
 const STEP = 1.25;
+/** Чувствительность колеса: щелчок колеса (≈100 px) — примерно ×1,2. */
+const WHEEL_SPEED = 0.0018;
+/** Сдвиг мыши, после которого нажатие — перетаскивание, а не клик. */
+const DRAG_THRESHOLD = 4;
 /** Мельче этого сами не ужимаем: подписи перестают читаться — лучше прокрутка. */
 const AUTO_MIN = 0.7;
 
@@ -61,6 +70,11 @@ export const GraphCanvas: FC<IGraphCanvasProps> = ({
   const [zoom, setZoom] = useState<number | null>(null);
   const [activeNode, setActiveNode] = useState<string | null>(null);
   const [activeEdge, setActiveEdge] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  /** Точка схемы под курсором до масштаба: после перерисовки она должна остаться под курсором. */
+  const anchor = useRef<{ lx: number; ly: number; cx: number; cy: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean; id: number } | null>(null);
+  const suppressClick = useRef(false);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -81,6 +95,69 @@ export const GraphCanvas: FC<IGraphCanvasProps> = ({
   // величину: там её листают пальцем, а ужатая до 360px она нечитаема.
   const auto = tablet ? Math.max(AUTO_MIN, Math.min(1, fitWidth)) : 1;
   const scale = zoom ?? auto;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+
+  // Колесо — масштаб. Слушатель не пассивный: иначе preventDefault не остановит прокрутку страницы.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !desktop) return undefined;
+    const onWheel = (e: WheelEvent): void => {
+      const svg = el.querySelector('svg');
+      if (!svg) return;
+      e.preventDefault();
+      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const current = scaleRef.current;
+      const next = clamp(current * Math.exp(-delta * WHEEL_SPEED));
+      if (next === current) return;
+      const box = svg.getBoundingClientRect();
+      anchor.current = { lx: (e.clientX - box.left) / current, ly: (e.clientY - box.top) / current, cx: e.clientX, cy: e.clientY };
+      setZoom(next);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [desktop]);
+
+  // После масштаба колесом — точку под курсором вернуть под курсор.
+  useLayoutEffect(() => {
+    const a = anchor.current;
+    const el = scrollRef.current;
+    const svg = el?.querySelector('svg');
+    if (!a || !el || !svg) return;
+    anchor.current = null;
+    const box = svg.getBoundingClientRect();
+    el.scrollLeft += box.left + a.lx * scale - a.cx;
+    el.scrollTop += box.top + a.ly * scale - a.cy;
+  }, [scale]);
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>): void => {
+    suppressClick.current = false;
+    const el = scrollRef.current;
+    if (!desktop || !el || e.button !== 0 || e.pointerType !== 'mouse') return;
+    // Нажатие на полосу прокрутки — её собственное перетаскивание, не схемы.
+    if (e.target === el && (e.nativeEvent.offsetX > el.clientWidth || e.nativeEvent.offsetY > el.clientHeight)) return;
+    drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false, id: e.pointerId };
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>): void => {
+    const d = drag.current;
+    const el = scrollRef.current;
+    if (!d || !el) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      d.moved = true;
+      el.setPointerCapture?.(d.id);
+      setDragging(true);
+    }
+    el.scrollLeft = d.left - dx;
+    el.scrollTop = d.top - dy;
+  };
+  const endDrag = (): void => {
+    if (drag.current?.moved) suppressClick.current = true;
+    drag.current = null;
+    setDragging(false);
+  };
 
   // Центр схемы — в середине окна при первом показе: в высокой схеме он иначе оказывался за краем.
   const seed = graph.nodes.find(n => n.seed);
@@ -129,7 +206,25 @@ export const GraphCanvas: FC<IGraphCanvasProps> = ({
       {!desktop && overflow && (
         <p className={styles.hint}>Схема шире экрана — листайте её пальцем в сторону. Списком связи удобнее читать в виде «Таблица».</p>
       )}
-      <div ref={scrollRef} className={[styles.scroll, size === 'lg' ? styles.tall : '', busy ? styles.busy : ''].filter(Boolean).join(' ')} aria-busy={busy || undefined}>
+      {desktop && <p className={styles.hint}>Колесо мыши — масштаб, левая кнопка — перетащить схему.</p>}
+      <div
+        ref={scrollRef}
+        className={[styles.scroll, desktop ? styles.pannable : '', dragging ? styles.dragging : '', size === 'lg' ? styles.tall : '', busy ? styles.busy : '']
+          .filter(Boolean)
+          .join(' ')}
+        aria-busy={busy || undefined}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClickCapture={e => {
+          if (!suppressClick.current) return;
+          suppressClick.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDragStart={e => e.preventDefault()}
+      >
         <svg
           role="group"
           aria-label={label}
