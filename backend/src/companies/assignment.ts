@@ -95,7 +95,8 @@ const portalCandidates = async (db: DbExecutor, companyId: number, latin: string
       id: number; name: string; city: string | null; entity_type: string; inn: string | null; ogrn: string | null;
       similarity: number | null; queue_id: number | null; model_verdict: IPortalCandidate['modelVerdict']; model_reason: string | null;
     }>(
-      `WITH similar AS (
+      // «similar» — ключевое слово PostgreSQL (SIMILAR TO): имя CTE — alike.
+      `WITH alike AS (
          SELECT c.id, greatest(similarity(c.name_latin, $2),
                   coalesce((SELECT max(similarity(a.alias_latin, $2)) FROM entity_aliases a
                             WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)) AS similarity
@@ -120,7 +121,7 @@ const portalCandidates = async (db: DbExecutor, companyId: number, latin: string
        )
        SELECT c.id, c.name, c.city, c.entity_type, ids.inn, ids.ogrn, s.similarity, p.id AS queue_id, p.model_verdict, p.model_reason
        FROM companies c
-       LEFT JOIN similar s ON s.id = c.id
+       LEFT JOIN alike s ON s.id = c.id
        LEFT JOIN pairs p ON p.other = c.id
        LEFT JOIN ids ON ids.company_id = c.id
        WHERE c.merged_into_id IS NULL
