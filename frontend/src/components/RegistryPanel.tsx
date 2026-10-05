@@ -35,6 +35,8 @@ export interface IRegistryPanelProps {
   omit?: ReadonlySet<string>;
   /** false — атрибуция показана в общем блоке источников страницы. */
   attribution?: boolean;
+  /** Только содержимое, без своей карточки и заголовка: панель внутри другого раздела (портфель компании). */
+  bare?: boolean;
 }
 
 const GENERAL_CONTRACTOR = new Set(['Генподрядчики', 'Генподрядчик']);
@@ -74,7 +76,7 @@ const briefOf = <T extends IDescriptionItem & { key: string }>(rows: T[]): T[] =
   return [...picked, ...rest.slice(0, Math.max(0, BRIEF_SIZE - picked.length))];
 };
 
-export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Данные реестра', variant = 'full', omit, attribution = true }) => {
+export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Данные реестра', variant = 'full', omit, attribution = true, bare = false }) => {
   if (!registry) return null;
   const all = registryRows(registry);
   const rows = omit ? all.filter(row => !omit.has(row.key) && !(typeof row.label === 'string' && omit.has(row.label))) : all;
@@ -94,34 +96,38 @@ export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Да
     </>
   );
 
+  const body = (
+    <div className={styles.body}>
+      <p className={styles.asOf}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
+      {rows.length > 0 && <DescriptionList items={brief ? briefOf(rows) : rows} />}
+      {attribution && (
+        <Callout tone="neutral" className={styles.attribution}>
+          {registry.attribution}
+        </Callout>
+      )}
+      {brief ? (
+        <>
+          <RegistryChanges changes={registry.changes.slice(0, 1)} title="Последнее изменение в реестре" />
+          <Disclosure summary="Все сведения реестра" meta={formatCountWord(rows.length, ['поле', 'поля', 'полей'])}>
+            <div className={styles.body}>
+              <DescriptionList items={rows} />
+              <RegistryChanges changes={registry.changes} />
+              {coverage}
+            </div>
+          </Disclosure>
+        </>
+      ) : (
+        <>
+          <RegistryChanges changes={registry.changes} />
+          {coverage}
+        </>
+      )}
+    </div>
+  );
+  if (bare) return body;
   return (
     <Section title={title} note={`${registry.source.title}, запись ${registry.externalRef}`}>
-      <div className={styles.body}>
-        <p className={styles.asOf}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
-        {rows.length > 0 && <DescriptionList items={brief ? briefOf(rows) : rows} />}
-        {attribution && (
-          <Callout tone="neutral" className={styles.attribution}>
-            {registry.attribution}
-          </Callout>
-        )}
-        {brief ? (
-          <>
-            <RegistryChanges changes={registry.changes.slice(0, 1)} title="Последнее изменение в реестре" />
-            <Disclosure summary="Все сведения реестра" meta={formatCountWord(rows.length, ['поле', 'поля', 'полей'])}>
-              <div className={styles.body}>
-                <DescriptionList items={rows} />
-                <RegistryChanges changes={registry.changes} />
-                {coverage}
-              </div>
-            </Disclosure>
-          </>
-        ) : (
-          <>
-            <RegistryChanges changes={registry.changes} />
-            {coverage}
-          </>
-        )}
-      </div>
+      {body}
     </Section>
   );
 };

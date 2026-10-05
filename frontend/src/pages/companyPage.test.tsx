@@ -262,14 +262,45 @@ describe('Карточка компании', () => {
     expect(within(tile).getByText('объектов в реестре · на 20.09.2026')).toBeTruthy();
     // Реестр застройщика — на той же вкладке «Сведения»: плитка ведёт якорем к разделу.
     expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7#company-registry');
-    // Застройщик — сама компания: её ИНН уже в реквизитах шапки, раздел реестра его не повторяет.
-    const registry = screen.getByRole('heading', { name: 'Сведения реестра о застройщике' }).closest('section')!;
+    // Объектов со сведениями ДОМ.РФ нет — раздел о записи застройщика; якорь плитки — у него.
+    const registry = screen.getByRole('heading', { name: 'Застройщик в реестре ДОМ.РФ' }).closest('section')!;
+    expect(registry.id).toBe('company-registry');
+    expect(within(registry).getByText(/Запись застройщика: Единый реестр, № 123/)).toBeTruthy();
+    // Застройщик — сама компания: её ИНН уже в реквизитах шапки, карточка реестра его не повторяет.
+    const card = within(registry).getByText('Сведения реестра о застройщике').closest('details')!;
+    expect(card.open).toBe(false);
     expect(within(registry).queryByText('1655000000')).toBeNull();
     expect(within(screen.getByLabelText('Реквизиты')).getByText('1655000000')).toBeTruthy();
     // Атрибуция реестра — одна, в «Источниках и датах» внизу вкладки, а не плашкой в разделе.
     expect(within(registry).queryByText('По сведениям проектной декларации')).toBeNull();
     const sources = screen.getByRole('heading', { name: 'Источники и даты' }).closest('section')!;
     expect(within(sources).getByText(/По сведениям проектной декларации: Единый реестр, запись 123/)).toBeTruthy();
+  });
+
+  it('объекты по данным ДОМ.РФ: числа со знаменателем, статусы и сроки полосами, неразобранное — словами', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/objects', () => ({
+        status: 200,
+        body: objectsBody([
+          objectRow({ projectId: 60, name: 'Река', registry: objectRegistry({ sold: '50 %' }) }),
+          objectRow({ projectId: 61, name: 'Парк', registry: objectRegistry({ apartments: '128', sold: '25 %', pricePerSqm: '410 000 ₽', completion: 'Сдан', status: 'Сдан' }) }),
+          objectRow(),
+        ]),
+      })),
+    );
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Объекты по данным ДОМ.РФ' })).closest('section')!;
+    expect(within(section).getByText('2 из 3 объектов · на 20.09.2026')).toBeTruthy();
+    expect(within(section).getByText('Квартир').nextElementSibling?.textContent).toBe('600');
+    expect(within(section).getAllByText('по 2 объектам из 2')).toHaveLength(2);
+    expect(within(section).getByText('Цена за м²').nextElementSibling?.textContent?.replace(/\s+/g, ' ')).toBe('410 000 ₽ — 933 425 ₽');
+    // (472 × 0,5 + 128 × 0,25) / 600 = 0,447 → 45 %.
+    expect(within(section).getByText('Продано квартир').nextElementSibling?.textContent?.replace(/\s+/g, ' ')).toBe('45 %');
+    const statuses = within(section).getByRole('list', { name: 'Статус строительства' });
+    expect(within(statuses).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Сдан1', 'Строится1']);
+    expect(within(section).getByText(/срок не распознан — 1/)).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Все объекты — 3' }).getAttribute('href')).toBe('/company/7?tab=objects');
   });
 
   it('шапка: роли на своих объектах — ярлыками; оговорка «не оценка» — одна на вкладку', async () => {

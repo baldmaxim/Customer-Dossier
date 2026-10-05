@@ -1,8 +1,8 @@
 // Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Главное о юрлице —
 // уже в шапке (статус, руководитель, адрес, реквизиты); здесь сначала итоги плитками во всю ширину
-// (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — графики (роли,
-// события, тексты) и реестр застройщика, справа — остальное ЕГРЮЛ и «С кем связана» (05.10.2026:
-// раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
+// (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — объекты по
+// данным ДОМ.РФ с записью застройщика и графики (роли, события, тексты), справа — остальное ЕГРЮЛ и
+// «С кем связана» (05.10.2026: раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
 //
 // У имени без ИНН и у группы сведений ЕГРЮЛ нет: об этом — надпись с подсказкой над названием, а назначение
 // имени компании — в шапке под ярлыком «Назначить компании» (CompanyPage).
@@ -17,9 +17,9 @@ import type { ICompanyResponse } from '../../api/types';
 import { scrollBehavior } from '../../lib/motion';
 import { CompanyBrief } from '../CompanyBrief';
 import { CompanyPartners } from '../CompanyPartners';
-import { RegistryPanel } from '../RegistryPanel';
 import { Section } from '../ui/Section';
 import { CompanyFocus } from './CompanyFocus';
+import { CompanyPortfolio } from './CompanyPortfolio';
 import { CompanySources } from './CompanySources';
 import { CompanyStructure } from './CompanyStructure';
 import { useCompanyFocus, useCompanyObjects } from './useCompanyQueries';
@@ -85,12 +85,8 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
       />
       <div className={styles.overview}>
         <div className={styles.overviewMain}>
+          <CompanyPortfolio companyId={companyId} data={data} registryOmit={registryOmit} />
           <CompanyStructure companyId={companyId} />
-          {data.registry && (
-            <div id="company-registry">
-              <RegistryPanel registry={data.registry} title="Сведения реестра о застройщике" omit={registryOmit} attribution={false} />
-            </div>
-          )}
         </div>
         <div className={styles.overviewAside}>
           {identified && (
