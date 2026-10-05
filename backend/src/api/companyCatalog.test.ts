@@ -16,11 +16,11 @@ describe('catalogSchema', () => {
 
 describe('orderBy', () => {
   it('юрлица — на контроле первыми, затем объекты; «Без ИНН» — по числу публикаций', () => {
-    expect(orderBy('legal', 'objects')).toBe('f.watched DESC, f.objects DESC, f.publications DESC, f.name, f.id');
-    expect(orderBy('unidentified', 'objects')).toBe('f.publications DESC, f.objects DESC, f.name, f.id');
+    expect(orderBy('legal', 'objects')).toBe('f.watched DESC, f.objects DESC, f.publications DESC, f.name, f.company_id NULLS LAST, f.group_ref');
+    expect(orderBy('unidentified', 'objects')).toBe('f.publications DESC, f.objects DESC, f.name, f.company_id NULLS LAST, f.group_ref');
   });
   it('по названию — без подъёма «на контроле»', () => {
-    expect(orderBy('legal', 'name')).toBe('f.name, f.id');
+    expect(orderBy('legal', 'name')).toBe('f.name, f.company_id NULLS LAST, f.group_ref');
   });
 });
 

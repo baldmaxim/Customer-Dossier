@@ -2,8 +2,8 @@
 // ЕГРЮЛ из Контур.Фокуса, затем реестр застройщика, затем коротко о том, что дальше: объекты, события,
 // публикации (плитки ведут на свои вкладки). Справа от 900px — «С кем связана».
 //
-// У имени без ИНН сведений ЕГРЮЛ быть не может: вместо них — «Юрлицо не установлено» (CompanyUnidentified),
-// у группы компаний — пояснение, что своего ИНН у группы нет.
+// У имени без ИНН и у группы сведений ЕГРЮЛ нет: об этом — надпись с подсказкой над названием, а назначение
+// имени компании — в шапке под ярлыком «Назначить компании» (CompanyPage).
 
 import { FC, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -13,11 +13,9 @@ import { scrollBehavior } from '../../lib/motion';
 import { CompanyBrief } from '../CompanyBrief';
 import { CompanyPartners } from '../CompanyPartners';
 import { RegistryPanel } from '../RegistryPanel';
-import { Callout } from '../ui/Callout';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
 import { CompanyFocus } from './CompanyFocus';
-import { CompanyUnidentified } from './CompanyUnidentified';
 import { useCompanyObjects } from './useCompanyQueries';
 import styles from './Company.module.css';
 
@@ -39,20 +37,13 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
     document.getElementById(target)?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
   }, [location.key, target]);
 
-  const group = data.company.entityType === 'group';
   return (
     <div className={styles.overview}>
       <Stack gap={4} className={styles.overviewMain}>
-        {hasLegalIdentifier(data) ? (
+        {hasLegalIdentifier(data) && (
           <Section id="company-egrul" title="ЕГРЮЛ — Контур.Фокус">
             <CompanyFocus companyId={companyId} />
           </Section>
-        ) : group ? (
-          <Callout tone="neutral" title="Группа компаний">
-            У группы нет своего ИНН: сведения ЕГРЮЛ — у её юрлиц. Юрлица группы — в «С кем связана» и на вкладке «Объекты».
-          </Callout>
-        ) : (
-          <CompanyUnidentified companyId={companyId} data={data} />
         )}
         {data.registry && (
           <div id="company-registry">

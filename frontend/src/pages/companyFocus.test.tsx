@@ -111,11 +111,13 @@ describe('Контур.Фокус на карточке компании', () =>
     expect(within(section).queryByRole('button', { name: /Обновить/ })).toBeNull();
   });
 
-  it('у имени нет ИНН и ОГРН — вместо ЕГРЮЛ «Юрлицо не установлено» (ADR-016)', async () => {
+  it('у имени нет ИНН и ОГРН — над названием «Юрлицо не установлено», назначение свёрнуто в шапке (ADR-016)', async () => {
     fakeApi(companyRoutes({ focus: focusView({ configured: true, identifier: null, problem: 'no_identifier' }), companyOver: { identifiers: [] } }));
     renderWithProviders(card(), '/company/7');
-    const section = (await screen.findByRole('heading', { name: 'Юрлицо не установлено', level: 2 })).closest('section')!;
-    expect(within(section).getByText(/имя из публикаций без ИНН/)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Пояснение: юрлицо не установлено' })).toBeTruthy();
+    const assign = screen.getByText('Назначить компании').closest('details')!;
+    expect(assign.open).toBe(false);
+    expect(within(assign).getByText(/имя из публикаций без ИНН/)).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус' })).toBeNull();
   });
 

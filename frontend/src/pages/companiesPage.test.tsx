@@ -12,7 +12,9 @@ import { fakeApi, renderWithProviders, renderWithRouter, type IFakeRoute } from 
 import { CompaniesPage } from './CompaniesPage';
 
 const row = (over: Partial<ICatalogRow> = {}): ICatalogRow => ({
+  kind: 'company',
   companyId: 42,
+  groupRef: null,
   name: 'Пример',
   egrulName: 'ООО "ПРИМЕР"',
   egrulStatus: 'Действующее',
@@ -27,6 +29,8 @@ const row = (over: Partial<ICatalogRow> = {}): ICatalogRow => ({
   watched: false,
   namePending: false,
   hints: 0,
+  members: [],
+  parents: [],
   ...over,
 });
 
@@ -93,6 +97,25 @@ describe('Главная «Компании»', () => {
     expect(screen.getByRole('cell', { name: 'Действующее' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: '24 817' })).toBeTruthy();
     expect(container.querySelectorAll('tr.row-link').length).toBe(1);
+  });
+
+  it('СЗ — внутри главной компании: «N юрлиц внутри» раскрывает их ссылками; группа только по ДОМ.РФ — без карточки', async () => {
+    fakeApi(routes([
+      row({ companyId: 50, name: 'Донстрой', egrulName: null, members: [{ companyId: 51, name: 'СЗ ДОНСТРОЙ', inn: '6319194231' }, { companyId: 52, name: 'СЗ ОСЕННИЙ КВАРТАЛ', inn: null }] }),
+      row({ kind: 'registry_group', companyId: null, groupRef: '77', name: 'Гранель', egrulName: null, egrulStatus: null, inn: null, members: [{ companyId: 60, name: 'СЗ ГРАНЕЛЬ', inn: null }] }),
+    ]));
+    renderWithProviders(<CompaniesPage />);
+    const toggle = await screen.findByRole('button', { name: '2\u00a0юрлица внутри' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('link', { name: 'СЗ ДОНСТРОЙ' })).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole('link', { name: 'СЗ ДОНСТРОЙ' }).getAttribute('href')).toBe('/company/51');
+    expect(screen.getByRole('cell', { name: 'ИНН 6319194231' })).toBeTruthy();
+    // Группа только по реестру: названия-ссылки нет, есть пояснение и раскрытие.
+    expect(screen.queryByRole('link', { name: 'Гранель' })).toBeNull();
+    expect(screen.getByText(/группа по реестру ДОМ\.РФ — в портале не подтверждена/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '1\u00a0юрлицо внутри' }));
+    expect(screen.getByRole('link', { name: 'СЗ ГРАНЕЛЬ' }).getAttribute('href')).toBe('/company/60');
   });
 
   it('вкладки с числами; «Без ИНН» — пояснение и свои колонки, без фильтра «на контроле»', async () => {

@@ -79,9 +79,18 @@ export interface ICompanyRegistered {
 /** Вид каталога компаний (ADR-016): юрлица, группы, имена без ИНН. */
 export type CatalogView = 'legal' | 'groups' | 'unidentified';
 
+export interface ICatalogMember {
+  companyId: number;
+  name: string;
+  inn: string | null;
+}
+
 /** Строка каталога GET /api/catalog/companies. */
 export interface ICatalogRow {
-  companyId: number;
+  /** company — карточка портала; registry_group — группа только по реестру ДОМ.РФ, своей карточки нет. */
+  kind: 'company' | 'registry_group';
+  companyId: number | null;
+  groupRef: string | null;
   name: string;
   /** Краткое наименование по ЕГРЮЛ (Контур.Фокус); null — сведений нет. */
   egrulName: string | null;
@@ -98,6 +107,10 @@ export interface ICatalogRow {
   namePending: boolean;
   /** Кандидатов для назначения: подсказки Фокуса по названию и пары «возможный дубль». */
   hints: number;
+  /** СЗ и другие юрлица, которые входят в эту компанию или группу: в общем списке их нет. */
+  members: ICatalogMember[];
+  /** Куда входит сама компания (видно в плоском списке «на контроле»). */
+  parents: string[];
 }
 
 export interface ICatalogResponse {

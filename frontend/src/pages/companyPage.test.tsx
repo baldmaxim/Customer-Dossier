@@ -65,6 +65,15 @@ describe('Карточка компании', () => {
     expect(screen.getByRole('link', { name: 'Схема связей' }).getAttribute('href')).toBe('/links?company=7');
   });
 
+  it('группа компаний: над названием «Группа компаний» с подсказкой, а не блок на «Сведениях»', async () => {
+    fakeApi(companyRoutes({ companyOver: { company: { id: 7, name: 'Основа', city: null, legalForm: 'АО', taxId: null, entityType: 'group' }, identifiers: [] } }));
+    renderCard();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Основа' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Пояснение: группа компаний' })).toBeTruthy();
+    expect(screen.queryByText(/У группы нет своего ИНН/)).toBeNull();
+    expect(screen.queryByText('Назначить компании')).toBeNull();
+  });
+
   it('реквизиты в шапке — подпись над значением; ИНН копируется нажатием', async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

@@ -14,9 +14,10 @@ import { Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { CompanyDetails } from '../components/company/CompanyDetails';
 import { CompanyObjects } from '../components/company/CompanyObjects';
-import { CompanyInfo } from '../components/company/CompanyInfo';
+import { CompanyInfo, hasLegalIdentifier } from '../components/company/CompanyInfo';
 import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites } from '../components/company/CompanyRequisites';
+import { CompanyUnidentified } from '../components/company/CompanyUnidentified';
 import { CompanySimilar } from '../components/company/CompanySimilar';
 import { useCompany, useCompanyFocus, useCompanyObjects } from '../components/company/useCompanyQueries';
 import { WatchToggle } from '../components/company/WatchToggle';
@@ -24,7 +25,9 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { Button } from '../components/ui/Button';
 import { ButtonLink } from '../components/ui/ButtonLink';
 import { Callout } from '../components/ui/Callout';
+import { Disclosure } from '../components/ui/Disclosure';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Hint } from '../components/ui/Hint';
 import { PageHeader, type IPageHeaderProps } from '../components/ui/PageHeader';
 import { TabPanel } from '../components/ui/TabPanel';
 import { Tabs } from '../components/ui/Tabs';
@@ -43,6 +46,11 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 const notFound = (error: unknown): boolean => error instanceof ApiError && error.status === 404;
+
+const GROUP_HINT =
+  'У группы нет своего ИНН: сведения ЕГРЮЛ — у её юрлиц. Юрлица группы — в «С кем связана» и на вкладке «Объекты».';
+const UNIDENTIFIED_HINT =
+  'Имя из публикаций без ИНН: какое это юрлицо, портал не знает, поэтому сведений ЕГРЮЛ нет. Назначьте имя компании — кандидаты под ярлыком «Назначить компании».';
 
 export const CompanyPage: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -113,6 +121,12 @@ export const CompanyPage: FC = () => {
       ),
       children: (
         <>
+          {/* Имя без ИНН: кандидаты и решения — свёрнуты под ярлыком в шапке, на любой вкладке. */}
+          {company.entityType !== 'group' && !hasLegalIdentifier(data) && (
+            <Disclosure variant="card" summary="Назначить компании" className={styles.assign}>
+              <CompanyUnidentified companyId={company.id} data={data} />
+            </Disclosure>
+          )}
           {/* Похожие — только на «Сведениях»: в «Подробно» они в «Опознании», а на читалке каждая
               строка высоты отнята у поста. */}
           {tab === 'info' && <CompanySimilar companyId={company.id} />}
@@ -131,9 +145,26 @@ export const CompanyPage: FC = () => {
     );
   }
 
+  // У группы своего ИНН нет, у имени без ИНН юрлицо не установлено — это сказано подсказкой у надписи над
+  // названием, а не блоком на «Сведениях» (05.10.2026, просьба владельца).
+  let eyebrow: ReactNode = 'Компания';
+  if (data?.company?.entityType === 'group') {
+    eyebrow = (
+      <>
+        Группа компаний <Hint label="группа компаний" text={GROUP_HINT} />
+      </>
+    );
+  } else if (data?.company && !hasLegalIdentifier(data)) {
+    eyebrow = (
+      <>
+        Юрлицо не установлено <Hint label="юрлицо не установлено" text={UNIDENTIFIED_HINT} />
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHeader eyebrow="Компания" className={`${styles.header} ${reader ? styles.readerHeader : ''}`} {...header} />
+      <PageHeader eyebrow={eyebrow} className={`${styles.header} ${reader ? styles.readerHeader : ''}`} {...header} />
       {body}
     </>
   );

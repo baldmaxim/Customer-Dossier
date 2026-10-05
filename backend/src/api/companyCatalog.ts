@@ -2,7 +2,8 @@
 //
 // Раньше каталог читал снимок сигналов, посчитанный по публикациям, и прятал компании без публикаций —
 // компания существовала, только если о ней написали. Теперь основа — реквизит:
-//  - legal        — юрлица: действующий ИНН/ОГРН/ОГРНИП с верной контрольной суммой или «на контроле»;
+//  - legal        — «Компании»: юрлица (действующий ИНН/ОГРН/ОГРНИП с верной контрольной суммой или «на контроле»)
+//                   и те, в кого входят СЗ; СЗ — не отдельной строкой, а внутри главной компании или группы;
 //  - groups       — группы компаний (entity_type = 'group'): у группы нет своего ИНН, это круг юрлиц;
 //  - unidentified — «Без ИНН»: имена из публикаций без реквизита. Это не компании, а упоминания, которые
 //                   ждут решения человека (ADR-016 п. 3); сначала те, о ком больше пишут. Отмеченные
@@ -38,8 +39,18 @@ export const catalogSchema = z.object({
 
 export type CatalogQuery = z.infer<typeof catalogSchema>;
 
-export interface ICatalogRow {
+export interface ICatalogMember {
   companyId: number;
+  name: string;
+  inn: string | null;
+}
+
+export interface ICatalogRow {
+  /** company — карточка портала; registry_group — группа только по реестру ДОМ.РФ, своей карточки нет. */
+  kind: 'company' | 'registry_group';
+  companyId: number | null;
+  /** Страница группы в реестре ДОМ.РФ — у строки registry_group. */
+  groupRef: string | null;
   name: string;
   /** Краткое наименование по ЕГРЮЛ (Контур.Фокус); null — сведений нет. */
   egrulName: string | null;
@@ -48,6 +59,7 @@ export interface ICatalogRow {
   ogrn: string | null;
   city: string | null;
   entityType: string;
+  /** Роли, объекты и публикации — компании вместе с её СЗ (юрлицами, которые входят в неё). */
   roles: string[];
   objects: number;
   publications: number;
@@ -56,6 +68,10 @@ export interface ICatalogRow {
   namePending: boolean;
   /** Кандидатов для назначения: подсказки Фокуса по названию и пары «возможный дубль». */
   hints: number;
+  /** Юрлица, которые входят в эту компанию или группу: в общем списке их нет, они здесь. */
+  members: ICatalogMember[];
+  /** Куда входит сама компания — видно, когда СЗ показаны плоско (фильтр «на контроле»). */
+  parents: string[];
 }
 
 export interface ICatalogResponse {
@@ -67,6 +83,12 @@ export interface ICatalogResponse {
   counts: Record<CatalogView, number> & { watched: number; dismissed: number };
 }
 
+// Кто в чью «семью» входит (05.10.2026, просьба владельца: «СЗ — под главную группу или компанию»):
+//  - mem       — «входит в группу» (corporate_relation/member_of_group) из реестра с действующим доказательством или
+//                из опубликованных наборов, плюс СЗ, чья страница группы в ДОМ.РФ подтверждена как компания портала;
+//  - vgroups   — группы только по реестру ДОМ.РФ: страница группы есть у СЗ, но как компания портала не подтверждена
+//                (решение «Это он» на экране ДОМ.РФ) — показываются строкой без своей карточки;
+//  - base.nested — юрлицо входит в семью: в «Компаниях» оно не отдельной строкой, а внутри главной.
 const BASE_SQL = `
   ids AS MATERIALIZED (
     SELECT ei.company_id,
@@ -82,12 +104,53 @@ const BASE_SQL = `
   dismissed AS MATERIALIZED (
     SELECT company_id FROM company_dismissals WHERE revoked_at IS NULL
   ),
+  reg_dev AS MATERIALIZED (
+    SELECT DISTINCT ON (r.company_id) r.company_id, d.group_ref,
+           coalesce(d.group_name, r.payload->'identity'->>'groupName') AS group_name
+    FROM registry_records r
+    JOIN domrf_cards d ON d.kind = 'developer' AND d.external_ref = r.external_ref
+    JOIN companies c ON c.id = r.company_id AND c.merged_into_id IS NULL
+    WHERE r.record_type = 'developer'
+    ORDER BY r.company_id, r.fetched_at DESC
+  ),
+  group_heads AS MATERIALIZED (
+    SELECT l.external_ref AS group_ref, min(coalesce(c.merged_into_id, c.id)) AS head,
+           count(DISTINCT coalesce(c.merged_into_id, c.id)) AS n
+    FROM domrf_company_links l JOIN companies c ON c.id = l.company_id
+    WHERE l.kind = 'group' AND l.state = 'confirmed'
+    GROUP BY l.external_ref
+  ),
+  mem AS MATERIALIZED (
+    SELECT a.subject_company_id AS member, a.object_company_id AS head
+    FROM assertions a
+    WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.subject_company_id <> a.object_company_id
+      AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
+      AND ((a.origin = 'registry' AND EXISTS (
+              SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
+        OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))
+    UNION
+    SELECT rd.company_id, gh.head FROM reg_dev rd JOIN group_heads gh ON gh.group_ref = rd.group_ref AND gh.n = 1
+    WHERE rd.company_id <> gh.head
+  ),
+  vgroups AS MATERIALIZED (
+    SELECT rd.group_ref, max(rd.group_name) AS group_name, array_agg(rd.company_id) AS members
+    FROM reg_dev rd
+    WHERE rd.group_ref IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM group_heads gh WHERE gh.group_ref = rd.group_ref)
+      AND NOT EXISTS (SELECT 1 FROM mem WHERE mem.member = rd.company_id)
+    GROUP BY rd.group_ref
+  ),
+  vmem AS MATERIALIZED (
+    SELECT group_ref, unnest(members) AS member FROM vgroups
+  ),
   base AS MATERIALIZED (
     SELECT c.id, c.name, c.city, c.entity_type, c.name_pending, ids.inn, ids.ogrn, (w.company_id IS NOT NULL) AS watched,
            CASE WHEN c.entity_type = 'group' THEN 'groups'
-                WHEN ids.company_id IS NOT NULL OR w.company_id IS NOT NULL THEN 'legal'
+                WHEN ids.company_id IS NOT NULL OR w.company_id IS NOT NULL
+                  OR EXISTS (SELECT 1 FROM mem WHERE mem.head = c.id) THEN 'legal'
                 WHEN d.company_id IS NOT NULL THEN 'dismissed'
-                ELSE 'unidentified' END AS view
+                ELSE 'unidentified' END AS view,
+           (EXISTS (SELECT 1 FROM mem WHERE mem.member = c.id) OR EXISTS (SELECT 1 FROM vmem WHERE vmem.member = c.id)) AS nested
     FROM companies c
     LEFT JOIN ids ON ids.company_id = c.id
     LEFT JOIN watched w ON w.company_id = c.id
@@ -97,9 +160,8 @@ const BASE_SQL = `
 
 const ROWS_SQL = `
   WITH ${BASE_SQL},
-  parts AS MATERIALIZED (
-    SELECT company_id, array_agg(DISTINCT role ORDER BY role) AS roles, count(DISTINCT project_id)::int AS objects
-    FROM card_participations_v WHERE is_current GROUP BY company_id
+  part_rows AS MATERIALIZED (
+    SELECT company_id, project_id, role FROM card_participations_v WHERE is_current
   ),
   touched AS MATERIALIZED (
     SELECT x.company_id, pa.source_item_id AS item_id
@@ -111,10 +173,30 @@ const ROWS_SQL = `
     FROM mentions m JOIN document_revisions r ON r.legacy_document_id = m.document_id
     WHERE m.entity_kind = 'company'
   ),
-  pubs AS MATERIALIZED (
-    SELECT t.company_id, count(*)::int AS publications, max(coalesce(si.published_at, si.first_observed_at)) AS last_at
-    FROM touched t JOIN source_items si ON si.id = t.item_id
-    GROUP BY t.company_id
+  fam AS MATERIALIZED (
+    SELECT 'c' || id AS head, id AS member FROM base
+    UNION
+    SELECT 'c' || head, member FROM mem
+    UNION
+    SELECT 'g' || group_ref, member FROM vmem
+  ),
+  fam_parts AS MATERIALIZED (
+    SELECT f.head, array_agg(DISTINCT pr.role ORDER BY pr.role) AS roles, count(DISTINCT pr.project_id)::int AS objects
+    FROM fam f JOIN part_rows pr ON pr.company_id = f.member
+    GROUP BY f.head
+  ),
+  fam_pubs AS MATERIALIZED (
+    SELECT f.head, count(DISTINCT t.item_id)::int AS publications, max(coalesce(si.published_at, si.first_observed_at)) AS last_at
+    FROM fam f JOIN touched t ON t.company_id = f.member JOIN source_items si ON si.id = t.item_id
+    GROUP BY f.head
+  ),
+  fam_list AS MATERIALIZED (
+    SELECT f.head, jsonb_agg(jsonb_build_object('companyId', c.id, 'name', c.name, 'inn', i.inn) ORDER BY c.name, c.id) AS list
+    FROM fam f
+    JOIN companies c ON c.id = f.member AND c.merged_into_id IS NULL
+    LEFT JOIN ids i ON i.company_id = c.id
+    WHERE f.head <> 'c' || f.member
+    GROUP BY f.head
   ),
   hints AS MATERIALIZED (
     SELECT company_id, count(*)::int AS n FROM (
@@ -125,19 +207,37 @@ const ROWS_SQL = `
       SELECT target_entity_id FROM merge_queue WHERE entity_kind = 'company' AND status = 'pending'
     ) x GROUP BY company_id
   ),
-  filtered AS (
-    SELECT b.*, coalesce(p.roles, '{}') AS roles, coalesce(p.objects, 0) AS objects,
-           coalesce(u.publications, 0) AS publications, u.last_at, coalesce(h.n, 0) AS hints
+  rows_all AS (
+    SELECT 'company'::text AS kind, b.id AS company_id, NULL::text AS group_ref, b.name, b.city, b.entity_type, b.name_pending,
+           b.inn, b.ogrn, b.watched, coalesce(fp.roles, '{}') AS roles, coalesce(fp.objects, 0) AS objects,
+           coalesce(fu.publications, 0) AS publications, fu.last_at, coalesce(h.n, 0) AS hints,
+           coalesce(fl.list, '[]'::jsonb) AS members,
+           coalesce((SELECT array_agg(DISTINCT hc.name) FROM mem m JOIN companies hc ON hc.id = m.head WHERE m.member = b.id), '{}') AS parents
     FROM base b
-    LEFT JOIN parts p ON p.company_id = b.id
-    LEFT JOIN pubs u ON u.company_id = b.id
+    LEFT JOIN fam_parts fp ON fp.head = 'c' || b.id
+    LEFT JOIN fam_pubs fu ON fu.head = 'c' || b.id
+    LEFT JOIN fam_list fl ON fl.head = 'c' || b.id
     LEFT JOIN hints h ON h.company_id = b.id
     WHERE b.view = $1
       AND (NOT $2::boolean OR b.watched)
-      AND ($3::text IS NULL OR $3::text = ANY(p.roles))
+      -- СЗ — внутри своей семьи; плоско — только в фильтре «на контроле»: там отмечена сама компания.
+      AND ($2::boolean OR b.view <> 'legal' OR NOT b.nested)
+    UNION ALL
+    SELECT 'registry_group', NULL, g.group_ref, coalesce(g.group_name, 'Группа по реестру ДОМ.РФ'), NULL, 'group', false,
+           NULL, NULL, false, coalesce(fp.roles, '{}'), coalesce(fp.objects, 0), coalesce(fu.publications, 0), fu.last_at, 0,
+           coalesce(fl.list, '[]'::jsonb), '{}'
+    FROM vgroups g
+    LEFT JOIN fam_parts fp ON fp.head = 'g' || g.group_ref
+    LEFT JOIN fam_pubs fu ON fu.head = 'g' || g.group_ref
+    LEFT JOIN fam_list fl ON fl.head = 'g' || g.group_ref
+    WHERE $1 = 'legal' AND NOT $2::boolean
+  ),
+  filtered AS (
+    SELECT * FROM rows_all r WHERE $3::text IS NULL OR $3::text = ANY(r.roles)
   )
-  SELECT f.id AS "companyId", f.name, f.city, f.entity_type AS "entityType", f.name_pending AS "namePending",
-         f.inn, f.ogrn, f.watched, f.roles, f.objects, f.publications, f.last_at AS "lastAt", f.hints,
+  SELECT f.kind, f.company_id AS "companyId", f.group_ref AS "groupRef", f.name, f.city, f.entity_type AS "entityType",
+         f.name_pending AS "namePending", f.inn, f.ogrn, f.watched, f.roles, f.objects, f.publications, f.last_at AS "lastAt",
+         f.hints, f.members, f.parents,
          count(*) OVER ()::int AS total,
          fr.legal_name, fr.ul_status, fr.ip
   FROM filtered f
@@ -155,18 +255,21 @@ const ROWS_SQL = `
 
 /** Порядок: на контроле — первыми (кроме «по названию»), «Без ИНН» — по числу публикаций: о ком больше пишут. */
 export const orderBy = (view: CatalogView, sort: CatalogQuery['sort']): string => {
-  if (sort === 'name') return 'f.name, f.id';
+  const tail = 'f.name, f.company_id NULLS LAST, f.group_ref';
+  if (sort === 'name') return tail;
   const lead = view === 'unidentified' ? '' : 'f.watched DESC, ';
   const key =
     sort === 'publications' ? 'f.publications DESC'
       : sort === 'recent' ? 'f.last_at DESC NULLS LAST'
         : view === 'unidentified' ? 'f.publications DESC, f.objects DESC'
           : 'f.objects DESC, f.publications DESC';
-  return `${lead}${key}, f.name, f.id`;
+  return `${lead}${key}, ${tail}`;
 };
 
 interface IRowSql {
-  companyId: number;
+  kind: ICatalogRow['kind'];
+  companyId: number | null;
+  groupRef: string | null;
   name: string;
   city: string | null;
   entityType: string;
@@ -179,6 +282,8 @@ interface IRowSql {
   publications: number;
   lastAt: Date | null;
   hints: number;
+  members: ICatalogMember[];
+  parents: string[];
   total: number;
   legal_name: unknown;
   ul_status: unknown;
@@ -196,17 +301,24 @@ export const egrulOf = (row: Pick<IRowSql, 'legal_name' | 'ul_status' | 'ip'>): 
 export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogResponse> => {
   const sql = ROWS_SQL.replace('%ORDER%', orderBy(params.view, params.sort));
   const rows = await query<IRowSql>(sql, [params.view, params.watch, params.role === 'any' ? null : params.role, CATALOG_LIMIT]);
-  const counts = await query<{ view: CatalogView; n: number; watched: number }>(
+  // Число на вкладке «Компании» — строк верхнего уровня: СЗ внутри семьи не считаются, группы только по ДОМ.РФ — да.
+  const counts = await query<{ view: string; n: number; watched: number }>(
     `WITH ${BASE_SQL}
-     SELECT view, count(*)::int AS n, count(*) FILTER (WHERE watched)::int AS watched FROM base GROUP BY view`,
+     SELECT view, count(*) FILTER (WHERE view <> 'legal' OR NOT nested)::int AS n, count(*) FILTER (WHERE watched)::int AS watched
+     FROM base GROUP BY view
+     UNION ALL
+     SELECT 'registry_groups', count(*)::int, 0 FROM vgroups`,
   );
   const byView = Object.fromEntries(CATALOG_VIEWS.map(v => [v, counts.find(c => c.view === v)?.n ?? 0])) as Record<CatalogView, number>;
+  byView.legal += counts.find(c => c.view === 'registry_groups')?.n ?? 0;
   return {
     view: params.view,
     items: rows.map(row => {
       const egrul = egrulOf(row);
       return {
+        kind: row.kind,
         companyId: row.companyId,
+        groupRef: row.groupRef,
         name: row.name,
         egrulName: egrul.name,
         egrulStatus: egrul.status,
@@ -221,13 +333,15 @@ export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogRespons
         watched: row.watched,
         namePending: row.namePending,
         hints: row.hints,
+        members: row.members,
+        parents: row.parents,
       };
     }),
     total: rows[0]?.total ?? 0,
     counts: {
       ...byView,
       watched: counts.reduce((sum, c) => sum + c.watched, 0),
-      dismissed: counts.find(c => (c.view as string) === 'dismissed')?.n ?? 0,
+      dismissed: counts.find(c => c.view === 'dismissed')?.n ?? 0,
     },
   };
 };

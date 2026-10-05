@@ -118,3 +118,36 @@
   text-align: start;
   text-transform: uppercase;
 }
+
+/* Юрлица внутри главной компании или группы (05.10.2026): кнопка раскрытия под названием, строки — с отступом. */
+.membersToggle {
+  display: inline-flex;
+  margin-top: var(--sp-1);
+  padding-inline: 0;
+}
+
+/* Раскрыто — шеврон вверх. */
+.membersOpen svg {
+  transform: rotate(180deg);
+}
+
+.memberRow {
+  height: var(--ctl-h);
+  background: var(--surface-2);
+}
+
+.memberName {
+  display: inline-block;
+  padding-left: var(--sp-5);
+  text-decoration: none;
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-4);
+  list-style: disc;
+  overflow-wrap: anywhere;
+}

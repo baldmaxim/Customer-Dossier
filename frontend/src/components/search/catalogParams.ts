@@ -8,7 +8,7 @@ export type CatalogRole = 'any' | 'customer' | 'developer' | 'general_contractor
 export type CatalogSort = 'objects' | 'publications' | 'recent' | 'name';
 
 export const CATALOG_VIEWS: ReadonlyArray<{ value: CatalogView; label: string; hint: string }> = [
-  { value: 'legal', label: 'Юрлица', hint: 'компании с ИНН или ОГРН и те, что на контроле' },
+  { value: 'legal', label: 'Компании', hint: 'юрлица с ИНН или ОГРН; СЗ — внутри своей главной компании или группы' },
   { value: 'groups', label: 'Группы', hint: 'группы компаний: у группы нет своего ИНН' },
   { value: 'unidentified', label: 'Без ИНН', hint: 'имена из публикаций без реквизита — их нужно назначить компании' },
 ];
