@@ -5,8 +5,9 @@
 //
 // Сведения ДОМ.РФ — текст сайта на дату, а не проверенный факт: внизу всегда «ДОМ.РФ · на дату». Фото —
 // сверху полосой 2:1 во всю ширину карточки; пока его нет — заглушка того же размера (подпись «фото и
-// сведения» — внизу). Карточка компактная: адрес — одной строкой с полным текстом в подсказке.
-// Без них — состояние по событиям из публикаций, если оно есть, и «только из публикаций».
+// сведения» — внизу). Статус и срок сдачи — ярлыками поверх полосы (05.10.2026: отдельной строкой они
+// удлиняли каждую карточку, а заглушка стояла пустой). Адрес — одной строкой с полным текстом в подсказке.
+// Без сведений ДОМ.РФ — состояние по событиям из публикаций, если оно есть, и «только из публикаций».
 
 import { FC } from 'react';
 import { Link } from 'react-router-dom';
@@ -60,17 +61,19 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
 
   return (
     <article className={`${styles.card} row-link`}>
-      {o.registry?.hasPhoto ? (
-        <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} fallback={placeholder} />
-      ) : (
-        placeholder
-      )}
-      {(status || completion) && (
-        <p className={styles.top}>
-          {status && <span className={styles.status}>{status /* raw-ok: подпись сайта ДОМ.РФ */}</span>}
-          {completion && <span className={styles.completion}>сдача: {completion}</span>}
-        </p>
-      )}
+      <div className={styles.media}>
+        {o.registry?.hasPhoto ? (
+          <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} fallback={placeholder} />
+        ) : (
+          placeholder
+        )}
+        {(status || completion) && (
+          <p className={styles.top}>
+            {status && <span className={styles.status}>{status /* raw-ok: подпись сайта ДОМ.РФ */}</span>}
+            {completion && <span className={styles.completion}>сдача: {completion}</span>}
+          </p>
+        )}
+      </div>
       <Heading className={styles.title}>
         <Link className="row-link-target" to={`/projects/${o.projectId}`} viewTransition>
           {o.name}

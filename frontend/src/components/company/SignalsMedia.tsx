@@ -5,7 +5,7 @@
 import { FC } from 'react';
 
 import type { ICompanySignals } from '../../api/types';
-import { formatCount } from '../../lib/format';
+import { formatCount, formatCountWord } from '../../lib/format';
 import {
   AMOUNT_PURPOSE_LABELS,
   DATE_STATUS_LABELS,
@@ -28,6 +28,8 @@ import { LazyDisclosure } from './LazyDisclosure';
 import styles from '../CompanySignals.module.css';
 
 type Media = ICompanySignals['media'];
+
+const EVENT_FORMS = ['событие', 'события', 'событий'] as const;
 
 const period = (from: string | null, to: string | null, precision: string): string => {
   if (!from) return 'дата неизвестна';
@@ -60,39 +62,42 @@ export const SignalsMedia: FC<{ media: Media }> = ({ media }) => (
       ))}
     </div>
 
+    {/* Список — под раскрытием: те же события по дате стоят в разделе «События»; здесь — из чего посчитаны числа. */}
     {media.events.length > 0 && (
-      <ul className={styles.items}>
-        {media.events.map(e => (
-          <li key={e.assertionId} className={styles.item}>
-            <p className={styles.itemLine}>
-              По сообщению источника: <strong>{EVENT_LABELS[e.type] ?? 'событие'}</strong>
-              {e.proceduralRole && ` · компания — ${PROCEDURAL_ROLE_LABELS[e.proceduralRole] ?? 'участник'}`}
-              {e.stage && ` · ${EVENT_STAGE_LABELS[e.stage] ?? 'стадия не описана'}`}
-              {e.outcome && ` · итог по источнику: ${EVENT_OUTCOME_LABELS[e.outcome] ?? 'не описан'}`}
-              {e.value && (
-                <>
-                  {' · '}
-                  <span>
-                    {AMOUNT_PURPOSE_LABELS[e.value.purpose ?? 'amount'] ?? 'сумма'} {formatMoney(e.value.amount, e.value.currency)}
-                  </span>
-                </>
-              )}
-            </p>
-            <p className={styles.itemMeta}>
-              <span>{period(e.validFrom, e.validTo, e.periodPrecision)}</span>
-              <span>{DATE_STATUS_LABELS[e.dateStatus] ?? ''}</span>
-              <span>
-                публикаций — {formatCount(e.publications)}, разных текстов — {formatCount(e.families)}
-              </span>
-              <Badge tone={toneOf(REVIEW_LEVEL_TONE, e.review)}>{REVIEW_LEVEL_LABELS[e.review] ?? 'не проверено'}</Badge>
-              {e.needsRevalidation && <Badge tone="warning">нужен пересмотр</Badge>}
-            </p>
-            <LazyDisclosure summary="Откуда известно">
-              <AssertionDetail assertionId={e.assertionId} showSummary={false} />
-            </LazyDisclosure>
-          </li>
-        ))}
-      </ul>
+      <LazyDisclosure summary={`Из чего посчитано — ${formatCountWord(media.events.length, EVENT_FORMS)}`}>
+        <ul className={styles.items}>
+          {media.events.map(e => (
+            <li key={e.assertionId} className={styles.item}>
+              <p className={styles.itemLine}>
+                По сообщению источника: <strong>{EVENT_LABELS[e.type] ?? 'событие'}</strong>
+                {e.proceduralRole && ` · компания — ${PROCEDURAL_ROLE_LABELS[e.proceduralRole] ?? 'участник'}`}
+                {e.stage && ` · ${EVENT_STAGE_LABELS[e.stage] ?? 'стадия не описана'}`}
+                {e.outcome && ` · итог по источнику: ${EVENT_OUTCOME_LABELS[e.outcome] ?? 'не описан'}`}
+                {e.value && (
+                  <>
+                    {' · '}
+                    <span>
+                      {AMOUNT_PURPOSE_LABELS[e.value.purpose ?? 'amount'] ?? 'сумма'} {formatMoney(e.value.amount, e.value.currency)}
+                    </span>
+                  </>
+                )}
+              </p>
+              <p className={styles.itemMeta}>
+                <span>{period(e.validFrom, e.validTo, e.periodPrecision)}</span>
+                <span>{DATE_STATUS_LABELS[e.dateStatus] ?? ''}</span>
+                <span>
+                  публикаций — {formatCount(e.publications)}, разных текстов — {formatCount(e.families)}
+                </span>
+                <Badge tone={toneOf(REVIEW_LEVEL_TONE, e.review)}>{REVIEW_LEVEL_LABELS[e.review] ?? 'не проверено'}</Badge>
+                {e.needsRevalidation && <Badge tone="warning">нужен пересмотр</Badge>}
+              </p>
+              <LazyDisclosure summary="Откуда известно">
+                <AssertionDetail assertionId={e.assertionId} showSummary={false} />
+              </LazyDisclosure>
+            </li>
+          ))}
+        </ul>
+      </LazyDisclosure>
     )}
     {media.legalCases.length > 0 && (
       <p className={styles.muted}>

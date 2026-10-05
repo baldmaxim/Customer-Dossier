@@ -53,7 +53,9 @@ export const CompanyObjects: FC<{ companyId: number }> = ({ companyId }) => {
   const members = query.data?.members ?? [];
 
   return (
+    // Без своей карточки: объекты — сами карточки в рамках; рамка вокруг них была второй (05.10.2026).
     <Section
+      variant="plain"
       title="Объекты"
       note={coverage ? (coverage.truncated ? `первые ${formatCount(coverage.loaded)} из ${formatCount(coverage.total)}` : formatCount(coverage.total)) : undefined}
     >

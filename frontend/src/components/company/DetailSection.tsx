@@ -1,13 +1,13 @@
 // Раздел вкладки «Подробно»: заголовок раздела в строке-раскрывашке (он же заголовок для
-// навигации диктора), содержимое на карточке. На телефоне раскрыт только первый раздел —
-// остальное по нажатию; с 600px раскрыто всё.
+// навигации диктора) внутри рамки раздела — одна рамка на раздел (05.10.2026: раньше заголовок стоял
+// над карточкой отдельной строкой). На телефоне раскрыт только первый раздел — остальное по нажатию;
+// с 600px раскрыто всё.
 //
 // lazy — содержимое монтируется при первом раскрытии: схема связей грузит граф сама, и
 // запрос за ней не нужен тому, кто раздел не открыл.
 
 import { FC, ReactNode, useState } from 'react';
 
-import { Card } from '../ui/Card';
 import { Disclosure } from '../ui/Disclosure';
 import { HeadingLevelContext } from '../ui/headingLevel';
 import styles from './Company.module.css';
@@ -41,6 +41,7 @@ export const DetailSection: FC<IDetailSectionProps> = ({
       meta={meta}
       level={2}
       defaultOpen={defaultOpen}
+      variant={bare ? 'plain' : 'card'}
       onToggle={next => {
         if (next) setMounted(true);
       }}
@@ -48,7 +49,7 @@ export const DetailSection: FC<IDetailSectionProps> = ({
     >
       {/* Заголовки внутри раздела — на уровень глубже его заголовка. */}
       <HeadingLevelContext.Provider value={3}>
-        {mounted && (bare ? children : <Card padding="md">{children}</Card>)}
+        {mounted && children}
       </HeadingLevelContext.Provider>
     </Disclosure>
   );

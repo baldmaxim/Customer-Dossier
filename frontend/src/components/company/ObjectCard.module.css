@@ -12,14 +12,18 @@
   background: var(--surface);
 }
 
-/* Фото во всю ширину карточки: поля карточки компенсируются, верхние углы — как у карточки. 2:1 и
+/* Полоса фото во всю ширину карточки: поля карточки компенсируются, верхние углы — как у карточки. 2:1 и
    object-fit: cover — полоса невысокая, сетка ровная, какой бы формы ни был снимок. */
+.media {
+  position: relative;
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-1);
+}
+
 .photo {
   display: block;
-  width: calc(100% + 2 * var(--sp-3));
+  width: 100%;
   max-width: none;
   aspect-ratio: 2 / 1;
-  margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-2);
   border-radius: var(--radius) var(--radius) 0 0;
   background: var(--surface-2);
   object-fit: cover;
@@ -42,22 +46,31 @@
   }
 }
 
+/* Статус и срок — ярлыками в нижнем левом углу полосы. Подложка — стекло шапки (--chrome-glass): текст
+   читается на любом снимке, тон один при любом статусе (ADR-009). */
 .top {
+  position: absolute;
+  inset: auto var(--sp-2) var(--sp-2);
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--sp-2);
+  gap: var(--sp-1);
   margin: 0;
   font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+}
+
+.status,
+.completion {
+  padding: 2px var(--sp-2); /* пилюля 20px: ярлык, а не кнопка */
+  border-radius: var(--radius-full);
+  background: var(--chrome-glass);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--text);
 }
 
 .status {
-  color: var(--text);
   font-weight: var(--fw-semibold);
-}
-
-.completion {
-  color: var(--muted);
 }
 
 .title {

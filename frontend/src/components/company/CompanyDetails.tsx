@@ -69,7 +69,7 @@ export const CompanyDetails: FC<{ companyId: number; data: ICompanyResponse }> =
   ];
 
   return (
-    <Stack gap={4}>
+    <Stack gap={3}>
       <AnchorNav label="Разделы" items={sections.map(s => ({ id: s.id, label: s.navLabel ?? s.title }))} />
       {sections.map(s => (
         <DetailSection
