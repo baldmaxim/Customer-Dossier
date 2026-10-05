@@ -1,0 +1,346 @@
+/* Графики: тонкие метки, скругление 4px только у конца данных (у основания — прямой угол), между
+   соседними заливками — 2px поверхности, сетка и оси — волосяные линии (скилл dataviz). Цвета —
+   только --chart-*; текст — текстовыми токенами, никогда цветом ряда. Длины — CSS-переменные
+   --w / --h из разметки (динамическое значение, поэтому в style). */
+
+/* ─── BarList: подпись · полоса · число ─── */
+.barList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.barRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Подпись — колонкой постоянной ширины, чтобы полосы всех строк начинались с одной линии. */
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5rem) minmax(2rem, 1fr) minmax(2rem, auto);
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.barLabel {
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.barTrack {
+  display: block;
+  height: 8px; /* тонкая метка: полоса — подсветка числа, не блок */
+  min-width: 0;
+}
+
+/* Дорожка — только когда есть знаменатель: тогда вся длина = итог, и полоса читается как доля. */
+.barTrackFilled {
+  border-radius: var(--radius-full);
+  background: var(--chart-track);
+}
+
+.barFill {
+  display: block;
+  width: var(--w, 0%);
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart-1);
+}
+
+.barValue {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.barRest {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 600px) {
+  .barRow {
+    grid-template-columns: minmax(0, 11rem) minmax(3rem, 1fr) minmax(2rem, auto);
+  }
+}
+
+/* ─── StackedBar: часть целого, порядковые ступени ─── */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.stackBar {
+  display: flex;
+  gap: 2px; /* поверхность между сегментами — вместо рамок */
+  height: 10px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.stackSeg {
+  flex: 0 0 auto;
+  width: var(--w, 0%);
+  min-width: 2px;
+  background: var(--chart-1);
+}
+
+.stackSeg:last-child {
+  flex-grow: 1; /* округление долей не оставляет щели в конце полосы */
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.legendValue {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--chart-1);
+  transform: translateY(1px);
+}
+
+/* Ступени — только у своих сегментов и образцов: голый [data-step] в модуле не хэшируется. */
+.stackSeg[data-step='2'],
+.swatch[data-step='2'] {
+  background: var(--chart-2);
+}
+
+.stackSeg[data-step='3'],
+.swatch[data-step='3'] {
+  background: var(--chart-3);
+}
+
+.stackSeg[data-step='4'],
+.swatch[data-step='4'] {
+  background: var(--chart-4);
+}
+
+/* ─── Meter: доля ─── */
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.meterHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.meterLabel {
+  color: var(--text);
+}
+
+.meterValue {
+  color: var(--text);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+
+.meterTrack {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--chart-track);
+}
+
+.meterFill {
+  display: block;
+  width: var(--w, 0%);
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart-1);
+}
+
+.meterCaption {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* ─── MonthBars: столбики по месяцам ─── */
+.months {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  margin: 0;
+}
+
+.monthsHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
+.monthsLabel {
+  color: var(--text);
+  font-weight: var(--fw-medium);
+}
+
+.monthsReadout {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Столбики растут от одной базовой линии (нижняя рамка — волосяная ось). */
+.monthsPlot {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 2px;
+  align-items: end;
+  height: 88px;
+  border-bottom: 1px solid var(--chart-grid);
+  touch-action: manipulation;
+}
+
+/* Колонка во всю высоту — цель наведения шире и выше самого столбика. */
+.monthCol {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+.monthBar {
+  display: block;
+  width: 100%;
+  max-width: 24px; /* толще 24px столбик — блок, а не метка */
+  height: var(--h, 0%);
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--chart-1);
+}
+
+.monthBar[data-partial] {
+  background: var(--chart-3);
+}
+
+.monthCol[data-active] {
+  background: var(--chart-track);
+}
+
+.monthsAxis {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 2px;
+  min-height: 1.2em;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* Метка года — от своей колонки вправо, не обрезается соседней. */
+.monthsAxis > span {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* ─── Sparkline: мини-столбики в плитке ─── */
+.spark {
+  display: inline-grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 1px;
+  align-items: end;
+  width: 72px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+.sparkBar {
+  display: block;
+  height: var(--h, 0%);
+  border-radius: 1px 1px 0 0;
+  background: var(--chart-2);
+}
+
+.sparkBar[data-partial] {
+  background: var(--chart-4);
+}
+
+/* ─── ChartData: таблица чисел под раскрытием ─── */
+.data {
+  font-size: var(--fs-sm);
+}
+
+.dataScroll {
+  max-height: 16rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 2px var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  text-align: end;
+  white-space: nowrap;
+}
+
+.dataTable th[scope='row'],
+.dataTable th[scope='col']:first-child {
+  text-align: start;
+  font-weight: var(--fw-regular);
+}
+
+.dataTable thead th {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}

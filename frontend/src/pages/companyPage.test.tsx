@@ -232,6 +232,27 @@ describe('Карточка компании', () => {
     expect(within(brief).queryByText(/надёжн.*(высок|низк)|риск/i)).toBeNull();
   });
 
+  it('«Роли, события и тексты»: разбивки посчитанных показателей полосами, пустые названы словами', async () => {
+    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: computedSignals })));
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Роли, события и тексты' })).closest('section')!;
+    const roles = within(section).getByRole('list', { name: 'Роли на объектах' });
+    expect(within(roles).getAllByRole('listitem').map(li => li.textContent)).toEqual(['генподрядчик1', 'заказчик1']);
+    const courts = within(section).getByRole('list', { name: 'Роль в судебных делах' });
+    expect(within(courts).getAllByRole('listitem').map(li => li.textContent)).toEqual(['истец, заявитель или кредитор1', 'ответчик или должник2']);
+    expect(within(section).getByText(/из 3 дел/)).toBeTruthy();
+    expect(within(section).getByText('Нет данных: события по видам, полнота текстов, происхождение текстов.')).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Как посчитано' }).getAttribute('href')).toBe('/company/7?tab=details#company-signals');
+  });
+
+  it('показатели не посчитаны — блока разбивок нет, а не пустые полосы', async () => {
+    fakeApi(companyRoutes());
+    renderCard();
+    expect(await screen.findByText(/Показатели ещё не посчитаны/)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Роли, события и тексты' })).toBeNull();
+  });
+
   it('плитка реестра — только у карточки с реестром и ведёт к его разделу', async () => {
     fakeApi(companyRoutes({ withRegistry: true }));
     renderCard();

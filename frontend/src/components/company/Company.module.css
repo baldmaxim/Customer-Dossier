@@ -84,25 +84,84 @@
   font-weight: var(--fw-semibold);
 }
 
-/* «Открыть в «Связях»» — по левому краю под схемой; сама схема — во всю ширину колонки. */
-/* ─── «Обзор»: основная колонка и «С кем связана» справа с 900px ─── */
+/* ─── «Сведения»: итоги во всю ширину, ниже — графики слева и справочные сведения справа ───
+   До 900px — одна колонка (итоги → графики → ЕГРЮЛ → связи); с 900px — 2 : 1; с 1280px основная
+   колонка шире, справа — не уже 20rem: ЕГРЮЛ и контрагенты читаются строками, а не столбиком слов.
+   Пустая основная колонка (показатели не посчитаны, реестра нет) не оставляет дыры слева. */
 .overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   align-items: start;
+  margin-top: var(--sp-3);
 }
 
 .overviewMain,
 .overviewAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
   min-width: 0;
+}
+
+.overviewMain:empty {
+  display: none;
 }
 
 @media (min-width: 900px) {
   .overview {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: var(--sp-4);
   }
+
+  .overview:has(> .overviewMain:empty) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .overview {
+    grid-template-columns: minmax(0, 3fr) minmax(20rem, 1fr);
+  }
+}
+
+/* ─── «Роли, события и тексты»: блоки разбивок сеткой — сколько встанет по ширине ─── */
+.structure {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--sp-4) var(--sp-5);
+}
+
+.structureBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.structureTitle {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.structureCaption {
+  color: var(--muted);
+  font-weight: var(--fw-regular);
+}
+
+.structureMissing {
+  margin: var(--sp-3) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.structureMore {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--ctl-h-sm);
+  font-size: var(--fs-sm);
+  text-decoration: none;
 }
 
 /* ─── События ─── */

@@ -190,12 +190,15 @@
 
   /* Графики (components/charts): один оттенок акцента и его ступени к поверхности. Статусных цветов
      в графиках нет — итоговой оценки и светофора в портале нет (ADR-009), смысл несут подписи.
+     Номинальные категории (роли, виды событий) — одним цветом --chart-1; ступени — только порядковым
+     (полнота текста, происхождение). 80/62/46 % проверены валидатором dataviz в обеих темах:
+     ступени монотонны, светлая — ≥ 2:1 к поверхности (20 % давала 1.4:1 — сливалась с карточкой).
      Через --accent и --surface ступени сами следуют за темой. */
   --chart-1: var(--accent);
-  --chart-2: color-mix(in srgb, var(--accent) 62%, var(--surface));
-  --chart-3: color-mix(in srgb, var(--accent) 38%, var(--surface));
-  --chart-4: color-mix(in srgb, var(--accent) 20%, var(--surface));
-  --chart-track: var(--surface-2);
+  --chart-2: color-mix(in srgb, var(--accent) 80%, var(--surface));
+  --chart-3: color-mix(in srgb, var(--accent) 62%, var(--surface));
+  --chart-4: color-mix(in srgb, var(--accent) 46%, var(--surface));
+  --chart-track: color-mix(in srgb, var(--accent) 12%, var(--surface));
   --chart-grid: var(--border);
 
   /* Слои. Нативный <dialog> живёт в top layer и в эту шкалу не входит. */

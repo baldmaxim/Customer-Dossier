@@ -330,6 +330,34 @@ export const formatMoney = (amount: number | string, currency: string | null = '
 export const formatPercent = (share: number | null): string =>
   share === null || !Number.isFinite(share) ? '—' : PERCENT_FORMAT.format(share);
 
+/** Месяцы — словарём, а не Intl: тот пишет «март 2026 г.», а в подписи графика «г.» лишнее. */
+export const MONTH_LABELS = [
+  'январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+] as const;
+export const MONTH_SHORT_LABELS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'] as const;
+
+/** Месяц ряда «2026-03» → «март 2026»; неразборчивое — как есть. */
+export const formatMonth = (key: string): string => {
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  const name = m ? MONTH_LABELS[Number(m[2]) - 1] : undefined;
+  return m && name ? `${name} ${m[1]}` : key;
+};
+
+/** Происхождение текста (семьи перепечаток, signals): порядок — от известного первоисточника к неизвестному. */
+export const FAMILY_ORIGIN_LABELS: Record<'established' | 'named' | 'unknown', string> = {
+  established: 'первоисточник в выборке',
+  named: 'первоисточник назван, его публикации нет',
+  unknown: 'первоисточник неизвестен',
+};
+
+/** Роль компании в делах (signals courtRoles): истец/заявитель/кредитор — одна группа, ответчик/должник — другая. */
+export const COURT_ROLE_GROUP_LABELS: Record<'plaintiff' | 'defendant' | 'other' | 'unknown', string> = {
+  plaintiff: 'истец, заявитель или кредитор',
+  defendant: 'ответчик или должник',
+  other: 'другая роль',
+  unknown: 'роль не названа',
+};
+
 /** Вид компании (этап 04). */
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
   legal_entity: 'юрлицо',

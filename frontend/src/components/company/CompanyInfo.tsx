@@ -1,6 +1,8 @@
-// Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Сначала юрлицо —
-// ЕГРЮЛ из Контур.Фокуса, затем реестр застройщика, затем коротко о том, что дальше: объекты, события,
-// публикации (плитки ведут на свои вкладки). Справа от 900px — «С кем связана».
+// Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Главное о юрлице —
+// уже в шапке (статус, руководитель, адрес, реквизиты); здесь сначала итоги плитками во всю ширину
+// (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — графики (роли,
+// события, тексты) и реестр застройщика, справа — остальное ЕГРЮЛ и «С кем связана» (05.10.2026:
+// раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
 //
 // У имени без ИНН и у группы сведений ЕГРЮЛ нет: об этом — надпись с подсказкой над названием, а назначение
 // имени компании — в шапке под ярлыком «Назначить компании» (CompanyPage).
@@ -17,9 +19,9 @@ import { CompanyBrief } from '../CompanyBrief';
 import { CompanyPartners } from '../CompanyPartners';
 import { RegistryPanel } from '../RegistryPanel';
 import { Section } from '../ui/Section';
-import { Stack } from '../ui/Stack';
 import { CompanyFocus } from './CompanyFocus';
 import { CompanySources } from './CompanySources';
+import { CompanyStructure } from './CompanyStructure';
 import { useCompanyFocus, useCompanyObjects } from './useCompanyQueries';
 import styles from './Company.module.css';
 
@@ -74,27 +76,28 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
 
   return (
     <>
+      <CompanyBrief
+        companyId={companyId}
+        objects={items}
+        objectsTotal={objects.data?.coverage.total ?? items.length}
+        objectsKnown={objects.isSuccess}
+        company={data}
+      />
       <div className={styles.overview}>
-        <Stack gap={3} className={styles.overviewMain}>
-          {identified && (
-            <Section id="company-egrul" title="ЕГРЮЛ — Контур.Фокус">
-              <CompanyFocus companyId={companyId} hideKeys={focusHidden} />
-            </Section>
-          )}
+        <div className={styles.overviewMain}>
+          <CompanyStructure companyId={companyId} />
           {data.registry && (
             <div id="company-registry">
               <RegistryPanel registry={data.registry} title="Сведения реестра о застройщике" omit={registryOmit} attribution={false} />
             </div>
           )}
-          <CompanyBrief
-            companyId={companyId}
-            objects={items}
-            objectsTotal={objects.data?.coverage.total ?? items.length}
-            objectsKnown={objects.isSuccess}
-            company={data}
-          />
-        </Stack>
+        </div>
         <div className={styles.overviewAside}>
+          {identified && (
+            <Section id="company-egrul" title="ЕГРЮЛ — Контур.Фокус">
+              <CompanyFocus companyId={companyId} hideKeys={focusHidden} layout="stacked" />
+            </Section>
+          )}
           <CompanyPartners companyId={companyId} />
         </div>
       </div>

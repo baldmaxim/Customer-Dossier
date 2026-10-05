@@ -52,9 +52,11 @@ export interface ICompanyFocusProps {
   companyId: number;
   /** Ключи строк Фокуса, которые уже показаны в шапке карточки. */
   hideKeys?: ReadonlySet<string>;
+  /** stacked — подпись над значением (узкая колонка справа): две колонки там оставляли значению треть ширины. */
+  layout?: 'stacked' | 'auto';
 }
 
-export const CompanyFocus: FC<ICompanyFocusProps> = ({ companyId, hideKeys }) => {
+export const CompanyFocus: FC<ICompanyFocusProps> = ({ companyId, hideKeys, layout = 'auto' }) => {
   const query = useCompanyFocus(companyId);
   const canRefresh = useCan('sources.manage');
   const client = useQueryClient();
@@ -118,7 +120,7 @@ export const CompanyFocus: FC<ICompanyFocusProps> = ({ companyId, hideKeys }) =>
         {`По ${identifierText(view)}, проверено ${formatDate(checkedAt)}`}
         {view.fetchedAt && view.fetchedAt !== checkedAt ? `; последнее изменение получено ${formatDate(view.fetchedAt)}` : ''}
       </p>
-      {shown.length > 0 && <DescriptionList items={shown.map(f => ({ key: f.key, label: f.label, value: f.value }))} />}
+      {shown.length > 0 && <DescriptionList layout={layout} dense items={shown.map(f => ({ key: f.key, label: f.label, value: f.value }))} />}
       <RegistryChanges
         changes={view.changes.map(c => ({ asOf: null, fetchedAt: c.fetchedAt, changes: c.changes }))}
         title="Что изменилось в ЕГРЮЛ"

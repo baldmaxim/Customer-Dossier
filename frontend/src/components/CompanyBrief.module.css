@@ -1,28 +1,42 @@
-/* «Коротко о компании»: плитки-итоги и пары «что — значение». */
+/* «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений», без своей карточки — плитки
+   сами в рамках. */
 
-/* Телефон — две плитки в ряд, с 600px — три: шесть плиток встают ровно 3 + 3, а не 4 + 2
-   с разбивкой в три строки. auto-fill здесь не годится: в карточке на 360px (296px внутри)
-   он давал одну колонку, а на 1280px — четыре. */
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-2);
-  margin: 0 0 var(--sp-3);
-}
-
-/* Плитка: подпись сверху, число крупно, разбивка мелко, ссылка прижата к низу — у плиток
-   одного ряда ссылки стоят на одной линии, сколько бы строк ни заняла разбивка. */
-.tile {
+.brief {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   min-width: 0;
-  /* На телефоне плитка — 144px: боковые поля уже, чтобы «корпоративных — 3» и подпись
-     ссылки помещались в строку. */
-  padding: var(--sp-3) var(--sp-2);
+}
+
+/* Телефон — две плитки в ряд, с 600px — три (шесть плиток встают 3 + 3, а не 4 + 2), с 1280px —
+   все шесть в одну строку: полоса во всю ширину каркаса. auto-fill здесь не годится: на 360px он
+   давал одну колонку. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.briefNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* Плитка: подпись сверху, число крупно, разбивка мелко; стрелка-ссылка — в правом верхнем углу
+   (нажимается вся плитка, подпись ссылки — для диктора). */
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* подпись, число и разбивка — одна запись */
+  min-width: 0;
+  /* На телефоне плитка — 144px: боковые поля уже, чтобы «корпоративных — 3» помещалось в строку. */
+  padding: var(--sp-2) var(--sp-5) var(--sp-2) var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface-2);
+  background: var(--surface);
 }
 
 .tileLabel {
@@ -34,12 +48,15 @@
   text-transform: uppercase;
 }
 
-/* Число не рвётся («2481/7» читалось как два числа): разделитель тысяч неразрывный. */
+/* Число не рвётся («2481/7» читалось как два числа): разделитель тысяч неразрывный. Цифры
+   пропорциональные: одиночное крупное число с табличными выглядит разреженным (dataviz). */
 .tileValue {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   margin: 0;
   font-size: var(--fs-xl);
   font-weight: var(--fw-semibold);
-  font-variant-numeric: tabular-nums;
   line-height: var(--lh-tight);
   white-space: nowrap;
 }
@@ -54,25 +71,17 @@
 }
 
 .tileMore {
-  margin: auto 0 0;
-  padding-top: var(--sp-1);
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  margin: 0;
+  line-height: 0;
 }
 
-/* Строчная ссылка, а не flex: перенесённая подпись уводит стрелку за последним словом,
-   а не оставляет её висеть справа от двух строк. */
 .tileLink {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
+  display: inline-flex;
+  color: var(--muted);
   text-decoration: none;
-}
-
-.tileLinkTail {
-  white-space: nowrap;
-}
-
-.tileLink svg {
-  margin-inline-start: var(--sp-1);
-  vertical-align: -0.2em;
 }
 
 .note {
@@ -87,8 +96,8 @@
     border-color: var(--border-strong);
   }
 
-  .tileLink:hover {
-    text-decoration: none;
+  .tile:hover .tileLink {
+    color: var(--accent);
   }
 }
 
@@ -98,7 +107,7 @@
   }
 
   .tile {
-    padding: var(--sp-3);
+    padding: var(--sp-2) var(--sp-6) var(--sp-2) var(--sp-3);
   }
 
   .tileDetail {
@@ -106,9 +115,8 @@
   }
 }
 
-/* Крупнее — только там, где плитка точно шире даты и пятизначного числа. */
 @media (min-width: 1280px) {
-  .tileValue {
-    font-size: var(--fs-2xl);
+  .tiles {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }

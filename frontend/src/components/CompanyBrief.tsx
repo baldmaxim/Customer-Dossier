@@ -1,5 +1,7 @@
-// «Коротко о компании»: плитки-итоги (объекты · события · публикации · связи · суды · реестр)
-// и строка ролей. У каждой плитки — разбивка мелко и ссылка туда, где число расписано.
+// «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений» (объекты · события · публикации ·
+// связи · суды · реестр). У каждой плитки — разбивка мелко и ссылка туда, где число расписано; заголовок
+// полосы — только для диктора: плитки сами себя называют. Роли — ярлыками в шапке и полосами в «Ролях,
+// событиях и текстах», а не третьей строкой здесь (05.10.2026).
 //
 // Здесь нет ни одного нового числа: всё берётся из расчёта показателей, уже загруженных
 // объектов, событий и реестра — те же числа стоят в «Подробно → Показатели» с правилом и
@@ -15,13 +17,12 @@ import { FC } from 'react';
 
 import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, formatDate } from '../lib/labels';
+import { formatDate } from '../lib/labels';
 import { BriefTile } from './company/BriefTile';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
 import { useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
-import { DescriptionList, type IDescriptionItem } from './ui/DescriptionList';
-import { Section } from './ui/Section';
+import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
 
 interface ICompanyBriefProps {
@@ -36,16 +37,11 @@ interface ICompanyBriefProps {
   company?: ICompanyResponse;
 }
 
-/** Роли по своим объектам карточки: запасной путь, когда показатели не посчитаны. Роли СЗ группы — не её. */
-const rolesFromObjects = (objects: ICompanyObject[]): string[] => {
-  const counts = new Map<string, number>();
-  for (const o of objects) {
-    if (o.via) continue;
-    for (const r of o.roles) counts.set(r.role, (counts.get(r.role) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([role, n]) => `${ASSERTION_ROLE_LABELS[role] ?? role} — ${n}`);
+/** Города своих объектов (объекты СЗ группы — не её): «Казань, Москва и ещё 2». */
+const citiesText = (objects: ICompanyObject[]): string | null => {
+  const cities = [...new Set(objects.filter(o => !o.via).map(o => o.city).filter((c): c is string => Boolean(c)))];
+  if (cities.length === 0) return null;
+  return cities.length > 2 ? `${cities.slice(0, 2).join(', ')} и ещё ${cities.length - 2}` : cities.join(', ');
 };
 
 /** Число показателя: посчитано — числом, нет данных или нет показателя — «—». */
@@ -71,33 +67,20 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const signals = query.data?.signals ?? null;
   const refresh = query.data?.refresh;
 
-  const roles = signals
-    ? Object.entries(signals.experience.byRole)
-        .filter(([, agg]) => (agg.value ?? 0) > 0)
-        .sort((a, b) => (b[1].value ?? 0) - (a[1].value ?? 0))
-        .map(([role, agg]) => `${ASSERTION_ROLE_LABELS[role] ?? role} — ${agg.value}`)
-    : rolesFromObjects(objects);
-  const cities = [...new Set(objects.filter(o => !o.via).map(o => o.city).filter((c): c is string => Boolean(c)))];
-
   const media = signals?.media;
   const experience = signals?.experience;
   const latest = media?.latestPublishedAt;
   const registry = company?.registry ?? null;
   const cases = media?.legalCasesCount;
 
-  const lines: IDescriptionItem[] = [{ label: 'Роли в публикациях', value: roles.join(', ') || 'роль не названа ни в одной публикации' }];
-  if (cities.length > 0) lines.push({ label: 'География объектов', value: cities.slice(0, 4).join(', ') });
-
   return (
-    <Section
-      title="Коротко о компании"
-      note={refresh?.active ? `показатели на ${formatDate(refresh.active.cutoffAt)}` : undefined}
-    >
+    <section className={styles.brief}>
+      <Heading className="visually-hidden">Коротко о компании</Heading>
       <dl className={styles.tiles}>
         <BriefTile
           label="Объекты"
           value={objectsKnown ? formatCount(objectsTotal) : '—'}
-          detail={joinDetail(roles.slice(0, 2))}
+          detail={citiesText(objects)}
           to={{ search: '?tab=objects' }}
           linkText="Все объекты"
         />
@@ -148,9 +131,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
           />
         )}
       </dl>
-
-      <DescriptionList items={lines} />
-
+      {refresh?.active && <p className={styles.briefNote}>показатели на {formatDate(refresh.active.cutoffAt)}</p>}
       {query.isError && (
         <p className={styles.note}>
           Показатели не загрузились — числа публикаций не показаны.{' '}
@@ -159,6 +140,6 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
           </Button>
         </p>
       )}
-    </Section>
+    </section>
   );
 };
