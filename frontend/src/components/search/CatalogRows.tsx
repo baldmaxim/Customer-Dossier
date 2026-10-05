@@ -6,7 +6,9 @@
 // внутри», раскрытие показывает их ссылками. Группа, известная только по реестру ДОМ.РФ (страница группы не
 // подтверждена как компания портала), — строка без своей карточки, только с раскрытием.
 //
-// Название юрлица — по ЕГРЮЛ, если Контур.Фокус его прислал. Статус — словами, без цвета (ADR-009).
+// Название юрлица — по ЕГРЮЛ, если Контур.Фокус его прислал. Статус — нейтральным ярлыком при любом значении
+// (ликвидация — факт реестра, а не вердикт, ADR-009), «с даты» — мелко под ним; роли — ярлыками (две и «+N»),
+// город — первым в пояснении, дата последней публикации — колонкой во всех видах (05.10.2026).
 
 import { FC, Fragment, ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,6 +18,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { formatCount, formatCountWord } from '../../lib/format';
 import { ASSERTION_ROLE_LABELS, formatDate } from '../../lib/labels';
 import { MQ } from '../../lib/media';
+import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CardList } from '../ui/CardList';
@@ -25,8 +28,48 @@ import { CountPair } from './CountPair';
 import styles from './Search.module.css';
 
 const MEMBER_FORMS = ['юрлицо', 'юрлица', 'юрлиц'] as const;
+/** Ярлыков ролей в строке — не больше: остальные «+N», их названия — диктору. */
+const ROLE_BADGES = 2;
 
-const rolesText = (roles: string[]): string => roles.map(r => ASSERTION_ROLE_LABELS[r] ?? r).join(', ');
+const roleLabel = (role: string): string => ASSERTION_ROLE_LABELS[role] ?? role;
+const rolesText = (roles: string[]): string => roles.map(roleLabel).join(', ');
+
+/** «Действующее (с 01.02.2020)» → ярлык «Действующее» и «с 01.02.2020» мелко: длинный статус не режется многоточием. */
+const statusParts = (status: string): { main: string; since: string | null } => {
+  const m = /^(.*?)\s*\((с\s[^)]+)\)$/.exec(status.trim());
+  return m ? { main: m[1]!, since: m[2]! } : { main: status, since: null };
+};
+
+const StatusCell: FC<{ status: string | null }> = ({ status }) => {
+  if (!status) return <span className={styles.muted}>—</span>;
+  const { main, since } = statusParts(status);
+  return (
+    <>
+      <Badge>{main}</Badge>
+      {since && <span className={styles.rowNote}>{since}</span>}
+    </>
+  );
+};
+
+const RoleBadges: FC<{ roles: string[] }> = ({ roles }) => {
+  if (roles.length === 0) return <span className={styles.muted}>—</span>;
+  const rest = roles.slice(ROLE_BADGES);
+  return (
+    <span className={styles.roleBadges}>
+      {roles.slice(0, ROLE_BADGES).map(r => (
+        <Badge key={r} tone="accent">
+          {roleLabel(r)}
+        </Badge>
+      ))}
+      {rest.length > 0 && (
+        <Badge tone="accent">
+          <span aria-hidden="true">+{rest.length}</span>
+          <span className="visually-hidden">ещё: {rolesText(rest)}</span>
+        </Badge>
+      )}
+    </span>
+  );
+};
 
 /** Название строки: по ЕГРЮЛ, если есть; у заведённой по ИНН без ответа Фокуса — временное «ИНН …». */
 export const catalogTitle = (row: ICatalogRow): string => row.egrulName ?? row.name;
@@ -39,6 +82,7 @@ const identifierText = (row: Pick<ICatalogRow, 'inn' | 'ogrn'>): string | null =
 /** Пояснение под названием: имя в публикациях, куда входит, на контроле ли, ждёт ли наименования. */
 const nameNote = (row: ICatalogRow): string | null => {
   const notes = [
+    row.city,
     row.kind === 'registry_group' ? 'группа по реестру ДОМ.РФ — в портале не подтверждена' : null,
     row.egrulName && row.egrulName !== row.name && !row.namePending ? `в публикациях — «${row.name}»` : null,
     row.namePending && !row.egrulName ? 'наименование из ЕГРЮЛ ещё не получено' : null,
@@ -48,8 +92,6 @@ const nameNote = (row: ICatalogRow): string | null => {
   ].filter(Boolean);
   return notes.length > 0 ? notes.join(' · ') : null;
 };
-
-const dash = <span className={styles.muted}>—</span>;
 
 interface IMembersToggleProps {
   row: ICatalogRow;
@@ -108,9 +150,11 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
               title={catalogTitle(row)}
               meta={
                 [
+                  row.city,
                   unidentified ? null : identifierText(row),
                   unidentified ? null : row.egrulStatus,
                   rolesText(row.roles),
+                  unidentified && row.lastPublishedAt ? `последняя ${formatDate(row.lastPublishedAt)}` : null,
                   row.kind === 'registry_group' ? 'группа по реестру ДОМ.РФ' : null,
                   row.watched ? 'на контроле' : null,
                   row.hints > 0 ? `кандидатов: ${formatCount(row.hints)}` : null,
@@ -144,7 +188,7 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
     );
   }
 
-  const columns = unidentified ? 5 : groups ? 4 : 6;
+  const columns = unidentified ? 5 : groups ? 5 : 7;
   const name = (row: ICatalogRow, open: boolean, onToggle: () => void): ReactNode => {
     const note = nameNote(row);
     return (
@@ -164,7 +208,7 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
 
   return (
     <Card padding="none" className={styles.tableCard}>
-      <TableScroll label="Компании" minWidth={unidentified || groups ? 560 : 720}>
+      <TableScroll label="Компании" minWidth={unidentified || groups ? 600 : 820}>
         <thead>
           <tr>
             <th>{unidentified ? 'Название в публикациях' : groups ? 'Группа' : 'Компания'}</th>
@@ -173,7 +217,7 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
             <th className={styles.colRole}>Роль</th>
             <th className="num">Объектов</th>
             <th className="num">Публикаций</th>
-            {unidentified && <th className={styles.colDate}>Последняя</th>}
+            <th className={styles.colDate}>Последняя</th>
           </tr>
         </thead>
         <tbody>
@@ -185,11 +229,17 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
                 <tr className={row.kind === 'company' ? `row-link ${styles.row}` : styles.row}>
                   {name(row, open, () => toggle(key))}
                   {!unidentified && !groups && <td className={styles.muted}>{identifierText(row) ?? '—'}</td>}
-                  {!unidentified && !groups && <td>{row.egrulStatus ?? dash}</td>}
-                  <td>{row.roles.length === 0 ? dash : rolesText(row.roles)}</td>
+                  {!unidentified && !groups && (
+                    <td>
+                      <StatusCell status={row.egrulStatus} />
+                    </td>
+                  )}
+                  <td>
+                    <RoleBadges roles={row.roles} />
+                  </td>
                   <td className="num">{formatCount(row.objects)}</td>
                   <td className="num">{formatCount(row.publications)}</td>
-                  {unidentified && <td className={styles.muted}>{row.lastPublishedAt ? formatDate(row.lastPublishedAt) : '—'}</td>}
+                  <td className={styles.muted}>{row.lastPublishedAt ? formatDate(row.lastPublishedAt) : '—'}</td>
                 </tr>
                 {open &&
                   row.members.map(m => (

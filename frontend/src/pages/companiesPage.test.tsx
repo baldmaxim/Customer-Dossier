@@ -91,12 +91,23 @@ describe('Главная «Компании»', () => {
     const link = await screen.findByRole('link', { name: 'ООО "ПРИМЕР"' });
     expect(link.getAttribute('href')).toBe('/company/42');
     expect(link.className).toContain('row-link-target');
-    expect(screen.getAllByRole('columnheader').map(th => th.textContent)).toEqual(['Компания', 'ИНН / ОГРН', 'Статус в ЕГРЮЛ', 'Роль', 'Объектов', 'Публикаций']);
-    expect(link.closest('td')?.textContent).toContain('в публикациях — «Пример» · на контроле');
+    expect(screen.getAllByRole('columnheader').map(th => th.textContent)).toEqual(['Компания', 'ИНН / ОГРН', 'Статус в ЕГРЮЛ', 'Роль', 'Объектов', 'Публикаций', 'Последняя']);
+    expect(link.closest('td')?.textContent).toContain('Москва · в публикациях — «Пример» · на контроле');
+    expect(screen.getByRole('cell', { name: 'подрядчик' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: '20.09.2026' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'ИНН 7707083893' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Действующее' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: '24 817' })).toBeTruthy();
     expect(container.querySelectorAll('tr.row-link').length).toBe(1);
+  });
+
+  it('статус ЕГРЮЛ — ярлыком, «с даты» мелко; ролей больше двух — «+N», названия остальных — диктору', async () => {
+    fakeApi(routes([row({ egrulStatus: 'Действующее (с 01.02.2020)', roles: ['developer', 'customer', 'contractor', 'designer'] })]));
+    renderWithProviders(<CompaniesPage />);
+    await screen.findByRole('link', { name: 'ООО "ПРИМЕР"' });
+    expect(screen.getByRole('cell', { name: 'Действующее с 01.02.2020' })).toBeTruthy();
+    const roles = screen.getByRole('cell', { name: /застройщик/ });
+    expect(roles.textContent).toBe('застройщикзаказчик+2ещё: подрядчик, проектировщик');
   });
 
   it('СЗ — внутри главной компании: «N юрлиц внутри» раскрывает их ссылками; группа только по ДОМ.РФ — без карточки', async () => {
@@ -148,7 +159,7 @@ describe('Главная «Компании»', () => {
     const link = within(list).getByRole('link', { name: 'ООО "ПРИМЕР"' });
     expect(link.getAttribute('href')).toBe('/company/42');
     expect(screen.queryByRole('table')).toBeNull();
-    expect(within(list).getByText('ИНН 7707083893 · Действующее · подрядчик')).toBeTruthy();
+    expect(within(list).getByText('Москва · ИНН 7707083893 · Действующее · подрядчик')).toBeTruthy();
     const summary = screen.getByText('На контроле · заказчики · по числу объектов');
     expect((summary.closest('details') as HTMLDetailsElement).open).toBe(false);
   });

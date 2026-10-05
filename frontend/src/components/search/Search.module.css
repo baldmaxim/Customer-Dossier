@@ -62,11 +62,11 @@
 }
 
 .colStatus {
-  width: 15%;
+  width: 14%;
 }
 
 .colDate {
-  width: 12%;
+  width: 9%;
   white-space: nowrap;
 }
 
@@ -84,6 +84,13 @@
   display: block;
   color: var(--muted);
   font-size: var(--fs-sm);
+}
+
+/* Ярлыки ролей в ячейке: переносятся, а не растягивают колонку. */
+.roleBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
 }
 
 .muted {
