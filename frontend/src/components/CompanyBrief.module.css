@@ -7,7 +7,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sp-2);
-  margin: 0 0 var(--sp-4);
+  margin: 0 0 var(--sp-3);
 }
 
 /* Плитка: подпись сверху, число крупно, разбивка мелко, ссылка прижата к низу — у плиток
@@ -76,7 +76,7 @@
 }
 
 .note {
-  margin: var(--sp-4) 0 0;
+  margin: var(--sp-3) 0 0;
   max-width: var(--prose);
   color: var(--muted);
   font-size: var(--fs-sm);

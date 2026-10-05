@@ -1,9 +1,13 @@
-// Сведения ЕГРЮЛ из Контур.Фокуса — раздел «Подробно» карточки компании (ADR-015).
+// Сведения ЕГРЮЛ из Контур.Фокуса — раздел «Сведения» карточки компании (ADR-015).
 //
-// Правила показа — как у реестра (RegistryPanel): у сведений дата проверки, атрибуция словами, изменения
-// отдельно («было — стало»: смена руководителя важнее самого руководителя). Цветов-индикаторов и оценок
-// нет (ADR-009): статус читается словами. «Обновить» — тому, у кого есть sources.manage: каждый запрос
-// к Фокусу списывается с тарифа.
+// Правила показа — как у реестра (RegistryPanel): у сведений дата проверки, изменения отдельно («было —
+// стало»: смена руководителя важнее самого руководителя). Цветов-индикаторов и оценок нет (ADR-009):
+// статус читается словами. «Обновить» — тому, у кого есть sources.manage: каждый запрос к Фокусу
+// списывается с тарифа.
+//
+// Без повторов (05.10.2026): строки, которые уже стоят в шапке карточки (наименование, статус,
+// руководитель, адрес, КПП), здесь не печатаются — hideKeys. Атрибуция Фокуса — в «Источниках и датах»
+// внизу вкладки (CompanySources), вместе с остальными оговорками.
 
 import { FC, ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -44,7 +48,13 @@ const checkNote = (view: IFocusView): string | null => {
   return parts.length > 0 ? parts.join(' ') : null;
 };
 
-export const CompanyFocus: FC<{ companyId: number }> = ({ companyId }) => {
+export interface ICompanyFocusProps {
+  companyId: number;
+  /** Ключи строк Фокуса, которые уже показаны в шапке карточки. */
+  hideKeys?: ReadonlySet<string>;
+}
+
+export const CompanyFocus: FC<ICompanyFocusProps> = ({ companyId, hideKeys }) => {
   const query = useCompanyFocus(companyId);
   const canRefresh = useCan('sources.manage');
   const client = useQueryClient();
@@ -69,6 +79,7 @@ export const CompanyFocus: FC<{ companyId: number }> = ({ companyId }) => {
 
   const view = query.data;
   const fields = view.fields ?? [];
+  const shown = hideKeys ? fields.filter(f => !hideKeys.has(f.key)) : fields;
   const refreshButton =
     canRefresh && view.configured && view.identifier ? (
       <Button size="sm" icon="refresh" loading={refresh.isPending} onClick={() => refresh.mutate()}>
@@ -107,10 +118,7 @@ export const CompanyFocus: FC<{ companyId: number }> = ({ companyId }) => {
         {`По ${identifierText(view)}, проверено ${formatDate(checkedAt)}`}
         {view.fetchedAt && view.fetchedAt !== checkedAt ? `; последнее изменение получено ${formatDate(view.fetchedAt)}` : ''}
       </p>
-      <DescriptionList items={fields.map(f => ({ key: f.key, label: f.label, value: f.value }))} />
-      <Callout tone="neutral" className={registry.attribution}>
-        {view.attribution}
-      </Callout>
+      {shown.length > 0 && <DescriptionList items={shown.map(f => ({ key: f.key, label: f.label, value: f.value }))} />}
       <RegistryChanges
         changes={view.changes.map(c => ({ asOf: null, fetchedAt: c.fetchedAt, changes: c.changes }))}
         title="Что изменилось в ЕГРЮЛ"

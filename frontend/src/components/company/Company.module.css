@@ -1,24 +1,49 @@
 /* Блоки карточки компании: реквизиты под именем, «Обзор», события, опознание, разделы «Подробно». */
 
-/* ─── Реквизиты под именем: подпись над значением, колонки — по ширине ───
-   9.5rem: в колонку помещается ОГРНИП (15 цифр) со значком копирования, и на 360px (328px
-   полезной ширины) встают две колонки; шире — сколько влезет. Адрес — во всю строку. */
+/* ─── Реквизиты под именем: ярлыки, короткие реквизиты строкой, длинные — рядом с 900px ───
+   Строкой (flex-wrap), а не сеткой auto-fill: сетка растягивала «Город» и «Вид» на одинаковые
+   колонки, и шапка из шести коротких значений занимала две строки по экрану. Ширина не
+   ограничена: каркас сам до --page-max. */
+.reqBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.reqBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .requisites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5); /* 24px между реквизитами строки: значения без рамок, иначе ИНН сливается с ОГРН */
+  margin: 0;
+}
+
+.requisitesWide {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
-  gap: var(--sp-2) var(--sp-3);
-  max-width: 56rem; /* 56rem: на широком экране реквизиты не разъезжаются по краям */
-  margin: var(--sp-2) 0 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .requisitesWide {
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  }
 }
 
 .requisite {
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-
-.requisiteWide {
-  grid-column: 1 / -1;
 }
 
 .reqLabel {
@@ -250,7 +275,7 @@
 
 /* Под реквизитами шапки: откуда статус, руководитель и адрес и на какую дату. */
 .reqSource {
-  margin: var(--sp-1) 0 0;
+  margin: 0;
   max-width: var(--prose);
   color: var(--muted);
   font-size: var(--fs-xs);
@@ -270,3 +295,39 @@
   font-size: var(--fs-sm);
 }
 
+
+/* ─── «Источники и даты» внизу «Сведений»: одна оговорка на вкладку вместо четырёх ─── */
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  max-width: var(--prose);
+  margin-top: var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.sourcesTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.sourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sourcesLead {
+  color: var(--text);
+  font-weight: var(--fw-medium);
+}
+
+.sourcesNote {
+  margin: 0;
+}

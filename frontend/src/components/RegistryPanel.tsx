@@ -8,6 +8,10 @@
 //
 // brief — шесть главных полей и «Все сведения реестра» раскрытием (страница объекта);
 // full — все поля сразу (как было).
+//
+// omit — строки, которые на этой странице уже показаны (карточка компании: застройщик — она сама, его
+// реквизиты и адрес стоят в шапке); attribution={false} — атрибуция вынесена в общий блок источников
+// страницы. Слово реестра не теряется: оговорка та же, только одна на страницу.
 
 import { FC } from 'react';
 
@@ -27,6 +31,10 @@ export interface IRegistryPanelProps {
   title?: string;
   /** full (по умолчанию) — все сведения сразу; brief — шесть главных и «Все сведения реестра». */
   variant?: 'full' | 'brief';
+  /** Строки, уже показанные на странице: ключ строки (address, developer, inn, ogrn, group) или подпись поля. */
+  omit?: ReadonlySet<string>;
+  /** false — атрибуция показана в общем блоке источников страницы. */
+  attribution?: boolean;
 }
 
 const GENERAL_CONTRACTOR = new Set(['Генподрядчики', 'Генподрядчик']);
@@ -66,9 +74,10 @@ const briefOf = <T extends IDescriptionItem & { key: string }>(rows: T[]): T[] =
   return [...picked, ...rest.slice(0, Math.max(0, BRIEF_SIZE - picked.length))];
 };
 
-export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Данные реестра', variant = 'full' }) => {
+export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Данные реестра', variant = 'full', omit, attribution = true }) => {
   if (!registry) return null;
-  const rows = registryRows(registry);
+  const all = registryRows(registry);
+  const rows = omit ? all.filter(row => !omit.has(row.key) && !(typeof row.label === 'string' && omit.has(row.label))) : all;
   const brief = variant === 'brief';
   const updates = ['обновления', 'обновлений', 'обновлений'] as const;
 
@@ -89,10 +98,12 @@ export const RegistryPanel: FC<IRegistryPanelProps> = ({ registry, title = 'Да
     <Section title={title} note={`${registry.source.title}, запись ${registry.externalRef}`}>
       <div className={styles.body}>
         <p className={styles.asOf}>{registryDateText(registry.asOf, registry.fetchedAt)}</p>
-        <DescriptionList items={brief ? briefOf(rows) : rows} />
-        <Callout tone="neutral" className={styles.attribution}>
-          {registry.attribution}
-        </Callout>
+        {rows.length > 0 && <DescriptionList items={brief ? briefOf(rows) : rows} />}
+        {attribution && (
+          <Callout tone="neutral" className={styles.attribution}>
+            {registry.attribution}
+          </Callout>
+        )}
         {brief ? (
           <>
             <RegistryChanges changes={registry.changes.slice(0, 1)} title="Последнее изменение в реестре" />

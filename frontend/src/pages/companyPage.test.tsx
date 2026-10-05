@@ -241,8 +241,24 @@ describe('Карточка компании', () => {
     expect(within(tile).getByText('объектов в реестре · на 20.09.2026')).toBeTruthy();
     // Реестр застройщика — на той же вкладке «Сведения»: плитка ведёт якорем к разделу.
     expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7#company-registry');
+    // Застройщик — сама компания: её ИНН уже в реквизитах шапки, раздел реестра его не повторяет.
     const registry = screen.getByRole('heading', { name: 'Сведения реестра о застройщике' }).closest('section')!;
-    expect(within(registry).getByText('1655000000')).toBeTruthy();
+    expect(within(registry).queryByText('1655000000')).toBeNull();
+    expect(within(screen.getByLabelText('Реквизиты')).getByText('1655000000')).toBeTruthy();
+    // Атрибуция реестра — одна, в «Источниках и датах» внизу вкладки, а не плашкой в разделе.
+    expect(within(registry).queryByText('По сведениям проектной декларации')).toBeNull();
+    const sources = screen.getByRole('heading', { name: 'Источники и даты' }).closest('section')!;
+    expect(within(sources).getByText(/По сведениям проектной декларации: Единый реестр, запись 123/)).toBeTruthy();
+  });
+
+  it('шапка: роли на своих объектах — ярлыками; оговорка «не оценка» — одна на вкладку', async () => {
+    fakeApi(companyRoutes());
+    renderCard();
+
+    const badges = await screen.findByRole('list', { name: 'Статус и роли на своих объектах' });
+    expect(within(badges).getByText('генподрядчик · 1')).toBeTruthy();
+    expect(within(badges).getByText('заказчик · 1')).toBeTruthy();
+    expect(await screen.findAllByText(/не оценка надёжности/)).toHaveLength(1);
   });
 
   it('контрагенты: первые шесть, «Показать ещё»; полный ответ сервера — ссылка «Все связи»', async () => {

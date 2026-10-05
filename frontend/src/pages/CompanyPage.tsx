@@ -16,7 +16,7 @@ import { CompanyDetails } from '../components/company/CompanyDetails';
 import { CompanyObjects } from '../components/company/CompanyObjects';
 import { CompanyInfo, hasLegalIdentifier } from '../components/company/CompanyInfo';
 import { CompanyPublications } from '../components/company/CompanyPublications';
-import { CompanyRequisites } from '../components/company/CompanyRequisites';
+import { CompanyRequisites, objectRoleCounts } from '../components/company/CompanyRequisites';
 import { CompanyUnidentified } from '../components/company/CompanyUnidentified';
 import { CompanySimilar } from '../components/company/CompanySimilar';
 import { useCompany, useCompanyFocus, useCompanyObjects } from '../components/company/useCompanyQueries';
@@ -108,9 +108,17 @@ export const CompanyPage: FC = () => {
       count: value === 'objects' && objectsTotal !== undefined && objectsTotal > 0 ? objectsTotal : undefined,
     }));
     header = {
-      // Наименование по ЕГРЮЛ, если Фокус его прислал; имя из публикаций — строкой реквизитов.
+      // Наименование по ЕГРЮЛ, если Фокус его прислал; имя из публикаций — строкой реквизитов. Роли — по своим
+      // объектам из того же запроса, что и число у вкладки; на читалке шапка — без длинных строк.
       title: data.egrul?.name ?? company.name,
-      meta: <CompanyRequisites data={data} focus={focus.data?.fields ? focus.data : null} />,
+      meta: (
+        <CompanyRequisites
+          data={data}
+          focus={focus.data?.fields ? focus.data : null}
+          roles={objectRoleCounts(objects.data?.items ?? [])}
+          compact={reader}
+        />
+      ),
       actions: (
         <>
           <WatchToggle companyId={company.id} watch={data.watch ?? null} />

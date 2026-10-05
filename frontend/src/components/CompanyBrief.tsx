@@ -9,12 +9,13 @@
 // Показатели могут быть не посчитаны, устареть или не загрузиться. Тогда сводка говорит это
 // словами и показывает то, что видно без них, а не подставляет ноль вместо неизвестного.
 // Числа правил signals@2 (связи, суды) в старом снимке отсутствуют — их плиток тогда нет.
+// Когда посчитаны и что это не оценка — в «Источниках и датах» внизу вкладки (CompanySources).
 
 import { FC } from 'react';
 
 import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, formatDate, formatDateTime } from '../lib/labels';
+import { ASSERTION_ROLE_LABELS, formatDate } from '../lib/labels';
 import { BriefTile } from './company/BriefTile';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
 import { useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
@@ -150,21 +151,14 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
 
       <DescriptionList items={lines} />
 
-      <p className={styles.note}>
-        {query.isError ? (
-          <>
-            Показатели не загрузились — числа публикаций не показаны.{' '}
-            <Button variant="link" size="sm" onClick={() => void query.refetch()}>
-              Повторить
-            </Button>{' '}
-          </>
-        ) : refresh?.active ? (
-          `Публикации, роли, связи и суды посчитаны ${formatDateTime(refresh.active.cutoffAt)}${refresh.stale ? ' — расчёт устарел' : ''}; объекты и события — на сегодня. `
-        ) : query.isSuccess ? (
-          'Показатели ещё не посчитаны: объекты и события — на сегодня, публикаций пока не видно. '
-        ) : null}
-        Это сведения из открытых публикаций, а не проверка контрагента и не оценка надёжности.
-      </p>
+      {query.isError && (
+        <p className={styles.note}>
+          Показатели не загрузились — числа публикаций не показаны.{' '}
+          <Button variant="link" size="sm" onClick={() => void query.refetch()}>
+            Повторить
+          </Button>
+        </p>
+      )}
     </Section>
   );
 };

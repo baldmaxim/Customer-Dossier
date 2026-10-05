@@ -59,7 +59,12 @@ describe('Контур.Фокус на карточке компании', () =>
     const section = await egrulSection();
     expect(await within(section).findByText('42.13 Строительство мостов и тоннелей')).toBeTruthy();
     expect(within(section).getByText(/проверено 02\.10\.2026; последнее изменение получено 01\.10\.2026/)).toBeTruthy();
-    expect(within(section).getByText(/а не оценка компании/)).toBeTruthy();
+    // Шапка уже показала статус, руководителя и адрес — раздел их не повторяет; атрибуция Фокуса — внизу вкладки.
+    expect(within(section).queryByText('Статус')).toBeNull();
+    expect(within(section).queryByText('Юридический адрес')).toBeNull();
+    expect(within(section).queryByText(/а не оценка компании/)).toBeNull();
+    const sources = screen.getByRole('heading', { name: 'Источники и даты' }).closest('section')!;
+    expect(within(sources).getByText(/а не оценка компании/)).toBeTruthy();
     expect(within(section).getByRole('heading', { name: 'Что изменилось в ЕГРЮЛ' })).toBeTruthy();
     expect(within(section).getByText('Иванов Иван Иванович — Генеральный директор')).toBeTruthy();
     expect(within(section).getByText(/Следующее обновление — 16\.10\.2026/)).toBeTruthy();
