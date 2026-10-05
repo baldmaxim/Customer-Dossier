@@ -33,10 +33,17 @@ export const useCompanyObjects = (companyId: number, enabled = true): UseQueryRe
     enabled,
   });
 
-export const useCompanyEvents = (companyId: number): UseQueryResult<{ items: IEventRow[] }> =>
+/** События: последние 100 по дате события и общее число (total; у прежнего сервера его нет — тогда длина списка). */
+export interface ICompanyEventsResponse {
+  items: IEventRow[];
+  total?: number;
+  truncated?: boolean;
+}
+
+export const useCompanyEvents = (companyId: number): UseQueryResult<ICompanyEventsResponse> =>
   useQuery({
     queryKey: ['company', companyId, 'events'],
-    queryFn: () => api.get<{ items: IEventRow[] }>(`/api/companies/${companyId}/events`),
+    queryFn: () => api.get<ICompanyEventsResponse>(`/api/companies/${companyId}/events`),
   });
 
 export const useCompanySimilar = (companyId: number): UseQueryResult<{ items: ISimilarCompany[] }> =>

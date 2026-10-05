@@ -51,6 +51,10 @@ export const SignalsMedia: FC<{ media: Media }> = ({ media }) => (
       {media.firstPublishedAt && <SignalDate label="первая публикация" date={media.firstPublishedAt} />}
       {media.latestPublishedAt && <SignalDate label="последняя публикация" date={media.latestPublishedAt} />}
       {media.legalCasesCount && <SignalAggregate label="судебных и банкротных дел" aggregate={media.legalCasesCount} basis="assertions" />}
+      {media.publicationsByMonth && (
+        <SignalAggregate label="публикаций в ряду по месяцам (24 мес.)" aggregate={media.publicationsByMonth} basis="publications" />
+      )}
+      {media.eventsByMonth && <SignalAggregate label="событий в ряду по месяцам (24 мес.)" aggregate={media.eventsByMonth} basis="assertions" />}
       {Object.entries(media.eventsByType ?? {}).map(([type, agg]) => (
         <SignalAggregate key={`et-${type}`} label={`событий: ${EVENT_LABELS[type] ?? 'прочие'}`} aggregate={agg} basis="assertions" />
       ))}

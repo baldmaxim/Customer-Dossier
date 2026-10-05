@@ -1,8 +1,10 @@
-// Правила signals@2: чистая детерминированная функция входа и среза. Никаких весов, шкал и вердиктов.
+// Правила signals@3: чистая детерминированная функция входа и среза. Никаких весов, шкал и вердиктов.
 //
 // signals@2 добавил числа, которые раньше были только списками: договоры, корпоративные связи,
 // названные контрагенты, события по видам, число судебных дел и края выборки по датам публикаций.
-// Правила прежних чисел не менялись; новое число — новая версия, а не тихая правка.
+// signals@3 (05.10.2026) добавил ряды по месяцам (публикации и события за 24 месяца, series.ts) и исправил
+// долю (share): числитель — число id, а не урезанный до 200 список. Правила прежних чисел не менялись;
+// новое число — новая версия, а не тихая правка.
 //
 // Разделение, которое нельзя сливать в одно число:
 //  - идентификация и полнота выборки;
@@ -13,6 +15,7 @@
 // Каждое проверенное аналитиком отделено от «есть в тексте»; отклонённое и спорное видно, но не reviewed.
 
 import { aggregate, dateStatus, share, windowDays, windowMonths } from './intervals.js';
+import { monthlySeries } from './series.js';
 import {
   SIGNAL_RULES_VERSION,
   type ICompanySignalInput,
@@ -29,6 +32,8 @@ import {
 } from './types.js';
 
 const FACT_MODALITIES = new Set(['reported_fact', 'unknown']);
+/** Точность даты, которую можно положить в месяц: квартал и год — нельзя (выдумали бы месяц). */
+const MONTH_PRECISE = new Set(['day', 'month']);
 const EVENT_MODALITIES = new Set(['reported_fact', 'claim', 'unknown']);
 const COURT_TYPES = new Set(['court_case', 'bankruptcy', 'bankruptcy_intent', 'bankruptcy_filing', 'bankruptcy_procedure', 'payment_claim']);
 
@@ -356,6 +361,20 @@ const mediaBlock = (input: ICompanySignalInput, cutoff: Date, publications: read
     legalCasesCount: aggregate(
       [...cases.values()].map(c => c.stages[0]!.assertionId),
       'судебные и банкротные дела: стадии с одним номером дела — одно дело, без номера — отдельное; id — первая стадия дела',
+    ),
+    publicationsByMonth: monthlySeries(
+      publications.map(p => ({ id: p.sourceItemId, date: p.publishedAt, registry: p.isRegistry === true })),
+      cutoff,
+      'публикации по календарному месяцу даты публикации (UTC), 24 месяца по месяц среза включительно; последний месяц обычно неполный; ' +
+        'без даты, раньше окна, позже среза и снимки реестра ДОМ.РФ (их дата — дата сбора, а не публикации) не входят; знаменатель — все публикации',
+      'publication_date',
+    ),
+    eventsByMonth: monthlySeries(
+      live.map(e => ({ id: e.assertionId, date: e.validFrom, coarse: !MONTH_PRECISE.has(e.periodPrecision) })),
+      cutoff,
+      'неотклонённые события по месяцу начала даты события, 24 месяца по месяц среза включительно; только даты с точностью до дня или месяца — ' +
+        'квартал и год в месяц не раскладываются; без даты, раньше окна и позже среза не входят; знаменатель — неотклонённые события',
+      'event_date',
     ),
     reviewedShare: share(ids(e => e.review === 'reviewed'), live.length, 'доля событий, подтверждённых аналитиком; знаменатель — неотклонённые события'),
     legalCases: [...cases.values()].sort((a, b) => a.caseKey.localeCompare(b.caseKey)),

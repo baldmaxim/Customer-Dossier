@@ -43,6 +43,9 @@ interface ICompanyRisk {
   riskLight: 'grey' | 'green' | 'yellow' | 'red';
 }
 
+/** Событий в карточке — не больше; общее число отдаётся отдельно (total). */
+const EVENTS_LIMIT = 100;
+
 const RISK_COLUMNS = `
   company_id            AS "companyId",
   name, city,
@@ -435,7 +438,11 @@ companiesRouter.get('/:id/partners', async (req, res) => {
   res.json({ items });
 });
 
-/** События компании: проекция card_events_v (legacy + опубликованные утверждения). */
+/**
+ * События компании: проекция card_events_v (legacy + опубликованные утверждения). Последние 100 по дате события
+ * (без даты — в конце) и общее число: до 05.10.2026 порядок был по severity, и при 100+ событиях «все события»
+ * показывали самые тяжёлые, а плитка сводки — длину урезанного списка вместо числа.
+ */
 companiesRouter.get('/:id/events', async (req, res) => {
   const id = Number.parseInt(req.params.id ?? '', 10);
   if (!Number.isFinite(id)) {
@@ -443,24 +450,26 @@ companiesRouter.get('/:id/events', async (req, res) => {
     return;
   }
 
-  const rows = await query(
+  const rows = await query<Record<string, unknown> & { total: number }>(
     `SELECT e.id, e.type, e.occurred_on AS "occurredOn", e.severity,
             e.amount_rub AS "amountRub", e.quote, e.confidence, e.status,
             p.id AS "projectId", p.name AS "projectName",
             cp.id AS "counterpartyId", cp.name AS "counterpartyName",
-            d.url, s.title AS "sourceTitle", s.key AS "sourceKey", s.kind AS "sourceKind", e.origin
+            d.url, s.title AS "sourceTitle", s.key AS "sourceKey", s.kind AS "sourceKind", e.origin,
+            count(*) OVER ()::int AS total
      FROM card_events_v e
      LEFT JOIN projects  p  ON p.id  = e.project_id
      LEFT JOIN companies cp ON cp.id = e.counterparty_id
      LEFT JOIN raw_documents d ON d.id = e.document_id
      LEFT JOIN sources s ON s.id = d.source_id
      WHERE e.company_id = $1 AND e.status <> 'rejected'
-     ORDER BY e.severity DESC, e.occurred_on DESC NULLS LAST, e.id DESC
-     LIMIT 100`,
+     ORDER BY e.occurred_on DESC NULLS LAST, e.severity DESC, e.id DESC
+     LIMIT ${EVENTS_LIMIT}`,
     [id],
   );
 
-  res.json({ items: rows });
+  const total = rows[0]?.total ?? 0;
+  res.json({ items: rows.map(({ total: _total, ...row }) => row), total, truncated: total > rows.length });
 });
 
 /**

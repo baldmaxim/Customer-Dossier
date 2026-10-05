@@ -1,7 +1,9 @@
-// Все события компании во вкладке «Подробно» — по дате события, без даты — в конце.
+// События компании во вкладке «Подробно» — по дате события, без даты — в конце. Сервер отдаёт последние 100
+// и общее число: усечённый список так и подписан, а не выдаётся за все.
 
 import { FC } from 'react';
 
+import { formatCount } from '../../lib/format';
 import { describeLoadError } from '../../lib/loadError';
 import { LoadingSkeleton } from '../LoadingSkeleton';
 import { Button } from '../ui/Button';
@@ -45,6 +47,9 @@ export const CompanyEvents: FC<{ companyId: number }> = ({ companyId }) => {
         ))}
       </ol>
       <p className={styles.note}>
+        {query.data?.truncated && query.data.total !== undefined
+          ? `Показаны последние ${formatCount(events.length)} из ${formatCount(query.data.total)} по дате события. `
+          : ''}
         Сначала новые по дате события; события без даты — в конце. Событие объекта — сообщение источника, а не вывод о компании.
       </p>
     </>

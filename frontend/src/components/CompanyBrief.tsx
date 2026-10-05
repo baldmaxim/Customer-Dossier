@@ -18,6 +18,7 @@ import { FC } from 'react';
 import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
 import { formatDate } from '../lib/labels';
+import { Sparkline } from './charts/Sparkline';
 import { BriefTile } from './company/BriefTile';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
 import { useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
@@ -72,6 +73,9 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const latest = media?.latestPublishedAt;
   const registry = company?.registry ?? null;
   const cases = media?.legalCasesCount;
+  // Мини-график — последние 12 месяцев ряда signals@3 (24 столбика в 72px сливаются); старый снимок — без него.
+  const byMonth = media?.publicationsByMonth;
+  const spark = byMonth?.status === 'ok' ? <Sparkline values={byMonth.buckets.slice(-12).map(b => b.value)} partialLast={byMonth.partialLast} /> : undefined;
 
   return (
     <section className={styles.brief}>
@@ -86,7 +90,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
         />
         <BriefTile
           label="События"
-          value={events.isSuccess ? formatCount(events.data.items.length) : '—'}
+          value={events.isSuccess ? formatCount(events.data.total ?? events.data.items.length) : '—'}
           detail={joinDetail([known('с датой за 12 мес.', media?.eventsDated12m)])}
           to={{ search: '?tab=details', hash: EVENTS_SECTION_ID }}
           linkText="Все события"
@@ -94,6 +98,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
         <BriefTile
           label="Публикации"
           value={aggregateText(media?.publications)}
+          chart={spark}
           detail={joinDetail([known('за 90 дней', media?.publications90d), latest?.value ? `последняя ${formatDate(latest.value)}` : null])}
           to={{ search: '?tab=publications' }}
           linkText="Все публикации"

@@ -76,9 +76,12 @@ export const aggregate = (
   };
 };
 
-/** Доля: при нулевом знаменателе — insufficient_data и null, не 0 % и не 100 %. */
+/**
+ * Доля: при нулевом знаменателе — insufficient_data и null, не 0 % и не 100 %. Числитель — число разных id
+ * (value), а не длина списка ids: тот урезан до IDS_LIMIT, и до signals@3 доля выше 200 событий занижалась.
+ */
 export const share = (numeratorIds: readonly number[], denominator: number, rule: string): IAggregate => {
   const base = aggregate(numeratorIds, rule, { denominator });
   if (denominator === 0) return { ...base, value: null, status: 'insufficient_data' };
-  return { ...base, value: Math.round((base.ids.length / denominator) * 1000) / 1000 };
+  return { ...base, value: Math.round(((base.value ?? 0) / denominator) * 1000) / 1000 };
 };

@@ -85,7 +85,9 @@ export const loadCompanyInputs = async (exec: DbExecutor, companyIds: readonly n
               (SELECT o.forward_origin FROM source_observations o
                 WHERE o.source_item_id = si.id AND o.forward_origin IS NOT NULL AND o.observed_at <= $2
                 ORDER BY o.id LIMIT 1) AS "forwardOrigin",
-              (SELECT count(*)::int FROM source_observations o WHERE o.source_item_id = si.id AND o.observed_at <= $2) AS observations
+              (SELECT count(*)::int FROM source_observations o WHERE o.source_item_id = si.id AND o.observed_at <= $2) AS observations,
+              -- signals@3: снимок реестра — дата сбора, а не публикации; в помесячный ряд публикаций не входит.
+              EXISTS (SELECT 1 FROM registry_records rr WHERE rr.source_id = si.source_id AND rr.item_key = si.item_key) AS "isRegistry"
        FROM source_items si
        JOIN sources s ON s.id = si.source_id
        JOIN LATERAL (

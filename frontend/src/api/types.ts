@@ -694,6 +694,16 @@ export interface ISignalAggregate {
   idsTruncated: boolean;
 }
 
+/**
+ * signals@3: ряд по календарным месяцам (UTC), 24 месяца по месяц среза. value — сумма месяцев, denominator —
+ * всё рассмотренное; что не вошло — по причине. В снимках прежних правил ряда нет.
+ */
+export interface ISignalMonthlySeries extends ISignalAggregate {
+  buckets: Array<{ month: string; value: number }>;
+  excluded: { undated: number; beforeWindow: number; future: number; coarse: number; registry: number };
+  partialLast: boolean;
+}
+
 /** Дата из выборки (signals@2): неизвестна — insufficient_data, а не сегодняшняя. */
 export interface ISignalDate {
   value: string | null;
@@ -797,6 +807,9 @@ export interface ICompanySignals {
     eventsByReview: Record<ReviewLevel, number>;
     eventsByType?: Record<string, ISignalAggregate>;
     legalCasesCount?: ISignalAggregate;
+    /* signals@3: в снимках прежних правил рядов нет — отсюда `?`. */
+    publicationsByMonth?: ISignalMonthlySeries;
+    eventsByMonth?: ISignalMonthlySeries;
     reviewedShare: ISignalAggregate;
     legalCases: Array<{
       caseKey: string;

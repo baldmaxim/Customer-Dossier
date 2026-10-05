@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody } from './companyPage.fixtures';
+import { companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -244,6 +244,33 @@ describe('Карточка компании', () => {
     expect(within(section).getByText(/из 3 дел/)).toBeTruthy();
     expect(within(section).getByText('Нет данных: события по видам, полнота текстов, происхождение текстов.')).toBeTruthy();
     expect(within(section).getByRole('link', { name: 'Как посчитано' }).getAttribute('href')).toBe('/company/7?tab=details#company-signals');
+  });
+
+  it('публикации и события по месяцам (signals@3): два графика, что не вошло — словами, числа — таблицей', async () => {
+    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: seriesSignals })));
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Публикации и события по месяцам' })).closest('section')!;
+    const charts = within(section).getAllByRole('img');
+    expect(charts).toHaveLength(2);
+    expect(charts[0]!.getAttribute('aria-label')).toMatch(/^Публикации, ноябрь 2024 — октябрь 2026: всего 10\sпубликаций, больше всего — сентябрь 2026 \(5\)/);
+    expect(
+      within(section).getByText('учтено 10 из 14 публикаций; не вошли: 1 раньше начала ряда, 2 без даты, 1 — снимки ДОМ.РФ (дата сбора, а не публикации)'),
+    ).toBeTruthy();
+    expect(within(section).getByText('учтено 2 из 3 событий; не вошли: 1 с датой до квартала или года')).toBeTruthy();
+    expect(within(section).queryByRole('table')).toBeNull();
+    // Мини-график в плитке «Публикации» — только форма, диктору не читается.
+    const brief = screen.getByRole('heading', { name: 'Коротко о компании' }).closest('section')!;
+    const tile = within(brief).getByText('Публикации').closest('div')!;
+    expect(tile.querySelector('[aria-hidden="true"] > span')).toBeTruthy();
+  });
+
+  it('снимок прежних правил — рядов нет, сказано словами, ничего не досчитывается', async () => {
+    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: computedSignals })));
+    renderCard();
+    const section = (await screen.findByRole('heading', { name: 'Публикации и события по месяцам' })).closest('section')!;
+    expect(within(section).getByText('Помесячные числа появятся после следующего расчёта показателей.')).toBeTruthy();
+    expect(within(section).queryByRole('img')).toBeNull();
   });
 
   it('показатели не посчитаны — блока разбивок нет, а не пустые полосы', async () => {

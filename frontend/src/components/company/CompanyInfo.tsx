@@ -1,7 +1,8 @@
 // Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Главное о юрлице —
 // уже в шапке (статус, руководитель, адрес, реквизиты); здесь сначала итоги плитками во всю ширину
 // (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — объекты по
-// данным ДОМ.РФ с записью застройщика и графики (роли, события, тексты), справа — остальное ЕГРЮЛ и
+// данным ДОМ.РФ с записью застройщика, публикации и события по месяцам и разбивки (роли, события, тексты),
+// справа — остальное ЕГРЮЛ и
 // «С кем связана» (05.10.2026: раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
 //
 // У имени без ИНН и у группы сведений ЕГРЮЛ нет: об этом — надпись с подсказкой над названием, а назначение
@@ -18,6 +19,7 @@ import { scrollBehavior } from '../../lib/motion';
 import { CompanyBrief } from '../CompanyBrief';
 import { CompanyPartners } from '../CompanyPartners';
 import { Section } from '../ui/Section';
+import { CompanyActivity } from './CompanyActivity';
 import { CompanyFocus } from './CompanyFocus';
 import { CompanyPortfolio } from './CompanyPortfolio';
 import { CompanySources } from './CompanySources';
@@ -86,6 +88,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
       <div className={styles.overview}>
         <div className={styles.overviewMain}>
           <CompanyPortfolio companyId={companyId} data={data} registryOmit={registryOmit} />
+          <CompanyActivity companyId={companyId} />
           <CompanyStructure companyId={companyId} />
         </div>
         <div className={styles.overviewAside}>

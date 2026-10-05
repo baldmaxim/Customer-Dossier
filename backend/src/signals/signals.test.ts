@@ -1,10 +1,11 @@
-// Этап 07 без БД: правила signals@2 на замороженном срезе. Данные синтетические.
+// Этап 07 без БД: правила сигналов (сейчас signals@3) на замороженном срезе. Данные синтетические.
 
 import { describe, it, expect } from 'vitest';
 
 import { dateStatus, overlap, share, windowMonths } from './intervals.js';
 import { computeCompanySignals, originFamilies } from './rules.js';
-import type { ICompanySignalInput, ISignalAssertion, ISignalPublication } from './types.js';
+import { isPartialMonth, monthKeys } from './series.js';
+import { SIGNAL_RULES_VERSION, type ICompanySignalInput, type IMonthlySeries, type ISignalAssertion, type ISignalPublication } from './types.js';
 
 const CUTOFF = new Date('2026-09-15T12:00:00Z');
 const ME = 1;
@@ -217,7 +218,7 @@ describe('signals@2: новые числа с правилом и знамена
     const again = assertion({ predicate: 'corporate_relation', role: 'subsidiary', subjectCompanyId: ME, objectCompanyId: 5 });
     const s = computeCompanySignals(input([contract, planned, denied, again], [publication(1)]), CUTOFF);
 
-    expect(s.rulesVersion).toBe('signals@2');
+    expect(s.rulesVersion).toBe(SIGNAL_RULES_VERSION);
     expect(s.experience.contractsCount).toMatchObject({ value: 1, denominator: 3, ids: [contract.id] });
     expect(s.experience.corporateCount).toMatchObject({ value: 1, denominator: 1 });
     expect(s.experience.counterparties).toMatchObject({ value: 1, ids: [5], denominator: 2 });
@@ -247,6 +248,68 @@ describe('signals@2: новые числа с правилом и знамена
     expect(s.media.eventsByType['delay']).toMatchObject({ value: 1, ids: [delay.id] });
     expect(s.media.eventsByType['court_case']?.value).toBe(3);
     expect(s.media.legalCasesCount.value).toBe(2);
+  });
+});
+
+describe('signals@3: ряды по месяцам и доля', () => {
+  const sumOf = (s: IMonthlySeries): number => s.buckets.reduce((t, b) => t + b.value, 0);
+  const excludedOf = (s: IMonthlySeries): number => Object.values(s.excluded).reduce((t, n) => t + n, 0);
+
+  it('24 месяца по месяц среза, окно — с первого дня первого месяца', () => {
+    expect(monthKeys(CUTOFF)).toHaveLength(24);
+    expect(monthKeys(CUTOFF)[0]).toBe('2024-10');
+    expect(monthKeys(CUTOFF)[23]).toBe('2026-09');
+    expect(monthKeys(new Date('2026-01-31T23:00:00Z'), 3)).toEqual(['2025-11', '2025-12', '2026-01']);
+    const s = computeCompanySignals(input([], [publication(1)]), CUTOFF);
+    expect(s.media.publicationsByMonth.window).toEqual({ from: '2024-10-01', to: '2026-09-15', basis: 'publication_date' });
+  });
+
+  it('публикации: по месяцу даты, без даты / раньше окна / позже среза / снимки реестра — отдельно, итог сходится', () => {
+    const pubs = [
+      publication(1, { publishedAt: '2026-09-15T08:00:00Z' }), // день среза — входит
+      publication(2, { publishedAt: '2026-09-01T00:00:00Z' }),
+      publication(3, { publishedAt: '2026-03-31T23:59:00Z' }),
+      publication(4, { publishedAt: null }),
+      publication(5, { publishedAt: '2024-09-30T10:00:00Z' }), // до окна
+      publication(6, { publishedAt: '2026-09-16T10:00:00Z' }), // позже среза
+      publication(7, { publishedAt: '2026-08-10T10:00:00Z', isRegistry: true }),
+    ];
+    const series = computeCompanySignals(input([], pubs), CUTOFF).media.publicationsByMonth;
+
+    expect(series.buckets.find(b => b.month === '2026-09')?.value).toBe(2);
+    expect(series.buckets.find(b => b.month === '2026-03')?.value).toBe(1);
+    expect(series.buckets.find(b => b.month === '2026-08')?.value).toBe(0);
+    expect(series.excluded).toEqual({ undated: 1, beforeWindow: 1, future: 1, coarse: 0, registry: 1 });
+    expect(series).toMatchObject({ value: 3, denominator: 7, status: 'ok', ids: [1, 2, 3], partialLast: true });
+    expect(series.value).toBe(sumOf(series));
+    expect(series.denominator).toBe(series.value! + excludedOf(series));
+  });
+
+  it('события: только точность до дня или месяца, отклонённое не считается', () => {
+    const day = assertion({ validFrom: '2026-05-12', periodPrecision: 'day' });
+    const month = assertion({ validFrom: '2026-05-01', validTo: '2026-05-31', periodPrecision: 'month' });
+    const quarter = assertion({ validFrom: '2026-04-01', validTo: '2026-06-30', periodPrecision: 'quarter' });
+    const undated = assertion({});
+    const rejected = assertion({ validFrom: '2026-05-12', periodPrecision: 'day', status: 'rejected' });
+    const series = computeCompanySignals(input([day, month, quarter, undated, rejected], [publication(1)]), CUTOFF).media.eventsByMonth;
+
+    expect(series.buckets.find(b => b.month === '2026-05')?.value).toBe(2);
+    expect(series.excluded).toMatchObject({ coarse: 1, undated: 1 });
+    expect(series).toMatchObject({ value: 2, denominator: 4 });
+    expect(series.denominator).toBe(series.value! + excludedOf(series));
+  });
+
+  it('ни одной публикации — «недостаточно данных», а не ноль; месяц на последнем дне — полный', () => {
+    const series = computeCompanySignals(input([], []), CUTOFF).media.publicationsByMonth;
+    expect(series).toMatchObject({ value: null, status: 'insufficient_data', denominator: 0 });
+    expect(series.buckets).toHaveLength(24);
+    expect(isPartialMonth(new Date('2026-09-30T08:00:00Z'))).toBe(false);
+    expect(isPartialMonth(new Date('2026-09-29T23:00:00Z'))).toBe(true);
+  });
+
+  it('доля считается по числу id, а не по урезанному до 200 списку', () => {
+    const ids = Array.from({ length: 250 }, (_, i) => i + 1);
+    expect(share(ids, 500, 'тест')).toMatchObject({ value: 0.5, idsTruncated: true });
   });
 });
 

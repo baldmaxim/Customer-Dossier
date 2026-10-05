@@ -1,7 +1,7 @@
 // Типы read-model сигналов компании (этап 07, ADR-009). Вход — утверждения и публикации на срез,
 // выход — три независимых блока с правилом, окном, знаменателем и списком исходных id у каждого числа.
 
-export const SIGNAL_RULES_VERSION = 'signals@2';
+export const SIGNAL_RULES_VERSION = 'signals@3';
 
 export type ReviewLevel = 'reviewed' | 'text_grounded' | 'legacy_unreviewed' | 'disputed' | 'rejected';
 
@@ -63,6 +63,8 @@ export interface ISignalPublication {
   /** Источник пересылки из наблюдений, если транспорт его назвал. */
   forwardOrigin: string | null;
   observations: number;
+  /** signals@3: публикация — снимок реестра (registry_records): дата — дата сбора, в помесячный ряд не входит. */
+  isRegistry?: boolean;
 }
 
 export interface ICompanySignalInput {
@@ -93,6 +95,17 @@ export interface IAggregate {
   denominator: number | null;
   ids: number[];
   idsTruncated: boolean;
+}
+
+/**
+ * signals@3: ряд по календарным месяцам (UTC), 24 месяца по месяц среза. value — сумма месяцев,
+ * denominator — всё рассмотренное, ids — учтённые; что не вошло — счётчиками по причине.
+ */
+export interface IMonthlySeries extends IAggregate {
+  buckets: Array<{ month: string; value: number }>;
+  excluded: { undated: number; beforeWindow: number; future: number; coarse: number; registry: number };
+  /** Месяц среза не закончился: последний столбик неполный. */
+  partialLast: boolean;
 }
 
 /**
@@ -217,6 +230,9 @@ export interface IMediaBlock {
   /** signals@2: события по видам и число судебных дел — числом, а не только списком. */
   eventsByType: Record<string, IAggregate>;
   legalCasesCount: IAggregate;
+  /** signals@3: публикации и события по месяцам — форма активности во времени, не оценка. */
+  publicationsByMonth: IMonthlySeries;
+  eventsByMonth: IMonthlySeries;
   reviewedShare: IAggregate;
   legalCases: ILegalCase[];
   courtRoles: { plaintiff: number; defendant: number; other: number; unknown: number };

@@ -13,7 +13,7 @@ import { publishCandidateSet } from '../reprocess/publish.js';
 import { claimNextRun, enqueueRun, processRun } from '../reprocess/runs.js';
 import { answer, company, event, project, relation, semanticProvider } from '../reprocess/semantic/__fixtures__/semanticAnswers.js';
 import { refreshSignals } from './refresh.js';
-import type { ICompanySignals } from './types.js';
+import { SIGNAL_RULES_VERSION, type ICompanySignals } from './types.js';
 
 let api: ITestApi;
 const sources: number[] = [];
@@ -116,7 +116,7 @@ describe('снимок сигналов на срез', () => {
 
     const res = await signalsOf(alfa);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', refresh: { active: { id: firstRefresh, rulesVersion: 'signals@2', cutoffAt: cutoff.toISOString() }, stale: false } });
+    expect(res.body).toMatchObject({ status: 'ok', refresh: { active: { id: firstRefresh, rulesVersion: SIGNAL_RULES_VERSION, cutoffAt: cutoff.toISOString() }, stale: false } });
 
     const card = await api.call('GET', `/api/companies/${alfa}`, undefined);
     expect(card.body).not.toHaveProperty('risk');
@@ -153,6 +153,11 @@ describe('снимок сигналов на срез', () => {
       )
     ).rows.map(r => r.id);
     expect(s.media.publications).toMatchObject({ value: items.length, ids: items });
+    // signals@3: ряд по месяцам — из тех же публикаций; итог — сумма месяцев, знаменатель — все публикации.
+    const byMonth = s.media.publicationsByMonth;
+    expect(byMonth.ids.every(i => items.includes(i))).toBe(true);
+    expect(byMonth.value).toBe(byMonth.buckets.reduce((t, b) => t + b.value, 0));
+    expect(byMonth.denominator).toBe(items.length);
     expect(s.experience.projects.ids).toEqual([await idOf('projects', 'Берег-Демо')]);
     expect(s.experience.participations[0]).toMatchObject({ building: 'корпус 2', workPackage: 'ВК', validFrom: `${Y}-06-01`, periodPrecision: 'month' });
   });

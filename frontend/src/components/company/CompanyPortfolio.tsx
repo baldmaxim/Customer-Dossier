@@ -26,6 +26,8 @@ import { useCompanyObjects } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 const OBJECTS = ['объекту', 'объектам', 'объектам'] as const;
+/** После «из» — родительный падеж: «1 из 1 объекта», «2 из 5 объектов». */
+const OF_OBJECTS = ['объекта', 'объектов', 'объектов'] as const;
 
 const asOfText = (asOf: IPortfolio['asOf']): string | null => {
   if (!asOf) return null;
@@ -82,7 +84,7 @@ export const CompanyPortfolio: FC<ICompanyPortfolioProps> = ({ companyId, data, 
       title={hasObjects ? 'Объекты по данным ДОМ.РФ' : 'Застройщик в реестре ДОМ.РФ'}
       note={
         p && hasObjects
-          ? [`${formatCount(p.withRegistry)} из ${formatCount(p.total)} объектов`, asOfText(p.asOf)].filter(Boolean).join(' · ')
+          ? [`${formatCount(p.withRegistry)} из ${formatCountWord(p.total, OF_OBJECTS)}`, asOfText(p.asOf)].filter(Boolean).join(' · ')
           : undefined
       }
       footer={

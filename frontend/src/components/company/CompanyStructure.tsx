@@ -23,9 +23,10 @@ import { Section } from '../ui/Section';
 import { useCompanySignals } from './useCompanyQueries';
 import styles from './Company.module.css';
 
-const OBJECTS = ['объект', 'объекта', 'объектов'] as const;
 const EVENTS = ['событие', 'события', 'событий'] as const;
-const CASES = ['дело', 'дела', 'дел'] as const;
+/** После «из» — родительный падеж: «из 1 объекта», «из 3 объектов». */
+const OF_OBJECTS = ['объекта', 'объектов', 'объектов'] as const;
+const OF_CASES = ['дела', 'дел', 'дел'] as const;
 const PUBLICATIONS = ['публикация', 'публикации', 'публикаций'] as const;
 const TEXTS = ['текст', 'текста', 'текстов'] as const;
 const KINDS = ['вид', 'вида', 'видов'] as const;
@@ -54,7 +55,7 @@ const rolesBlock = (s: ICompanySignals): IBlock | null => {
   return {
     key: 'roles',
     title: 'Роли на объектах',
-    caption: projects !== null ? `из ${formatCountWord(projects, OBJECTS)} с участием` : 'по объектам с участием',
+    caption: projects !== null ? `из ${formatCountWord(projects, OF_OBJECTS)} с участием` : 'по объектам с участием',
     chart: <BarList label="Роли на объектах" items={items} total={projects} />,
   };
 };
@@ -88,7 +89,7 @@ const courtsBlock = (s: ICompanySignals): IBlock | null => {
   return {
     key: 'courts',
     title: 'Роль в судебных делах',
-    caption: `из ${formatCountWord(cases, CASES)}`,
+    caption: `из ${formatCountWord(cases, OF_CASES)}`,
     chart: <BarList label="Роль в судебных делах" items={items} total={cases} />,
   };
 };

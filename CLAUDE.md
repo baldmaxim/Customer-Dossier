@@ -66,7 +66,7 @@ npm run release:fingerprint [-- --out f.json]  # HEAD + sha256 рабочего 
 # сервер pulse.meridianai.ru (ADR-013): deploy/release.sh [--check] из корня TG_Info — сборка, перенос, update.sh;
 # обслуживание, туннели, перенос базы и грабли — deploy/README.md
 npm run pipeline:once -- --headlines [--limit N]  # темы публикаций (headline@1) для редакций без темы
-npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на срез (этап 07, правила signals@2) + legacy company_metrics
+npm run metrics:refresh [-- --cutoff ISO]  # снимок сигналов на срез (этап 07, правила signals@3) + legacy company_metrics
 npm run focus -- --status | --probe <ИНН|ОГРН> | --refresh <ИНН|ОГРН> | --suggest <название> | --pass  # Контур.Фокус (ADR-015/016): --probe и --suggest — живые платные запросы, снимков не пишут
 ```
 
@@ -327,7 +327,10 @@ npm run focus -- --status | --probe <ИНН|ОГРН> | --refresh <ИНН|ОГР
   Новые правила — новая версия `SIGNAL_RULES_VERSION`, не правка чисел молча. `signals@2` (21.09.2026) добавил
   договоры, корпоративные связи, контрагентов, пакеты работ, события по видам, число дел и края выборки по датам;
   прежние правила не менялись. Старый снимок новых чисел не содержит — карточка говорит это словами и ничего
-  не досчитывает; числа появляются после `npm run metrics:refresh`.
+  не досчитывает; числа появляются после `npm run metrics:refresh`. **`signals@3` (05.10.2026)** — ряды по месяцам
+  (`signals/series.ts`: публикации и события за 24 месяца, месяц UTC; снимки реестра ДОМ.РФ, даты без даты и даты до
+  квартала/года — счётчиками `excluded`, не в месяцах) и исправленная доля `share` (числитель — `value`, не урезанный
+  до 200 список `ids`). Чего нет в старом снимке, фронтенд определяет по отсутствию поля, а не по строке версии.
 - **Доступ: локально без входа, на сервере — пользователи с ролями (ADR-013, ADR-014, 30.09.2026).**
   `AUTH_MODE=none` (по умолчанию): API только на loopback, входа нет, запросы идут от локального `operator`
   со всеми правами. `AUTH_MODE=password` — сервер quantor: логин и пароль (scrypt, `auth/password.ts`) →

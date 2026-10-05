@@ -159,6 +159,37 @@ export const computedSignals = {
   },
 };
 
+/** 24 месяца по месяц среза computedSignals (октябрь 2026), значения — с конца ряда. */
+const SERIES_MONTHS = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2026, 9 - (23 - i), 1)).toISOString().slice(0, 7));
+
+const monthSeries = (tail: number[], excluded: Partial<Record<'undated' | 'beforeWindow' | 'future' | 'coarse' | 'registry', number>> = {}) => {
+  const values = [...Array(24 - tail.length).fill(0), ...tail] as number[];
+  const sum = values.reduce((t, v) => t + v, 0);
+  const ex = { undated: 0, beforeWindow: 0, future: 0, coarse: 0, registry: 0, ...excluded };
+  return {
+    ...agg(sum),
+    denominator: sum + Object.values(ex).reduce((t, v) => t + v, 0),
+    buckets: SERIES_MONTHS.map((month, i) => ({ month, value: values[i]! })),
+    excluded: ex,
+    partialLast: true,
+  };
+};
+
+/** Показатели signals@3: те же числа и ряды по месяцам (публикации и события). */
+export const seriesSignals = {
+  ...computedSignals,
+  refresh: { ...computedSignals.refresh, active: { ...computedSignals.refresh.active, rulesVersion: 'signals@3' } },
+  signals: {
+    ...computedSignals.signals,
+    cutoff: '2026-10-01T12:00:00Z',
+    media: {
+      ...computedSignals.signals.media,
+      publicationsByMonth: monthSeries([3, 0, 5, 2], { undated: 2, registry: 1, beforeWindow: 1 }),
+      eventsByMonth: monthSeries([1, 0, 1], { coarse: 1 }),
+    },
+  },
+};
+
 /** Объект вкладки «Объекты»: свой, с двумя ролями, без сведений ДОМ.РФ. */
 export const objectRow = (over: Record<string, unknown> = {}) => ({
   projectId: 55,
