@@ -194,7 +194,7 @@ describe('объекты компании из событий', () => {
       e.projectName === 'Бадаевский-Демо' && e.sourceTitle === 'card_demo' && e.sourceKey === 'card_demo')).toBe(true);
     // Общее число — отдельно от списка (список урезан до 100); служебный столбец total в строки не попадает.
     expect(events.body).toMatchObject({ total: (events.body.items as unknown[]).length, truncated: false });
-    expect(events.body.items[0]).not.toHaveProperty('total');
+    expect((events.body.items as unknown[])[0]).not.toHaveProperty('total');
 
     const projects = await call(`/api/companies/${id}/projects`);
     expect(projects.status).toBe(200);
