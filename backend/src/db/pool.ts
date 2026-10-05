@@ -41,6 +41,9 @@ export const createPgPoolConfig = (overrides: Partial<PoolConfig> = {}): PoolCon
   connectionString: env.DATABASE_URL,
   max: env.DATABASE_POOL_MAX,
   statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS,
+  // JIT выключен: запросы портала короткие, а завышенная оценка стоимости (подзапросы на строку) включала
+  // компиляцию с оптимизацией — 05.10.2026 поиск компаний тратил 1,7 с из 1,8 на JIT при 0,1 с работы.
+  options: '-c jit=off',
   // Ждать свободный коннект не вечно: быстрый отказ вместо зависшего хендлера.
   connectionTimeoutMillis: 5000,
   keepAlive: true,
