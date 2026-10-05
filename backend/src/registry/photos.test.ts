@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { PHOTO_MAX_BYTES, hasPhoto, photoFile, photosEnabled, readPhotoMeta, savePhoto } from './photos.js';
+import { NO_PHOTO_RECHECK_DAYS, PHOTO_MAX_BYTES, hasPhoto, markNoPhoto, needsPhoto, photoFile, photosEnabled, readPhotoMeta, savePhoto } from './photos.js';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 let dir = '';
@@ -48,5 +48,16 @@ describe('фото объектов ДОМ.РФ', () => {
   it('имя файла — только номер объекта: путь из данных не собирается', () => {
     expect(() => savePhoto('../etc/passwd', { bytes: JPEG, width: 1, height: 1, originalUrl: 'x' }, dir)).toThrow(/только цифры/);
     expect(photoFile('../71431', dir)).toBeNull();
+  });
+
+  it('добор фото: нужен, пока снимка нет; «галереи нет» — повтор через неделю; со снимком — не нужен', () => {
+    const now = new Date('2026-10-05T12:00:00Z');
+    expect(needsPhoto('500', dir, now)).toBe(true);
+    markNoPhoto('500', dir, now);
+    expect(needsPhoto('500', dir, now)).toBe(false);
+    expect(needsPhoto('500', dir, new Date(now.getTime() + (NO_PHOTO_RECHECK_DAYS + 1) * 86_400_000))).toBe(true);
+    savePhoto('500', { bytes: JPEG, width: 1, height: 1, originalUrl: 'x' }, dir, now);
+    expect(needsPhoto('500', dir, now)).toBe(false);
+    expect(needsPhoto('500', '', now)).toBe(false);
   });
 });

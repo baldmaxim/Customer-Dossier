@@ -4,7 +4,8 @@
 // поднята над ней (row-link-above) и остаётся отдельной целью.
 //
 // Сведения ДОМ.РФ — текст сайта на дату, а не проверенный факт: внизу всегда «ДОМ.РФ · на дату». Фото —
-// сверху, во всю ширину карточки, если работник ДОМ.РФ его снял (подпись «фото и сведения» — там же).
+// сверху полосой 2:1 во всю ширину карточки; пока его нет — заглушка того же размера (подпись «фото и
+// сведения» — внизу). Карточка компактная: адрес — одной строкой с полным текстом в подсказке.
 // Без них — состояние по событиям из публикаций, если оно есть, и «только из публикаций».
 
 import { FC } from 'react';
@@ -49,10 +50,21 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
   const facts = factsOf(o);
   const place = o.registry?.address ?? o.city;
   const level = o.level && o.level !== 'complex' ? PROJECT_LEVEL_LABELS[o.level] : null;
+  const placeText = `${level ? `${level} · ` : ''}${place ?? 'адрес не указан'}`;
+  // Фото ещё нет (сбор ДОМ.РФ до объекта не дошёл, галереи нет) — заглушка того же размера: ряды ровные.
+  const placeholder = (
+    <div className={`${styles.photo} ${styles.placeholder}`} aria-hidden="true">
+      <Icon name="building" size="lg" />
+    </div>
+  );
 
   return (
     <article className={`${styles.card} row-link`}>
-      {o.registry?.hasPhoto && <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} />}
+      {o.registry?.hasPhoto ? (
+        <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} fallback={placeholder} />
+      ) : (
+        placeholder
+      )}
       {(status || completion) && (
         <p className={styles.top}>
           {status && <span className={styles.status}>{status /* raw-ok: подпись сайта ДОМ.РФ */}</span>}
@@ -64,9 +76,8 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
           {o.name}
         </Link>
       </Heading>
-      <p className={styles.place}>
-        {level && `${level} · `}
-        {place ?? 'адрес не указан'}
+      <p className={styles.place} title={placeText}>
+        {placeText}
       </p>
       {facts.length > 0 && (
         <dl className={styles.facts}>

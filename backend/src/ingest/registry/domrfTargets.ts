@@ -190,3 +190,11 @@ export const markDomRfCaptured = async (
     [externalRef, revisionId, projectId],
   );
 };
+
+/** Снятые карточки объектов, от свежих к старым: из них добор фото выбирает те, у кого снимка нет. */
+export const listCapturedDomRfTargets = async (limit = 5000): Promise<Array<{ id: number; externalRef: string; url: string }>> =>
+  query<{ id: number; externalRef: string; url: string }>(
+    `SELECT id, external_ref AS "externalRef", url FROM domrf_targets
+     WHERE captured_at IS NOT NULL ORDER BY captured_at DESC LIMIT $1`,
+    [limit],
+  );

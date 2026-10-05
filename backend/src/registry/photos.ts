@@ -17,6 +17,9 @@ export const PHOTO_MAX_BYTES = 1_500_000;
 /** Ширина, до которой снимок уменьшается в браузере: карточка — до 600 px, паспорт — до 1200 px на ретине. */
 export const PHOTO_MAX_WIDTH = 1280;
 
+/** На странице объекта галереи нет — повторная проверка не раньше, чем через столько дней. */
+export const NO_PHOTO_RECHECK_DAYS = 7;
+
 export interface IPhotoMeta {
   /** Адрес исходного снимка на сайте: тот же адрес при перечитывании — снимок не скачивается заново. */
   originalUrl: string;
@@ -80,4 +83,28 @@ export const savePhoto = (
   fs.writeFileSync(`${target.meta}.tmp`, JSON.stringify(meta), { mode: 0o644 });
   fs.renameSync(`${target.meta}.tmp`, target.meta);
   return meta;
+};
+
+/** Галереи на странице нет: заметка без снимка, чтобы добор фото не открывал страницу каждый проход. */
+export const markNoPhoto = (externalRef: string, dir: string = env.REGISTRY_PHOTO_DIR, now: Date = new Date()): void => {
+  if (!photosEnabled(dir)) return;
+  fs.mkdirSync(dir, { recursive: true });
+  const target = paths(externalRef, dir);
+  fs.writeFileSync(`${target.meta}.tmp`, JSON.stringify({ noPhoto: true, checkedAt: now.toISOString() }), { mode: 0o644 });
+  fs.renameSync(`${target.meta}.tmp`, target.meta);
+};
+
+/**
+ * Нужен ли объекту добор фото: снимка нет и галерею не проверяли последние NO_PHOTO_RECHECK_DAYS дней.
+ * Объекты, снятые до появления фото (02.10.2026), иначе ждали бы перечитывания раз в неделю.
+ */
+export const needsPhoto = (externalRef: string, dir: string = env.REGISTRY_PHOTO_DIR, now: Date = new Date()): boolean => {
+  if (!photosEnabled(dir) || !REF.test(externalRef) || hasPhoto(externalRef, dir)) return false;
+  try {
+    const meta = JSON.parse(fs.readFileSync(paths(externalRef, dir).meta, 'utf8')) as { noPhoto?: boolean; checkedAt?: string };
+    if (meta.noPhoto && meta.checkedAt) return now.getTime() - Date.parse(meta.checkedAt) > NO_PHOTO_RECHECK_DAYS * 86_400_000;
+  } catch {
+    // заметки нет — проверяли никогда
+  }
+  return true;
 };

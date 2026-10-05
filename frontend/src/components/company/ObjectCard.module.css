@@ -3,26 +3,33 @@
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   min-width: 0;
   overflow: hidden;
-  padding: var(--sp-4);
+  padding: var(--sp-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
 }
 
-/* Фото во всю ширину карточки: поля карточки компенсируются, верхние углы — как у карточки. 16:9 и
-   object-fit: cover — сетка ровная, какой бы формы ни был снимок. */
+/* Фото во всю ширину карточки: поля карточки компенсируются, верхние углы — как у карточки. 2:1 и
+   object-fit: cover — полоса невысокая, сетка ровная, какой бы формы ни был снимок. */
 .photo {
   display: block;
-  width: calc(100% + 2 * var(--sp-4));
+  width: calc(100% + 2 * var(--sp-3));
   max-width: none;
-  aspect-ratio: 16 / 9;
-  margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-1);
+  aspect-ratio: 2 / 1;
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-2);
   border-radius: var(--radius) var(--radius) 0 0;
   background: var(--surface-2);
   object-fit: cover;
+}
+
+/* Заглушка на месте фото: та же полоса, значок здания приглушённо. */
+.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
 }
 
 @media (hover: hover) {
@@ -39,9 +46,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-1) var(--sp-3);
+  gap: 0 var(--sp-2);
   margin: 0;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
 }
 
 .status {
@@ -55,7 +62,7 @@
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-base);
   line-height: var(--lh-snug);
   overflow-wrap: break-word;
 }
@@ -66,20 +73,22 @@
 }
 
 .place {
+  overflow: hidden;
   margin: 0;
   color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   line-height: var(--lh-snug);
-  overflow-wrap: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Три числа рядом: подпись мелко над значением, как реквизиты в шапке компании. */
 .facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sp-2);
-  margin: var(--sp-1) 0 0;
-  padding: var(--sp-2) 0;
+  gap: var(--sp-1) var(--sp-2);
+  margin: var(--sp-1) 0;
+  padding: var(--sp-1) 0;
   border-block: 1px solid var(--border);
 }
 
@@ -98,7 +107,7 @@
 
 .fact dd {
   margin: 0;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;

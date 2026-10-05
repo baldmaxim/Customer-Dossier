@@ -45,13 +45,14 @@ import {
   failDomRfTarget,
   parseDomRfObjectUrl,
   requestRecaptureForDeveloper,
+  listCapturedDomRfTargets,
   setDomRfTargetRefs,
   type IDomRfTarget,
 } from './domrfTargets.js';
 import { importRegistryPayload } from './importFile.js';
 import { syncDomRfGroupRelations } from '../../registry/groupSync.js';
 import { withdrawModelExtractionOnRegistry } from '../../registry/modelArtifacts.js';
-import { PHOTO_MAX_WIDTH, hasPhoto, photosEnabled, readPhotoMeta, savePhoto } from '../../registry/photos.js';
+import { PHOTO_MAX_WIDTH, hasPhoto, markNoPhoto, needsPhoto, photosEnabled, readPhotoMeta, savePhoto } from '../../registry/photos.js';
 
 const script = (name: string): string => fs.readFileSync(fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url)), 'utf8');
 
@@ -171,7 +172,10 @@ const capturePhoto = async (page: Page, externalRef: string): Promise<string> =>
   if (!photosEnabled()) return '';
   try {
     const src = await page.evaluate<string | null>(MAIN_PHOTO_SRC);
-    if (!src) return '; фото на странице нет';
+    if (!src) {
+      markNoPhoto(externalRef);
+      return '; фото на странице нет';
+    }
     if (readPhotoMeta(externalRef)?.originalUrl === src && hasPhoto(externalRef)) return '';
     const shot = await page.evaluate<{ base64: string; width: number; height: number }>(
       `(${script('domrf-photo-capture.js')})(${JSON.stringify(src)}, ${PHOTO_MAX_WIDTH})`,
@@ -181,6 +185,31 @@ const capturePhoto = async (page: Page, externalRef: string): Promise<string> =>
   } catch (err) {
     return `; фото не снято: ${message(err)}`;
   }
+};
+
+/**
+ * Добор фото у объекта, снятого раньше, чем появились фото: открыть карточку и снять только снимок — без
+ * «Все характеристики», без застройщика и без новой редакции. Галерея грузится вместе с заголовком.
+ */
+const backfillPhoto = async (target: { externalRef: string; url: string }): Promise<IDomRfPassResult> => {
+  const what = `фото объекта ${target.externalRef}`;
+  try {
+    await approvedSource();
+    const note = await withPage(async page => {
+      await open(page, target.url);
+      await page.locator('img[class*="GalleryAlamics__Image"]').first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => undefined);
+      return capturePhoto(page, target.externalRef);
+    });
+    return { what, outcome: note.replace(/^; /, '') || 'фото то же, что прежде' };
+  } catch (err) {
+    return { what, outcome: `ошибка: ${message(err)}` };
+  }
+};
+
+/** Следующий объект без фото среди снятых; null — добирать нечего. */
+const nextPhotoBackfill = async (): Promise<{ externalRef: string; url: string } | null> => {
+  if (!photosEnabled()) return null;
+  return (await listCapturedDomRfTargets()).find(t => needsPhoto(t.externalRef)) ?? null;
 };
 
 export interface IDomRfPassResult {
@@ -320,6 +349,11 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
     prefix.push({ what: 'связи с группами', outcome: `записано ${groups.linked}, снято ${groups.withdrawn}` });
   }
   passNo += 1;
+  // Каждый второй шаг (кроме шагов страниц застройщиков) — добор фото у снятых раньше объектов, пока такие есть.
+  if (passNo % 2 === 1 && passNo % PAGES_EVERY !== 0) {
+    const photo = await nextPhotoBackfill();
+    if (photo) return [...prefix, await backfillPhoto(photo)];
+  }
   const objectsFirst = passNo % PAGES_EVERY !== 0;
   if (objectsFirst) {
     const target = await claimDomRfTarget();

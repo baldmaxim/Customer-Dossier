@@ -1,5 +1,5 @@
-/* Вкладка «Объекты» и превью на «Обзоре»: сетка карточек — одна колонка на телефоне, две с 600px,
-   три с 1280px. */
+/* Вкладка «Объекты» и превью: сетка карточек — одна колонка на телефоне, две с 600px, три с 900px,
+   четыре с 1280px. */
 
 .body {
   display: flex;
@@ -46,13 +46,20 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 900px) {
   .grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
 
-  /* Превью на «Обзоре» стоит в колонке 2/3 — там и с 1280px две карточки в ряд. */
+/* С 1280px — четыре карточки в ряд: карточка компактная, полоса фото 2:1. */
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Превью в колонке 2/3 — три в ряд. */
   .preview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
