@@ -32,7 +32,7 @@ export const DomRfPage: FC = () => {
   const select = (next: Tab): void => patch({ tab: next === 'companies' ? null : next, filter: null, q: null }, { history: 'push' });
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <PageHeader eyebrow="Админка · Источники · Сайты" title="наш.дом.рф" lead="Единый реестр застройщиков: что нашёл браузер на сервере и что ждёт вашего решения." />
       <Tabs
         label="Разделы ДОМ.РФ"

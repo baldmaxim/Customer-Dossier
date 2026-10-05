@@ -53,7 +53,7 @@
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-5);
+  gap: var(--sp-4);
 }
 
 @media (min-width: 900px) {

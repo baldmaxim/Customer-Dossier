@@ -22,7 +22,7 @@ export const AccountPage: FC = () => {
   const [changed, setChanged] = useState(false);
 
   return (
-    <Stack gap={5} className={styles.page}>
+    <Stack gap={4} className={styles.page}>
       <Section title={user.displayName}>
         <Stack gap={4}>
           <DescriptionList

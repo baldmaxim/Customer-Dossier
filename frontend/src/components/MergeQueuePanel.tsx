@@ -27,7 +27,7 @@ export const MergeQueuePanel: FC = () => {
   const items = merges.data?.items ?? [];
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <p className={styles.intro}>
         Портал не объединяет похожие карточки сам: решите, одна это компания (или объект) или разные. Разные реквизиты, бренд и юрлицо,
         разные города и корпуса не объединяются — сравнение это покажет.

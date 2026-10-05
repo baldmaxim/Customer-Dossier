@@ -76,7 +76,7 @@ export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
   // Карточки на телефоне сами по себе карточки: раздел вокруг них — без рамки.
   const variant = wide ? 'card' : 'plain';
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       {missing && <AddCompanyByInn identifier={missing} />}
       {found.length > 0 && (
         <Section title="Компании" note={`найдено: ${formatCount(found.length)}`} variant={variant}>

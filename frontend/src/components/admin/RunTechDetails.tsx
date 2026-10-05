@@ -91,7 +91,7 @@ export const RunTechDetails: FC<{ run: IRunDetail }> = ({ run: r }) => {
   ];
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <DescriptionList items={items} dense />
 
       <Stack gap={2}>

@@ -84,7 +84,7 @@ export const UserPage: FC = () => {
 
   const self = user.id === me.id;
   return (
-    <Stack gap={5} className={styles.page}>
+    <Stack gap={4} className={styles.page}>
       <PageHeader
         eyebrow={EYEBROW}
         title={user.displayName}

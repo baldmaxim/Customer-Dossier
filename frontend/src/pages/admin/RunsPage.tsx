@@ -70,7 +70,7 @@ export const RunsPage: FC = () => {
     });
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <BaseTotals />
       <RevisionStates status={status} onFilter={next => filter({ status: next })} />
 

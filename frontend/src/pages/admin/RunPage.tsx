@@ -107,7 +107,7 @@ export const RunPage: FC = () => {
   const current = r.publication.activeSetId === null ? 'none' : r.publication.activeRunId === r.id ? 'this' : 'other';
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <PageHeader
         eyebrow={EYEBROW}
         title={title}

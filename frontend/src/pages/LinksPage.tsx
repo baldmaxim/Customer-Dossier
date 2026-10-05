@@ -87,7 +87,8 @@ export const LinksPage: FC = () => {
   const title = center ? (centerName ? `Связи: ${centerName}` : 'Связи') : 'Связи компаний';
 
   return (
-    <div className={styles.page}>
+    // data-bleed: схема — во всю ширину экрана, каркас её не ограничивает (Layout.module.css).
+    <div className={styles.page} data-bleed>
       <PageHeader
         eyebrow={center ? (center.kind === 'company' ? 'Компания' : 'Объект') : undefined}
         title={title}

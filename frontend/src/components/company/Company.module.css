@@ -76,7 +76,7 @@
 @media (min-width: 900px) {
   .overview {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: var(--sp-5);
+    gap: var(--sp-4);
   }
 }
 

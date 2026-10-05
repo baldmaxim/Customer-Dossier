@@ -28,7 +28,8 @@ body {
   color: var(--text);
   font-family: var(--font);
   font-size: var(--fs-base);
-  line-height: var(--lh-text);
+  /* Интерфейс — --lh-ui; проза (пост, цитата, абзацы пояснений) ставит --lh-text сама. */
+  line-height: var(--lh-ui);
   letter-spacing: var(--tracking-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

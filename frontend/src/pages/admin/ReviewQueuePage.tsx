@@ -34,7 +34,7 @@ export const ReviewQueuePage: FC = () => {
     patch({ tab: next === 'conflicts' ? null : next, kind: null, status: null, what: null, cursor: null, open: null }, { history: 'push' });
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <Tabs
         label="Очереди проверки"
         idBase={idBase}

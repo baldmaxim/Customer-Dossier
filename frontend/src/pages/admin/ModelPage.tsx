@@ -73,7 +73,7 @@ export const ModelPage: FC = () => {
   const refresh = (): void => void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       <Section title="Модель" note="меняется в настройках сервера">
         <Stack gap={3}>
           <DescriptionList

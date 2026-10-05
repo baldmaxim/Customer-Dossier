@@ -52,13 +52,15 @@
   view-transition-name: app-header;
 }
 
-/* Каркас идёт во всю ширину экрана: ограничивается не он, а отдельные блоки —
-   абзац по читаемости, форма по смыслу. Поля — var(--gutter). */
+/* Фон шапки — во всю ширину экрана, содержимое — в ширину каркаса (--page-max по центру), как и
+   main: логотип стоит над левым краем страницы, а не у края монитора. Поля — var(--gutter). */
 .headerInner {
   display: flex;
   align-items: stretch;
   gap: var(--sp-3);
+  max-width: calc(var(--page-max) + 2 * var(--gutter));
   height: var(--header-h);
+  margin-inline: auto;
   padding: 0 max(var(--gutter), var(--safe-right)) 0 max(var(--gutter), var(--safe-left));
 }
 
@@ -171,13 +173,21 @@
   transform: scale(0.94);
 }
 
+/* Каркас — до --page-max по центру (index.css: почему). Схема связей ставит data-bleed и идёт
+   во всю ширину: ей место нужнее, чем строке текста. */
 .main {
   flex: 1;
   width: 100%;
   /* min-width: 0 — иначе широкая таблица внутри распирает flex-колонку оболочки. */
   min-width: 0;
+  max-width: calc(var(--page-max) + 2 * var(--gutter));
+  margin-inline: auto;
   padding: var(--sp-4) max(var(--gutter), var(--safe-right))
     calc(var(--sp-7) + var(--bottom-ui) + var(--toast-space, 0px)) max(var(--gutter), var(--safe-left));
+}
+
+.main:has([data-bleed]) {
+  max-width: none;
 }
 
 /* Возврат на детальных страницах: тихая строка над заголовком, не акцентная пилюля. */
@@ -332,12 +342,6 @@
 
   .tabbar {
     display: none;
-  }
-}
-
-@media (min-width: 900px) {
-  .main {
-    padding-top: var(--sp-5);
   }
 }
 

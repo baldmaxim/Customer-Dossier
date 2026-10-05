@@ -82,7 +82,7 @@
     grid-template-columns: minmax(14rem, 18rem) minmax(0, 46rem);
     justify-content: center;
     align-items: start;
-    gap: var(--sp-5);
+    gap: var(--sp-4);
   }
 
   /* Список каналов стоит на месте, пока читают длинный пост. */

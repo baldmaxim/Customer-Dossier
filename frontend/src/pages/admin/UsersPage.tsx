@@ -45,7 +45,7 @@ export const UsersPage: FC = () => {
   const rejected = newestFirst(all.filter(u => u.registration === 'rejected'));
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       {requests.length > 0 && (
         <Section title={`Заявки на доступ (${formatCount(requests.length)})`} note="войти можно только после одобрения">
           <RegistrationRequests requests={requests} />

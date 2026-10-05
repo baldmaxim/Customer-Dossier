@@ -78,7 +78,7 @@ export const FocusPage: FC = () => {
 
   if (settings.isLoading) {
     return (
-      <Stack gap={5}>
+      <Stack gap={4}>
         {header}
         <LoadingSkeleton label="Загружаю состояние Контур.Фокуса…" lines={4} height="44px" />
       </Stack>
@@ -86,7 +86,7 @@ export const FocusPage: FC = () => {
   }
   if (settings.isError || !settings.data) {
     return (
-      <Stack gap={5}>
+      <Stack gap={4}>
         {header}
         <Callout tone="danger" title="Состояние Контур.Фокуса не получено" action={<Button onClick={() => void settings.refetch()}>Повторить</Button>}>
           {describeLoadError(settings.error)}
@@ -98,7 +98,7 @@ export const FocusPage: FC = () => {
   const { key, enabled, dailyLimit, refreshDays, usedLastDay, coverage, recent } = settings.data;
 
   return (
-    <Stack gap={5}>
+    <Stack gap={4}>
       {header}
       <Section title="Состояние" note="лимит и срок меняются в настройках сервера">
         <Stack gap={3}>
