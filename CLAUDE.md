@@ -42,6 +42,7 @@ npm run ingest:once -- --stats            # документы, очередь, 
 npm run ingest:once -- --site-profile <ключ> --file profile.json  # проверить и записать профиль сайта
 npm run ingest:once -- --telegram-profile <канал> --file profile.json  # то же для канала (этап 16)
 npm run ingest:once -- --probe-site <ключ> # проба допущенного сайта: 1 страница, 3 записи, без записи
+npm run ingest:once -- --reread <канал|all> [--apply] [--max-pages N] [--from <id>]  # перечитать историю исправленным разборщиком: только собранные посты, правка — новой редакцией
 
 # Пайплайн: запуск → чанки → набор кандидатов → публикация (этап 03B)
 npm run pipeline:once -- --check          # LM Studio поднят?
@@ -103,6 +104,8 @@ npm run site-search -- --status | --probe <ИНН> | --pass | --check  # сай�
   страницы не означает, что всё до прошлой отметки сохранено: разрыв записывается и догружается не более
   `maxPagesPerRun` страниц. Первый запуск историю не собирает, если не задан срок сбора
   (`history_days`, см. ниже). Пропущенный номер поста — не удаление.
+  **Текст ответа — свой, не цитата (`tg_web@3`, 06.10.2026):** в ответе первым идёт `.tgme_widget_message_text`
+  цитаты (`a.tgme_widget_message_reply`), раньше сохранялась она («…» на 263 символа); история исправлена `--reread all`.
   Канал в `data-post` не совпал с ключом — `identity_changed`, без записи. Бот: `update_id` — транспортный
   offset, журнал `bot_processed_updates` (одна транзакция на обновление, offset из журнала); `edited_message` —
   новая редакция; `forward_origin` хранится в `transport_meta` отдельно от переславшего. Возможности
