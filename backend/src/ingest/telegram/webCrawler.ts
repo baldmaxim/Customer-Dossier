@@ -8,7 +8,9 @@
 //  - пропущенный номер поста — не потеря и не удаление: считается как «необъяснённый»;
 //  - правки видны только в окне перепроверки (свежие страницы), удаления не наблюдаются;
 //  - канал в data-post не совпал с ключом источника — неопределённость идентичности, запись не ведётся;
-//  - допуск перепроверяется перед каждой записью: отзыв во время прохода — остановка без повторов.
+//  - допуск перепроверяется перед каждой записью: отзыв во время прохода — остановка без повторов;
+//  - картинки постов (фото, обложки видео) — сжатой копией после записи страницы (photos.ts): вне транзакции
+//    и без влияния на исход прохода; посты страницы, перечитанные ради правок, добирают недостающие.
 
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
@@ -27,6 +29,7 @@ import {
   type ITelegramPost,
 } from '../telegramWeb.js';
 import { WEB_PREVIEW_CAPABILITIES } from './capabilities.js';
+import { photosEnabled, savePostImages, type IImageStats } from './photos.js';
 import { sourceProfileMetaSchema } from '../profileMeta.js';
 
 export const TELEGRAM_WEB_PARSER_VERSION = 'tg_web@2';
@@ -188,6 +191,7 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
   };
   let missing = 0;
   let requests = 0;
+  const imageStats: IImageStats = { saved: 0, failed: 0 };
   const pageLimit = firstRun ? Math.min(profile.initialPages, profile.maxPagesPerRun) : profile.maxPagesPerRun;
 
   const fetchPage = async (before?: number) => {
@@ -210,13 +214,16 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
       cursor = nextCursor;
       return;
     }
+    const withImages: Array<{ itemId: number; images: ITelegramPost['images'] }> = [];
     await withTransaction(async client => {
       await client.query('SELECT id FROM sources WHERE id = $1 FOR UPDATE', [source.id]);
       const denied = await collectAllowed(client, source.id);
       if (denied) throw new PolicyRevokedError(denied);
-      for (const doc of docs) {
+      for (const [i, doc] of docs.entries()) {
         const result = await storeDocument(doc, client);
         report.counts[STORE_COUNT[result.outcome]] += 1;
+        const images = posts[i]?.images ?? [];
+        if (result.sourceItemId !== null && images.length > 0) withImages.push({ itemId: result.sourceItemId, images });
       }
       await client.query(
         `UPDATE sources SET cursor = jsonb_set(cursor, '{tg}', $2::jsonb), updated_at = now() WHERE id = $1`,
@@ -224,6 +231,18 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
       );
     });
     cursor = nextCursor;
+    // После фиксации: сеть и сжатие не держат транзакцию, сбой картинки не отменяет записанные посты.
+    if (withImages.length > 0 && photosEnabled()) {
+      try {
+        const stats = await savePostImages(withImages);
+        imageStats.saved += stats.saved;
+        imageStats.failed += stats.failed;
+        if (stats.storageError) imageStats.storageError = stats.storageError;
+      } catch (err) {
+        imageStats.failed += withImages.reduce((n, p) => n + p.images.length, 0);
+        imageStats.storageError = err instanceof Error ? err.message.slice(0, 200) : 'ошибка';
+      }
+    }
   };
 
   const handleFetchError = (err: unknown): void => {
@@ -409,6 +428,7 @@ export const crawlTelegramChannel = async (source: ISource, options: ITelegramCr
       historyComplete: cursor.historyComplete ?? false,
       missingIdsUnexplained: missing,
       recheckedEdits: recheckDue,
+      images: photosEnabled() ? imageStats : 'disabled',
       capabilities: {
         history: WEB_PREVIEW_CAPABILITIES.history.state,
         edits: WEB_PREVIEW_CAPABILITIES.edits.state,

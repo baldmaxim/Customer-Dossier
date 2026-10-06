@@ -8,7 +8,7 @@ import zlib from 'node:zlib';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 
 import { isBlockedAddress } from './addressPolicy.js';
-import { NetworkPolicyError, assertUrlAllowed, safeFetch, type ISourceNetworkPolicy } from './safeFetch.js';
+import { NetworkPolicyError, assertUrlAllowed, safeFetch, safeFetchBytes, type ISourceNetworkPolicy } from './safeFetch.js';
 
 const policy = (over: Partial<ISourceNetworkPolicy> = {}): ISourceNetworkPolicy => ({
   allowedHosts: ['example.ru'],
@@ -237,5 +237,16 @@ describe('safeFetch — с настоящим HTTP-сервером', () => {
       'blocked_address',
     );
     expect(hits.length).toBe(before);
+  });
+});
+
+describe('safeFetchBytes', () => {
+  it('тело — байты без декодирования, проверки адреса и размера те же', async () => {
+    const jpegHead = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x80, 0xfe]);
+    const transport = async () => ({ status: 200, headers: { 'content-type': 'image/jpeg' }, body: jpegHead });
+    const res = await safeFetchBytes('https://cdn.example.ru/x.jpg', policy(), {}, { transport });
+    expect(res.body.equals(jpegHead)).toBe(true);
+    await expectPolicyError(safeFetchBytes('https://other.test/x.jpg', policy(), {}, { transport }), 'host_not_allowed');
+    await expectPolicyError(safeFetchBytes('https://cdn.example.ru/x.jpg', policy({ maxBytes: 4 }), {}, { transport }), 'oversize');
   });
 });

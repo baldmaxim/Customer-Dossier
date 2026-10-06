@@ -66,7 +66,10 @@ services:
     container_name: tginfo-api
     restart: unless-stopped
     env_file: .env
-    environment: *api-fixed
+    environment:
+      <<: *api-fixed
+      # Фото публикаций Telegram (06.10.2026): сжатые копии картинок постов t.me/s/ — пишет и читает только api.
+      TG_PHOTO_DIR: /data/tg-photos
     # Сбор и разбор идут в процессе API: SIGTERM — и минута на то, чтобы закрыть транзакции.
     stop_grace_period: 60s
     depends_on:
@@ -78,9 +81,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    # Фото объектов только читает: снимает их работник ДОМ.РФ.
+    # Фото объектов только читает: снимает их работник ДОМ.РФ. Картинки Telegram пишет сам — при сборе каналов.
     volumes:
       - registry_photos:/data/photos:ro
+      - tg_photos:/data/tg-photos
     mem_limit: 448m
     networks: [internal]
 
@@ -121,6 +125,8 @@ services:
 volumes:
   db_data:
   registry_photos:
+  # Картинки постов Telegram: вне базы и резервных копий, как фото ДОМ.РФ — не сведения, оригинал остаётся в канале.
+  tg_photos:
 
 networks:
   internal:

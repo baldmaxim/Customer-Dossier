@@ -10,7 +10,14 @@
 import * as cheerio from 'cheerio';
 
 import { env } from '../config/env.js';
-import { DEFAULT_SOURCE_LIMITS, NetworkPolicyError, safeFetch, type ISourceNetworkPolicy, type SafeTransport } from '../net/safeFetch.js';
+import {
+  DEFAULT_SOURCE_LIMITS,
+  NetworkPolicyError,
+  hostMatchesPolicy,
+  safeFetch,
+  type ISourceNetworkPolicy,
+  type SafeTransport,
+} from '../net/safeFetch.js';
 import type { IAttachment, TextCompleteness } from '../revisions/store.js';
 
 /** Веб-версия каналов: только t.me, без поддоменов и чужих редиректов. */
@@ -19,6 +26,21 @@ export const TELEGRAM_WEB_POLICY: ISourceNetworkPolicy = {
   allowSubdomains: false,
   ...DEFAULT_SOURCE_LIMITS,
 };
+
+/**
+ * Картинки постов: CDN Telegram (cdn1…cdn5.telesco.pe). Адрес берётся из разметки страницы, поэтому
+ * свой allowlist: картинка с чужого хоста не скачивается, даже если её подсунули в style.
+ */
+export const TELEGRAM_CDN_POLICY: ISourceNetworkPolicy = {
+  allowedHosts: ['telesco.pe'],
+  allowSubdomains: true,
+  maxBytes: DEFAULT_SOURCE_LIMITS.maxBytes,
+  timeoutMs: 20_000,
+  maxRedirects: 2,
+};
+
+/** Больше в посте не бывает: альбом Telegram — до 10 элементов. */
+export const MAX_POST_IMAGES = 10;
 
 /** Селекторы вынесены наружу: при смене вёрстки правится одно место. */
 export const TG_SELECTORS = {
@@ -47,6 +69,13 @@ export interface ITelegramWebForward {
   messageId: number | null;
 }
 
+/** Картинка поста: фото или обложка видео (самого видео в веб-версии нет). */
+export interface ITelegramImage {
+  kind: 'photo' | 'video';
+  /** Адрес на CDN Telegram; в редакцию не пишется — меняется от запроса к запросу. */
+  url: string;
+}
+
 export interface ITelegramPost {
   /** 'channel/1234' — то же значение, что в data-post. */
   externalId: string;
@@ -69,7 +98,29 @@ export interface ITelegramPost {
   forward: ITelegramWebForward | null;
   /** Число элементов медиагруппы (альбома), если видно. */
   mediaGroupSize: number;
+  /** Фото и обложки видео в порядке альбома — только с CDN Telegram. */
+  images: ITelegramImage[];
 }
+
+/**
+ * Где веб-версия рисует картинку: фото — фоном ссылки, видео — фоном обложки. Необязательно: без них пост
+ * сохраняется как раньше, `layoutStats.images` на пробе показывает, нашлось ли что-то.
+ */
+const IMAGE_SELECTOR = '.tgme_widget_message_photo_wrap, .tgme_widget_message_video_thumb';
+const BACKGROUND_URL = /background-image\s*:\s*url\(\s*(['"]?)([^'")]+)\1\s*\)/i;
+
+/** Адрес картинки из style: только https и только CDN Telegram, иначе null. */
+export const imageUrlFromStyle = (style: string | undefined): string | null => {
+  const raw = BACKGROUND_URL.exec(style ?? '')?.[2]?.trim();
+  if (!raw) return null;
+  try {
+    // Адрес без схемы (//cdn4.telesco.pe/…) — от страницы t.me; хост проверяется после разбора.
+    const url = new URL(raw, 'https://t.me/');
+    return url.protocol === 'https:' && hostMatchesPolicy(url.hostname, TELEGRAM_CDN_POLICY) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
 
 /** Вложения веб-версии: наличие видно, содержимое не читается. */
 const MEDIA_SELECTORS: Record<string, string> = {
@@ -206,6 +257,14 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       .filter(([, selector]) => wrap.find(selector).length > 0)
       .map(([kind]) => ({ kind, status: 'unsupported' as const }));
 
+    const images: ITelegramImage[] = [];
+    wrap.find(IMAGE_SELECTOR).each((_, el) => {
+      if (images.length >= MAX_POST_IMAGES) return;
+      const node = $(el);
+      const url = imageUrlFromStyle(node.attr('style'));
+      if (url) images.push({ kind: node.hasClass('tgme_widget_message_video_thumb') ? 'video' : 'photo', url });
+    });
+
     posts.push({
       externalId: dataPost,
       postId: parsePostId(dataPost),
@@ -220,11 +279,13 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
       edited,
       forward,
       mediaGroupSize,
+      images,
     });
   });
 
   // Telegram отдаёт от старых к новым; нам удобнее от новых.
   posts.sort((a, b) => b.postId - a.postId);
+  layoutStats.images = posts.reduce((n, p) => n + p.images.length, 0);
 
   return { posts, layoutStats, htmlLength: html.length, channelTitle: parseChannelTitle($, channel) };
 };

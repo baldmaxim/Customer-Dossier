@@ -425,10 +425,22 @@ export interface IRevisionMeta {
   observationCount: number;
 }
 
+/** Картинка публикации Telegram — сжатая копия на портале (GET /api/items/:id/images/:n). */
+export interface IPostImage {
+  /** Порядок в посте, с нуля. */
+  n: number;
+  /** video — обложка: само видео открывается в оригинале. */
+  kind: 'photo' | 'video';
+  width: number;
+  height: number;
+}
+
 export interface IRevision extends Omit<IRevisionMeta, 'bodyLength' | 'observationCount'> {
   sourceItemId: number;
   title: string | null;
   body: string;
+  /** Картинки публикации; null — не записано (пост собран до 06.10.2026, не Telegram, сбор фото выключен). */
+  images?: { items: IPostImage[]; missing: number } | null;
 }
 
 export type DiffOp =

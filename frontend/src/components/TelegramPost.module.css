@@ -178,6 +178,12 @@
   text-align: center;
 }
 
+/* Под альбомом полоса уже не первая: без верхних скруглений и без выноса вверх. */
+.mediaAfter {
+  margin-top: 0;
+  border-radius: 0;
+}
+
 .title {
   margin: 0 0 var(--sp-2);
   font-weight: var(--fw-semibold);

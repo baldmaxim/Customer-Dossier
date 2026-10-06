@@ -272,12 +272,17 @@ const viaTransport = async (
   return { status: res.status, headers: res.headers, body: res.body };
 };
 
-export const safeFetch = async (
+export interface ISafeBytesResponse extends Omit<ISafeResponse, 'text'> {
+  body: Buffer;
+}
+
+/** Те же проверки, что у safeFetch, но тело — байты: картинки текстом не декодируются. */
+export const safeFetchBytes = async (
   rawUrl: string | URL,
   policy: ISourceNetworkPolicy,
   request: ISafeRequest = {},
   depsIn: ISafeFetchDeps = {},
-): Promise<ISafeResponse> => {
+): Promise<ISafeBytesResponse> => {
   const deps: Required<Omit<ISafeFetchDeps, 'transport'>> = {
     lookup: depsIn.lookup ?? defaultLookup,
     isAddressBlocked: depsIn.isAddressBlocked ?? isBlockedAddress,
@@ -313,15 +318,19 @@ export const safeFetch = async (
         continue;
       }
 
-      return {
-        status: raw.status,
-        headers: raw.headers,
-        text: decodeBody(raw.body, raw.headers['content-type']),
-        finalUrl: url.toString(),
-        redirects,
-      };
+      return { status: raw.status, headers: raw.headers, body: raw.body, finalUrl: url.toString(), redirects };
     }
   } finally {
     clearTimeout(timer);
   }
+};
+
+export const safeFetch = async (
+  rawUrl: string | URL,
+  policy: ISourceNetworkPolicy,
+  request: ISafeRequest = {},
+  depsIn: ISafeFetchDeps = {},
+): Promise<ISafeResponse> => {
+  const { body, ...rest } = await safeFetchBytes(rawUrl, policy, request, depsIn);
+  return { ...rest, text: decodeBody(body, rest.headers['content-type']) };
 };

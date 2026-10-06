@@ -35,6 +35,7 @@ tginfo-api ─► адреса openrouter.ai ─awg0─► nl3 ─► OpenRouter
 | Сертификат | `/opt/infra/nginx/certbot/conf/live/pulse.meridianai.ru/` | продлевает `infra-certbot` сам |
 | Резервные копии | `/opt/portals/tg-info/backups/tg_info-*.dump` | cron `/etc/cron.d/tginfo-backup`, 03:47, 14 дней |
 | Фото объектов ДОМ.РФ | том `tginfo_registry_photos` (`/data/photos` в `domrf` и `api`) | в копию не входят: снимаются с сайта заново (ADR-012 п. 35) |
+| Картинки постов Telegram | том `tginfo_tg_photos` (`/data/tg-photos` в `api`) | WebP до 1280 px, ~30–80 КБ; в копию не входят — оригинал в канале (ADR-007, дополнение 06.10.2026) |
 | Туннель Telegram | `/etc/amnezia/amneziawg/awg0.conf`, `awg-quick@awg0` | клиент `amnezia-awg2` на nl3 |
 | Туннель модели | пользователь `llmtunnel`, `/etc/ssh/sshd_config.d/tginfo-llmtunnel.conf`, ufw на `br-tginfo` | ключ — с домашнего ПК |
 | Домашний ПК | `C:\ProgramData\tginfo\` (ключ, `known_hosts`, `llm-tunnel.ps1`), задача «TG_Info LLM tunnel» | держит туннель к LM Studio |
@@ -162,6 +163,10 @@ docker exec tginfo-db rm /tmp/r.dump
   `systemctl restart awg-quick@awg0` → проверка выше. Экспорт `vpn://…` — base64url от qCompress(JSON),
   текст конфига в `containers[0].awg.last_config → config`.
 - Сети Telegram сверять с https://core.telegram.org/resources/cidr.txt (сверено 30.09.2026).
+- Картинки постов идут с CDN Telegram `cdn1…cdn5.telesco.pe` — это те же сети (`149.154.160.0/20`, 06.10.2026),
+  отдельных `AllowedIPs` не нужно. Проверка: `getent ahostsv4 cdn4.telesco.pe` → адреса `149.154.…`,
+  `ip route get <адрес>` → `dev awg0`. Сбой скачивания виден в `source_runs.coverage → images.failed` и
+  в заметке поста (`/data/tg-photos/<id/1000>/<id>.json`, поле `error`); текст поста при этом сохранён.
 - **OpenRouter** тоже через `awg0`: с адреса Selectel он на любой запрос отвечает `403 Access denied by
   security policy`, с nl3 — нормально. В `AllowedIPs` — адреса `openrouter.ai` по `/32` (30.09.2026:
   `8.47.69.0`, `8.6.112.0` — так отвечает DNS сервера, `104.18.2.115`, `104.18.3.115` — так отвечают другие).

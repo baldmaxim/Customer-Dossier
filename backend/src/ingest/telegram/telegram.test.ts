@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { describeBotMessage, describeForwardOrigin } from '../telegramBot.js';
-import { parseChannelPage } from '../telegramWeb.js';
+import { imageUrlFromStyle, parseChannelPage } from '../telegramWeb.js';
 import { BOT_CAPABILITIES, WEB_PREVIEW_CAPABILITIES } from './capabilities.js';
 
 const wrap = (post: string, inner: string): string =>
@@ -39,6 +39,47 @@ describe('parseChannelPage — признаки этапа 05B', () => {
     expect(byId.get(11)).toMatchObject({ edited: false, forwardFrom: null, forward: { name: 'Скрытый автор', username: null, messageId: null } });
     expect(byId.get(12)).toMatchObject({ completeness: 'caption_only', mediaGroupSize: 2 });
     expect(byId.get(13)).toMatchObject({ forwardFrom: 'origin_chan', forward: { name: 'Origin', username: 'origin_chan', messageId: 77 } });
+  });
+
+  it('картинки: фото и обложки видео по порядку, только CDN Telegram, превью ссылки — не картинка поста', () => {
+    const html = [
+      wrap(
+        'demo_chan/20',
+        `<div class="tgme_widget_message_grouped_wrap">
+           <a class="tgme_widget_message_photo_wrap" style="width:100%;background-image:url('https://cdn4.telesco.pe/file/p1.jpg')"></a>
+           <a class="tgme_widget_message_video_player"><i class="tgme_widget_message_video_thumb" style="background-image:url(&quot;//cdn1.telesco.pe/file/v1.jpg&quot;)"></i></a>
+           <a class="tgme_widget_message_photo_wrap" style="background-image:url('https://evil.example/p2.jpg')"></a>
+         </div>
+         <div class="tgme_widget_message_text">Альбом с фото и видео</div>
+         <a class="tgme_widget_message_link_preview"><i class="link_preview_image" style="background-image:url('https://cdn4.telesco.pe/file/preview.jpg')"></i></a>`,
+      ),
+      wrap('demo_chan/21', `<div class="tgme_widget_message_text">Текст без картинок</div>`),
+    ].join('');
+    const parsed = parseChannelPage(html, 'demo_chan');
+    const byId = new Map(parsed.posts.map(p => [p.postId, p]));
+
+    expect(byId.get(20)?.images).toEqual([
+      { kind: 'photo', url: 'https://cdn4.telesco.pe/file/p1.jpg' },
+      { kind: 'video', url: 'https://cdn1.telesco.pe/file/v1.jpg' },
+    ]);
+    expect(byId.get(21)?.images).toEqual([]);
+    expect(parsed.layoutStats.images).toBe(2);
+  });
+
+  it('адрес картинки из style: только https и CDN Telegram', () => {
+    expect(imageUrlFromStyle("background-image:url('https://cdn5.telesco.pe/file/x.jpg')")).toBe('https://cdn5.telesco.pe/file/x.jpg');
+    expect(imageUrlFromStyle('background-image: url( //cdn2.telesco.pe/file/y.jpg )')).toBe('https://cdn2.telesco.pe/file/y.jpg');
+    for (const style of [
+      "background-image:url('http://cdn5.telesco.pe/file/x.jpg')",
+      "background-image:url('https://telesco.pe.evil.example/x.jpg')",
+      "background-image:url('data:image/png;base64,AAAA')",
+      "background-image:url('javascript:alert(1)')",
+      "background-image:url('/file/relative.jpg')",
+      'width:100%',
+      undefined,
+    ]) {
+      expect(imageUrlFromStyle(style)).toBeNull();
+    }
   });
 });
 

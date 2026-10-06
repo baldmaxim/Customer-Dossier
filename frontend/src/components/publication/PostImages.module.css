@@ -1,0 +1,82 @@
+/* Альбом поста — у верхнего края пузыря, поля пузыря компенсируются (как полоса вложений в TelegramPost):
+   картинка доходит до рамки, верхние углы — как у пузыря. */
+.album {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px; /* шов между картинками альбома, как в Telegram: не отступ сетки */
+  overflow: hidden;
+  margin: calc(var(--sp-2) * -1) calc(var(--sp-3) * -1) var(--sp-2);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--border);
+}
+
+.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cell {
+  position: relative;
+  min-width: 0;
+  background: var(--surface-2);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.link {
+  display: block;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Общее кольцо фокуса (base.css) — внутрь: снаружи его обрезает скругление альбома. */
+.link:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* В сетке — квадраты (широкая первая — 2:1), кадрируются; одна картинка — целиком, с потолком по высоте
+   (инфографика не обрезается). width/height атрибутов задают пропорцию до загрузки — лента не прыгает. */
+.img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.wide .img {
+  aspect-ratio: 2 / 1;
+}
+
+.single .img {
+  aspect-ratio: auto;
+  max-height: min(70svh, 560px);
+  object-fit: contain;
+}
+
+/* «видео» — ярлыком в углу, на стекле шапки: читается на любом кадре (как статус на фото объекта). */
+.badge {
+  position: absolute;
+  left: var(--sp-2);
+  bottom: var(--sp-2);
+  padding: 2px var(--sp-2); /* пилюля 20px: ярлык, а не кнопка */
+  border-radius: var(--radius-full);
+  background: var(--chrome-glass);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  pointer-events: none;
+}
+
+.failed {
+  display: grid;
+  place-items: center;
+  min-height: 96px; /* место пустой ячейки: альбом не схлопывается */
+  padding: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}

@@ -1,9 +1,11 @@
 // Чтение публикаций, их редакций, полноты и различий между версиями.
 // Только чтение; доступ — после входа оператора (app.ts).
 
+import fs from 'node:fs';
 import { z } from 'zod';
 
 import { query, queryOne } from '../db/pool.js';
+import { postImageFile, postImagesView } from '../ingest/telegram/photos.js';
 import { loadItemOutcome } from '../reprocess/itemOutcome.js';
 import { diffLines } from '../revisions/diff.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
@@ -189,7 +191,7 @@ revisionsRouter.get('/revisions/:id', async (req, res) => {
     res.status(400).json({ error: 'Некорректный id' });
     return;
   }
-  const revision = await queryOne(
+  const revision = await queryOne<{ sourceItemId: number }>(
     `SELECT r.id, r.source_item_id AS "sourceItemId", r.revision_no AS "revisionNo", r.title, r.body,
             r.body_representation AS "representation", encode(r.body_hash, 'hex') AS "bodyHash",
             r.completeness, r.completeness_reason AS "completenessReason", r.attachments,
@@ -204,7 +206,31 @@ revisionsRouter.get('/revisions/:id', async (req, res) => {
     res.status(404).json({ error: 'Редакция не найдена' });
     return;
   }
-  res.json({ revision });
+  // Картинки — у публикации, а не у редакции: сохраняются при первом чтении поста (ingest/telegram/photos.ts).
+  res.json({ revision: { ...revision, images: postImagesView(revision.sourceItemId) } });
+});
+
+/**
+ * Картинка публикации Telegram — сжатая копия (WebP). Кэш браузера — сутки поверх общего no-store /api:
+ * файл не меняется; ETag — sha256 копии. Отдаётся тем же входом, что и текст поста.
+ */
+revisionsRouter.get('/items/:id/images/:n', async (req, res) => {
+  const id = idOf(req.params.id);
+  const n = Number.parseInt(req.params.n ?? '', 10);
+  const found = id === null ? null : postImageFile(id, n);
+  if (!found) {
+    res.status(404).json({ error: 'Картинки нет' });
+    return;
+  }
+  const etag = `"${found.meta.sha256 ?? ''}"`;
+  if (found.meta.sha256 && req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  if (found.meta.sha256) res.setHeader('ETag', etag);
+  res.type('image/webp');
+  fs.createReadStream(found.file).on('error', () => res.destroy()).pipe(res);
 });
 
 const diffSchema = z.object({ against: z.coerce.number().int().positive() });

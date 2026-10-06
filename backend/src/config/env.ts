@@ -118,6 +118,10 @@ export const parseEnv = (source: EnvSource) => {
     MODEL_REVIEW_BATCH_SIZE: parsePositiveInt('MODEL_REVIEW_BATCH_SIZE', source.MODEL_REVIEW_BATCH_SIZE, 20),
 
     TG_FETCH_DELAY_MS: parsePositiveInt('TG_FETCH_DELAY_MS', source.TG_FETCH_DELAY_MS, 4000),
+    // Фото публикаций Telegram (06.10.2026): каталог сжатых копий картинок постов из t.me/s/. Пусто — картинки
+    // не скачиваются и не отдаются. На сервере — том tg_photos (deploy/docker-compose.yml). В резервную копию базы
+    // не входят: фото — не сведения и не доказательство, у поста остаются текст и ссылка на оригинал.
+    TG_PHOTO_DIR: optional(source, 'TG_PHOTO_DIR', ''),
     INGEST_USER_AGENT: optional(
       source,
       'INGEST_USER_AGENT',

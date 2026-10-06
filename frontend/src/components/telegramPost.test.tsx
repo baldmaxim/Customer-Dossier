@@ -31,6 +31,44 @@ const post = (over: Partial<Parameters<typeof TelegramPost>[0]> = {}) => (
 );
 
 describe('TelegramPost', () => {
+  it('картинки поста: фото — копия с портала, обложка видео ведёт к оригиналу, несохранённое — словами', async () => {
+    fakeApi([{
+      match: 'GET /api/revisions/9',
+      respond: () => ({ status: 200, body: revision('Альбом со стройки', {
+        completeness: 'caption_only',
+        attachments: [{ kind: 'photo', status: 'unsupported' }, { kind: 'video', status: 'unsupported' }, { kind: 'document', status: 'unsupported' }],
+        images: {
+          items: [
+            { n: 0, kind: 'photo', width: 1280, height: 960 },
+            { n: 2, kind: 'video', width: 1280, height: 720 },
+          ],
+          missing: 1,
+        },
+      }) }),
+    }]);
+    renderWithProviders(post());
+
+    const photo = await screen.findByRole('img', { name: 'Фото 1 из 2' });
+    expect(photo.getAttribute('src')).toBe('/api/items/5/images/0');
+    expect(screen.getByRole('link', { name: 'Фото 1 из 2 — открыть крупнее' }).getAttribute('href')).toBe('/api/items/5/images/0');
+    expect(screen.getByRole('img', { name: 'Обложка видео 2 из 2' }).getAttribute('src')).toBe('/api/items/5/images/2');
+    expect(screen.getByRole('link', { name: 'Видео 2 из 2 — открыть в оригинале' }).getAttribute('href')).toBe('https://t.me/stroykanal/9');
+    expect(screen.getByText(/^файл — не сохраняется/)).toBeTruthy();
+    expect(screen.queryByText(/^фото/)).toBeNull();
+    expect(screen.getByText('Сохранено 2 из 3 картинок — остальные есть в оригинале.')).toBeTruthy();
+  });
+
+  it('пост без сохранённых картинок — вложения словами, как раньше', async () => {
+    fakeApi([{
+      match: 'GET /api/revisions/9',
+      respond: () => ({ status: 200, body: revision('Подпись', { attachments: [{ kind: 'photo', status: 'unsupported' }], images: null }) }),
+    }]);
+    renderWithProviders(post());
+
+    expect(await screen.findByText(/^фото — не сохраняется/)).toBeTruthy();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
   it('снимок ДОМ.РФ: характеристики и генподрядчик отдельно от исходного текста', async () => {
     fakeApi([{
       match: 'GET /api/revisions/9',

@@ -14,6 +14,7 @@ import { api } from '../api/client';
 import type { IRevision } from '../api/types';
 import { SOURCE_KIND_LABELS, formatPostDate, formatTime, sourceLabel } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
+import { PostImages } from './publication/PostImages';
 import { PostText } from './publication/PostText';
 import { useScrollable } from './publication/useScrollable';
 import { RegistryPublicationBody } from './RegistryPublicationBody';
@@ -43,7 +44,7 @@ export interface ITelegramPostProps {
   variant?: 'card' | 'plain';
 }
 
-/** Вложения портал не читает: вид вложения — словами. */
+/** Вложения без сохранённой копии — словами (фото и обложки видео из t.me/s/ портал хранит с 06.10.2026). */
 const ATTACHMENT_LABELS: Record<string, string> = {
   photo: 'фото',
   video: 'видео',
@@ -83,6 +84,10 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
   const kind = SOURCE_KIND_LABELS[sourceKind] ?? 'источник';
   const revision = query.data?.revision;
   const attachments = revision?.attachments ?? [];
+  const images = revision?.images?.items ?? [];
+  const shownKinds = new Set<string>(images.map(i => i.kind));
+  const unsaved = attachments.filter(a => !shownKinds.has(a.kind));
+  const missingImages = images.length > 0 ? (revision?.images?.missing ?? 0) : 0;
   const whenText = [formatPostDate(when), formatTime(when)].filter(Boolean).join(', ');
 
   return (
@@ -162,11 +167,17 @@ export const TelegramPost: FC<ITelegramPostProps> = ({
 
         {revision && (
           <div className={styles.bubble}>
-            {attachments.length > 0 && (
-              <div className={styles.media}>
-                {attachments.map(a => ATTACHMENT_LABELS[a.kind] ?? 'вложение').join(', ')} — не сохраняется,
+            <PostImages itemId={revision.sourceItemId} images={images} postUrl={url} />
+            {unsaved.length > 0 && (
+              <div className={`${styles.media} ${images.length > 0 ? styles.mediaAfter : ''}`}>
+                {unsaved.map(a => ATTACHMENT_LABELS[a.kind] ?? 'вложение').join(', ')} — не сохраняется,
                 открыть можно в оригинале
               </div>
+            )}
+            {missingImages > 0 && (
+              <p className={styles.note}>
+                Сохранено {images.length} из {images.length + missingImages} картинок — остальные есть в оригинале.
+              </p>
             )}
             {title && <p className={styles.title}>{title}</p>}
             {revision.body.trim() === '' ? (
