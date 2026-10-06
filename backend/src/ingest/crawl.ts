@@ -4,14 +4,18 @@
 // website, поэтому допуск, здоровье, журнал запусков и кнопка пробы в админке
 // работают для него без изменений.
 
+import { crawlCompanySite } from './companySite/crawler.js';
+import { isCompanySiteConfig, parseCompanySiteProfile } from './companySite/profile.js';
 import { crawlRegistry } from './registry/crawler.js';
 import { isRegistryConfig, parseRegistryProfile } from './registry/profile.js';
 import { crawlSite, type ICrawlOptions, type ICrawlReport } from './sites/crawler.js';
 import { parseSiteProfile } from './sites/profile.js';
 import type { ISource } from './sources.js';
 
-export const crawlSource = async (source: ISource, options: ICrawlOptions = {}): Promise<ICrawlReport> =>
-  isRegistryConfig(source.config) ? crawlRegistry(source, options) : crawlSite(source, options);
+export const crawlSource = async (source: ISource, options: ICrawlOptions = {}): Promise<ICrawlReport> => {
+  if (isCompanySiteConfig(source.config)) return crawlCompanySite(source, options);
+  return isRegistryConfig(source.config) ? crawlRegistry(source, options) : crawlSite(source, options);
+};
 
 export interface ISourceProfileSummary {
   mode: string;
@@ -25,6 +29,10 @@ export interface ISourceProfileSummary {
  * режима; допуска не выдаёт и запросов не делает.
  */
 export const parseSourceProfile = (config: Record<string, unknown>): ISourceProfileSummary => {
+  if (isCompanySiteConfig(config)) {
+    const profile = parseCompanySiteProfile(config);
+    return { mode: profile.mode, maxItemsPerRun: profile.maxPages, detail: `сайт компании: главная и до ${profile.maxPages - 1} страниц проектов` };
+  }
   if (isRegistryConfig(config)) {
     const profile = parseRegistryProfile(config);
     return {

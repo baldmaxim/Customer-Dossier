@@ -28,6 +28,7 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   MODEL_REVIEW_ENABLED: false,
   MODEL_REVIEW_APPLY: false,
   SITE_SEARCH_ENABLED: false,
+  SITE_PROJECTS_ENABLED: false,
   LLM_PROVIDER: 'lmstudio',
   METRICS_AUTO_REFRESH: false,
   FOCUS_ENABLED: false,

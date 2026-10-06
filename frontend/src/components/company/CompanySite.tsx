@@ -13,13 +13,37 @@ import { formatCount } from '../../lib/format';
 import { describeLoadError } from '../../lib/loadError';
 import { SiteCandidates, SiteControls, searchLine } from '../companySite/SiteCandidates';
 import { companySiteKey, useSiteActions } from '../companySite/useSiteActions';
+import { useSiteProjects } from '../companySite/useSiteProjects';
 import { Button } from '../ui/Button';
+import { ButtonLink } from '../ui/ButtonLink';
 import { Callout } from '../ui/Callout';
 import { Disclosure } from '../ui/Disclosure';
 import { Loading } from '../ui/Loading';
 import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
 import styles from '../companySite/Site.module.css';
+import { siteReadText } from './CompanySiteProjects';
+
+/** Чтение подтверждённого сайта (25B): прочитан ли и что нашлось — подробности на вкладке «Объекты». */
+const SiteReadSummary: FC<{ companyId: number }> = ({ companyId }) => {
+  const query = useSiteProjects(companyId);
+  const data = query.data;
+  if (!data || data.sites.length === 0) return null;
+  const missing = data.projects.filter(p => !p.match).length;
+  return (
+    <p className={styles.muted}>
+      {data.sites.map(site => `${site.host}: ${siteReadText(site)}`).join('; ')}
+      {data.projects.length > 0 && (
+        <>
+          {'. '}
+          <ButtonLink to="?tab=objects" variant="link" size="sm">
+            Проектов на сайте: {formatCount(data.projects.length)}, нет на портале: {formatCount(missing)}
+          </ButtonLink>
+        </>
+      )}
+    </p>
+  );
+};
 
 export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ companyId, companyName }) => {
   const query = useQuery({
@@ -47,6 +71,7 @@ export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ co
       {data && (
         <Stack gap={3}>
           {confirmed.length > 0 && <SiteCandidates candidates={confirmed} {...decide} />}
+          {confirmed.length > 0 && <SiteReadSummary companyId={companyId} />}
           {family.length > 0 && (
             <ul className={styles.list}>
               {family.map(f => (

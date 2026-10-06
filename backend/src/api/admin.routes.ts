@@ -101,6 +101,8 @@ adminRouter.get('/sources', async (_req, res) => {
      LEFT JOIN LATERAL (
        SELECT * FROM source_runs WHERE source_id = s.id ORDER BY started_at DESC LIMIT 1
      ) r ON true
+     -- Сайты компаний (25B) — не источники новостей: их состояние на карточке компании и в «Сайтах компаний».
+     WHERE coalesce(s.config->>'mode', '') <> 'company_site'
      ORDER BY
        -- сломанные наверх: они требуют внимания
        CASE s.status WHEN 'broken' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,

@@ -11,6 +11,7 @@ import { execute, query, queryOne, withTransaction } from '../db/pool.js';
 import { tooGenericToSearch } from '../ingest/registry/domrfCompanies.js';
 import { likePattern } from '../utils/likePattern.js';
 import type { SiteCheckStatus, ISiteCheck } from './verify.js';
+import { attachCompanySiteSource, releaseCompanySiteSource } from './sources.js';
 import { isNotCompanySite, normalizeSiteUrl, type IAcceptedSite } from './url.js';
 
 export const SCHEDULER_ACTOR = 'scheduler';
@@ -330,10 +331,17 @@ export const saveSiteCheck = async (id: number, check: ISiteCheck): Promise<void
 
 // ─── Решения оператора ──────────────────────────────────────────────────────────────────────
 
-const lockCandidate = async (client: PoolClient, id: number): Promise<{ company_id: number; host: string; state: string }> => {
+interface ILockedCandidate {
+  company_id: number;
+  host: string;
+  state: string;
+  source_id: number | null;
+}
+
+const lockCandidate = async (client: PoolClient, id: number): Promise<ILockedCandidate> => {
   const row = (
-    await client.query<{ company_id: number; host: string; state: string }>(
-      'SELECT company_id, host, state FROM company_site_candidates WHERE id = $1 FOR UPDATE',
+    await client.query<ILockedCandidate>(
+      'SELECT company_id, host, state, source_id FROM company_site_candidates WHERE id = $1 FOR UPDATE',
       [id],
     )
   ).rows[0];
@@ -344,11 +352,17 @@ const lockCandidate = async (client: PoolClient, id: number): Promise<{ company_
 export interface ISiteDecision {
   companyId: number;
   host: string;
+  /** Источник, которым портал читает сайт (25B); у отклонённого — прежний, если был. */
+  sourceId: number | null;
 }
 
-/** «Это сайт компании». Остальные кандидаты компании не закрываются: у группы и её СЗ бывают свои сайты. */
-export const confirmSiteCandidate = async (id: number, actor: string): Promise<ISiteDecision> =>
-  withTransaction(async client => {
+/**
+ * «Это сайт компании». Остальные кандидаты компании не закрываются: у группы и её СЗ бывают свои сайты.
+ * После решения сайт становится источником и включается (25B, companySites/sources.ts) — отдельной транзакцией,
+ * как страница ДОМ.РФ после «Это он»: сбой включения решения не отменяет, его доделает syncCompanySiteSources.
+ */
+export const confirmSiteCandidate = async (id: number, actor: string): Promise<ISiteDecision> => {
+  const decided = await withTransaction(async client => {
     const row = await lockCandidate(client, id);
     if (row.state === 'confirmed') throw new CompanySiteError('Сайт уже подтверждён', 'already_decided');
     await client.query(
@@ -357,25 +371,33 @@ export const confirmSiteCandidate = async (id: number, actor: string): Promise<I
     );
     return { companyId: row.company_id, host: row.host };
   });
+  return { ...decided, sourceId: await attachCompanySiteSource(id, actor) };
+};
 
-/** «Не он» (и у подтверждённого — «это не сайт компании»): при повторном поиске не возвращается. */
-export const rejectSiteCandidate = async (id: number, actor: string, note: string | null): Promise<ISiteDecision> =>
-  withTransaction(async client => {
+/**
+ * «Не он» (и у подтверждённого — «Отвязать»): при повторном поиске не возвращается. Отвязан последний, кто
+ * подтверждал этот сайт, — чтение ставится на паузу, допуски отзываются.
+ */
+export const rejectSiteCandidate = async (id: number, actor: string, note: string | null): Promise<ISiteDecision> => {
+  const decided = await withTransaction(async client => {
     const row = await lockCandidate(client, id);
     if (row.state === 'rejected') throw new CompanySiteError('Кандидат уже отклонён', 'already_decided');
     await client.query(
       `UPDATE company_site_candidates SET state = 'rejected', decided_by = $2, decided_at = now(), decision_note = $3 WHERE id = $1`,
       [id, actor, note],
     );
-    return { companyId: row.company_id, host: row.host };
+    return { companyId: row.company_id, host: row.host, sourceId: row.source_id, wasConfirmed: row.state === 'confirmed' };
   });
+  if (decided.wasConfirmed) await releaseCompanySiteSource(decided.sourceId, actor);
+  return { companyId: decided.companyId, host: decided.host, sourceId: decided.sourceId };
+};
 
 /** «Указать вручную»: адрес оператора — сразу подтверждённым; проверка признаков — следующим проходом. */
 export const linkSiteManually = async (companyId: number, rawUrl: string, actor: string): Promise<ISiteDecision & { id: number }> => {
   const address = normalizeSiteUrl(rawUrl);
   if (!address) throw new CompanySiteError('Укажите адрес сайта, например https://example.ru', 'invalid');
   if (isNotCompanySite(address.host)) throw new CompanySiteError('Это справочник, агрегатор или соцсеть, а не сайт компании', 'invalid');
-  return withTransaction(async client => {
+  const linked = await withTransaction(async client => {
     const company = (await client.query<{ merged_into_id: number | null }>('SELECT merged_into_id FROM companies WHERE id = $1', [companyId])).rows[0];
     if (!company) throw new CompanySiteError(`Компания №${companyId} не найдена`, 'not_found');
     if (company.merged_into_id !== null) throw new CompanySiteError(`Компания №${companyId} объединена с №${company.merged_into_id}`, 'invalid');
@@ -390,6 +412,7 @@ export const linkSiteManually = async (companyId: number, rawUrl: string, actor:
     ).rows[0]!.id;
     return { id, companyId, host: address.host };
   });
+  return { ...linked, sourceId: await attachCompanySiteSource(linked.id, actor) };
 };
 
 // ─── Чтение для экранов ─────────────────────────────────────────────────────────────────────
@@ -421,6 +444,17 @@ export interface ISiteCandidate {
   firstSeenAt: string;
   /** Тот же хост подтверждён у других компаний — оператору: сайт группы или чужой сайт. */
   sharedWith: Array<{ companyId: number; name: string }>;
+  /** Чтение сайта (25B): источник подтверждённого сайта; null — ещё не заведён. */
+  source: ISiteSourceState | null;
+}
+
+export interface ISiteSourceState {
+  id: number;
+  status: 'active' | 'paused' | 'broken';
+  health: string | null;
+  healthReason: string | null;
+  lastOkAt: string | null;
+  lastAttemptAt: string | null;
 }
 
 export interface ISiteSearchState {
@@ -453,6 +487,9 @@ const CANDIDATE_JSON = `json_build_object(
   'checkedAt', k.checked_at, 'checkError', k.check_error, 'pageTitle', k.page_title, 'innOnPage', k.inn_on_page,
   'ogrnOnPage', k.ogrn_on_page, 'nameOnPage', k.name_on_page, 'otherInns', k.other_inns, 'state', k.state,
   'decidedBy', k.decided_by, 'decidedAt', k.decided_at, 'decisionNote', k.decision_note, 'firstSeenAt', k.first_seen_at,
+  'source', (SELECT json_build_object('id', src.id, 'status', src.status, 'health', src.health, 'healthReason', src.health_reason,
+                                      'lastOkAt', src.last_ok_at, 'lastAttemptAt', src.last_attempt_at)
+             FROM sources src WHERE src.id = k.source_id),
   'sharedWith', coalesce((
     SELECT json_agg(json_build_object('companyId', o.company_id, 'name', oc.name) ORDER BY oc.name)
     FROM company_site_candidates o JOIN companies oc ON oc.id = o.company_id AND oc.merged_into_id IS NULL

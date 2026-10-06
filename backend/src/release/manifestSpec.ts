@@ -104,6 +104,9 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'company_site_searches', class: 'operational', why: 'поиск сайта компании веб-поиском: запрос, исход, срок, ошибка' },
   { table: 'company_site_candidates', class: 'domain', why: 'найденные и указанные сайты компаний, признаки проверки и решения оператора' },
   { table: 'site_search_requests', class: 'history', why: 'журнал попыток веб-поиска сайтов: расход суточного лимита' },
+  // Чтение подтверждённых сайтов (миграция 046, этап 25B)
+  { table: 'company_site_pages', class: 'domain', why: 'тексты страниц сайтов компаний на дату: новая строка только при изменении' },
+  { table: 'company_site_extractions', class: 'pipeline', why: 'проекты со страниц сайтов, выписанные моделью (site-projects@1) и прошедшие проверку цитаты; не канон' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];
@@ -132,6 +135,7 @@ export const CONFIG_KEYS = [
   'MODEL_REVIEW_ENABLED',
   'MODEL_REVIEW_APPLY',
   'SITE_SEARCH_ENABLED',
+  'SITE_PROJECTS_ENABLED',
   'REVISION_WRITE_ENABLED',
   'GRAPH_ENABLED',
   'GRAPH_EXPORT_ENABLED',

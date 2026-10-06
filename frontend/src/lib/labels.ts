@@ -34,6 +34,7 @@ import type {
   SiteCandidateState,
   SiteCheckStatus,
   SiteFoundVia,
+  SiteProjectStatus,
   SiteSearchMode,
   SiteSearchOutcome,
   TextCompleteness,
@@ -1020,6 +1021,15 @@ export const SITE_SEARCH_OUTCOME_LABELS: Record<SiteSearchOutcome, string> = {
   found: 'найдены кандидаты',
   none: 'сайта не нашлось',
   no_citations: 'поиск ничего не вернул',
+};
+
+/** Статус проекта со слов сайта компании (25B), со строчной — стоит ярлыком. */
+export const SITE_PROJECT_STATUS_LABELS: Record<SiteProjectStatus, string> = {
+  selling: 'в продаже',
+  construction: 'строится',
+  completed: 'сдан',
+  planned: 'планируется',
+  unknown: 'статус не указан',
 };
 
 export const SITE_SEARCH_MODE_LABELS: Record<SiteSearchMode, string> = {

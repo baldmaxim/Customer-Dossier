@@ -19,6 +19,8 @@ import { ENTITY_MATCH_JSON_SCHEMA, entityMatchSchema, type IEntityMatch } from '
 import { buildDomRfHintSystemMessage, buildDomRfHintUserMessage } from './domrfHint/prompt.js';
 import { SITE_SEARCH_JSON_SCHEMA, siteSearchSchema, type ISiteSearch } from './siteSearch/schema.js';
 import { buildSiteSearchSystemMessage, siteSearchPlugins } from './siteSearch/prompt.js';
+import { SITE_PROJECTS_JSON_SCHEMA, siteProjectsSchema, type ISiteProjects } from './siteProjects/schema.js';
+import { buildSiteProjectsSystemMessage, buildSiteProjectsUserMessage } from './siteProjects/prompt.js';
 import { checkOpenRouter, requestHeaders, requestRouting, type ILlmConnection, type ILlmTarget } from './endpoint.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
@@ -161,6 +163,15 @@ export const SITE_SEARCH_SPEC: IExtractSpec<ISiteSearch> = {
   system: buildSiteSearchSystemMessage,
   user: body => body,
   plugins: () => siteSearchPlugins(env.SITE_SEARCH_MAX_RESULTS),
+};
+
+/** site-projects@1 — проекты со страницы сайта компании (этап 25B): текст уже собран formatSiteProjectsInput. */
+export const SITE_PROJECTS_SPEC: IExtractSpec<ISiteProjects> = {
+  schemaName: 'tg_info_site_projects',
+  jsonSchema: SITE_PROJECTS_JSON_SCHEMA,
+  validator: siteProjectsSchema,
+  system: buildSiteProjectsSystemMessage,
+  user: body => buildSiteProjectsUserMessage(body),
 };
 
 /** Цитаты веб-поиска из ответа: только с адресом; заголовок и фрагмент — по возможности. */
@@ -365,6 +376,9 @@ export const extractDomRfHint = (options: IExtractOptions): Promise<ILlmResult<I
 
 /** entity-match@1 — одна ли сущность в паре «возможный дубль». Вердикт применяет resolve/modelReview.ts. */
 export const extractEntityMatch = (options: IExtractOptions): Promise<ILlmResult<IEntityMatch>> => extractWith(options, ENTITY_MATCH_SPEC);
+
+/** site-projects@1 — проекты со страницы сайта компании. Канон не трогает: результат — в company_site_extractions. */
+export const extractSiteProjects = (options: IExtractOptions): Promise<ILlmResult<ISiteProjects>> => extractWith(options, SITE_PROJECTS_SPEC);
 
 /** headline@1 — тема публикации. Канон не трогает: результат живёт в revision_headlines. */
 export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>

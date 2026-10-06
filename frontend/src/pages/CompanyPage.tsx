@@ -14,6 +14,7 @@ import { Navigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { CompanyDetails } from '../components/company/CompanyDetails';
 import { CompanyObjects } from '../components/company/CompanyObjects';
+import { CompanySiteProjects } from '../components/company/CompanySiteProjects';
 import { CompanyInfo, hasLegalIdentifier } from '../components/company/CompanyInfo';
 import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites, objectRoleCounts } from '../components/company/CompanyRequisites';
@@ -29,6 +30,7 @@ import { Disclosure } from '../components/ui/Disclosure';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Hint } from '../components/ui/Hint';
 import { PageHeader, type IPageHeaderProps } from '../components/ui/PageHeader';
+import { Stack } from '../components/ui/Stack';
 import { TabPanel } from '../components/ui/TabPanel';
 import { Tabs } from '../components/ui/Tabs';
 import { enumParam, useUrlPatch, useUrlState } from '../hooks/useUrlState';
@@ -146,7 +148,12 @@ export const CompanyPage: FC = () => {
     body = (
       <TabPanel idBase={idBase} value={tab} focusable={tab === 'info'} className={reader ? styles.readerPanel : styles.panel}>
         {tab === 'info' && <CompanyInfo companyId={company.id} data={data} />}
-        {tab === 'objects' && <CompanyObjects companyId={company.id} />}
+        {tab === 'objects' && (
+          <Stack gap={4}>
+            <CompanyObjects companyId={company.id} />
+            <CompanySiteProjects companyId={company.id} />
+          </Stack>
+        )}
         {tab === 'publications' && <CompanyPublications companyId={company.id} />}
         {tab === 'details' && <CompanyDetails companyId={company.id} data={data} />}
       </TabPanel>

@@ -13,6 +13,7 @@ export interface IJobFlags {
   MODEL_REVIEW_ENABLED: boolean;
   MODEL_REVIEW_APPLY: boolean;
   SITE_SEARCH_ENABLED: boolean;
+  SITE_PROJECTS_ENABLED: boolean;
   LLM_PROVIDER: string;
   METRICS_AUTO_REFRESH: boolean;
   FOCUS_ENABLED: boolean;
@@ -84,6 +85,11 @@ export const startBackgroundJobs = (
         : flags.MODEL_REVIEW_APPLY
           ? 'разногласия разбирает и решает модель: дубли сливаются и отклоняются, «это он / не он» по ДОМ.РФ (MODEL_REVIEW_APPLY=true)'
           : 'модель ставит вердикты дублям и совпадениям ДОМ.РФ, решения не применяются (MODEL_REVIEW_APPLY=false)',
+    );
+    decision.notes.push(
+      flags.SITE_PROJECTS_ENABLED
+        ? 'проекты с подтверждённых сайтов компаний выписывает модель — при ИИ-допуске сайта (SITE_PROJECTS_ENABLED=true)'
+        : 'проекты с сайтов компаний не разбираются (SITE_PROJECTS_ENABLED=false)',
     );
     // Поиск сайтов компаний (этап 25A) — тем же заданием и последним; каждая попытка — платный веб-поиск.
     decision.notes.push(

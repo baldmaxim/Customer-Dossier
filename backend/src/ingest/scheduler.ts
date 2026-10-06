@@ -9,6 +9,7 @@ import { crawlTelegramChannel } from './telegram/webCrawler.js';
 import { crawlSource } from './crawl.js';
 import { emptyBatchStats, type IBatchStats } from './store.js';
 import { evaluateSourcePolicy } from './policy.js';
+import { isCompanySiteConfig } from './companySite/profile.js';
 import {
   getDueSources,
   startRun,
@@ -88,8 +89,16 @@ export const ingestWebsiteSource = async (source: ISource): Promise<IIngestRepor
 };
 
 /** Один проход по всем просроченным источникам. Вызывается шедулером и CLI. */
+/**
+ * Сайтов компаний за проход (этап 25B): каждый — до шести страниц с паузой 4 с, и без предела проход ждал бы их
+ * минутами, а каналы Telegram — вместе с ним. Остальные сайты остаются в очереди до следующего прохода.
+ */
+export const COMPANY_SITES_PER_PASS = 2;
+
 export const runIngestPass = async (limit = 20): Promise<IIngestReport[]> => {
-  const sources = await getDueSources(limit);
+  const due = await getDueSources(limit);
+  let companySites = 0;
+  const sources = due.filter(source => !isCompanySiteConfig(source.config) || (companySites += 1) <= COMPANY_SITES_PER_PASS);
   const reports: IIngestReport[] = [];
 
   for (const [index, source] of sources.entries()) {

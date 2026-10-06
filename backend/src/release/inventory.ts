@@ -76,6 +76,8 @@ export const COUNTED_TABLES = [
   'company_site_searches',
   'company_site_candidates',
   'site_search_requests',
+  'company_site_pages',
+  'company_site_extractions',
   'bot_processed_updates',
   'source_policy_log',
   'backfill_checkpoints',

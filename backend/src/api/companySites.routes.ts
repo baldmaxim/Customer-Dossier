@@ -7,6 +7,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 
 import { env } from '../config/env.js';
+import { loadCompanySiteProjects } from '../companySites/readModel.js';
 import { siteSearchMode } from '../companySites/search.js';
 import {
   CompanySiteError,
@@ -54,6 +55,16 @@ companySitesRouter.get('/companies/:id/site', async (req, res) => {
 });
 
 /** Для входа на вкладке «Сайты»: включён ли поиск, расход за сутки и счётчики — без списка компаний. */
+/** Проекты с подтверждённых сайтов компании (25B): для вкладки «Объекты» и строки на «Сведениях». */
+companySitesRouter.get('/companies/:id/site-projects', async (req, res) => {
+  const id = idOf(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: 'Некорректный номер компании' });
+    return;
+  }
+  res.json(await loadCompanySiteProjects(id));
+});
+
 companySitesRouter.get('/admin/company-sites/summary', async (_req, res) => {
   res.json({ mode: siteSearchMode(), dailyLimit: env.SITE_SEARCH_DAILY_LIMIT, totals: await companySitesTotals() });
 });

@@ -71,6 +71,19 @@ describe('сайт компании на карточке', () => {
   it('читатель: подтверждённый сайт ссылкой, кандидаты — только числом, кнопок нет', async () => {
     fakeApi([
       {
+        match: 'GET /api/companies/7/site-projects',
+        respond: () => ({
+          status: 200,
+          body: {
+            sites: [{ host: 'demo.ru', url: 'https://demo.ru/', status: 'active', health: 'ok', healthReason: null, lastReadAt: '2026-10-06T12:00:00Z', pages: 3 }],
+            projects: [
+              { name: 'ЖК Остров', status: 'selling', completion: null, city: null, address: null, quote: 'ЖК Остров в продаже', host: 'demo.ru', pageUrl: 'https://demo.ru/p', pageTitle: null, seenAt: '2026-10-06T12:00:00Z', firstSeenAt: '2026-10-06T12:00:00Z', isNew: true, match: null },
+            ],
+            waiting: 0,
+          },
+        }),
+      },
+      {
         match: 'GET /api/companies/7/site',
         respond: () => ({ status: 200, body: body({ candidates: [candidate({ id: 13, host: 'demo.ru', url: 'https://demo.ru/', state: 'confirmed', decidedBy: 'oper', decidedAt: '2026-10-06T11:00:00Z' }), candidate()] }) }),
       },
@@ -81,6 +94,9 @@ describe('сайт компании на карточке', () => {
     expect(screen.getByText('Найдены кандидаты: 1 — ждут решения оператора.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Это сайт компании/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Искать/ })).toBeNull();
+    // 25B: прочитан ли сайт и что на нём — ссылкой на вкладку «Объекты».
+    expect(await screen.findByRole('link', { name: 'Проектов на сайте: 1, нет на портале: 1' })).toBeTruthy();
+    expect(screen.getByText(/demo\.ru: прочитан/)).toBeTruthy();
   });
 
   it('сайта нет, поиск выключен — так и сказано; СЗ показывает сайт группы', async () => {

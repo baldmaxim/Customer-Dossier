@@ -27,3 +27,12 @@
   font-size: var(--fs-sm);
   overflow-wrap: break-word;
 }
+
+/* Цитата со страницы сайта: мелко, как цитаты разбора, но без рамки — это не доказательство. */
+.quote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-text);
+  overflow-wrap: break-word;
+}

@@ -195,6 +195,13 @@ export const parseEnv = (source: EnvSource) => {
     SITE_SEARCH_MAX_RESULTS: parsePositiveInt('SITE_SEARCH_MAX_RESULTS', source.SITE_SEARCH_MAX_RESULTS, 5),
     // Через сколько дней компанию без найденного сайта искать снова.
     SITE_SEARCH_REFRESH_DAYS: parsePositiveInt('SITE_SEARCH_REFRESH_DAYS', source.SITE_SEARCH_REFRESH_DAYS, 90),
+    // Проекты со страниц подтверждённых сайтов компаний (этап 25B, site-projects@1). Идёт тем же заданием, что разбор
+    // (PIPELINE_ENABLED), и только при ИИ-допуске сайта — его даёт оператор, подтверждая сайт. Страница разбирается
+    // заново только при изменении текста. false — новых разборов нет, прежние остаются на карточке.
+    SITE_PROJECTS_ENABLED: parseStrictBool('SITE_PROJECTS_ENABLED', source.SITE_PROJECTS_ENABLED, true),
+    SITE_PROJECTS_BATCH_SIZE: parsePositiveInt('SITE_PROJECTS_BATCH_SIZE', source.SITE_PROJECTS_BATCH_SIZE, 5),
+    // Сколько символов страницы видит модель: каталог ЖК обычно в начале, хвост — подвал и формы.
+    SITE_PROJECTS_INPUT_CHARS: parsePositiveInt('SITE_PROJECTS_INPUT_CHARS', source.SITE_PROJECTS_INPUT_CHARS, 12000),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

@@ -106,7 +106,8 @@ describe('сайты компаний: очередь и поиск', () => {
 
   it('решения: «Это сайт компании» один раз; «Указать вручную» — сразу подтверждён; справочник — отказ', async () => {
     const id = await candidateId(beta, 'beta.ru');
-    expect(await confirmSiteCandidate(id, 'oper')).toEqual({ companyId: beta, host: 'beta.ru' });
+    // 25B: подтверждённый сайт сразу становится источником чтения.
+    expect(await confirmSiteCandidate(id, 'oper')).toEqual({ companyId: beta, host: 'beta.ru', sourceId: expect.any(Number) });
     await expect(confirmSiteCandidate(id, 'oper')).rejects.toMatchObject({ code: 'already_decided' });
     await expect(rejectSiteCandidate(999_999, 'oper', null)).rejects.toBeInstanceOf(CompanySiteError);
     const manual = await linkSiteManually(alpha, 'https://www.alpha-dev.ru/contacts', 'oper');

@@ -272,10 +272,11 @@ export const deleteSource = async (
   withDocuments = false,
 ): Promise<IDeleteSourceResult> => {
   // Публикации и редакции (этап 02) — тоже собранные документы: их история
-  // не удаляется вместе с источником.
+  // не удаляется вместе с источником. Снимки страниц сайта компании (25B) — тоже.
   const row = await queryOne<{ n: number }>(
     `SELECT (SELECT count(*) FROM raw_documents WHERE source_id = $1)
-          + (SELECT count(*) FROM source_items WHERE source_id = $1) AS n`,
+          + (SELECT count(*) FROM source_items WHERE source_id = $1)
+          + (SELECT count(*) FROM company_site_pages WHERE source_id = $1) AS n`,
     [id],
   );
   const documentCount = Number(row?.n ?? 0);
@@ -426,6 +427,8 @@ export const setSourceEnabled = async (
   sourceId: number,
   enabled: boolean,
   changedBy: string,
+  /** Основание и ответственный вместо TOGGLE_* — для включения не кнопкой «Сбор» (сайт компании подтверждён, 25B). */
+  defaults: { basis: string; owner: string } | null = null,
 ): Promise<ISource | null> => {
   const current = await queryOne<{
     kind: SourceKind;
@@ -447,9 +450,9 @@ export const setSourceEnabled = async (
       accessStatus: enabled ? 'approved' : 'revoked',
       aiProcessingStatus: enabled ? 'approved' : 'revoked',
       scope: current.policyScope,
-      basis: current.policyBasis?.trim() ? current.policyBasis : enabled ? TOGGLE_BASIS : null,
+      basis: current.policyBasis?.trim() ? current.policyBasis : enabled ? (defaults?.basis ?? TOGGLE_BASIS) : null,
       reference: current.policyReference,
-      owner: current.policyOwner?.trim() ? current.policyOwner : enabled ? TOGGLE_OWNER : null,
+      owner: current.policyOwner?.trim() ? current.policyOwner : enabled ? (defaults?.owner ?? TOGGLE_OWNER) : null,
       // Срок действия разрешения в упрощённом режиме не используется: выключает оператор.
       expiresAt: null,
     },

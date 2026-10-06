@@ -373,6 +373,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
   { match: 'GET /api/companies/7/finance', respond: () => ({ status: 200, body: financeBody() }) },
   { match: 'GET /api/companies/7/registry-checks', respond: () => ({ status: 200, body: checksBody() }) },
+  { match: 'GET /api/companies/7/site-projects', respond: () => ({ status: 200, body: { sites: [], projects: [], waiting: 0 } }) },
   { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },

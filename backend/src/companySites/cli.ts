@@ -1,6 +1,6 @@
 // Сайты компаний из консоли (этап 25A, ADR-018):
 //
-//   npm run site-search -- --status         включён ли поиск, расход за сутки, очередь и решения
+//   npm run site-search -- --status         включён ли поиск, расход за сутки, очередь и решения; чтение сайтов (25B)
 //   npm run site-search -- --probe <ИНН>    один живой платный поиск по компании портала: запрос, страницы выдачи
 //                                           (хосты), принятые и отброшенные адреса с причиной. Кандидатов и очереди
 //                                           не пишет, но попытка занимает место в суточном лимите и идёт в журнал.
@@ -12,7 +12,7 @@
 // На сервере: node dist/companySites/cli.js … в контейнере API. Ключ OpenRouter — из админки или LLM_API_KEY.
 
 import { env } from '../config/env.js';
-import { closeDb } from '../db/pool.js';
+import { closeDb, query } from '../db/pool.js';
 import { loadStoredLlmKey } from '../settings/llmKey.js';
 import { runSiteCheckPass, runSiteSearchPass, searchCompanySite, siteSearchMode, type ISiteSearchRun } from './search.js';
 import { companySitesTotals, loadSearchTargetByTaxId } from './store.js';
@@ -43,6 +43,18 @@ const status = async (): Promise<void> => {
   const t = await companySitesTotals();
   console.log(`[site-search] попыток за сутки: ${t.usedLastDay} из ${env.SITE_SEARCH_DAILY_LIMIT}`);
   console.log(`[site-search] компаний искали ${t.searched}; ждут решения ${t.withPending}; с подтверждённым сайтом ${t.confirmed}; не найдено ${t.notFound}`);
+  // Чтение подтверждённых сайтов (25B): источники site:<хост> по состоянию, страницы и разборы.
+  const reads = await query<{ status: string; health: string | null; n: number; read: number }>(
+    `SELECT status::text, health, count(*)::int AS n, count(last_ok_at)::int AS read FROM sources WHERE key LIKE 'site:%' GROUP BY 1, 2 ORDER BY 1, 2`,
+  );
+  console.log(`[company-site] чтение сайтов: ${reads.length === 0 ? 'нет' : reads.map(r => `${r.status}/${r.health ?? 'не читался'} — ${r.n} (прочитано ${r.read})`).join('; ')}`);
+  const pages = await query<{ pages: number; extracted: number; projects: number }>(
+    `SELECT (SELECT count(*)::int FROM company_site_pages) AS pages,
+            (SELECT count(*)::int FROM company_site_extractions WHERE outcome = 'ok') AS extracted,
+            (SELECT coalesce(sum(jsonb_array_length(projects)), 0)::int FROM company_site_extractions WHERE outcome = 'ok') AS projects`,
+  );
+  const p = pages[0];
+  if (p) console.log(`[company-site] снимков страниц ${p.pages}, разобрано ${p.extracted}, проектов в разборах ${p.projects}`);
 };
 
 const loadKey = async (): Promise<void> => {

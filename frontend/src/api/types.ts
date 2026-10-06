@@ -2085,6 +2085,17 @@ export interface ISiteCandidate {
   firstSeenAt: string;
   /** Тот же сайт подтверждён у других компаний. */
   sharedWith: Array<{ companyId: number; name: string }>;
+  /** Чтение подтверждённого сайта (25B); null — ещё не заведено. У старого сервера поля нет. */
+  source?: ISiteSourceState | null;
+}
+
+export interface ISiteSourceState {
+  id: number;
+  status: 'active' | 'paused' | 'broken';
+  health: string | null;
+  healthReason: string | null;
+  lastOkAt: string | null;
+  lastAttemptAt: string | null;
 }
 
 export interface ISiteSearchState {
@@ -2126,4 +2137,46 @@ export interface ICompanySitesList {
   items: ICompanySitesRow[];
   matched: number;
   totals: { searched: number; withPending: number; confirmed: number; notFound: number; usedLastDay: number };
+}
+
+// ─── Проекты с сайта компании (этап 25B) ─────────────────────────────────────────────────────
+
+export type SiteProjectStatus = 'selling' | 'construction' | 'completed' | 'planned' | 'unknown';
+
+export interface ICompanySiteProjectRow {
+  name: string;
+  status: SiteProjectStatus;
+  completion: string | null;
+  city: string | null;
+  address: string | null;
+  /** Дословно со страницы сайта. */
+  quote: string;
+  host: string;
+  pageUrl: string;
+  pageTitle: string | null;
+  /** Дата снимка страницы. */
+  seenAt: string;
+  /** Впервые замечен на сайте. */
+  firstSeenAt: string;
+  /** Нет на портале и замечен впервые за последние 90 дней. */
+  isNew: boolean;
+  /** Объект портала с тем же названием. */
+  match: { projectId: number; name: string } | null;
+}
+
+export interface ICompanySiteRead {
+  host: string;
+  url: string;
+  status: 'active' | 'paused' | 'broken';
+  health: string | null;
+  healthReason: string | null;
+  lastReadAt: string | null;
+  pages: number;
+}
+
+export interface ICompanySiteProjects {
+  sites: ICompanySiteRead[];
+  projects: ICompanySiteProjectRow[];
+  /** Страниц, которые модель ещё не разбирала. */
+  waiting: number;
 }
