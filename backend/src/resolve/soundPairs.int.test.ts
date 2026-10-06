@@ -2,8 +2,12 @@
 // «возможный дубль» без слияния; повтор без изменений каталога ничего не читает и не плодит пар; отклонённая
 // пара не всплывает; две компании с реквизитами в пару не ставятся.
 
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { createApp } from '../app.js';
 import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { SOUND_PAIR_SCORE, enqueueSoundPairs } from './soundPairs.js';
@@ -33,19 +37,45 @@ const queue = async () =>
     )
   ).rows;
 
+const ORIGIN = 'http://127.0.0.1:5173';
+let server: http.Server;
+let port = 0;
+
+const similar = (companyId: number): Promise<Array<{ id: number; modelVerdict: string | null }>> =>
+  new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, method: 'GET', path: `/api/companies/${companyId}/similar`, headers: { host: `127.0.0.1:${port}`, origin: ORIGIN } },
+      res => {
+        let data = '';
+        res.on('data', c => (data += c));
+        res.on('end', () => resolve((JSON.parse(data) as { items: Array<{ id: number; modelVerdict: string | null }> }).items));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+
+let sminex = 0;
+let ru = 0;
+let alt = 0;
+
 beforeAll(async () => {
   await resetAndMigrate();
+  server = http.createServer(createApp({ allowedOrigins: [ORIGIN] }));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  port = (server.address() as AddressInfo).port;
 });
 
 afterAll(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
   await closeDb();
 });
 
 describe('пары «возможный дубль» по звучанию названия', () => {
   it('Sminex, Сминекс и Смайнекс — три ждущие пары, никто не слит', async () => {
-    const sminex = await company('Sminex', '7704412966');
-    const ru = await company('Сминекс');
-    const alt = await company('Смайнекс');
+    sminex = await company('Sminex', '7704412966');
+    ru = await company('Сминекс');
+    alt = await company('Смайнекс');
 
     const result = await enqueueSoundPairs({ limit: 10, dryRun: false });
     expect(result.inserted).toBe(3);
@@ -69,6 +99,18 @@ describe('пары «возможный дубль» по звучанию на�
     const forced = await enqueueSoundPairs({ limit: 10, dryRun: false, force: true });
     expect(forced).toMatchObject({ skipped: false, inserted: 0 });
     expect(forced.fresh).toEqual([]);
+  });
+
+  it('плашка «Похожие компании»: пары очереди видны; «та же» по модели — первой, «разные» — скрыта', async () => {
+    // У «Sminex» триграммы «Смайнекс» не находят — её приносит только пара очереди.
+    expect((await similar(sminex)).map(s => s.id).sort()).toEqual([ru, alt].sort());
+    await getPool().query(
+      `UPDATE merge_queue SET model_verdict = CASE WHEN least(source_entity_id, target_entity_id) = $1 AND greatest(source_entity_id, target_entity_id) = $2
+                                                   THEN 'same' ELSE 'different' END
+       WHERE reasons->>'key' = 'sound_key' AND $3 IN (source_entity_id, target_entity_id)`,
+      [Math.min(sminex, alt), Math.max(sminex, alt), sminex],
+    );
+    expect(await similar(sminex)).toEqual([expect.objectContaining({ id: alt, modelVerdict: 'same' })]);
   });
 
   it('отклонённая пара не всплывает; две компании с ИНН в пару не встают', async () => {
