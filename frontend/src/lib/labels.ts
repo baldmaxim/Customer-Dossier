@@ -18,6 +18,7 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
+  FinanceLine,
   ParserApiConnectionState,
   ParserApiDataset,
   ParserApiMethod,
@@ -915,6 +916,34 @@ export const PARSER_API_CONNECTION_LABELS: Record<ParserApiConnectionState, stri
   key_rejected: 'ключ не принят',
   subscription_expired: 'подписка истекла',
   ip_rejected: 'адрес портала не разрешён',
+};
+
+/** Строки отчётности ГИР БО в карточке (24B): подпись — как в отчёте, коротко. */
+export const FINANCE_LINE_LABELS: Record<FinanceLine, string> = {
+  revenue: 'Выручка',
+  salesProfit: 'Прибыль от продаж',
+  pretaxProfit: 'Прибыль до налогообложения',
+  netProfit: 'Чистая прибыль (убыток)',
+  interestPayable: 'Проценты к уплате',
+  assets: 'Активы',
+  equity: 'Капитал',
+  longBorrowings: 'Займы долгосрочные',
+  shortBorrowings: 'Займы краткосрочные',
+  payables: 'Кредиторская задолженность',
+  receivables: 'Дебиторская задолженность',
+  cash: 'Денежные средства',
+};
+
+/**
+ * Состояние набора сведений parser-api.com словами (24B, 24C). not_checked — не спрашивали; failed — последняя
+ * попытка не удалась. «Записей нет» — ответ сервиса, а не отсутствие проверки.
+ */
+export const PARSER_API_STATE_LABELS: Record<'not_checked' | 'found' | 'not_found' | 'partial' | 'failed', string> = {
+  not_checked: 'не запрашивалось',
+  found: 'сведения получены',
+  not_found: 'записей нет',
+  partial: 'получена часть',
+  failed: 'запрос не удался',
 };
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {

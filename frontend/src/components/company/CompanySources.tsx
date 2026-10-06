@@ -11,7 +11,7 @@ import { FC } from 'react';
 import type { ICompanyResponse } from '../../api/types';
 import { formatDate, formatDateTime } from '../../lib/labels';
 import { registryDateText } from '../RegistryChanges';
-import { useCompanyFocus, useCompanySignals } from './useCompanyQueries';
+import { useCompanyFinance, useCompanyFocus, useCompanySignals } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 export interface ICompanySourcesProps {
@@ -24,6 +24,7 @@ export interface ICompanySourcesProps {
 export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, identified }) => {
   const focus = useCompanyFocus(companyId, identified);
   const signals = useCompanySignals(companyId);
+  const finance = useCompanyFinance(companyId);
   const view = focus.data;
   const refresh = signals.data?.refresh;
   const registry = data.registry;
@@ -35,6 +36,10 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
     metrics = 'Показатели ещё не посчитаны: объекты и события — на сегодня, публикаций пока не видно.';
   }
   const checkedAt = view?.check?.checkedAt ?? view?.fetchedAt ?? null;
+  // Финансы (24B): ГИР БО и ФНС через parser-api.com — строка, только если есть что показать.
+  const fin = finance.data;
+  const finChecked = [fin?.finance?.state.checkedAt, fin?.tax?.state.checkedAt].filter((d): d is string => Boolean(d)).sort().pop() ?? null;
+  const finShown = Boolean(fin?.finance?.view?.years?.length || fin?.tax?.view?.recognized);
 
   return (
     <section className={styles.sources} aria-labelledby={`company-sources-${companyId}`}>
@@ -52,6 +57,13 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
           <li>
             <span className={styles.sourcesLead}>ДОМ.РФ.</span> {registry.attribution}: {registry.source.title}, запись {registry.externalRef}.{' '}
             {registryDateText(registry.asOf, registry.fetchedAt)}.
+          </li>
+        )}
+        {finShown && (
+          <li>
+            <span className={styles.sourcesLead}>Финансы.</span> Бухгалтерская отчётность — ГИР БО ФНС, налоги и численность —
+            ФНС «Прозрачный бизнес»; получены через parser-api.com. Суммы в рублях (ГИР БО отдаёт тысячи — пересчитано).
+            {finChecked ? ` Проверено ${formatDate(finChecked)}.` : ''}
           </li>
         )}
         {metrics && (

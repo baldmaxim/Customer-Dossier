@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, companyRoutes, computedSignals, datasetState, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -384,6 +384,89 @@ describe('Карточка компании', () => {
     const tile = screen.getByText('Генподрядчики').closest('div')!;
     expect(within(tile).getByText('2')).toBeTruthy();
     expect(within(tile).getByText('СУ-10, ООО Новый')).toBeTruthy();
+  });
+
+  it('финансы: последний год сеткой с прошлым годом, все годы — таблицей по раскрытию, налоги ФНС; плитка «Выручка»', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/finance', () => ({
+        status: 200,
+        body: financeBody({
+          inn: '7702336269',
+          problem: null,
+          finance: {
+            state: datasetState('finance'),
+            view: { format: 'finance-map@1', recognized: true, problems: [], unit: 'RUB', years: [financeYear(2025, 11_053_475_000, 3_886_099_000), financeYear(2024, 17_920_625_000, -4_698_650_000)] },
+          },
+          tax: {
+            state: datasetState('tax'),
+            view: {
+              format: 'tax-map@1',
+              recognized: true,
+              problems: [],
+              unit: 'RUB',
+              headcount: [{ year: 2025, count: 65 }, { year: 2024, count: 31 }],
+              incomeExpenses: [],
+              taxesPaid: [{ year: 2025, total: 585_814_996, lines: 12 }],
+              arrears: { year: 2026, period: 5, total: 119_207_438, arrear: 99_118_924, penalty: 20_088_514, fine: 0, items: [{ name: 'Налог на прибыль', total: 72_223_124 }] },
+              arrearsHistory: [],
+              flags: { bailiffDebt: false, noReporting: false, asOf: '2026-09-01' },
+              taxModes: [],
+              msp: null,
+            },
+          },
+        }),
+      })),
+    );
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Финансы и налоги' })).closest('section')!;
+    expect(within(section).getByText('отчётность за 2024–2025 · проверено 06.10.2026')).toBeTruthy();
+    // Подпись в сетке — dt; та же подпись есть и в таблице под раскрытием.
+    const fact = (label: string) => within(section).getAllByText(label).find(n => n.tagName === 'DT')!.closest('div')!;
+    const revenue = fact('Выручка');
+    expect(revenue.textContent?.replace(/\s+/g, ' ')).toBe('Выручка11,1 млрд ₽в 2024 — 17,9 млрд ₽');
+    // Убыток — со знаком минус, без цвета и слов «падение».
+    expect(fact('Чистая прибыль (убыток)').textContent).toMatch(/в 2024 — [−-]4,7\sмлрд\s₽/);
+    expect(within(section).getByText('65 чел. в 2025; в 2024 — 31')).toBeTruthy();
+    expect(within(section).getByText(/недоимка 99,1 млн ₽ · пени 20,1 млн ₽ · штрафы 0 ₽/)).toBeTruthy();
+    expect(within(section).getAllByText('нет')).toHaveLength(2);
+    // Таблица по годам — под раскрытием, со ссылкой на PDF отчёта.
+    fireEvent.click(within(section).getByText('Все годы — 2'));
+    const pdf = within(section).getAllByRole('link', { name: 'PDF' });
+    expect(pdf[0]!.getAttribute('href')).toBe('https://bo.nalog.gov.ru/download/bfo/pdf/2025');
+    expect(within(section).getByText(/· с аудитом/)).toBeTruthy();
+    // Плитка сводки и строка источника.
+    const tile = screen.getAllByText('Выручка').map(n => n.closest('div')!).find(d => d.className.includes('tile'))!;
+    expect(tile.textContent).toContain('за 2025');
+    expect(screen.getByText(/Бухгалтерская отчётность — ГИР БО ФНС/)).toBeTruthy();
+    expect(within(section).getByRole('button', { name: 'Обновить' })).toBeTruthy();
+  });
+
+  it('финансы: не запрашивалось — словами, «Запросить» — только оператору; без ИНН блока нет', async () => {
+    const notChecked = financeBody({
+      inn: '7702336269',
+      problem: null,
+      finance: { state: datasetState('finance', { outcome: null, checkedAt: null, record: null }), view: null },
+      tax: { state: datasetState('tax', { outcome: null, checkedAt: null, record: null }), view: null },
+    });
+    fakeApi(replace('GET /api/companies/7/finance', () => ({ status: 200, body: notChecked })));
+    const { unmount } = renderWithProviders(
+      <AuthContext.Provider value={{ ...LOCAL_AUTH, authRequired: true, can: p => p === 'portal.read' }}>
+        <Routes>
+          <Route path="/company/:id" element={<CompanyPage />} />
+        </Routes>
+      </AuthContext.Provider>,
+      '/company/7',
+    );
+    const section = (await screen.findByRole('heading', { name: 'Финансы и налоги' })).closest('section')!;
+    expect(within(section).getByText('Отчётность ГИР БО: не запрашивалось.')).toBeTruthy();
+    expect(within(section).queryByRole('button', { name: 'Запросить' })).toBeNull();
+    unmount();
+
+    fakeApi(companyRoutes());
+    renderCard();
+    await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 });
+    expect(screen.queryByRole('heading', { name: 'Финансы и налоги' })).toBeNull();
   });
 
   it('кто строит для компании: компания нигде не заказчик — ни блока, ни плитки', async () => {

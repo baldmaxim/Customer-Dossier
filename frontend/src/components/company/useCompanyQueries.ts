@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyBuildersResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyBuildersResponse, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -38,6 +38,15 @@ export const useCompanyBuilders = (companyId: number): UseQueryResult<ICompanyBu
   useQuery({
     queryKey: ['company', companyId, 'builders'],
     queryFn: () => api.get<ICompanyBuildersResponse>(`/api/companies/${companyId}/builders`),
+  });
+
+/** Финансы и налоги (24B): карты снимков ГИР БО и «Прозрачного бизнеса». Ключ — для «Обновить». */
+export const companyFinanceKey = (companyId: number): readonly unknown[] => ['company', companyId, 'finance'];
+
+export const useCompanyFinance = (companyId: number): UseQueryResult<ICompanyFinanceResponse> =>
+  useQuery({
+    queryKey: companyFinanceKey(companyId),
+    queryFn: () => api.get<ICompanyFinanceResponse>(`/api/companies/${companyId}/finance`),
   });
 
 /** События: последние 100 по дате события и общее число (total; у прежнего сервера его нет — тогда длина списка). */

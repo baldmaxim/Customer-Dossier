@@ -1,0 +1,84 @@
+/* «Финансы и налоги»: последний год сеткой «подпись над значением», годы — таблицей, налоги — списком. */
+
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.meta {
+  margin: 0 0 var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.year {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* Две колонки на телефоне, дальше — сколько поместится; число всегда текстом. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0 0 var(--sp-2);
+}
+
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  }
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fact dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+}
+
+.fact dd {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.fact .prev {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+
+.table .num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subhead {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.detail {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.items {
+  margin: 0;
+  padding-inline-start: var(--sp-4);
+  font-size: var(--fs-sm);
+}

@@ -8,6 +8,7 @@ import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { clearParserApiKey, loadStoredParserApiKey, parserApiKey, saveParserApiKey } from '../settings/parserApiKey.js';
 import type { callParserApi, ParserApiCallResult } from './client.js';
+import { loadCompanyFinance } from './finance.js';
 import { loadParserApiStates, parserApiConnection, parserApiCoverage } from './read.js';
 import { refreshParserApiDatasets } from './refresh.js';
 import { pgParserApiStore } from './store.js';
@@ -78,6 +79,13 @@ describe('parser-api.com на базе (T24A-07)', () => {
     expect(state).toMatchObject({ outcome: null, attemptCount: 1, lastError: 'fssp_ur: network — timeout' });
     const journal = (await pool().query(`SELECT outcome, billable FROM parser_api_requests ORDER BY id DESC LIMIT 1`)).rows[0];
     expect(journal).toEqual({ outcome: 'network', billable: false });
+  });
+
+  it('финансы компании (24B): карта снимка tax, finance не проверялось — без вида; без ИНН — причина словами', async () => {
+    const finance = await loadCompanyFinance(pool(), watched);
+    expect(finance).toMatchObject({ inn: INN, problem: null, finance: { state: { outcome: null }, view: null }, tax: { state: { outcome: 'found' }, view: { recognized: true, headcount: [] } } });
+    const bare = await company('Без ИНН');
+    expect(await loadCompanyFinance(pool(), bare)).toMatchObject({ inn: null, problem: 'no_inn', finance: null, tax: null });
   });
 
   it('подключение по журналу: успех — подключён; ключ сменили позже — ждёт первого ответа; без ключа — не подключён', async () => {

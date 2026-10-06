@@ -17,12 +17,13 @@ import { FC } from 'react';
 
 import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
-import { formatDate } from '../lib/labels';
+import { formatDate, formatMoney } from '../lib/labels';
 import { Sparkline } from './charts/Sparkline';
 import { BriefTile } from './company/BriefTile';
 import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
+import { FINANCE_SECTION_ID } from './company/CompanyFinance';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
-import { useCompanyBuilders, useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
+import { useCompanyBuilders, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
 import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
@@ -73,6 +74,9 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const query = useCompanySignals(companyId);
   const events = useCompanyEvents(companyId);
   const builders = useCompanyBuilders(companyId);
+  // Последний год отчётности ГИР БО (24B); старый сервер маршрута не знает — плитки нет.
+  const finance = useCompanyFinance(companyId);
+  const latestYear = finance.data?.finance?.view?.years?.[0];
   // Старый сервер маршрута не знает: без objects плитки нет, а не падение сводки.
   const generals = (builders.data?.items ?? []).filter(b => b.roles.includes('general_contractor'));
   const signals = query.data?.signals ?? null;
@@ -105,6 +109,15 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             detail={namesText(generals.map(b => b.company?.name ?? b.name)) ?? 'не названы ни ДОМ.РФ, ни в публикациях'}
             to={{ search: '', hash: BUILDERS_SECTION_ID }}
             linkText="Кто строит для компании"
+          />
+        )}
+        {latestYear && (
+          <BriefTile
+            label="Выручка"
+            value={latestYear.revenue !== null ? formatMoney(latestYear.revenue) : '—'}
+            detail={joinDetail([`за ${latestYear.year}`, latestYear.netProfit !== null ? `чистая прибыль ${formatMoney(latestYear.netProfit)}` : null])}
+            to={{ search: '', hash: FINANCE_SECTION_ID }}
+            linkText="Финансы и налоги"
           />
         )}
         <BriefTile

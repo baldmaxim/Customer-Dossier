@@ -12,6 +12,7 @@ import { env } from '../config/env.js';
 import { getPool, query } from '../db/pool.js';
 import { checkParserApiKey } from '../parserApi/client.js';
 import { isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
+import { loadCompanyFinance } from '../parserApi/finance.js';
 import { loadParserApiStates, parserApiConnection, parserApiCoverage } from '../parserApi/read.js';
 import { refreshParserApiDatasets, type ParserApiStopReason } from '../parserApi/refresh.js';
 import { pgParserApiStore } from '../parserApi/store.js';
@@ -69,6 +70,16 @@ parserApiRouter.get('/companies/:id/parser-api', async (req, res) => {
     problem: target.ok ? null : target.problem,
     datasets: target.ok ? await loadParserApiStates(getPool(), target.inn) : [],
   });
+});
+
+/** Финансы и налоги компании (этап 24B): карты снимков ГИР БО и «Прозрачного бизнеса», только чтение. */
+parserApiRouter.get('/companies/:id/finance', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    sendError(res, 400, 'Некорректный id', 'bad_id');
+    return;
+  }
+  res.json(await loadCompanyFinance(getPool(), id));
 });
 
 parserApiRouter.post('/companies/:id/parser-api/refresh', async (req, res) => {

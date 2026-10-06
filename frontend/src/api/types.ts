@@ -1788,6 +1788,63 @@ export interface IParserApiDatasetState {
   record: { fetchedAt: string; complete: boolean; missing: string[] } | null;
 }
 
+/** Финансы компании (этап 24B): GET /api/companies/:id/finance. Все суммы — в рублях. */
+export type FinanceLine =
+  | 'revenue'
+  | 'salesProfit'
+  | 'pretaxProfit'
+  | 'netProfit'
+  | 'interestPayable'
+  | 'assets'
+  | 'equity'
+  | 'longBorrowings'
+  | 'shortBorrowings'
+  | 'payables'
+  | 'receivables'
+  | 'cash';
+
+export type IFinanceYear = {
+  year: number;
+  source: { period: number; publishedDate: string | null; actualDate: string | null; correctionNumber: number; audited: boolean; pdfUrl: string | null };
+} & Record<FinanceLine, number | null>;
+
+export interface IFinanceView {
+  format: string;
+  recognized: boolean;
+  problems: string[];
+  unit: 'RUB';
+  years: IFinanceYear[];
+}
+
+export interface ITaxView {
+  format: string;
+  recognized: boolean;
+  problems: string[];
+  unit: 'RUB';
+  headcount: Array<{ year: number; count: number }>;
+  incomeExpenses: Array<{ year: number; income: number | null; expense: number | null }>;
+  taxesPaid: Array<{ year: number; total: number; lines: number }>;
+  arrears: { year: number; period: number | null; total: number; arrear: number; penalty: number; fine: number; items: Array<{ name: string; total: number }> } | null;
+  arrearsHistory: Array<{ year: number; period: number | null; total: number }>;
+  flags: { bailiffDebt: boolean | null; noReporting: boolean | null; asOf: string | null };
+  taxModes: string[];
+  msp: string | null;
+}
+
+export interface IParserApiBlock<TView> {
+  state: IParserApiDatasetState;
+  view: TView | null;
+}
+
+export interface ICompanyFinanceResponse {
+  inn: string | null;
+  problem: 'no_inn' | 'several_inns' | null;
+  configured: boolean;
+  scheduled: boolean;
+  finance: IParserApiBlock<IFinanceView> | null;
+  tax: IParserApiBlock<ITaxView> | null;
+}
+
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────
 
 export type DomRfCardKind = 'developer' | 'group';

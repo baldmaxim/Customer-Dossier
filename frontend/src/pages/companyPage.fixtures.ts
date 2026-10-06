@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { ICompanyBuildersResponse, IFocusView } from '../api/types';
+import type { ICompanyBuildersResponse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -297,6 +297,45 @@ export const buildersBody = (over: Partial<ICompanyBuildersResponse> = {}): ICom
   ...over,
 });
 
+/** Финансы (24B). По умолчанию у компании нет ИНН — блока нет. */
+export const financeBody = (over: Partial<ICompanyFinanceResponse> = {}): ICompanyFinanceResponse => ({
+  inn: null,
+  problem: 'no_inn',
+  configured: true,
+  scheduled: false,
+  finance: null,
+  tax: null,
+  ...over,
+});
+
+export const datasetState = (dataset: IParserApiDatasetState['dataset'], over: Partial<IParserApiDatasetState> = {}): IParserApiDatasetState => ({
+  dataset,
+  outcome: 'found',
+  checkedAt: '2026-10-06T08:00:00Z',
+  nextCheckAt: '2027-01-04T08:00:00Z',
+  attemptCount: 0,
+  lastError: null,
+  record: { fetchedAt: '2026-10-06T08:00:00Z', complete: true, missing: [] },
+  ...over,
+});
+
+export const financeYear = (year: number, revenue: number, netProfit: number): IFinanceYear => ({
+  year,
+  source: { period: year, publishedDate: `${year + 1}-04-01`, actualDate: null, correctionNumber: 0, audited: year === 2025, pdfUrl: `https://bo.nalog.gov.ru/download/bfo/pdf/${year}` },
+  revenue,
+  salesProfit: null,
+  pretaxProfit: null,
+  netProfit,
+  interestPayable: 1_000_000,
+  assets: 167_500_000_000,
+  equity: 106_200_000_000,
+  longBorrowings: 39_300_000_000,
+  shortBorrowings: 11_300_000_000,
+  payables: 6_000_000_000,
+  receivables: 36_400_000_000,
+  cash: 935_600_000,
+});
+
 export const companyRoutes = ({
   withRegistry = false,
   registryOver = {},
@@ -320,6 +359,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
+  { match: 'GET /api/companies/7/finance', respond: () => ({ status: 200, body: financeBody() }) },
   { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
