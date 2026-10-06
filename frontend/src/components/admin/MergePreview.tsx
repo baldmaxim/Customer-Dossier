@@ -26,8 +26,8 @@ import styles from './Merge.module.css';
 interface IMergePreviewProps {
   /** Пара очереди «Дубли». */
   pair?: IPendingMerge;
-  /** Любая пара компаний: источник войдёт в цель. */
-  adhoc?: { sourceId: number; targetId: number };
+  /** Любая пара: источник войдёт в цель; по умолчанию — компании. */
+  adhoc?: { sourceId: number; targetId: number; kind?: 'company' | 'project' };
   onDone: () => void;
   /** Тост после объединения; по умолчанию — про «Историю объединений» ниже. */
   doneText?: string;
@@ -55,9 +55,9 @@ export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, done
 
   const previewUrl = pair
     ? `/api/admin/merges/${pair.id}/preview`
-    : `/api/entities/merge-preview?kind=company&sourceId=${adhoc?.sourceId}&targetId=${adhoc?.targetId}`;
+    : `/api/entities/merge-preview?kind=${adhoc?.kind ?? 'company'}&sourceId=${adhoc?.sourceId}&targetId=${adhoc?.targetId}`;
   const previewQuery = useQuery({
-    queryKey: pair ? ['merge-preview', pair.id] : ['merge-preview', 'adhoc', adhoc?.sourceId, adhoc?.targetId],
+    queryKey: pair ? ['merge-preview', pair.id] : ['merge-preview', 'adhoc', adhoc?.kind ?? 'company', adhoc?.sourceId, adhoc?.targetId],
     queryFn: () => api.get<IMergePreview>(previewUrl),
     // Сравнение не подменяется молча фоновым обновлением: объединяется ровно то, что видели.
     refetchOnWindowFocus: false,
@@ -76,7 +76,7 @@ export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, done
         ? api.post<{ mergeId: number; replayed: boolean }>(`/api/admin/merges/${pair.id}/merge`, body)
         : api.post<{ mergeId: number; replayed: boolean }>('/api/entities/merge', {
             ...body,
-            kind: 'company',
+            kind: adhoc?.kind ?? 'company',
             sourceId: adhoc?.sourceId,
             targetId: adhoc?.targetId,
           });

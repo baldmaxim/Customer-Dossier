@@ -29,14 +29,17 @@ import { revisionStatesSql } from '../reprocess/revisionStates.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
 import { classifySourceHealth } from '../ingest/sourceHealth.js';
-import { DomRfTargetError, listDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
+import { DomRfTargetError, listDomRfTargets, listProjectDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
 import { actorOf } from './auth.js';
 
 export const adminRouter = asyncRouter();
 
 /** Адреса для браузерного парсинга: здесь нет сетевого обращения к ДОМ.РФ. */
-adminRouter.get('/domrf-targets', async (_req, res) => {
-  res.json({ items: await listDomRfTargets() });
+adminRouter.get('/domrf-targets', async (req, res) => {
+  const parsed = z.object({ projectId: z.coerce.number().int().positive().optional() }).safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Некорректный ID объекта портала' }); return; }
+  const { projectId } = parsed.data;
+  res.json({ items: projectId === undefined ? await listDomRfTargets() : await listProjectDomRfTargets(projectId) });
 });
 
 adminRouter.post('/domrf-targets', async (req, res) => {
@@ -45,7 +48,11 @@ adminRouter.post('/domrf-targets', async (req, res) => {
   try {
     res.json({ item: await registerDomRfTarget(parsed.data) });
   } catch (err) {
-    if (err instanceof DomRfTargetError) { res.status(400).json({ error: err.message }); return; }
+    if (err instanceof DomRfTargetError) {
+      if (err.linkedProject) { res.status(409).json({ error: err.message, code: 'linked_elsewhere', project: err.linkedProject }); return; }
+      res.status(400).json({ error: err.message });
+      return;
+    }
     throw err;
   }
 });

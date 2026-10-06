@@ -1,0 +1,53 @@
+/* Привязка карточки ДОМ.РФ внутри плашки «Сведений ДОМ.РФ нет»: ссылки строкой, форма — поле и кнопка
+   в строку с 600px, на телефоне друг под другом. */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-block-start: var(--sp-2);
+}
+
+.targets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.url {
+  min-width: 0;
+}
+
+.text {
+  margin: 0 0 var(--sp-2);
+}
+
+@media (min-width: 600px) {
+  .form {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .url {
+    flex: 1 1 24rem;
+    max-width: 36rem;
+  }
+}

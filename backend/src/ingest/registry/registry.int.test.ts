@@ -4,7 +4,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, it, expect } from 'vitest';
 
-import { closeDb, getPool } from '../../db/pool.js';
+import { closeDb, getPool, withTransaction } from '../../db/pool.js';
 import { insertSyntheticSource, resetAndMigrate } from '../../__tests__/integration/db.js';
 import type { SafeTransport } from '../../net/safeFetch.js';
 import { ingestWebsiteSource } from '../scheduler.js';
@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { DomRfTargetError, listProjectDomRfTargets, markDomRfCaptured, registerDomRfTarget } from './domrfTargets.js';
 import { importRegistryFile } from './importFile.js';
 import { loadProjectRegistry } from '../../registry/read.js';
 
@@ -377,6 +378,48 @@ describe('импорт файла без сети (T20C-02)', () => {
     } finally {
       fs.rmSync(file, { force: true });
     }
+  });
+
+  it('карточку ДОМ.РФ со страницы объекта: чужую — отказ с её объектом, снятую без объекта — перечитать для этого', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-link-demo.test/api/object?id={id}' } }, 'registry-link-demo.test'), 'registry-link-demo.test');
+    const url = (ref: string): string => `https://наш.дом.рф/сервисы/каталог-новостроек/объект/${ref}`;
+    const file = path.join(os.tmpdir(), `domrf-link-${Date.now()}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      format: 'domrf-browser@1',
+      url: url('62091'),
+      title: 'ЖК Адмирал-Демо',
+      address: 'Москва город',
+      developer: { name: 'СЗ АДМИРАЛ-ДЕМО' },
+      characteristics: [{ label: 'Количество квартир', value: '120' }],
+    }), 'utf8');
+    try {
+      expect((await importRegistryFile((await getSourceById(s.id))!, file)).kind).toBe('stored');
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+    const owner = (await pool().query<{ project_id: number }>(
+      `SELECT project_id FROM registry_records WHERE source_id = $1 AND external_ref = '62091'`, [s.id],
+    )).rows[0]!.project_id;
+    const other = (await pool().query<{ id: number }>(
+      `INSERT INTO projects (name, name_norm, name_latin) VALUES ('Адмирал', 'адмирал', 'admiral') RETURNING id`,
+    )).rows[0]!.id;
+
+    // Снимок уже у другой карточки: перепривязка упала бы на каждом чтении — отказ называет ту карточку.
+    const refused = await registerDomRfTarget({ url: url('62091'), projectId: other }).catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(DomRfTargetError);
+    expect((refused as DomRfTargetError).linkedProject).toEqual({ id: owner, name: expect.any(String) });
+    expect(await listProjectDomRfTargets(other)).toEqual([]);
+    expect((await registerDomRfTarget({ url: url('62091'), projectId: owner })).projectId).toBe(owner);
+
+    // Снятая карточка без объекта: привязка ставит её на чтение сейчас, а не через неделю.
+    await registerDomRfTarget({ url: url('62092') });
+    await pool().query(`UPDATE domrf_targets SET captured_at = now(), requested_at = now() - interval '1 day' WHERE external_ref = '62092'`);
+    const linked = await registerDomRfTarget({ url: url('62092'), projectId: other });
+    expect(linked).toMatchObject({ projectId: other, status: 'pending' });
+    expect((await listProjectDomRfTargets(other)).map(t => t.externalRef)).toEqual(['62092']);
+    await withTransaction(client => markDomRfCaptured(client, '62092', null, null));
+    const again = await registerDomRfTarget({ url: url('62092'), projectId: other });
+    expect(again.status).toBe('captured');
   });
 
   it('сохранённый оператором ответ даёт ту же редакцию, снимок и канон, что и сбор', async () => {

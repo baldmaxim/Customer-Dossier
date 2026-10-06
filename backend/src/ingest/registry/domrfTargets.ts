@@ -22,9 +22,13 @@ export interface IDomRfTarget {
 }
 
 export class DomRfTargetError extends Error {
-  constructor(message: string) {
+  /** Запись ДОМ.РФ уже у другой карточки портала: исправляется объединением карточек, а не перепривязкой. */
+  readonly linkedProject: { id: number; name: string } | null;
+
+  constructor(message: string, linkedProject: { id: number; name: string } | null = null) {
     super(message);
     this.name = 'DomRfTargetError';
+    this.linkedProject = linkedProject;
   }
 }
 
@@ -60,6 +64,29 @@ export const listDomRfTargets = async (pendingOnly = false): Promise<IDomRfTarge
      ORDER BY (t.captured_at IS NULL OR t.captured_at < t.requested_at) DESC, t.requested_at DESC, t.id DESC`,
   );
 
+/** Ссылки, привязанные к одной карточке объекта: страница объекта показывает, что ждёт сбора. */
+export const listProjectDomRfTargets = async (projectId: number): Promise<IDomRfTarget[]> =>
+  query<IDomRfTarget>(
+    `SELECT ${columns} FROM domrf_targets t LEFT JOIN projects p ON p.id = t.project_id
+     WHERE t.project_id = $1 ORDER BY t.requested_at DESC, t.id DESC`,
+    [projectId],
+  );
+
+/**
+ * Карточка портала, к которой снимки этой записи ДОМ.РФ уже привязаны (с учётом объединения).
+ * Перепривязать их нельзя: на ту карточку записана роль застройщика с цитатой из снимка.
+ */
+const registryLinkedProject = async (client: PoolClient, externalRef: string): Promise<{ id: number; name: string } | null> =>
+  (await client.query<{ id: number; name: string }>(
+    `SELECT DISTINCT live.id, live.name
+     FROM registry_records r
+     JOIN projects p ON p.id = r.project_id
+     JOIN projects live ON live.id = coalesce(p.merged_into_id, p.id)
+     WHERE r.record_type = 'object' AND r.external_ref = $1
+     ORDER BY live.id LIMIT 1`,
+    [externalRef],
+  )).rows[0] ?? null;
+
 export const findDomRfTarget = async (client: PoolClient, externalRef: string): Promise<{ projectId: number | null } | null> =>
   (await client.query<{ projectId: number | null }>(
     'SELECT project_id AS "projectId" FROM domrf_targets WHERE external_ref = $1', [externalRef],
@@ -77,15 +104,31 @@ export const registerDomRfTarget = async (input: { url: string; projectId?: numb
       if (!project) throw new DomRfTargetError(`Объект портала №${projectId} не найден`);
       if (project.merged_into_id !== null) throw new DomRfTargetError(`Объект портала №${projectId} объединён с №${project.merged_into_id}`);
     }
-    const existing = (await client.query<{ id: number; project_id: number | null }>(
-      'SELECT id, project_id FROM domrf_targets WHERE external_ref = $1 FOR UPDATE', [parsed.externalRef],
+    const existing = (await client.query<{ id: number; project_id: number | null; project_name: string | null }>(
+      `SELECT t.id, t.project_id, p.name AS project_name
+       FROM domrf_targets t LEFT JOIN projects p ON p.id = t.project_id
+       WHERE t.external_ref = $1 FOR UPDATE OF t`, [parsed.externalRef],
     )).rows[0];
-    if (existing) {
-      if (projectId !== null && existing.project_id !== null && projectId !== existing.project_id) {
-        throw new DomRfTargetError(`Ссылка уже привязана к объекту портала №${existing.project_id}`);
+    if (projectId !== null) {
+      // Без этой проверки ссылка встала бы в сбор и падала на каждом чтении (projectLink.ts).
+      const linked = await registryLinkedProject(client, parsed.externalRef);
+      if (linked && linked.id !== projectId) {
+        throw new DomRfTargetError(`Эта карточка ДОМ.РФ уже у объекта портала «${linked.name}» (№${linked.id})`, linked);
       }
+      if (existing && existing.project_id !== null && existing.project_id !== projectId) {
+        const name = existing.project_name ?? `№${existing.project_id}`;
+        throw new DomRfTargetError(`Ссылка уже привязана к объекту портала «${name}» (№${existing.project_id})`, { id: existing.project_id, name });
+      }
+    }
+    if (existing) {
+      // Привязка к объекту у уже снятой карточки — снимок перечитывается сразу, а не через неделю:
+      // повтор без изменений редакции не создаёт, но прикрепляет снимок к объекту (projectLink.ts).
       await client.query(
-        `UPDATE domrf_targets SET project_id = coalesce(project_id, $2), url = $3, updated_at = now() WHERE id = $1`,
+        `UPDATE domrf_targets SET project_id = coalesce(project_id, $2), url = $3,
+           requested_at = CASE WHEN project_id IS NULL AND $2::bigint IS NOT NULL THEN now() ELSE requested_at END,
+           next_attempt_at = CASE WHEN project_id IS NULL AND $2::bigint IS NOT NULL THEN NULL ELSE next_attempt_at END,
+           updated_at = now()
+         WHERE id = $1`,
         [existing.id, projectId, parsed.url],
       );
     } else {

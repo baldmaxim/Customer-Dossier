@@ -6,7 +6,8 @@
 // не используется (ADR-012). Значения — как на сайте, без пересчёта.
 //
 // Снимка нет — `ProjectRegistryMissing`: словами, что сведений нет, и похожие объекты со сведениями
-// («возможно, это тот же объект») — ссылкой, а не подстановкой чужих данных.
+// («возможно, это тот же объект») — ссылкой, а не подстановкой чужих данных; оператору — привязка
+// карточки ДОМ.РФ ссылкой (`ProjectDomRfLink`).
 
 import { FC, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -24,6 +25,7 @@ import { useCan } from '../../hooks/useAuth';
 import { formatCountWord } from '../../lib/format';
 import { withLegalForm } from '../../lib/legalForm';
 import styles from '../ProjectPage.module.css';
+import { ProjectDomRfLink } from './ProjectDomRfLink';
 
 /** Поле снимка по одной из подписей: у страницы сайта и у API подписи разные. */
 const field = (registry: IRegistryView, ...labels: string[]): string | null => {
@@ -141,6 +143,7 @@ export const ProjectRegistryMissing: FC<{ dossier: IProjectDossier }> = ({ dossi
           )}
         </>
       )}
+      <ProjectDomRfLink projectId={dossier.project.id} />
     </Callout>
   );
 };
