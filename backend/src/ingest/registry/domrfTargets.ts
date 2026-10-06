@@ -84,10 +84,10 @@ const FILTER_SQL: Record<DomRfTargetFilter, string> = {
   captured: `NOT ${PENDING_SQL}`,
 };
 
-/** «Ждут» — в порядке, в котором их возьмёт работник; ошибки и прочитанные — свежие первыми. */
+/** «Ждут» — в порядке, в котором их возьмёт работник (claimDomRfTarget); ошибки и прочитанные — свежие первыми. */
 const ORDER_SQL: Record<DomRfTargetFilter, string> = {
   all: `${PENDING_SQL} DESC, t.requested_at DESC, t.id DESC`,
-  waiting: 't.requested_at, t.id',
+  waiting: 't.requested_at DESC, t.id DESC',
   error: 't.last_attempt_at DESC NULLS LAST, t.id DESC',
   captured: 't.captured_at DESC, t.id DESC',
 };
@@ -259,15 +259,22 @@ export const removeDomRfTarget = async (id: number): Promise<boolean> =>
 export const TARGET_TTL_DAYS = 7;
 
 /**
- * Атомарная аренда одной карточки: второй процесс не возьмёт её до истечения lease. Сначала —
- * поставленные и не снятые (новые и «Повторить»), затем те, чей снимок старше недели, от самых старых.
+ * Атомарная аренда одной карточки: второй процесс не возьмёт её до истечения lease. Порядок (06.10.2026):
+ * 1) ждущие без ошибки — новые, «Повторить», привязка со страницы объекта; поставленные последними — первыми,
+ *    иначе ручная ссылка ждала бы тысячи автоматических; 2) повтор ошибок — давно не пробованные первыми;
+ * 3) перечитывание снимков старше недели — от самых старых. Раньше ошибки стояли в общей очереди по дате
+ * постановки и шли первыми: 49 карточек с ошибкой, повторяемые раз в час, заняли весь проход — за сутки
+ * не прочитано ни одной из 4 481 ждущей.
  */
 export const claimDomRfTarget = async (): Promise<IDomRfTarget | null> => withTransaction(async client => {
   const row = (await client.query<IDomRfTarget>(
     `SELECT ${columns} FROM domrf_targets t LEFT JOIN projects p ON p.id = t.project_id
      WHERE (t.captured_at IS NULL OR t.captured_at < t.requested_at OR t.captured_at < now() - make_interval(days => $1))
        AND (t.next_attempt_at IS NULL OR t.next_attempt_at <= now())
-     ORDER BY (t.captured_at IS NULL OR t.captured_at < t.requested_at) DESC, t.requested_at, t.captured_at, t.id
+     ORDER BY CASE WHEN ${PENDING_SQL} AND t.last_error IS NULL THEN 0 WHEN ${PENDING_SQL} THEN 1 ELSE 2 END,
+       CASE WHEN ${PENDING_SQL} AND t.last_error IS NULL THEN t.requested_at END DESC,
+       CASE WHEN ${PENDING_SQL} THEN t.last_attempt_at END,
+       t.captured_at, t.id DESC
      FOR UPDATE OF t SKIP LOCKED LIMIT 1`,
     [TARGET_TTL_DAYS],
   )).rows[0];

@@ -1,13 +1,14 @@
 // Вкладка «Карточки» на настоящей базе: тысячи ссылок — страницами; «ждут», «ошибка» и «прочитаны»
 // не пересекаются; причина ошибки группируется без адресов и номеров объектов, но код ответа различает;
-// поиск — по номеру ДОМ.РФ и названию объекта портала. Данные синтетические, сети нет.
+// поиск — по номеру ДОМ.РФ и названию объекта портала. Работник берёт новые карточки раньше повтора
+// ошибок: иначе несколько сломанных карточек занимали весь проход. Данные синтетические, сети нет.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getPool } from '../../db/pool.js';
 import { resetAndMigrate } from '../../__tests__/integration/db.js';
 import { domRfObjectUrl } from './domrfCards.js';
-import { pageDomRfTargets, registerDomRfTarget } from './domrfTargets.js';
+import { claimDomRfTarget, pageDomRfTargets, registerDomRfTarget } from './domrfTargets.js';
 
 const set = (ref: string, sql: string, params: unknown[] = []): Promise<unknown> =>
   getPool().query(`UPDATE domrf_targets SET ${sql} WHERE external_ref = $1`, [ref, ...params]);
@@ -55,7 +56,7 @@ describe('страница карточек ДОМ.РФ', () => {
   });
 
   it('«ждут» — в порядке очереди; поиск по номеру и по объекту портала', async () => {
-    expect((await pageDomRfTargets({ filter: 'waiting', page: 1, limit: 50 })).items.map(t => t.externalRef)).toEqual(['50001', '50002']);
+    expect((await pageDomRfTargets({ filter: 'waiting', page: 1, limit: 50 })).items.map(t => t.externalRef)).toEqual(['50002', '50001']);
     expect((await pageDomRfTargets({ filter: 'all', q: '50005', page: 1, limit: 50 })).items.map(t => t.externalRef)).toEqual(['50005']);
     const byName = await pageDomRfTargets({ filter: 'captured', q: 'адмирал', page: 1, limit: 50 });
     expect(byName.items.map(t => [t.externalRef, t.projectName])).toEqual([['50007', 'ЖК Адмирал']]);
@@ -68,5 +69,13 @@ describe('страница карточек ДОМ.РФ', () => {
     expect(last.items).toHaveLength(1);
     expect(new Set([...first.items, ...last.items].map(t => t.id)).size).toBe(4);
     expect(last.total).toBe(7);
+  });
+
+  // Последним: аренда меняет состояние карточек.
+  it('работник берёт ждущие раньше повтора ошибок, поставленные последними — первыми', async () => {
+    expect((await claimDomRfTarget())?.externalRef).toBe('50002');
+    expect((await claimDomRfTarget())?.externalRef).toBe('50001');
+    // Ждущих не осталось (обе в аренде) — повтор ошибки, которую дольше всех не пробовали.
+    expect((await claimDomRfTarget())?.externalRef).toBe('50003');
   });
 });
