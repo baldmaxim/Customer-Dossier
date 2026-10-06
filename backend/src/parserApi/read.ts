@@ -65,6 +65,32 @@ export const latestParserApiRecord = async (
   return row ? { payload: row.payload, fetchedAt: iso(row.fetched_at)!, complete: row.complete } : null;
 };
 
+/**
+ * Подключение словами: ключа нет; ключ задан, но настоящего ответа ещё не было (проверка ключа без расхода
+ * тарифа его не подтверждает); последний решающий ответ — успех или отказ по ключу, подписке, адресу. Считается
+ * только после последней смены ключа в админке: отказ прежнему ключу о новом ничего не говорит.
+ */
+export type ParserApiConnectionState = 'none' | 'unverified' | 'connected' | 'key_rejected' | 'subscription_expired' | 'ip_rejected';
+
+export const parserApiConnection = async (
+  db: DbExecutor,
+  keySet: boolean,
+  keySince: string | null,
+): Promise<{ state: ParserApiConnectionState; at: string | null }> => {
+  if (!keySet) return { state: 'none', at: null };
+  const row = (
+    await db.query<{ outcome: ParserApiConnectionState | 'ok'; requested_at: Date }>(
+      `SELECT outcome, requested_at FROM parser_api_requests
+       WHERE outcome IN ('ok', 'key_rejected', 'subscription_expired', 'ip_rejected')
+         AND ($1::timestamptz IS NULL OR requested_at >= $1)
+       ORDER BY requested_at DESC, id DESC LIMIT 1`,
+      [keySince],
+    )
+  ).rows[0];
+  if (!row) return { state: 'unverified', at: null };
+  return { state: row.outcome === 'ok' ? 'connected' : row.outcome, at: iso(row.requested_at) };
+};
+
 export interface IParserApiCoverage {
   /** Компании «на контроле» с одним ИНН — их проверяет расписание. */
   watched: number;

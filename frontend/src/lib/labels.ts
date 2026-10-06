@@ -18,6 +18,7 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
+  ParserApiConnectionState,
   ParserApiDataset,
   ParserApiMethod,
   ParserApiRequestOutcome,
@@ -905,6 +906,15 @@ export const PARSER_API_OUTCOME_LABELS: Record<ParserApiRequestOutcome, string> 
   bad_response: 'непонятный ответ',
   http_error: 'ошибка сервиса',
   network: 'нет связи',
+};
+
+export const PARSER_API_CONNECTION_LABELS: Record<ParserApiConnectionState, string> = {
+  none: 'не подключён',
+  unverified: 'ключ задан, ждёт первого ответа',
+  connected: 'подключён',
+  key_rejected: 'ключ не принят',
+  subscription_expired: 'подписка истекла',
+  ip_rejected: 'адрес портала не разрешён',
 };
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {

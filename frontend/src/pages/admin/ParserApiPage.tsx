@@ -9,6 +9,7 @@ import { FC } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ILlmKeyStatus, IParserApiRequestRow } from '../../api/types';
+import { ParserApiConnectionBadge } from '../../components/admin/ParserApiConnectionBadge';
 import { parserApiSettingsQuery, PARSER_API_SETTINGS_KEY } from '../../components/admin/parserApiSettings';
 import { ServiceKeyForm, type IServiceKeySaved } from '../../components/admin/ServiceKeyForm';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
@@ -108,6 +109,7 @@ export const ParserApiPage: FC = () => {
         <Stack gap={3}>
           <DescriptionList
             items={[
+              { label: 'Подключение', value: <ParserApiConnectionBadge settings={settings.data} /> },
               {
                 label: 'Проверка',
                 value: enabled ? 'по расписанию — компании «на контроле»; остальные — кнопкой в карточке' : 'только кнопкой в карточке компании',

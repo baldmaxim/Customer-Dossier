@@ -8,7 +8,7 @@ import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { clearParserApiKey, loadStoredParserApiKey, parserApiKey, saveParserApiKey } from '../settings/parserApiKey.js';
 import type { callParserApi, ParserApiCallResult } from './client.js';
-import { loadParserApiStates, parserApiCoverage } from './read.js';
+import { loadParserApiStates, parserApiConnection, parserApiCoverage } from './read.js';
 import { refreshParserApiDatasets } from './refresh.js';
 import { pgParserApiStore } from './store.js';
 import { companyInn, dueParserApiTargets } from './targets.js';
@@ -78,6 +78,12 @@ describe('parser-api.com на базе (T24A-07)', () => {
     expect(state).toMatchObject({ outcome: null, attemptCount: 1, lastError: 'fssp_ur: network — timeout' });
     const journal = (await pool().query(`SELECT outcome, billable FROM parser_api_requests ORDER BY id DESC LIMIT 1`)).rows[0];
     expect(journal).toEqual({ outcome: 'network', billable: false });
+  });
+
+  it('подключение по журналу: успех — подключён; ключ сменили позже — ждёт первого ответа; без ключа — не подключён', async () => {
+    expect(await parserApiConnection(pool(), true, null)).toMatchObject({ state: 'connected' });
+    expect(await parserApiConnection(pool(), true, new Date(Date.now() + 60_000).toISOString())).toEqual({ state: 'unverified', at: null });
+    expect(await parserApiConnection(pool(), false, null)).toEqual({ state: 'none', at: null });
   });
 
   it('ключ из админки: шифротекст рядом с ключами OpenRouter и Фокуса, наружу — четыре символа', async () => {

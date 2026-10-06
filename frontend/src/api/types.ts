@@ -1763,8 +1763,12 @@ export interface IParserApiRequestRow {
   actor: string;
 }
 
+export type ParserApiConnectionState = 'none' | 'unverified' | 'connected' | 'key_rejected' | 'subscription_expired' | 'ip_rejected';
+
 export interface IParserApiSettings {
   key: ILlmKeyStatus;
+  /** Подключение по журналу запросов после последней смены ключа; у старого сервера поля нет. */
+  connection?: { state: ParserApiConnectionState; at: string | null };
   enabled: boolean;
   limits: { daily: number; monthly: number };
   kadMaxPages: number;

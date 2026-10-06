@@ -58,6 +58,30 @@ describe('страница parser-api.com', () => {
     expect(screen.getByText(/картотека дел · ИНН 7736255508 · стр\. 2 · адрес портала не разрешён \(HTTP 403, код 40303\) · по расписанию/)).toBeTruthy();
     expect(screen.getByText(/ГИР БО: отчётность · ИНН 7736255508 · ответ получен \(списан с тарифа\) · boss/)).toBeTruthy();
     expect(screen.getByText('Без ключа портал к parser-api.com не обращается.')).toBeTruthy();
+    // Старый сервер без поля connection, ключа нет — серый «не подключён», не зелёный.
+    expect(screen.getByText('не подключён').className).not.toMatch(/success/);
+  });
+
+  it('подключение: зелёный «подключён» — только после успешного ответа сервиса; до него — «ждёт первого ответа»', async () => {
+    fakeApi([
+      {
+        match: 'GET /api/admin/parser-api',
+        respond: () => ({
+          status: 200,
+          body: settings({ key: keyStatus({ source: 'admin', hint: 'e97c' }), connection: { state: 'connected', at: '2026-10-06T08:00:00Z' } }),
+        }),
+      },
+    ]);
+    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    expect((await screen.findByText('подключён')).className).toMatch(/success/);
+  });
+
+  it('подключение: ключ задан, настоящего ответа ещё не было — не зелёный', async () => {
+    fakeApi([
+      { match: 'GET /api/admin/parser-api', respond: () => ({ status: 200, body: settings({ key: keyStatus({ source: 'admin', hint: 'e97c' }), connection: { state: 'unverified', at: null } }) }) },
+    ]);
+    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    expect((await screen.findByText('ключ задан, ждёт первого ответа')).className).not.toMatch(/success/);
   });
 
   it('оператор видит состояние, но не форму ключа', async () => {

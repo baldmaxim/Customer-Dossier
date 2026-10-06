@@ -12,7 +12,7 @@ import { env } from '../config/env.js';
 import { getPool, query } from '../db/pool.js';
 import { checkParserApiKey } from '../parserApi/client.js';
 import { isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
-import { loadParserApiStates, parserApiCoverage } from '../parserApi/read.js';
+import { loadParserApiStates, parserApiConnection, parserApiCoverage } from '../parserApi/read.js';
 import { refreshParserApiDatasets, type ParserApiStopReason } from '../parserApi/refresh.js';
 import { pgParserApiStore } from '../parserApi/store.js';
 import { companyInn } from '../parserApi/targets.js';
@@ -115,9 +115,10 @@ parserApiRouter.post('/companies/:id/parser-api/refresh', async (req, res) => {
 
 parserApiRouter.get('/admin/parser-api', async (_req, res) => {
   const key = await loadStoredParserApiKey();
-  const [usage, coverage, recent] = await Promise.all([
+  const [usage, coverage, connection, recent] = await Promise.all([
     pgParserApiStore.usage(),
     parserApiCoverage(getPool()),
+    parserApiConnection(getPool(), key.source !== 'none', key.source === 'admin' ? key.updatedAt : null),
     query(
       `SELECT requested_at AS "requestedAt", method, inn, page, http_status AS "httpStatus", api_code AS "apiCode",
               outcome, billable, error, actor
@@ -127,6 +128,7 @@ parserApiRouter.get('/admin/parser-api', async (_req, res) => {
   ]);
   res.json({
     key,
+    connection,
     enabled: env.PARSER_API_ENABLED,
     limits: limits(),
     kadMaxPages: env.PARSER_API_KAD_MAX_PAGES,

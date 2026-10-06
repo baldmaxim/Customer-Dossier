@@ -11,7 +11,7 @@
 //   danger  — сбой, который без вмешательства не пройдёт;
 //   neutral — данных ещё нет или это решение оператора («выключено») — не поломка.
 
-import type { AmbiguityStatus, AssertionStatus, ISourceHealthState, ItemState, RunStatus, SourceHealth } from '../api/types';
+import type { AmbiguityStatus, AssertionStatus, ISourceHealthState, ItemState, ParserApiConnectionState, RunStatus, SourceHealth } from '../api/types';
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -30,6 +30,18 @@ export const SOURCE_HEALTH_STATE_TONE: Record<ISourceHealthState['state'], Statu
   temporary_error: 'warning',
   // Старые посты собраны не все — сведение о полноте, а не сбой.
   partial_history: 'info',
+};
+
+/** Подключение внешнего сервиса (parser-api.com, этап 24A): зелёный — только после настоящего ответа. */
+export const PARSER_API_CONNECTION_TONE: Record<ParserApiConnectionState, StatusTone> = {
+  connected: 'success',
+  // Ключа нет — решение владельца, а не поломка.
+  none: 'neutral',
+  // Ключ задан, подтвердит первый запрос.
+  unverified: 'info',
+  key_rejected: 'danger',
+  subscription_expired: 'danger',
+  ip_rejected: 'danger',
 };
 
 /** Как работает сборщик по последним проходам (этап 05A). */

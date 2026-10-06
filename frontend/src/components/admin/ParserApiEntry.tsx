@@ -1,4 +1,5 @@
-// Вход на страницу parser-api.com с вкладки «Сайты» (этап 24A): подключён ли, расход за сутки и месяц,
+// Вход на страницу parser-api.com с вкладки «Сайты» (этап 24A): ярлык подключения (зелёный — сервис уже
+// ответил успехом), расход за сутки и месяц,
 // кнопка «Открыть». Как вход Контур.Фокуса (FocusEntry): сама настройка — на своей странице.
 
 import { FC } from 'react';
@@ -9,6 +10,7 @@ import { ButtonLink } from '../ui/ButtonLink';
 import { Cluster } from '../ui/Cluster';
 import { Section } from '../ui/Section';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
+import { ParserApiConnectionBadge } from './ParserApiConnectionBadge';
 import { PARSER_API_PAGE_PATH, parserApiSettingsQuery } from './parserApiSettings';
 import styles from './Found.module.css';
 
@@ -20,12 +22,15 @@ export const ParserApiEntry: FC = () => {
     text =
       data.key.source === 'none'
         ? 'Не подключён: ключ не задан.'
-        : `Подключён. Запросов за сутки: ${formatCount(data.usage.day)} из ${formatCount(data.limits.daily)}, за месяц: ${formatCount(data.usage.month)} из ${formatCount(data.limits.monthly)}.`;
+        : `Запросов за сутки: ${formatCount(data.usage.day)} из ${formatCount(data.limits.daily)}, за месяц: ${formatCount(data.usage.month)} из ${formatCount(data.limits.monthly)}.`;
   }
   return (
     <Section title="parser-api.com — открытые реестры">
       <Cluster gap={3} align="center" justify="between">
-        <p className={styles.muted}>{text}</p>
+        <Cluster gap={2} align="center">
+          {data && <ParserApiConnectionBadge settings={data} />}
+          <p className={styles.muted}>{text}</p>
+        </Cluster>
         <ButtonLink to={PARSER_API_PAGE_PATH} variant="primary" size="sm">
           Открыть<VisuallyHidden> parser-api.com</VisuallyHidden>
         </ButtonLink>
