@@ -11,7 +11,7 @@ import { FC } from 'react';
 import type { ICompanyResponse } from '../../api/types';
 import { formatDate, formatDateTime } from '../../lib/labels';
 import { registryDateText } from '../RegistryChanges';
-import { useCompanyFinance, useCompanyFocus, useCompanySignals } from './useCompanyQueries';
+import { useCompanyChecks, useCompanyFinance, useCompanyFocus, useCompanySignals } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 export interface ICompanySourcesProps {
@@ -25,6 +25,7 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
   const focus = useCompanyFocus(companyId, identified);
   const signals = useCompanySignals(companyId);
   const finance = useCompanyFinance(companyId);
+  const checks = useCompanyChecks(companyId);
   const view = focus.data;
   const refresh = signals.data?.refresh;
   const registry = data.registry;
@@ -40,6 +41,11 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
   const fin = finance.data;
   const finChecked = [fin?.finance?.state.checkedAt, fin?.tax?.state.checkedAt].filter((d): d is string => Boolean(d)).sort().pop() ?? null;
   const finShown = Boolean(fin?.finance?.view?.years?.length || fin?.tax?.view?.recognized);
+  // Суды и долги (24C).
+  const chk = checks.data;
+  const chkStates = [chk?.courts?.state, chk?.fssp?.state, chk?.bankruptcy?.state];
+  const chkChecked = chkStates.map(s => s?.checkedAt).filter((d): d is string => Boolean(d)).sort().pop() ?? null;
+  const chkShown = Boolean(chk?.courts?.view || chk?.fssp?.view || chk?.bankruptcy?.view);
 
   return (
     <section className={styles.sources} aria-labelledby={`company-sources-${companyId}`}>
@@ -64,6 +70,13 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
             <span className={styles.sourcesLead}>Финансы.</span> Бухгалтерская отчётность — ГИР БО ФНС, налоги и численность —
             ФНС «Прозрачный бизнес»; получены через parser-api.com. Суммы в рублях (ГИР БО отдаёт тысячи — пересчитано).
             {finChecked ? ` Проверено ${formatDate(finChecked)}.` : ''}
+          </li>
+        )}
+        {chkShown && (
+          <li>
+            <span className={styles.sourcesLead}>Суды и долги.</span> Картотека арбитражных дел (kad.arbitr.ru), банк данных
+            исполнительных производств ФССП и ЕФРСБ (Федресурс); получены через parser-api.com, суммы — словами ФССП.
+            {chkChecked ? ` Проверено ${formatDate(chkChecked)}.` : ''}
           </li>
         )}
         {metrics && (

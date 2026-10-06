@@ -12,6 +12,7 @@ import { env } from '../config/env.js';
 import { getPool, query } from '../db/pool.js';
 import { checkParserApiKey } from '../parserApi/client.js';
 import { isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
+import { loadCompanyChecks } from '../parserApi/checks.js';
 import { loadCompanyFinance } from '../parserApi/finance.js';
 import { loadParserApiStates, parserApiConnection, parserApiCoverage } from '../parserApi/read.js';
 import { refreshParserApiDatasets, type ParserApiStopReason } from '../parserApi/refresh.js';
@@ -80,6 +81,16 @@ parserApiRouter.get('/companies/:id/finance', async (req, res) => {
     return;
   }
   res.json(await loadCompanyFinance(getPool(), id));
+});
+
+/** Суды, ФССП и банкротство (этап 24C): карты снимков картотеки, ФССП и ЕФРСБ, только чтение. */
+parserApiRouter.get('/companies/:id/registry-checks', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    sendError(res, 400, 'Некорректный id', 'bad_id');
+    return;
+  }
+  res.json(await loadCompanyChecks(getPool(), id));
 });
 
 parserApiRouter.post('/companies/:id/parser-api/refresh', async (req, res) => {

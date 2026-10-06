@@ -21,9 +21,10 @@ import { formatDate, formatMoney } from '../lib/labels';
 import { Sparkline } from './charts/Sparkline';
 import { BriefTile } from './company/BriefTile';
 import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
+import { CHECKS_SECTION_ID } from './company/CompanyChecks';
 import { FINANCE_SECTION_ID } from './company/CompanyFinance';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
-import { useCompanyBuilders, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
+import { useCompanyBuilders, useCompanyChecks, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
 import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
@@ -77,6 +78,10 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   // Последний год отчётности ГИР БО (24B); старый сервер маршрута не знает — плитки нет.
   const finance = useCompanyFinance(companyId);
   const latestYear = finance.data?.finance?.view?.years?.[0];
+  // Картотека дел и ФССП (24C): плитки — только когда сведения получены.
+  const checks = useCompanyChecks(companyId);
+  const courts = checks.data?.courts?.view?.recognized ? checks.data.courts.view : null;
+  const fssp = checks.data?.fssp?.view?.recognized ? checks.data.fssp.view : null;
   // Старый сервер маршрута не знает: без objects плитки нет, а не падение сводки.
   const generals = (builders.data?.items ?? []).filter(b => b.roles.includes('general_contractor'));
   const signals = query.data?.signals ?? null;
@@ -118,6 +123,24 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             detail={joinDetail([`за ${latestYear.year}`, latestYear.netProfit !== null ? `чистая прибыль ${formatMoney(latestYear.netProfit)}` : null])}
             to={{ search: '', hash: FINANCE_SECTION_ID }}
             linkText="Финансы и налоги"
+          />
+        )}
+        {courts && (
+          <BriefTile
+            label="Арбитраж"
+            value={`${formatCount(courts.total)}${courts.complete ? '' : '+'}`}
+            detail={joinDetail(['дел за 24 мес.', courts.byRole.respondent > 0 ? `ответчик — ${formatCount(courts.byRole.respondent)}` : null, courts.byRole.plaintiff > 0 ? `истец — ${formatCount(courts.byRole.plaintiff)}` : null])}
+            to={{ search: '', hash: CHECKS_SECTION_ID }}
+            linkText="Арбитражные дела"
+          />
+        )}
+        {fssp && (
+          <BriefTile
+            label="ФССП"
+            value={formatCount(fssp.open.count)}
+            detail={joinDetail(['не окончено', fssp.open.remainingCovered > 0 ? `остаток ${formatMoney(fssp.open.remaining)}` : null])}
+            to={{ search: '', hash: CHECKS_SECTION_ID }}
+            linkText="Исполнительные производства"
           />
         )}
         <BriefTile

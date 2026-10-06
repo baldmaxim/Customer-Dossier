@@ -8,6 +8,7 @@ import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { clearParserApiKey, loadStoredParserApiKey, parserApiKey, saveParserApiKey } from '../settings/parserApiKey.js';
 import type { callParserApi, ParserApiCallResult } from './client.js';
+import { loadCompanyChecks } from './checks.js';
 import { loadCompanyFinance } from './finance.js';
 import { loadParserApiStates, parserApiConnection, parserApiCoverage } from './read.js';
 import { refreshParserApiDatasets } from './refresh.js';
@@ -86,6 +87,16 @@ describe('parser-api.com на базе (T24A-07)', () => {
     expect(finance).toMatchObject({ inn: INN, problem: null, finance: { state: { outcome: null }, view: null }, tax: { state: { outcome: 'found' }, view: { recognized: true, headcount: [] } } });
     const bare = await company('Без ИНН');
     expect(await loadCompanyFinance(pool(), bare)).toMatchObject({ inn: null, problem: 'no_inn', finance: null, tax: null });
+  });
+
+  it('суды, ФССП, банкротство (24C): не проверялось — состояние без вида; ФССП после сбоя — неудача видна', async () => {
+    const checks = await loadCompanyChecks(pool(), watched);
+    expect(checks).toMatchObject({
+      inn: INN,
+      courts: { state: { outcome: null, attemptCount: 0 }, view: null },
+      fssp: { state: { outcome: null, attemptCount: 1 }, view: null },
+      bankruptcy: { state: { outcome: null }, view: null },
+    });
   });
 
   it('подключение по журналу: успех — подключён; ключ сменили позже — ждёт первого ответа; без ключа — не подключён', async () => {

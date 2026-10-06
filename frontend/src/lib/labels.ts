@@ -18,6 +18,8 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
+  CourtCaseType,
+  CourtRole,
   FinanceLine,
   ParserApiConnectionState,
   ParserApiDataset,
@@ -944,6 +946,22 @@ export const PARSER_API_STATE_LABELS: Record<'not_checked' | 'found' | 'not_foun
   not_found: 'записей нет',
   partial: 'получена часть',
   failed: 'запрос не удался',
+};
+
+/** Картотека арбитражных дел (24C): роль компании в деле и вид дела. */
+export const COURT_ROLE_LABELS: Record<CourtRole, string> = {
+  respondent: 'ответчик',
+  plaintiff: 'истец',
+  third: 'третье лицо',
+  other: 'иной участник',
+  unknown: 'роль не указана',
+};
+
+export const COURT_TYPE_LABELS: Record<CourtCaseType, string> = {
+  economic: 'экономический спор',
+  administrative: 'административное',
+  bankruptcy: 'о банкротстве',
+  unknown: 'вид не указан',
 };
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {

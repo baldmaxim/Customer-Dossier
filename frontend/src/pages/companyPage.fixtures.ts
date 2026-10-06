@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { ICompanyBuildersResponse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
+import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -308,6 +308,18 @@ export const financeBody = (over: Partial<ICompanyFinanceResponse> = {}): ICompa
   ...over,
 });
 
+/** Суды, ФССП, банкротство (24C). По умолчанию у компании нет ИНН — блока нет. */
+export const checksBody = (over: Partial<ICompanyChecksResponse> = {}): ICompanyChecksResponse => ({
+  inn: null,
+  problem: 'no_inn',
+  configured: true,
+  scheduled: false,
+  courts: null,
+  fssp: null,
+  bankruptcy: null,
+  ...over,
+});
+
 export const datasetState = (dataset: IParserApiDatasetState['dataset'], over: Partial<IParserApiDatasetState> = {}): IParserApiDatasetState => ({
   dataset,
   outcome: 'found',
@@ -360,6 +372,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
   { match: 'GET /api/companies/7/finance', respond: () => ({ status: 200, body: financeBody() }) },
+  { match: 'GET /api/companies/7/registry-checks', respond: () => ({ status: 200, body: checksBody() }) },
   { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },

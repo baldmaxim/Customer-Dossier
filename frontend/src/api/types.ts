@@ -1845,6 +1845,81 @@ export interface ICompanyFinanceResponse {
   tax: IParserApiBlock<ITaxView> | null;
 }
 
+/** Суды, ФССП и банкротство (этап 24C): GET /api/companies/:id/registry-checks. */
+export type CourtCaseType = 'economic' | 'administrative' | 'bankruptcy' | 'unknown';
+export type CourtRole = 'respondent' | 'plaintiff' | 'third' | 'other' | 'unknown';
+
+export interface ICourtCase {
+  id: string | null;
+  number: string;
+  startDate: string | null;
+  court: string | null;
+  type: CourtCaseType;
+  roles: CourtRole[];
+  counterparties: string[];
+  counterpartiesTotal: number;
+  url: string | null;
+}
+
+export interface ICourtsView {
+  format: string;
+  recognized: boolean;
+  problems: string[];
+  window: { from: string } | null;
+  complete: boolean;
+  total: number;
+  byRole: Record<CourtRole, number>;
+  byType: Record<CourtCaseType, number>;
+  last12m: { from: string; total: number; respondent: number; plaintiff: number } | null;
+  cases: ICourtCase[];
+}
+
+export interface IFsspProceeding {
+  number: string;
+  date: string | null;
+  subject: string | null;
+  debt: number | null;
+  remaining: number | null;
+  department: string | null;
+  issuer: string | null;
+  stopDate: string | null;
+  stopReason: string | null;
+}
+
+export interface IFsspView {
+  format: string;
+  recognized: boolean;
+  problems: string[];
+  totalRows: number | null;
+  loaded: number;
+  complete: boolean;
+  open: { count: number; debt: number; remaining: number; remainingCovered: number; fee: number };
+  ended: { count: number; byReason: Array<{ reason: string; count: number }> };
+  unknownStatus: number;
+  openedByYear: Array<{ year: number; count: number }>;
+  last12m: { from: string; count: number } | null;
+  bySubject: Array<{ subject: string; count: number }>;
+  recent: IFsspProceeding[];
+}
+
+export interface IBankruptcyView {
+  format: string;
+  recognized: boolean;
+  problems: string[];
+  found: boolean;
+  record: { name: string | null; category: string | null; region: string | null; address: string | null } | null;
+}
+
+export interface ICompanyChecksResponse {
+  inn: string | null;
+  problem: 'no_inn' | 'several_inns' | null;
+  configured: boolean;
+  scheduled: boolean;
+  courts: IParserApiBlock<ICourtsView> | null;
+  fssp: IParserApiBlock<IFsspView> | null;
+  bankruptcy: IParserApiBlock<IBankruptcyView> | null;
+}
+
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────
 
 export type DomRfCardKind = 'developer' | 'group';

@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyBuildersResponse, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -49,6 +49,15 @@ export const useCompanyFinance = (companyId: number): UseQueryResult<ICompanyFin
   useQuery({
     queryKey: companyFinanceKey(companyId),
     queryFn: () => api.get<ICompanyFinanceResponse>(`/api/companies/${companyId}/finance`),
+  });
+
+/** Суды, ФССП и банкротство (24C): карты снимков картотеки, ФССП и ЕФРСБ. */
+export const companyChecksKey = (companyId: number): readonly unknown[] => ['company', companyId, 'registry-checks'];
+
+export const useCompanyChecks = (companyId: number): UseQueryResult<ICompanyChecksResponse> =>
+  useQuery({
+    queryKey: companyChecksKey(companyId),
+    queryFn: () => api.get<ICompanyChecksResponse>(`/api/companies/${companyId}/registry-checks`),
   });
 
 /** События: последние 100 по дате события и общее число (total; у прежнего сервера его нет — тогда длина списка). */

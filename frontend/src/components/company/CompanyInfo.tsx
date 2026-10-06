@@ -1,7 +1,7 @@
 // Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Главное о юрлице —
 // уже в шапке (статус, руководитель, адрес, реквизиты); здесь сначала итоги плитками во всю ширину
 // (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — кто строит для
-// компании (генподрядчики её объектов, 24D), финансы и налоги (ГИР БО и ФНС, 24B), объекты по
+// компании (генподрядчики её объектов, 24D), финансы и налоги (ГИР БО и ФНС, 24B), суды, ФССП и банкротство (24C), объекты по
 // данным ДОМ.РФ с записью застройщика, публикации и события по месяцам и разбивки (роли, события, тексты),
 // справа — остальное ЕГРЮЛ, сайт компании (25A) и
 // «С кем связана» (05.10.2026: раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
@@ -22,6 +22,7 @@ import { CompanyPartners } from '../CompanyPartners';
 import { Section } from '../ui/Section';
 import { CompanyActivity } from './CompanyActivity';
 import { CompanyBuilders } from './CompanyBuilders';
+import { CompanyChecks } from './CompanyChecks';
 import { CompanyFinance } from './CompanyFinance';
 import { CompanyFocus } from './CompanyFocus';
 import { CompanyPortfolio } from './CompanyPortfolio';
@@ -93,6 +94,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
         <div className={styles.overviewMain}>
           <CompanyBuilders companyId={companyId} />
           <CompanyFinance companyId={companyId} />
+          <CompanyChecks companyId={companyId} />
           <CompanyPortfolio companyId={companyId} data={data} registryOmit={registryOmit} />
           <CompanyActivity companyId={companyId} />
           <CompanyStructure companyId={companyId} />

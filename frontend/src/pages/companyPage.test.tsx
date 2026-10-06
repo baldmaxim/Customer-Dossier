@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, companyRoutes, computedSignals, datasetState, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -467,6 +467,103 @@ describe('Карточка компании', () => {
     renderCard();
     await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 });
     expect(screen.queryByRole('heading', { name: 'Финансы и налоги' })).toBeNull();
+  });
+
+  it('суды, ФССП, банкротство: роли и виды дел, ссылка на карточку дела; ФССП словами ФССП; ЕФРСБ — записей нет; плитки', async () => {
+    const caseRow = (n: number, date: string, type: 'economic' | 'bankruptcy', role: 'respondent' | 'plaintiff') => ({
+      id: `${n}1111111-2222-3333-4444-555555555555`,
+      number: `А40-${n}/2026`,
+      startDate: date,
+      court: 'АС города Москвы',
+      type,
+      roles: [role],
+      counterparties: ['ДГИ Москвы'],
+      counterpartiesTotal: 1,
+      url: `https://kad.arbitr.ru/Card/${n}1111111-2222-3333-4444-555555555555`,
+    });
+    fakeApi(
+      replace('GET /api/companies/7/registry-checks', () => ({
+        status: 200,
+        body: checksBody({
+          inn: '7702336269',
+          problem: null,
+          courts: {
+            state: datasetState('courts'),
+            view: {
+              format: 'courts-map@1',
+              recognized: true,
+              problems: [],
+              window: { from: '2024-10-01' },
+              complete: true,
+              total: 6,
+              byRole: { respondent: 4, plaintiff: 2, third: 0, other: 0, unknown: 0 },
+              byType: { economic: 5, administrative: 0, bankruptcy: 1, unknown: 0 },
+              last12m: { from: '2025-10-06', total: 3, respondent: 2, plaintiff: 1 },
+              cases: [1, 2, 3, 4, 5, 6].map(n => caseRow(n, `2026-0${n}-01`, n === 1 ? 'bankruptcy' : 'economic', n % 3 === 0 ? 'plaintiff' : 'respondent')),
+            },
+          },
+          fssp: {
+            state: datasetState('fssp'),
+            view: {
+              format: 'fssp-map@1',
+              recognized: true,
+              problems: [],
+              totalRows: 678,
+              loaded: 678,
+              complete: true,
+              open: { count: 677, debt: 431_164_180, remaining: 423_787_007, remainingCovered: 652, fee: 7_377_174 },
+              ended: { count: 1, byReason: [{ reason: 'ст. 46 ч. 1 п. 3', count: 1 }] },
+              unknownStatus: 0,
+              openedByYear: [{ year: 2026, count: 191 }, { year: 2025, count: 419 }],
+              last12m: { from: '2025-10-06', count: 248 },
+              bySubject: [{ subject: 'Иные взыскания в пользу физлиц', count: 620 }],
+              recent: [],
+            },
+          },
+          bankruptcy: { state: datasetState('bankruptcy', { outcome: 'not_found' }), view: { format: 'bankruptcy-map@1', recognized: true, problems: [], found: false, record: null } },
+        }),
+      })),
+    );
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Суды, ФССП и банкротство' })).closest('section')!;
+    expect(within(section).getByText('6 — ответчик 4, истец 2')).toBeTruthy();
+    expect(within(section).getByText('3 — ответчик 2, истец 1')).toBeTruthy();
+    expect(within(section).getByText('экономический спор — 5, о банкротстве — 1')).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'А40-1/2026' }).getAttribute('href')).toBe('https://kad.arbitr.ru/Card/11111111-2222-3333-4444-555555555555');
+    // Пять дел сразу, шестое — под раскрытием.
+    expect(within(section).getByText('Остальные дела — 1')).toBeTruthy();
+    expect(within(section).getByText(/Роль в деле о банкротстве не говорит, чьё это банкротство/)).toBeTruthy();
+    expect(within(section).getByText('677 — сумма долга по документам 431,2 млн ₽')).toBeTruthy();
+    expect(within(section).getByText('423,8 млн ₽ — указан у 652 из 677')).toBeTruthy();
+    expect(within(section).getByText('1 — ст. 46 ч. 1 п. 3: 1')).toBeTruthy();
+    expect(within(section).getByText(/Записей о компании в ЕФРСБ нет · проверено 06\.10\.2026/)).toBeTruthy();
+    // Плитки сводки.
+    const tile = (label: string) => screen.getAllByText(label).map(n => n.closest('div')!).find(d => d.className.includes('tile'))!;
+    expect(tile('Арбитраж').textContent).toContain('ответчик');
+    expect(tile('ФССП').textContent).toContain('остаток 423,8');
+    expect(screen.getByText(/Картотека арбитражных дел \(kad\.arbitr\.ru\)/)).toBeTruthy();
+  });
+
+  it('суды, ФССП, банкротство: сбой ФССП — причина и повтор словами; без ИНН блока нет', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/registry-checks', () => ({
+        status: 200,
+        body: checksBody({
+          inn: '7702336269',
+          problem: null,
+          courts: { state: datasetState('courts', { outcome: null, checkedAt: null, record: null }), view: null },
+          fssp: { state: datasetState('fssp', { outcome: null, checkedAt: null, record: null, attemptCount: 1, lastError: 'fssp_ur: network — timeout' }), view: null },
+          bankruptcy: { state: datasetState('bankruptcy', { outcome: null, checkedAt: null, record: null }), view: null },
+        }),
+      })),
+    );
+    renderCard();
+    const section = (await screen.findByRole('heading', { name: 'Суды, ФССП и банкротство' })).closest('section')!;
+    expect(within(section).getByText('Картотека дел: не запрашивалось.')).toBeTruthy();
+    expect(within(section).getByText('Сведения ФССП: запрос не удался')).toBeTruthy();
+    expect(within(section).getByText(/fssp_ur: network — timeout/)).toBeTruthy();
+    expect(within(section).getByRole('button', { name: 'Обновить' })).toBeTruthy();
   });
 
   it('кто строит для компании: компания нигде не заказчик — ни блока, ни плитки', async () => {

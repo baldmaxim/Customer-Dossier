@@ -16,16 +16,16 @@ import { api } from '../../api/client';
 import type { FinanceLine, IFinanceView, IParserApiDatasetState, ITaxView } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
-import { FINANCE_LINE_LABELS, PARSER_API_STATE_LABELS, formatDate, formatDateTime, formatMoney } from '../../lib/labels';
+import { FINANCE_LINE_LABELS, formatDate, formatMoney } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
 import { DescriptionList } from '../ui/DescriptionList';
 import { Disclosure } from '../ui/Disclosure';
-import { EmptyState } from '../ui/EmptyState';
 import { Section } from '../ui/Section';
 import { TableScroll } from '../ui/TableScroll';
 import { useToast } from '../ui/toast';
+import { checkedText, ParserApiStateNote, stateKeyOf } from './ParserApiState';
 import { companyFinanceKey, useCompanyFinance } from './useCompanyQueries';
 import styles from './CompanyFinance.module.css';
 
@@ -49,40 +49,12 @@ const TABLE_LINES: FinanceLine[] = [
   'cash',
 ];
 
-type StateKey = keyof typeof PARSER_API_STATE_LABELS;
-
-/** Состояние набора: последний исход проверки, а без него — была ли неудачная попытка. */
-export const stateKeyOf = (state: IParserApiDatasetState): StateKey =>
-  state.outcome ?? (state.attemptCount > 0 ? 'failed' : 'not_checked');
-
 const money = (value: number | null): string => (value === null ? '—' : formatMoney(value));
-
-/** «проверено 06.10.2026», при неудаче последней попытки — её причина. */
-const checkedText = (state: IParserApiDatasetState): string | null => {
-  const parts: string[] = [];
-  if (state.checkedAt) parts.push(`проверено ${formatDate(state.checkedAt)}`);
-  if (state.attemptCount > 0 && state.lastError) parts.push(`последняя попытка не удалась${state.nextCheckAt ? `, повтор после ${formatDateTime(state.nextCheckAt)}` : ''}`);
-  return parts.length > 0 ? parts.join(' · ') : null;
-};
-
-const StateNote: FC<{ state: IParserApiDatasetState; what: string; inn: string }> = ({ state, what, inn }) => {
-  const key = stateKeyOf(state);
-  if (key === 'failed') {
-    return (
-      <Callout tone="warning" title={`${what}: ${PARSER_API_STATE_LABELS.failed}`}>
-        {state.lastError ?? 'причина неизвестна'}
-        {state.nextCheckAt ? ` Повтор — после ${formatDateTime(state.nextCheckAt)}.` : ''}
-      </Callout>
-    );
-  }
-  if (key === 'not_found') return <EmptyState size="sm">{what}: по ИНН {inn} записей нет.</EmptyState>;
-  return <EmptyState size="sm">{what}: {PARSER_API_STATE_LABELS.not_checked}.</EmptyState>;
-};
 
 const FinancePart: FC<{ view: IFinanceView | null; state: IParserApiDatasetState; inn: string }> = ({ view, state, inn }) => {
   if (!view || view.years.length === 0) {
     if (view && !view.recognized) return <Callout tone="warning" title="Отчётность не распознана">{view.problems.join('; ')}</Callout>;
-    return <StateNote state={state} what="Отчётность ГИР БО" inn={inn} />;
+    return <ParserApiStateNote state={state} what="Отчётность ГИР БО" inn={inn} />;
   }
   const [latest, previous] = view.years;
   const first = view.years[view.years.length - 1]!;
@@ -155,7 +127,7 @@ const yesNo = (value: boolean | null): string => (value === null ? 'нет св�
 const TaxPart: FC<{ view: ITaxView | null; state: IParserApiDatasetState; inn: string }> = ({ view, state, inn }) => {
   if (!view || !view.recognized) {
     if (view) return <Callout tone="warning" title="Сведения ФНС не распознаны">{view.problems.join('; ')}</Callout>;
-    return <StateNote state={state} what="Сведения ФНС" inn={inn} />;
+    return <ParserApiStateNote state={state} what="Сведения ФНС" inn={inn} />;
   }
   const [staff, staffPrev] = view.headcount;
   const income = view.incomeExpenses[0];
