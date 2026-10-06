@@ -1,10 +1,12 @@
 // «Похожие компании — возможно, это она же: …» одной строкой под шапкой карточки.
 // Портал не объединяет похожие карточки сам (объединить легко, разделить почти нельзя),
-// поэтому говорит о них прямо — чтобы читатель не принял половину сведений за все.
+// поэтому говорит о них прямо — чтобы читатель не принял половину сведений за все. Пары из очереди
+// «возможный дубль» (в т. ч. одно название в разной записи: Сминекс — Sminex) — с вердиктом модели.
 
 import { FC, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
+import { MODEL_VERDICT_HINTS } from '../../lib/labels';
 import { Callout } from '../ui/Callout';
 import { useCompanySimilar } from './useCompanyQueries';
 import styles from './Company.module.css';
@@ -24,6 +26,7 @@ export const CompanySimilar: FC<{ companyId: number }> = ({ companyId }) => {
               {s.name}
             </Link>
             {s.city ? ` (${s.city})` : ''}
+            {s.modelVerdict === 'same' && ` — ${MODEL_VERDICT_HINTS.same}`}
           </Fragment>
         ))}
         .

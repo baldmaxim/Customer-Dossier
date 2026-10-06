@@ -1087,6 +1087,11 @@ export const MODEL_VERDICT_LABELS: Record<string, string> = {
   unsure: 'модель: не уверена',
 };
 
+/** Почему пара «возможный дубль» в очереди, если не по сходству строк: проход по звучанию (resolve/soundPairs.ts). */
+export const MERGE_REASON_LABELS: Record<string, string> = {
+  sound_key: 'звучит одинаково',
+};
+
 /** Кто принял решение: модель подписывается своим именем («model:…»), правило сбора — «auto». */
 export const actorLabel = (actor: string | null | undefined): string => {
   if (!actor) return '—';

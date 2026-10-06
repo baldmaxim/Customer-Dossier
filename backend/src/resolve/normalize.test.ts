@@ -7,6 +7,7 @@ import {
   isValidInn,
   isValidOgrn,
   isValidTaxId,
+  soundKey,
 } from './normalize.js';
 
 describe('normalizeName — компании', () => {
@@ -135,6 +136,31 @@ describe('isShortAmbiguousName', () => {
   it('длинное или многословное — автослияние разрешено', () => {
     expect(isShortAmbiguousName(normalizeName('BI Group'))).toBe(false);
     expect(isShortAmbiguousName(normalizeName('Казахстройинвест'))).toBe(false);
+  });
+});
+
+describe('soundKey', () => {
+  const sound = (name: string): string => soundKey(normalizeName(name).key);
+
+  it('одно название в разной записи — один ключ', () => {
+    expect(sound('Сминекс')).toBe('smnks');
+    expect(sound('Смайнекс')).toBe('smnks');
+    expect(sound('ООО «Sminex»')).toBe('smnks');
+    expect(sound('Цемент')).toBe(sound('Cement'));
+    expect(sound('Капитал')).toBe(sound('Capital'));
+    expect(sound('Сминекс Групп')).toBe(sound('Sminex Group'));
+  });
+
+  it('разные названия не сводятся', () => {
+    expect(sound('Самолёт')).not.toBe(sound('Эталон'));
+    expect(sound('Сминекс')).not.toBe(sound('Сминекс-Интеко'));
+    expect(sound('Донстрой')).not.toBe(sound('Монострой'));
+  });
+
+  it('короткое имя ключа не получает', () => {
+    expect(sound('ПИК')).toBe('');
+    expect(sound('Асем')).toBe('');
+    expect(soundKey('')).toBe('');
   });
 });
 

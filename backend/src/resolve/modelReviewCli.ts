@@ -1,11 +1,15 @@
 // Разбор разногласий моделью из консоли (02.10.2026):
 //
 //   npm run review:model -- [--limit N] [--apply]          # в образе: node dist/resolve/modelReviewCli.js
+//   npm run review:model -- --sound-pairs [--apply]        # пары по звучанию названия (soundPairs.ts)
 //
 // Без --apply — только вердикты: подсказки к совпадениям ДОМ.РФ, план решений по ним и вердикты по парам
 // «возможный дубль» пишутся рядом с записями, решения не применяются. Так владелец сначала смотрит, что
 // решит модель. С --apply — применяет: «Это он / Не он», слияние (при MERGE_APPLY_ENABLED) и отклонение пар.
 // Печатает отчёт: что решено, кем (правило или модель) и почему.
+//
+// --sound-pairs — модель не вызывается: план пар «одно название в разной записи» (Сминекс — Sminex), с --apply
+// новые пары ставятся в очередь (до --limit), вердикт по ним выносит следующий прогон или тик.
 
 import { env } from '../config/env.js';
 import { closeDb } from '../db/pool.js';
@@ -15,6 +19,7 @@ import { withdrawModelExtractionOnRegistry } from '../registry/modelArtifacts.js
 import { applyDomRfModelDecisions } from '../ingest/registry/domrfModelDecisions.js';
 import { runDomRfHintPass } from '../ingest/registry/domrfHints.js';
 import { applyJudgedPairs, modelReviewCounts, runModelReviewPass, type IPairJudgement } from './modelReview.js';
+import { enqueueSoundPairs } from './soundPairs.js';
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
@@ -31,6 +36,25 @@ const ACTION_WORDS: Record<string, string> = {
   rejected: 'пара отклонена',
   blocked: 'не применено',
 };
+
+if (args.includes('--sound-pairs')) {
+  try {
+    const result = await enqueueSoundPairs({ limit, dryRun: !apply, force: true });
+    console.log(`Пары по звучанию названия — ${apply ? 'С ЗАПИСЬЮ в очередь' : 'план, без записи'}\n`);
+    console.log(`Найдено пар: ${result.pairs.length}, новых для очереди: ${result.fresh.length}`);
+    for (const p of result.fresh) {
+      console.log(`  «${p.sourceName}» (№ ${p.sourceId}) ↔ «${p.targetName}» (№ ${p.targetId}) — ключ ${p.sound}`);
+    }
+    for (const c of result.tooCommon) console.log(`  пропущен общий ключ ${c.sound}: компаний ${c.companies}`);
+    if (apply) console.log(`\nПоставлено в очередь: ${result.inserted}${result.fresh.length > limit ? ` (остальные — следующим запуском, --limit ${limit})` : ''}`);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  } finally {
+    await closeDb();
+  }
+  process.exit(process.exitCode ?? 0);
+}
 
 try {
   // Ключ OpenRouter из админки живёт в базе: без этого команда видела бы только LLM_API_KEY из .env.

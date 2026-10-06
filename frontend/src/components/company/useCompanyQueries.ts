@@ -10,6 +10,8 @@ export interface ISimilarCompany {
   id: number;
   name: string;
   city: string | null;
+  /** Пара стоит в очереди «возможный дубль» и модель её оценила; старый сервер поля не присылает. */
+  modelVerdict?: 'same' | 'unsure' | null;
 }
 
 export const useCompany = (companyId: number, enabled: boolean): UseQueryResult<ICompanyResponse> =>

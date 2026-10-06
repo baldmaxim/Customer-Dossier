@@ -234,6 +234,43 @@ export const isShortAmbiguousName = (normalized: INormalizedName): boolean => {
   return tokens.length <= 1 && normalized.key.length < 6;
 };
 
+/** Звуковой ключ короче — не участвует: «ПИК» и «Пак» совпали бы. */
+export const MIN_SOUND_KEY = 4;
+const MIN_SOUND_SOURCE = 5;
+
+/** Сочетания, которые в латинице и кириллице пишут по-разному. Порядок важен: длинные — раньше. */
+const SOUND_FOLDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/shch|sch/g, 'sh'],
+  [/dzh/g, 'j'],
+  [/kh/g, 'h'],
+  [/ph/g, 'f'],
+  [/ck/g, 'k'],
+  [/x/g, 'ks'],
+  [/w/g, 'v'],
+  [/q/g, 'k'],
+  [/c(?=[eiy])/g, 's'],
+  [/c(?!h)/g, 'k'],
+  [/ts/g, 's'],
+];
+
+/**
+ * Звуковой ключ — одно название в разной записи: «Сминекс», «Смайнекс» и «Sminex» дают smnks.
+ * Транслитерация (шаг 7 normalizeName) сводит только графику; здесь свёртываются сочетания, которые
+ * пишут как попало (x/кс, c/к/ц, ph/ф), отбрасываются гласные после первой буквы (их читают по-разному:
+ * «ай» и «и») и схлопываются повторы. Вход — `key` (латиница без пробелов).
+ *
+ * Ключ грубый и НИКОГДА не решает сам: совпадение — только повод поставить пару «возможный дубль»
+ * на вердикт модели (resolve/soundPairs.ts). В базе не хранится и считается при проходе, поэтому правка
+ * правил не требует bump NORMALIZER_VERSION. Короткое имя — '' (не участвует).
+ */
+export const soundKey = (latinKey: string): string => {
+  if (latinKey.length < MIN_SOUND_SOURCE) return '';
+  let s = latinKey;
+  for (const [from, to] of SOUND_FOLDS) s = s.replace(from, to);
+  const skeleton = `${s.slice(0, 1)}${s.slice(1).replace(/[aeiouy]/g, '')}`.replace(/(.)\1+/g, '$1');
+  return skeleton.length < MIN_SOUND_KEY ? '' : skeleton;
+};
+
 /**
  * Идентификаторы юрлиц РФ: ИНН, ОГРН, ОГРНИП.
  *

@@ -17,6 +17,7 @@ import { applyDomRfModelDecisions } from './ingest/registry/domrfModelDecisions.
 import { runDomRfHintPass } from './ingest/registry/domrfHints.js';
 import { syncDomRfGroupRelations } from './registry/groupSync.js';
 import { applyJudgedPairs, runModelReviewPass } from './resolve/modelReview.js';
+import { enqueueSoundPairs } from './resolve/soundPairs.js';
 import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 import { startFocusScheduler } from './focus/scheduler.js';
@@ -118,6 +119,10 @@ const startPipelineWorker = (signal: AbortSignal): void => {
           const sync = await syncDomRfGroupRelations();
           if (sync.linked + sync.withdrawn > 0) console.log(`[model-review] связи с группами: записано ${sync.linked}, снято ${sync.withdrawn}`);
         }
+        // Одно название в разной записи (Сминекс — Смайнекс — Sminex) резолвер в очередь не ставит:
+        // пары по звучанию — до вердиктов, решает модель. Каталог без изменений не перечитывается.
+        const sound = await enqueueSoundPairs({ limit: 50, dryRun: false });
+        if (sound.inserted > 0) console.log(`[model-review] пар по звучанию названия поставлено: ${sound.inserted}`);
         // Включили применение после прогона «посмотреть» — сначала прежние вердикты, без вызова модели.
         const stored = env.MODEL_REVIEW_APPLY ? await applyJudgedPairs(env.MODEL_REVIEW_BATCH_SIZE) : [];
         const pairs = [...stored, ...(await runModelReviewPass())];

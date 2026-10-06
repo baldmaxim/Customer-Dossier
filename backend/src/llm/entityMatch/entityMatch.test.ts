@@ -1,4 +1,4 @@
-// entity-match@1 без сети: что просим у модели по паре «возможный дубль» и что принимаем в ответ.
+// entity-match@2 без сети: что просим у модели по паре «возможный дубль» и что принимаем в ответ.
 //
 // Вердикт из трёх и короткая причина; иной вердикт и пустая причина не принимаются. Данные запроса —
 // недоверенные: маркеры внутри обезвреживаются.
@@ -15,7 +15,7 @@ describe('пара «возможный дубль» — вердикт моде
     expect([...ENTITY_MATCH_JSON_SCHEMA.required]).toEqual(Object.keys(ENTITY_MATCH_JSON_SCHEMA.properties));
     expect([...ENTITY_MATCH_JSON_SCHEMA.properties.verdict.enum]).toEqual(['same', 'different', 'unsure']);
     expect(ENTITY_MATCH_SPEC.schemaName).toBe('tg_info_entity_match');
-    expect(ENTITY_MATCH_PROMPT_VERSION).toBe('entity-match@1');
+    expect(ENTITY_MATCH_PROMPT_VERSION).toBe('entity-match@2');
     expect(buildEntityMatchSystemMessage().endsWith('/no_think')).toBe(true);
   });
 
@@ -24,6 +24,9 @@ describe('пара «возможный дубль» — вердикт моде
     expect(system).toContain('Сомневаешься — unsure');
     expect(system).toContain('Группа компаний (бренд, ГК) и её отдельное юрлицо — different');
     expect(system).toContain('Разные записи ДОМ.РФ — разные объекты');
+    // @2: разная запись одного названия — довод за, похожее звучание разных слов — нет.
+    expect(system).toContain('«Sminex», «Сминекс», «Смайнекс»');
+    expect(system).toContain('Похожее звучание разных слов');
   });
 
   it('ответ: вердикт из трёх, причина не пустая и не длиннее строки', () => {

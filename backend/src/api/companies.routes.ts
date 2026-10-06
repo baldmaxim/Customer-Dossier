@@ -495,21 +495,35 @@ companiesRouter.get('/:id/similar', async (req, res) => {
     return;
   }
 
+  // Похожие по триграммам и ждущие пары очереди: «Sminex» и «Смайнекс» по триграммам не видят друг друга,
+  // их пару ставит проход по звучанию (resolve/soundPairs.ts). Пара, которую модель назвала разными
+  // компаниями, «возможно, это она же» не показывается; названная одной — первой и с вердиктом.
   const rows = await query(
-    `SELECT c2.id, c2.name, c2.city, c2.tax_id AS "taxId",
-            similarity(c1.name_latin, c2.name_latin) AS score
-     FROM companies c1
-     JOIN companies c2 ON c2.id <> c1.id AND c2.merged_into_id IS NULL
-                       AND c2.name_latin % c1.name_latin
-     WHERE c1.id = $1 AND c1.merged_into_id IS NULL
+    `WITH me AS (SELECT id, name_latin FROM companies WHERE id = $1 AND merged_into_id IS NULL),
+     queued AS (
+       SELECT CASE WHEN q.source_entity_id = me.id THEN q.target_entity_id ELSE q.source_entity_id END AS other_id,
+              q.model_verdict
+       FROM merge_queue q JOIN me ON me.id IN (q.source_entity_id, q.target_entity_id)
+       WHERE q.entity_kind = 'company' AND q.status = 'pending'
+     ),
+     trgm AS (
+       SELECT c2.id AS other_id, similarity(me.name_latin, c2.name_latin) AS score
+       FROM me JOIN companies c2 ON c2.id <> me.id AND c2.merged_into_id IS NULL AND c2.name_latin % me.name_latin
        -- пары, уже разобранные вручную, показывать не нужно
-       AND NOT EXISTS (
+       WHERE NOT EXISTS (
          SELECT 1 FROM merge_queue q
          WHERE q.entity_kind = 'company' AND q.status <> 'pending'
-           AND least(q.source_entity_id, q.target_entity_id) = least(c1.id, c2.id)
-           AND greatest(q.source_entity_id, q.target_entity_id) = greatest(c1.id, c2.id)
+           AND least(q.source_entity_id, q.target_entity_id) = least(me.id, c2.id)
+           AND greatest(q.source_entity_id, q.target_entity_id) = greatest(me.id, c2.id)
        )
-     ORDER BY score DESC
+     )
+     SELECT c.id, c.name, c.city, c.tax_id AS "taxId", t.score, q.model_verdict AS "modelVerdict"
+     FROM (SELECT other_id FROM queued UNION SELECT other_id FROM trgm) o
+     JOIN companies c ON c.id = o.other_id AND c.merged_into_id IS NULL
+     LEFT JOIN queued q ON q.other_id = o.other_id
+     LEFT JOIN trgm t ON t.other_id = o.other_id
+     WHERE q.model_verdict IS DISTINCT FROM 'different'
+     ORDER BY (q.model_verdict = 'same') IS TRUE DESC, (q.other_id IS NOT NULL) DESC, t.score DESC NULLS LAST, c.id
      LIMIT 5`,
     [id],
   );

@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import type { IPendingMerge } from '../../api/types';
-import { MODEL_VERDICT_LABELS, formatPercent } from '../../lib/labels';
+import { MERGE_REASON_LABELS, MODEL_VERDICT_LABELS, formatPercent } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -50,6 +50,9 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
     if (ok) reject.mutate();
   };
 
+  // Пара по звучанию названия стоит в очереди с условным баллом — процент сходства ей не подпись.
+  const reasonLabel = typeof pair.reasons.key === 'string' ? MERGE_REASON_LABELS[pair.reasons.key] : undefined;
+
   return (
     <Card as="li" padding="md">
       <Stack gap={3}>
@@ -58,7 +61,7 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
           <Icon name="forward" size="sm" className={styles.arrow} />
           <VisuallyHidden>и</VisuallyHidden>
           <span className={styles.entityName}>{pair.targetName}</span>
-          <Badge tone="neutral">сходство {formatPercent(Number(pair.score))}</Badge>
+          <Badge tone="neutral">{reasonLabel ?? `сходство ${formatPercent(Number(pair.score))}`}</Badge>
         </Cluster>
         {pair.modelVerdict && (
           <p className={styles.modelVerdict}>
