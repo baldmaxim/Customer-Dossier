@@ -95,6 +95,17 @@
   white-space: nowrap;
 }
 
+/* Генподрядчик по ДОМ.РФ — одной строкой, как адрес; полное имя — в подсказке. */
+.contractor {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Три числа рядом: подпись мелко над значением, как реквизиты в шапке компании. */
 .facts {
   display: grid;

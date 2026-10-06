@@ -1,5 +1,5 @@
 // Карточка объекта на вкладке «Объекты» и в превью «Обзора»: статус и срок сдачи сверху, название
-// крупно, адрес, три главных числа ДОМ.РФ, роль компании, «через СЗ …» для объектов группы и
+// крупно, адрес, генподрядчик по ДОМ.РФ (24D), три главных числа ДОМ.РФ, роль компании, «через СЗ …» для объектов группы и
 // источник сведений внизу. Вся карточка — ссылка на страницу объекта (row-link); ссылка на СЗ
 // поднята над ней (row-link-above) и остаётся отдельной целью.
 //
@@ -13,6 +13,7 @@ import { FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ICompanyObject } from '../../api/types';
+import { contractorNames } from '../../lib/contractors';
 import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { Heading } from '../ui/Heading';
@@ -52,6 +53,7 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
   const place = o.registry?.address ?? o.city;
   const level = o.level && o.level !== 'complex' ? PROJECT_LEVEL_LABELS[o.level] : null;
   const placeText = `${level ? `${level} · ` : ''}${place ?? 'адрес не указан'}`;
+  const contractor = contractorNames(o.registry?.contractor);
   // Фото ещё нет (сбор ДОМ.РФ до объекта не дошёл, галереи нет) — заглушка того же размера: ряды ровные.
   const placeholder = (
     <div className={`${styles.photo} ${styles.placeholder}`} aria-hidden="true">
@@ -82,6 +84,11 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
       <p className={styles.place} title={placeText}>
         {placeText}
       </p>
+      {contractor && (
+        <p className={styles.contractor} title={contractor}>
+          генподрядчик: {contractor}
+        </p>
+      )}
       {facts.length > 0 && (
         <dl className={styles.facts}>
           {facts.map(f => (

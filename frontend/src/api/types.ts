@@ -256,6 +256,40 @@ export interface ICompanyObjectsResponse {
   coverage: { loaded: number; total: number; truncated: boolean };
 }
 
+/** «Кто строит для компании» (этап 24D): GET /api/companies/:id/builders. */
+export type BuilderRole = 'general_contractor' | 'contractor';
+export type BuilderSource = 'registry' | 'publications';
+
+export interface IBuilderObject {
+  projectId: number;
+  name: string;
+  role: BuilderRole;
+  sources: BuilderSource[];
+  isCurrent: boolean;
+  registryAsOf: string | null;
+  lastPublication: string | null;
+  mentions: number | null;
+}
+
+export interface ICompanyBuilder {
+  key: string;
+  name: string;
+  inn: string | null;
+  company: { id: number; name: string } | null;
+  match: 'identifier' | 'name' | 'participation' | null;
+  registryNames: string[];
+  inGroup: boolean;
+  roles: BuilderRole[];
+  sources: BuilderSource[];
+  objects: IBuilderObject[];
+  lastSeen: string | null;
+}
+
+export interface ICompanyBuildersResponse {
+  items: ICompanyBuilder[];
+  objects: { customerSide: number; withRegistry: number; withRegistryContractor: number; truncated: boolean };
+}
+
 export interface IRegistryProjectRow {
   projectId: number;
   name: string;

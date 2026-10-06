@@ -169,8 +169,12 @@ const rank = (o: ICompanyObject): number[] => [
   o.roles.some(r => r.isCurrent) ? 0 : 1,
 ];
 
+/** Все участники группы компании — для объектов и для пометки «строит своими силами» (24D). */
+export const loadGroupMembers = (companyId: number): Promise<Array<{ companyId: number; name: string }>> =>
+  query<{ companyId: number; name: string }>(MEMBERS_SQL, [companyId]);
+
 export const loadCompanyObjects = async (companyId: number): Promise<ICompanyObjectsResponse> => {
-  const members = await query<{ companyId: number; name: string }>(MEMBERS_SQL, [companyId]);
+  const members = await loadGroupMembers(companyId);
   const memberName = new Map(members.map(m => [m.companyId, m.name]));
   const links = await query<ILinkRow>(LINKS_SQL, [[companyId, ...members.map(m => m.companyId)], companyId]);
 

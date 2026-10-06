@@ -1,5 +1,5 @@
-// Карточка компании на настоящей базе (этап 22): лента публикаций, контрагенты и
-// состояние обработки на экране админки.
+// Карточка компании на настоящей базе (этап 22): лента публикаций, контрагенты,
+// состояние обработки на экране админки и «кто строит для компании» (24D).
 //
 // Эти три запроса ходят по представлениям (`published_assertions_v`,
 // `co_participations_v`) и по колонкам, которых нет в unit-профиле, — без живого
@@ -73,9 +73,11 @@ const ingest = async (body: string, answer: ReturnType<typeof fx.answer>): Promi
 
 const GC = `ООО «Картастрой» (ИНН ${INN_A}) выбрано генподрядчиком ЖК «Картадемо».`;
 const SUB = 'Субподрядчиком на ЖК «Картадемо» выступает «Картасервис».';
+const CUSTOMER = 'Заказчиком ЖК «Картадемо» выступает «Картазаказ».';
 
 let companyId = 0;
 let partnerId = 0;
+let customerId = 0;
 
 beforeAll(async () => {
   await resetAndMigrate();
@@ -269,5 +271,40 @@ describe('публикации объекта', () => {
   it('карточка компании отдаёт отметку «на контроле» и наименование ЕГРЮЛ (нет снимка Фокуса — null)', async () => {
     const res = await call(`/api/companies/${companyId}`);
     expect(res.body).toMatchObject({ watch: null, egrul: null });
+  });
+});
+
+describe('кто строит для компании (этап 24D)', () => {
+  // Своя публикация — в последнем блоке: иначе счётчики публикаций и разборов выше выросли бы.
+  beforeAll(async () => {
+    await ingest(`Новости стройки. ${CUSTOMER}`, fx.answer({
+      companies: [fx.company('Картазаказ', CUSTOMER)],
+      projects: [fx.project('Картадемо', CUSTOMER)],
+      relations: [
+        fx.relation({ type: 'participation', kind: 'customer', subject: 'Картазаказ', project: 'Картадемо', quote: CUSTOMER }),
+      ],
+    }));
+    customerId = (await getPool().query<{ id: number }>(
+      `SELECT id FROM companies WHERE name LIKE '%Картазаказ%' AND merged_into_id IS NULL ORDER BY id LIMIT 1`,
+    )).rows[0]!.id;
+  });
+
+  it('генподрядчик из публикаций на объекте заказчика — с ИНН и числом записей; субподрядчик не входит', async () => {
+    const res = await call(`/api/companies/${customerId}/builders`);
+    expect(res.status).toBe(200);
+    const body = res.body as {
+      items: Array<{ company: { id: number } | null; inn: string | null; roles: string[]; sources: string[]; objects: Array<{ mentions: number | null; lastPublication: string | null }> }>;
+      objects: { customerSide: number; withRegistry: number };
+    };
+    expect(body.objects).toMatchObject({ customerSide: 1, withRegistry: 0 });
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ company: { id: companyId }, inn: INN_A, roles: ['general_contractor'], sources: ['publications'] });
+    expect(body.items[0]!.objects[0]).toMatchObject({ mentions: 1, lastPublication: '2026-09-18T07:00:00.000Z' });
+  });
+
+  it('у генподрядчика своих объектов заказчика нет — список пуст, customerSide = 0', async () => {
+    const res = await call(`/api/companies/${companyId}/builders`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ items: [], objects: { customerSide: 0 } });
   });
 });

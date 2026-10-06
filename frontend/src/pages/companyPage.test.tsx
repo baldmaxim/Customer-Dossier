@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, companyRoutes, computedSignals, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -328,6 +328,71 @@ describe('Карточка компании', () => {
     expect(within(statuses).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Сдан1', 'Строится1']);
     expect(within(section).getByText(/срок не распознан — 1/)).toBeTruthy();
     expect(within(section).getByRole('link', { name: 'Все объекты — 3' }).getAttribute('href')).toBe('/company/7?tab=objects');
+  });
+
+  it('кто строит для компании: ДОМ.РФ по ИНН и публикации, своя группа, без карточки — «Найти по ИНН»; плитка сводки', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/builders', () => ({
+        status: 200,
+        body: buildersBody({
+          objects: { customerSide: 2, withRegistry: 1, withRegistryContractor: 1, truncated: false },
+          items: [
+            {
+              key: 'company:10',
+              name: 'СУ-10',
+              inn: '7736255508',
+              company: { id: 10, name: 'СУ-10' },
+              match: 'identifier',
+              registryNames: ['ООО СУ-10'],
+              inGroup: false,
+              roles: ['general_contractor'],
+              sources: ['registry', 'publications'],
+              objects: [
+                { projectId: 60, name: 'Река', role: 'general_contractor', sources: ['registry'], isCurrent: true, registryAsOf: '2026-09-30', lastPublication: null, mentions: null },
+                { projectId: 61, name: 'Парк', role: 'general_contractor', sources: ['publications'], isCurrent: true, registryAsOf: null, lastPublication: '2026-10-01T10:00:00Z', mentions: 3 },
+              ],
+              lastSeen: '2026-10-01T10:00:00Z',
+            },
+            {
+              key: 'inn:7704412966',
+              name: 'ООО Новый',
+              inn: '7704412966',
+              company: null,
+              match: null,
+              registryNames: ['ООО Новый'],
+              inGroup: false,
+              roles: ['general_contractor'],
+              sources: ['registry'],
+              objects: [{ projectId: 60, name: 'Река', role: 'general_contractor', sources: ['registry'], isCurrent: true, registryAsOf: null, lastPublication: null, mentions: null }],
+              lastSeen: null,
+            },
+          ],
+        }),
+      })),
+    );
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Кто строит для компании' })).closest('section')!;
+    expect(within(section).getByRole('link', { name: 'СУ-10' }).getAttribute('href')).toBe('/company/10');
+    expect(within(section).getByText('найдена по ИНН из ДОМ.РФ')).toBeTruthy();
+    expect(within(section).getByText('в ДОМ.РФ: ООО СУ-10')).toBeTruthy();
+    expect(within(section).getByText(/ДОМ\.РФ на 30\.09\.2026/)).toBeTruthy();
+    expect(within(section).getByText(/публикации: 3, последняя 01\.10\.2026/)).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Найти по ИНН' }).getAttribute('href')).toBe('/?q=7704412966');
+    expect(within(section).getByText(/не проверенный договор/)).toBeTruthy();
+
+    const tile = screen.getByText('Генподрядчики').closest('div')!;
+    expect(within(tile).getByText('2')).toBeTruthy();
+    expect(within(tile).getByText('СУ-10, ООО Новый')).toBeTruthy();
+  });
+
+  it('кто строит для компании: компания нигде не заказчик — ни блока, ни плитки', async () => {
+    fakeApi(companyRoutes());
+    renderCard();
+
+    await screen.findByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус', level: 2 });
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Кто строит для компании' })).toBeNull());
+    expect(screen.queryByText('Генподрядчики')).toBeNull();
   });
 
   it('шапка: роли на своих объектах — ярлыками; оговорка «не оценка» — одна на вкладку', async () => {

@@ -542,6 +542,17 @@ export const IN_PERIOD_LABELS: Record<string, string> = {
  * На каком основании компания считается контрагентом (этап 22). Совместное участие —
  * не договор: две фирмы на одном объекте могут не иметь отношений между собой.
  */
+/** «Кто строит для компании» (24D): откуда известно и как найдена карточка портала. */
+export const BUILDER_SOURCE_LABELS: Record<string, string> = {
+  registry: 'ДОМ.РФ',
+  publications: 'публикации',
+};
+
+export const BUILDER_MATCH_LABELS: Record<string, string> = {
+  identifier: 'найдена по ИНН из ДОМ.РФ',
+  name: 'совпало по названию — проверьте ИНН',
+};
+
 export const PARTNER_KIND_LABELS: Record<string, string> = {
   contract: 'договор',
   corporate: 'корпоративная связь',

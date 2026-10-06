@@ -1,0 +1,92 @@
+/* «Кто строит для компании»: строитель, роль ярлыком, ИНН и как найден, объекты с источником. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+}
+
+.item + .item {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+}
+
+/* Имя — цель нажатия: 44px под палец, плотнее под мышь (--ctl-h-sm). */
+.name,
+.nameText {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow-wrap: break-word;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .name:hover {
+    color: var(--accent);
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--sp-3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.objects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.object {
+  min-width: 0;
+  font-size: var(--fs-md);
+  overflow-wrap: break-word;
+}
+
+.objectLink {
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .objectLink:hover {
+    color: var(--accent);
+  }
+}
+
+.past,
+.source,
+.more,
+.note {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.note {
+  margin: var(--sp-3) 0 0;
+}

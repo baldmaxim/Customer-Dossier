@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyBuildersResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -31,6 +31,13 @@ export const useCompanyObjects = (companyId: number, enabled = true): UseQueryRe
     queryKey: ['company', companyId, 'objects'],
     queryFn: () => api.get<ICompanyObjectsResponse>(`/api/companies/${companyId}/objects`),
     enabled,
+  });
+
+/** «Кто строит для компании» (24D): генподрядчики из ДОМ.РФ и публикаций на объектах заказчика. */
+export const useCompanyBuilders = (companyId: number): UseQueryResult<ICompanyBuildersResponse> =>
+  useQuery({
+    queryKey: ['company', companyId, 'builders'],
+    queryFn: () => api.get<ICompanyBuildersResponse>(`/api/companies/${companyId}/builders`),
   });
 
 /** События: последние 100 по дате события и общее число (total; у прежнего сервера его нет — тогда длина списка). */

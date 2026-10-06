@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { IFocusView } from '../api/types';
+import type { ICompanyBuildersResponse, IFocusView } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -290,6 +290,13 @@ export const focusFound = (over: Partial<IFocusView> = {}): IFocusView =>
     ...over,
   });
 
+/** «Кто строит для компании» (24D). По умолчанию компания нигде не заказчик — блока нет. */
+export const buildersBody = (over: Partial<ICompanyBuildersResponse> = {}): ICompanyBuildersResponse => ({
+  items: [],
+  objects: { customerSide: 0, withRegistry: 0, withRegistryContractor: 0, truncated: false },
+  ...over,
+});
+
 export const companyRoutes = ({
   withRegistry = false,
   registryOver = {},
@@ -312,6 +319,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/projects', respond: () => ({ status: 200, body: { items: [projectRow(), projectRow({ role: 'customer', counterparties: null })] } }) },
   { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
+  { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },

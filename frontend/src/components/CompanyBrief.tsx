@@ -1,4 +1,4 @@
-// «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений» (объекты · события · публикации ·
+// «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений» (объекты · генподрядчики · события · публикации ·
 // связи · суды · реестр). У каждой плитки — разбивка мелко и ссылка туда, где число расписано; заголовок
 // полосы — только для диктора: плитки сами себя называют. Роли — ярлыками в шапке и полосами в «Ролях,
 // событиях и текстах», а не третьей строкой здесь (05.10.2026).
@@ -20,8 +20,9 @@ import { formatCount } from '../lib/format';
 import { formatDate } from '../lib/labels';
 import { Sparkline } from './charts/Sparkline';
 import { BriefTile } from './company/BriefTile';
+import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
-import { useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
+import { useCompanyBuilders, useCompanyEvents, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
 import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
@@ -59,12 +60,21 @@ const joinDetail = (parts: Array<string | null>): string | null => {
   return known.length > 0 ? known.join(' · ') : null;
 };
 
+/** «СУ-10, МонАрх и ещё 2»: генподрядчики раньше подрядчиков (порядок сервера). */
+const namesText = (names: string[]): string | null => {
+  if (names.length === 0) return null;
+  return names.length > 2 ? `${names.slice(0, 2).join(', ')} и ещё ${names.length - 2}` : names.join(', ');
+};
+
 const known = (label: string, aggregate: ISignalAggregate | undefined): string | null =>
   aggregate?.status === 'ok' ? `${label} — ${formatCount(aggregate.value)}` : null;
 
 export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objectsTotal, objectsKnown, company }) => {
   const query = useCompanySignals(companyId);
   const events = useCompanyEvents(companyId);
+  const builders = useCompanyBuilders(companyId);
+  // Старый сервер маршрута не знает: без objects плитки нет, а не падение сводки.
+  const generals = (builders.data?.items ?? []).filter(b => b.roles.includes('general_contractor'));
   const signals = query.data?.signals ?? null;
   const refresh = query.data?.refresh;
 
@@ -88,6 +98,15 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
           to={{ search: '?tab=objects' }}
           linkText="Все объекты"
         />
+        {(builders.data?.objects?.customerSide ?? 0) > 0 && (
+          <BriefTile
+            label="Генподрядчики"
+            value={formatCount(generals.length)}
+            detail={namesText(generals.map(b => b.company?.name ?? b.name)) ?? 'не названы ни ДОМ.РФ, ни в публикациях'}
+            to={{ search: '', hash: BUILDERS_SECTION_ID }}
+            linkText="Кто строит для компании"
+          />
+        )}
         <BriefTile
           label="События"
           value={events.isSuccess ? formatCount(events.data.total ?? events.data.items.length) : '—'}

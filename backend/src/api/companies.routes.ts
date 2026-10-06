@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { loadCardExtras } from '../companies/cardExtras.js';
+import { loadCompanyBuilders } from './companyBuilders.js';
 import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
@@ -354,6 +355,16 @@ companiesRouter.get('/:id/objects', async (req, res) => {
     return;
   }
   res.json(await loadCompanyObjects(id));
+});
+
+/** «Кто строит для компании» (этап 24D): генподрядчики из ДОМ.РФ и из публикаций на объектах заказчика. */
+companiesRouter.get('/:id/builders', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  res.json(await loadCompanyBuilders(id));
 });
 
 const feedSchema = z.object({
