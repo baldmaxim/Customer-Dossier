@@ -31,9 +31,11 @@ interface IMergePreviewProps {
   onDone: () => void;
   /** Тост после объединения; по умолчанию — про «Историю объединений» ниже. */
   doneText?: string;
+  /** Только сравнение: решение «Да / Нет» принимает строка пары (MergePair). */
+  readOnly?: boolean;
 }
 
-const failureText = (err: unknown): string => {
+export const mergeFailureText = (err: unknown): string => {
   if (err instanceof ApiError && (err.code === 'version_conflict' || err.code === 'merge_preview_stale')) {
     return 'Данные изменились после сравнения — оно обновлено. Проверьте ещё раз.';
   }
@@ -43,7 +45,7 @@ const failureText = (err: unknown): string => {
   return err instanceof ApiError && err.status < 500 ? err.message : describeLoadError(err);
 };
 
-export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, doneText }) => {
+export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, doneText, readOnly = false }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -91,7 +93,7 @@ export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, done
       onDone();
     },
     onError: (err: Error) => {
-      setError(failureText(err));
+      setError(mergeFailureText(err));
       if (err instanceof ApiError && (err.code === 'version_conflict' || err.code === 'merge_preview_stale')) void previewQuery.refetch();
     },
   });
@@ -141,11 +143,13 @@ export const MergePreview: FC<IMergePreviewProps> = ({ pair, adhoc, onDone, done
         </p>
       ))}
       {error && <Callout tone="danger">{error}</Callout>}
-      <div>
-        <Button variant="primary" disabled={!preview.canApply} loading={apply.isPending} onClick={() => void ask()}>
-          Объединить
-        </Button>
-      </div>
+      {!readOnly && (
+        <div>
+          <Button variant="primary" disabled={!preview.canApply} loading={apply.isPending} onClick={() => void ask()}>
+            Объединить
+          </Button>
+        </div>
+      )}
     </Stack>
   );
 };

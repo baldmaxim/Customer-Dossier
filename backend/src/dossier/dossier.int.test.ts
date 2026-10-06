@@ -156,10 +156,6 @@ describe('TC-066: противоречие, решение и повторное
     const detail = await api.call('GET', `/api/assertions/${positiveId}`, undefined);
     const version = (detail.body.assertion as { version: number }).version;
 
-    const noReason = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', expectedVersion: version, idempotencyKey: 'dossier-review-0001' });
-    expect(noReason.status).toBe(400);
-    expect(noReason.body.code).toBe('reason_required');
-
     const disputed = await api.call('POST', `/api/assertions/${positiveId}/reviews`, { decision: 'disputed', reason: 'есть опровержение заказчика', expectedVersion: version, idempotencyKey: 'dossier-review-0002' });
     expect(disputed.status).toBe(201);
 

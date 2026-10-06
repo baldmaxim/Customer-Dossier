@@ -95,7 +95,7 @@ describe('AmbiguityDetail — выбор компании', () => {
   it('вариант с чужим ИНН в тексте недоступен; реквизиты словами; выбор ≠ подтверждение участия', async () => {
     fakeApi([{ match: 'GET /api/entities/ambiguities/7', respond: () => ({ status: 200, body: detail }) }]);
     renderWithProviders(<AmbiguityDetail ambiguityId={7} />);
-    const buttons = await screen.findAllByRole('button', { name: /^Это она/ });
+    const buttons = await screen.findAllByRole('button', { name: /^Да, это/ });
     expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
     expect((buttons[1] as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText(/Нельзя: реквизит принадлежит другому варианту/)).toBeTruthy();
@@ -103,8 +103,23 @@ describe('AmbiguityDetail — выбор компании', () => {
     expect(screen.getByText('ИНН 7707083893')).toBeTruthy();
     expect(screen.queryByText(/RU:inn/)).toBeNull();
     expect(screen.getAllByText(/не подтверждает участие, договор или долг/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Не ясно' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Это не компания' })).toBeTruthy();
+    // Приёмка — «Да» у варианта и «Нет, ни одна»; причины и отдельной записи нет.
+    expect(screen.getByRole('button', { name: 'Нет, ни одна' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Это не компания' })).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('«Да» записывает выбор сразу, без причины', async () => {
+    const api = fakeApi([
+      { match: 'GET /api/entities/ambiguities/7', respond: () => ({ status: 200, body: detail }) },
+      { match: 'POST /api/entities/ambiguities/7/decisions', respond: () => ({ status: 201, body: { decisionId: 1, replayed: false, version: 2 } }) },
+    ]);
+    renderWithProviders(<AmbiguityDetail ambiguityId={7} />);
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Да, это/ }))[1]!);
+    expect(await screen.findByText('Решение записано.')).toBeTruthy();
+    const body = api.calls.find(c => c.method === 'POST')?.body as Record<string, unknown>;
+    expect(body).toMatchObject({ decision: 'resolved_to', entityId: 2, expectedVersion: detail.version });
+    expect(body.reason).toBeUndefined();
   });
 
   it('конфликт версии — сообщение, решение не показано записанным', async () => {
@@ -116,10 +131,7 @@ describe('AmbiguityDetail — выбор компании', () => {
       },
     ]);
     renderWithProviders(<AmbiguityDetail ambiguityId={7} />);
-    const buttons = await screen.findAllByRole('button', { name: /^Это она/ });
-    fireEvent.click(buttons[1]!);
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ИНН в тексте' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Записать решение' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Да, это/ }))[1]!);
     expect((await screen.findByRole('alert')).textContent).toMatch(/Упоминание изменилось.*Решение не записано/);
     expect(screen.queryByText(/Решение записано/)).toBeNull();
   });

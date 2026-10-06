@@ -221,17 +221,19 @@ describe('«Проверка»: противоречия', () => {
 });
 
 describe('«Проверка»: дубли', () => {
-  it('«Объединить» — только после подтверждения, и объединяется ровно то, что сравнили', async () => {
-    const { api } = open('/admin/review?tab=duplicates');
+  it('«Сравнить» — только смотреть: кнопки объединения в сравнении нет', async () => {
+    open('/admin/review?tab=duplicates');
     expect(await screen.findByText('сходство 87 %')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Сравнить' }));
     expect(await screen.findByText('ИНН 7802000000')).toBeTruthy();
     // Номеров карточек и версий на экране нет.
     expect(screen.queryByText(/#72|версия 3/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Объединить' })).toBeNull();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Объединить' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Объединить карточки?' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Объединить' }));
+  it('«Да» объединяет сразу по токену свежего сравнения, без подтверждения', async () => {
+    const { api } = open('/admin/review?tab=duplicates');
+    fireEvent.click(await screen.findByRole('button', { name: 'Да, объединить' }));
     await waitFor(() =>
       expect(api.calls.find(c => c.url === '/api/admin/merges/31/merge')?.body).toMatchObject({
         expectedSourceVersion: 3,
@@ -239,17 +241,13 @@ describe('«Проверка»: дубли', () => {
         expectedPreviewToken: 'f'.repeat(64),
       }),
     );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('«Это разные компании» спрашивает подтверждение; отказ ничего не отправляет', async () => {
+  it('«Нет» убирает пару сразу, без подтверждения', async () => {
     const { api } = open('/admin/review?tab=duplicates');
-    fireEvent.click(await screen.findByRole('button', { name: 'Это разные компании' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Отмена' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(api.calls.some(c => c.url.endsWith('/reject'))).toBe(false);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Это разные компании' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Да, разные компании' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Нет, разные компании' }));
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/admin/merges/31/reject')).toBe(true));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

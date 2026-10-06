@@ -291,11 +291,19 @@ entitiesRouter.get('/entities/ambiguities/:id', async (req, res) => {
   }
 });
 
+export const AMBIGUITY_NO_REASON = 'причина не указана';
+
 export const ambiguityDecisionSchema = z
   .object({
     decision: z.enum(['resolved_to', 'kept_unknown', 'dismissed']),
     entityId: z.number().int().positive().nullish(),
-    reason: z.string().trim().min(3).max(2000),
+    // Причину с экрана больше не спрашиваем (решение владельца 06.10.2026); колонка NOT NULL — подставляем.
+    reason: z
+      .string()
+      .trim()
+      .max(2000)
+      .nullish()
+      .transform(v => v || AMBIGUITY_NO_REASON),
     expectedVersion: z.number().int().positive(),
     idempotencyKey: z.string().min(8).max(200),
   })
@@ -305,7 +313,7 @@ entitiesRouter.post('/entities/ambiguities/:id/decisions', async (req, res) => {
   const id = idOf(req.params.id);
   const parsed = ambiguityDecisionSchema.safeParse(req.body);
   if (id === null || !parsed.success) {
-    res.status(400).json({ error: 'Нужны решение, причина, версия и ключ идемпотентности; сущность — только для выбора кандидата' });
+    res.status(400).json({ error: 'Нужны решение, версия и ключ идемпотентности; сущность — только для выбора кандидата' });
     return;
   }
   try {

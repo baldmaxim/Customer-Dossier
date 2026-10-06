@@ -176,12 +176,6 @@
   min-width: 0;
 }
 
-.formRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-  gap: var(--sp-3);
-}
-
 .historyItem {
   display: flex;
   flex-direction: column;

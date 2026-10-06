@@ -233,12 +233,13 @@ describe('ввод обращения и решения', () => {
     expect(createCaseSchema.safeParse({ ...base, companyId: 10, claimedRole: 'владелец' }).success).toBe(false);
   });
 
-  it('причина обязательна для отклонения, спора и возврата на проверку', () => {
+  it('причина необязательна для любого решения («Да / Нет», 06.10.2026)', () => {
     const base = { expectedVersion: 1, idempotencyKey: 'key-00000001' };
     expect(reviewSchema.safeParse({ ...base, decision: 'reviewed_supported' }).success).toBe(true);
-    expect(reviewSchema.safeParse({ ...base, decision: 'disputed' }).success).toBe(false);
-    expect(reviewSchema.safeParse({ ...base, decision: 'rejected', reason: 'нет' }).success).toBe(true);
-    expect(reviewSchema.safeParse({ ...base, decision: 'candidate', reason: ' ' }).success).toBe(false);
+    expect(reviewSchema.safeParse({ ...base, decision: 'disputed' }).success).toBe(true);
+    expect(reviewSchema.parse({ ...base, decision: 'rejected', reason: null }).reason).toBeNull();
+    expect(reviewSchema.parse({ ...base, decision: 'candidate', reason: ' ' }).reason).toBeNull();
+    expect(reviewSchema.parse({ ...base, decision: 'rejected', reason: 'нет' }).reason).toBe('нет');
   });
 
   it('дата с точностью текста', () => {

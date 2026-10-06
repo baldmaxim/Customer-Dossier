@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ambiguityDecisionSchema } from '../api/entities.routes.js';
+import { AMBIGUITY_NO_REASON, ambiguityDecisionSchema } from '../api/entities.routes.js';
 import {
   checkAmbiguityChoice,
   decisionRequestHash,
@@ -90,12 +90,13 @@ describe('текст вокруг упоминания', () => {
 describe('контракт решения (T15A-02)', () => {
   const base = { reason: 'по реквизитам в тексте', expectedVersion: 1, idempotencyKey: 'ambiguity-key-01' };
 
-  it('resolved_to требует сущность; kept_unknown и dismissed — без неё; причина обязательна', () => {
+  it('resolved_to требует сущность; kept_unknown и dismissed — без неё; причина необязательна', () => {
     expect(ambiguityDecisionSchema.safeParse({ ...base, decision: 'resolved_to', entityId: 3 }).success).toBe(true);
     expect(ambiguityDecisionSchema.safeParse({ ...base, decision: 'resolved_to' }).success).toBe(false);
     expect(ambiguityDecisionSchema.safeParse({ ...base, decision: 'kept_unknown', entityId: 3 }).success).toBe(false);
     expect(ambiguityDecisionSchema.safeParse({ ...base, decision: 'dismissed' }).success).toBe(true);
-    expect(ambiguityDecisionSchema.safeParse({ ...base, decision: 'dismissed', reason: '  ' }).success).toBe(false);
+    expect(ambiguityDecisionSchema.parse({ ...base, decision: 'dismissed', reason: '  ' }).reason).toBe(AMBIGUITY_NO_REASON);
+    expect(ambiguityDecisionSchema.parse({ decision: 'kept_unknown', expectedVersion: 1, idempotencyKey: 'ambiguity-key-01' }).reason).toBe(AMBIGUITY_NO_REASON);
   });
 
   it('hash запроса различает сущность и версию, но не пробелы по краям причины', () => {

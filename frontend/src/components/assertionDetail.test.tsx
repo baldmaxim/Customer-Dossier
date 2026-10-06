@@ -58,35 +58,31 @@ describe('AssertionDetail', () => {
     const summary = await screen.findByText('Решение оператора');
     const details = summary.closest('details');
     expect(details?.open).toBe(false);
-    expect(screen.queryByRole('button', { name: 'Записать решение' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Да' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Исключить цитату' })).toBeNull();
 
     fireEvent.click(summary);
     details?.dispatchEvent(new Event('toggle'));
 
-    expect(await screen.findByRole('button', { name: 'Записать решение' })).toBeTruthy();
-    expect(screen.getByLabelText('Решение')).toBeTruthy();
-    expect(screen.getByLabelText('Что именно проверено')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Да' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Нет' })).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByText('История решений')).toBeTruthy();
     expect(screen.getByText('Обоснование этого решения не сохранилось.')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Исключить цитату' }).length).toBe(2);
     expect(screen.getAllByRole('link', { name: 'разбор' })[0]?.getAttribute('href')).toBe('/admin/process/77');
   });
 
-  it('в «Проверке» решение раскрыто сразу; причина обязательна для отклонения', async () => {
+  it('в «Проверке» решение раскрыто сразу; «Нет» отклоняет одним нажатием, без причины', async () => {
     const api = fakeApi(routes([{ match: 'POST /api/assertions/5/reviews', respond: () => ({ status: 200, body: { ok: true } }) }]));
     renderWithProviders(<AssertionDetail assertionId={5} mode="review" />);
 
-    const submit = await screen.findByRole('button', { name: 'Записать решение' });
-    fireEvent.change(screen.getByLabelText('Решение'), { target: { value: 'rejected' } });
-    expect((submit as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/^Причина/), { target: { value: 'цитата про другой корпус' } });
-    expect((submit as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(submit);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Нет' }));
 
     await screen.findByText('Решение записано.');
     const call = api.calls.find(c => c.method === 'POST');
-    expect(call?.body).toMatchObject({ decision: 'rejected', reason: 'цитата про другой корпус', expectedVersion: 3 });
+    expect(call?.body).toMatchObject({ decision: 'rejected', scope: 'reflects_source', reason: null, expectedVersion: 3 });
     expect(typeof (call?.body as { idempotencyKey?: unknown }).idempotencyKey).toBe('string');
   });
 
@@ -94,7 +90,7 @@ describe('AssertionDetail', () => {
     fakeApi(routes([{ match: 'POST /api/assertions/5/reviews', respond: () => ({ status: 409, body: { error: 'version_conflict' } }) }]));
     renderWithProviders(<AssertionDetail assertionId={5} mode="review" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Записать решение' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Да' }));
     expect(await screen.findByText(/изменилось в другой вкладке/)).toBeTruthy();
     expect(screen.queryByText('version_conflict')).toBeNull();
   });

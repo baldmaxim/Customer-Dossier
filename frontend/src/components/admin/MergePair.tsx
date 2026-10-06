@@ -1,23 +1,24 @@
-// Возможный дубль: две карточки с похожими названиями. «Сравнить» раскрывает сравнение,
-// «Это разные …» убирает пару из списка (с подтверждением: вернуть её в список нечем).
+// Возможный дубль: две карточки с похожими названиями. «Одна компания? Да / Нет» (решение владельца
+// 06.10.2026: без подтверждений): «Да» берёт свежее сравнение и объединяет по его токену — то, что
+// мешает объединению, раскрывает сравнение; «Нет» убирает пару из списка. «Сравнить» — только смотреть.
 
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { IPendingMerge } from '../../api/types';
+import type { IMergePreview, IPendingMerge } from '../../api/types';
+import { newKey } from '../../lib/idempotency';
 import { MERGE_REASON_LABELS, MODEL_VERDICT_LABELS, formatPercent } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Cluster } from '../ui/Cluster';
-import { useConfirm } from '../ui/confirm';
 import { Icon } from '../ui/Icon';
 import { Stack } from '../ui/Stack';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
 import { actionError } from './actionError';
-import { MergePreview } from './MergePreview';
+import { MergePreview, mergeFailureText } from './MergePreview';
 import styles from './Merge.module.css';
 
 interface IMergePairProps {
@@ -29,8 +30,10 @@ interface IMergePairProps {
 export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const confirm = useConfirm();
   const noun = pair.entityKind === 'company' ? 'компании' : 'объекты';
+  const question = pair.entityKind === 'company' ? 'Одна компания?' : 'Один объект?';
+  // Один ключ на пару: повторное «Да» не объединяет дважды.
+  const [key] = useState(() => newKey('merge'));
 
   const reject = useMutation({
     mutationFn: () => api.post(`/api/admin/merges/${pair.id}/reject`),
@@ -41,14 +44,39 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
     onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
-  const askReject = async (): Promise<void> => {
-    const ok = await confirm({
-      title: `Это разные ${noun}?`,
-      body: `«${pair.sourceName}» и «${pair.targetName}» уйдут из возможных дублей, обе карточки останутся как есть.`,
-      confirmLabel: `Да, разные ${noun}`,
-    });
-    if (ok) reject.mutate();
-  };
+  const merge = useMutation({
+    mutationFn: async () => {
+      // Сравнение — свежее: сервер примет только токен сравнения, сделанного по текущим версиям.
+      const preview = await queryClient.fetchQuery({
+        queryKey: ['merge-preview', pair.id],
+        queryFn: () => api.get<IMergePreview>(`/api/admin/merges/${pair.id}/preview`),
+        staleTime: 0,
+      });
+      if (!preview.canApply) return { blocked: preview.conflicts.map(c => c.message) };
+      const result = await api.post<{ mergeId: number; replayed: boolean }>(`/api/admin/merges/${pair.id}/merge`, {
+        expectedSourceVersion: preview.source.version,
+        expectedTargetVersion: preview.target.version,
+        idempotencyKey: key,
+        expectedPreviewToken: preview.previewToken,
+      });
+      return { blocked: null, replayed: result.replayed };
+    },
+    onSuccess: result => {
+      if (result.blocked) {
+        toast.show({ tone: 'warning', text: `Объединить нельзя${result.blocked.length > 0 ? `: ${result.blocked.join('; ')}` : ''}.` });
+        onToggle(true);
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['merges'] });
+      void queryClient.invalidateQueries({ queryKey: ['merge-history'] });
+      toast.show({
+        tone: 'success',
+        text: result.replayed ? 'Эти карточки уже объединены.' : 'Карточки объединены. Отменить можно в «Истории объединений» ниже.',
+      });
+    },
+    onError: (err: Error) => toast.show({ tone: 'danger', text: mergeFailureText(err) }),
+  });
+  const busy = merge.isPending || reject.isPending;
 
   // Пара по звучанию названия стоит в очереди с условным баллом — процент сходства ей не подпись.
   const reasonLabel = typeof pair.reasons.key === 'string' ? MERGE_REASON_LABELS[pair.reasons.key] : undefined;
@@ -71,14 +99,18 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
           </p>
         )}
         <Cluster gap={2}>
-          <Button aria-expanded={open} iconEnd="chevron" onClick={() => onToggle(!open)}>
+          <span>{question}</span>
+          <Button aria-label="Да, объединить" loading={merge.isPending} disabled={busy} onClick={() => merge.mutate()}>
+            Да
+          </Button>
+          <Button aria-label={`Нет, разные ${noun}`} loading={reject.isPending} disabled={busy} onClick={() => reject.mutate()}>
+            Нет
+          </Button>
+          <Button variant="ghost" aria-expanded={open} iconEnd="chevron" onClick={() => onToggle(!open)}>
             {open ? 'Скрыть сравнение' : 'Сравнить'}
           </Button>
-          <Button variant="ghost" loading={reject.isPending} onClick={() => void askReject()}>
-            {pair.entityKind === 'company' ? 'Это разные компании' : 'Это разные объекты'}
-          </Button>
         </Cluster>
-        {open && <MergePreview pair={pair} onDone={() => onToggle(false)} />}
+        {open && <MergePreview pair={pair} onDone={() => onToggle(false)} readOnly />}
       </Stack>
     </Card>
   );
