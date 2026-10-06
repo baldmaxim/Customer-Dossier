@@ -272,6 +272,25 @@ export const soundKey = (latinKey: string): string => {
 };
 
 /**
+ * Падежное окончание с согласной у последнего слова: гласные окончаний ключ и так отбрасывает, а «-ом», «-ем», «-ам»,
+ * «-ами», «-ах» добавляют согласную («Сминексом» → smnksm, «Сминекс» → smnks).
+ */
+const CASE_ENDING = /(?:yami|ami|yakh|akh|yam|am|om|em)$/;
+const MIN_STEM = 5;
+
+/**
+ * Звуковые ключи имени: полный и без падежного окончания. Окончание срезается не вместо полного ключа, а вдобавок:
+ * у «Газпрома» «-ом» — часть основы, и полный ключ нужен для пары с «Газпромом». Пара — при любом общем ключе.
+ */
+export const soundKeys = (latinKey: string): string[] => {
+  const full = soundKey(latinKey);
+  const ending = CASE_ENDING.exec(latinKey);
+  const stem = ending ? latinKey.slice(0, -ending[0].length) : '';
+  const stripped = stem.length >= MIN_STEM ? soundKey(stem) : '';
+  return [...new Set([full, stripped].filter(k => k !== ''))];
+};
+
+/**
  * Идентификаторы юрлиц РФ: ИНН, ОГРН, ОГРНИП.
  *
  * Проверяем контрольную сумму, а не только длину. Модель охотно принимает за

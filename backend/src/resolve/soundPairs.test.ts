@@ -21,6 +21,11 @@ describe('buildSoundPairs — пары «возможный дубль» по з
     expect(plan.pairs[0]).toMatchObject({ sourceId: 2, targetId: 1 });
   });
 
+  it('имя в творительном падеже встаёт в пару с именительным', () => {
+    const plan = buildSoundPairs([name(1, 'Аквилон'), name(2, 'Аквилоном')]);
+    expect(plan.pairs).toEqual([expect.objectContaining({ sourceId: 2, targetId: 1, sound: 'akvln' })]);
+  });
+
   it('обе стороны с реквизитом — разные юрлица, пары нет', () => {
     expect(buildSoundPairs([name(1, 'Sminex', true), name(2, 'Сминекс', true)]).pairs).toEqual([]);
   });

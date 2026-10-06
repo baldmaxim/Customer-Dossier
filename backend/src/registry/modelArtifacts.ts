@@ -5,8 +5,10 @@
 // … входит в группу «Донстрой»» модель заводила компанию «Донстрой» по названию и путала стороны связи.
 // Теперь снимки реестра модели не отдаются (modelTextPolicySql), а уже попавшее отсюда снимается тем же
 // способом, что и вклад заменённой публикации: доказательство разбора на редакции реестра → superseded,
-// поставленные и не начатые запуски → cancelled. Доказательства реестра (origin = registry), решения
-// аналитика и доказательства из публикаций не трогаются. Повтор ничего не меняет.
+// поставленные и брошенные запуски → cancelled. Брошенный — running с истёкшей арендой: исполнитель упал посреди
+// разбора, а взять его снова нельзя — реестр модели не отдаётся (06.10.2026: запуск № 16260 висел с 02.10).
+// Доказательства реестра (origin = registry), решения аналитика и доказательства из публикаций не трогаются.
+// Повтор ничего не меняет.
 
 import { withTransaction } from '../db/pool.js';
 
@@ -24,11 +26,13 @@ export const withdrawModelExtractionOnRegistry = async (): Promise<{ evidence: n
       [REGISTRY_EXTRACTION_REASON],
     );
     const runs = await client.query(
-      `UPDATE extraction_runs er SET status = 'cancelled', error = $1, finished_at = now(), lease_owner = NULL, lease_expires_at = NULL
+      `UPDATE extraction_runs er SET status = 'cancelled', error = $1, finished_at = now(), lease_owner = NULL, lease_expires_at = NULL,
+         fencing_token = er.fencing_token + 1
        FROM document_revisions r
        JOIN source_items si ON si.id = r.source_item_id
        JOIN sources s ON s.id = si.source_id
-       WHERE er.revision_id = r.id AND er.status = 'queued' AND s.config->>'mode' = 'registry_api'`,
+       WHERE er.revision_id = r.id AND s.config->>'mode' = 'registry_api'
+         AND (er.status = 'queued' OR (er.status = 'running' AND er.lease_expires_at < now()))`,
       [REGISTRY_EXTRACTION_REASON],
     );
     return { evidence: evidence.rowCount ?? 0, runs: runs.rowCount ?? 0 };

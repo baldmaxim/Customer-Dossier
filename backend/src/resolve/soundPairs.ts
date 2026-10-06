@@ -1,14 +1,14 @@
 // Пары «возможный дубль» по звучанию названия (06.10.2026). Резолвер не ставил в очередь «Сминекс»,
 // «Смайнекс» и «Sminex»: у имён в разных алфавитах триграммы norm не совпадают, и балл не дотягивает до
-// серой зоны (0.75). Этот проход находит живые компании с одинаковым звуковым ключом
-// (normalize.ts::soundKey) по названию и всем написаниям и ставит пару в merge_queue — решает модель
+// серой зоны (0.75). Этот проход находит живые компании с общим звуковым ключом
+// (normalize.ts::soundKeys — полный и без падежного окончания) по названию и всем написаниям и ставит пару в merge_queue — решает модель
 // (entity-match), а не ключ. Слияния здесь нет: только очередь; ON CONFLICT — отклонённая пара не всплывает.
 //
 // Не ставятся: обе стороны с действующим реквизитом (разные юрлица — правило, не вопрос модели), карточки,
 // отмеченные «не компания», временное имя «ИНН …», общий ключ больше SOUND_GROUP_MAX компаний.
 
 import { query, queryOne } from '../db/pool.js';
-import { isJunkName, normalizeName, soundKey } from './normalize.js';
+import { isJunkName, normalizeName, soundKeys } from './normalize.js';
 
 /** Серая зона резолвера (QUEUE_SCORE…AUTO_MERGE_SCORE): пара ждёт вердикта и сама не сливается. */
 export const SOUND_PAIR_SCORE = 0.8;
@@ -47,11 +47,12 @@ export const buildSoundPairs = (names: readonly ISoundName[]): ISoundPairsPlan =
   for (const n of names) {
     const normalized = normalizeName(n.name);
     if (isJunkName(normalized)) continue;
-    const sound = soundKey(normalized.key);
-    if (!sound) continue;
-    const group = groups.get(sound) ?? new Map<number, ISoundName>();
-    if (!group.has(n.companyId)) group.set(n.companyId, n);
-    groups.set(sound, group);
+    // Полный ключ и ключ без падежного окончания («Сминексом» → и smnksm, и smnks).
+    for (const sound of soundKeys(normalized.key)) {
+      const group = groups.get(sound) ?? new Map<number, ISoundName>();
+      if (!group.has(n.companyId)) group.set(n.companyId, n);
+      groups.set(sound, group);
+    }
   }
 
   const pairs = new Map<string, ISoundPair>();

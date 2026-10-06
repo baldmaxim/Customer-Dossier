@@ -8,6 +8,7 @@ import {
   isValidOgrn,
   isValidTaxId,
   soundKey,
+  soundKeys,
 } from './normalize.js';
 
 describe('normalizeName — компании', () => {
@@ -161,6 +162,26 @@ describe('soundKey', () => {
     expect(sound('ПИК')).toBe('');
     expect(sound('Асем')).toBe('');
     expect(soundKey('')).toBe('');
+  });
+});
+
+describe('soundKeys — падежные окончания', () => {
+  const keys = (name: string): string[] => soundKeys(normalizeName(name).key);
+  const share = (a: string, b: string): boolean => keys(a).some(k => keys(b).includes(k));
+
+  it('творительный и дательный падеж мн. ч. совпадают с именительным', () => {
+    expect(share('Сминексом', 'Sminex')).toBe(true);
+    expect(share('Аквилоном', 'Аквилон')).toBe(true);
+    expect(share('Самолётом', 'Самолет')).toBe(true);
+  });
+
+  it('«-ом» в основе не теряется: «Газпром» и «Газпромом» совпадают по полному ключу', () => {
+    expect(share('Газпромом', 'Газпром')).toBe(true);
+  });
+
+  it('разные названия по-прежнему разные; короткая основа не срезается', () => {
+    expect(share('Сминексом', 'Самолет')).toBe(false);
+    expect(keys('Атом')).toEqual([]);
   });
 });
 
