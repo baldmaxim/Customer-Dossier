@@ -4,9 +4,6 @@
 
 import type { IEventRow } from '../../api/types';
 
-/** Якорь раздела событий во вкладке «Подробно»: ссылка «Все события» с «Обзора» ведёт к нему. */
-export const EVENTS_SECTION_ID = 'company-events';
-
 export const byEventDate = (events: readonly IEventRow[]): IEventRow[] =>
   events
     .map((event, index) => ({ event, index }))

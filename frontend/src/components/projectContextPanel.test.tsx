@@ -20,7 +20,7 @@ const context: IProjectContext = {
 describe('ProjectContextPanel', () => {
   it('состояние по дате события, роль с периодом нужной точности, без «выборки»', async () => {
     fakeApi([{ match: 'GET /api/companies/7/context', respond: () => ({ status: 200, body: context }) }]);
-    const { container } = renderWithProviders(<ProjectContextPanel companyId={7} projectId={55} projectName="ЖК «Северная долина»" />);
+    const { container } = renderWithProviders(<ProjectContextPanel companyId={7} projectId={55} />);
 
     expect(await screen.findByText(/Состояние \(по дате события\): корпус 12: строится с 01\.08\.2026/)).toBeTruthy();
     expect(screen.getByText(/заказчик, корпус 12 — с 03\.2024/)).toBeTruthy();
@@ -30,7 +30,7 @@ describe('ProjectContextPanel', () => {
 
   it('ошибка загрузки — причиной и кнопкой «Повторить»', async () => {
     fakeApi([{ match: 'GET /api/companies/7/context', respond: () => ({ status: 500, body: { error: 'db down' } }) }]);
-    renderWithProviders(<ProjectContextPanel companyId={7} projectId={55} projectName="ЖК Демо" />);
+    renderWithProviders(<ProjectContextPanel companyId={7} projectId={55} />);
     expect((await screen.findByRole('alert')).textContent).toMatch(/Сбой сервера \(500\)/);
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeTruthy();
   });

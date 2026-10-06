@@ -1,6 +1,9 @@
 // Кандидаты в сайты компании (этап 25A): адрес, признаки проверки и решение оператора. Один список — на карточке
 // компании и на странице «Сайты компаний». Признаки — словами и тоном: «ИНН компании на сайте» — сильный довод,
 // «на сайте другой ИНН» — повод присмотреться; объяснение модели подписано как её объяснение, а не решение.
+// На карточке компании (compact, 06.10.2026, просьба владельца «меньше информации») — только адрес, признаки у
+// ждущего решения и действия ярлычками в той же строке; как найден, заголовок страницы, кто и когда решил и
+// объяснение модели — в очереди «Сайты компаний».
 
 import { FC, FormEvent, ReactNode, useState } from 'react';
 
@@ -62,24 +65,49 @@ interface ISiteCandidatesProps {
   busy: boolean;
   onConfirm: (candidate: ISiteCandidate) => void;
   onReject: (candidate: ISiteCandidate) => void;
+  /** Карточка компании: адрес, признаки ждущего решения и ярлычки действий — без строк подробностей. */
+  compact?: boolean;
 }
 
-export const SiteCandidates: FC<ISiteCandidatesProps> = ({ candidates, canDecide, busy, onConfirm, onReject }) => (
-  <ul className={styles.list}>
+/** «Это сайт компании» / «Не он» / «Отвязать» — ярлычками. */
+const Decision: FC<{ candidate: ISiteCandidate; busy: boolean; onConfirm: () => void; onReject: () => void }> = ({ candidate: c, busy, onConfirm, onReject }) => (
+  <>
+    {c.state !== 'confirmed' && (
+      <Button variant="chip" disabled={busy} onClick={onConfirm}>
+        Это сайт компании<VisuallyHidden> — {c.host}</VisuallyHidden>
+      </Button>
+    )}
+    {c.state !== 'rejected' && (
+      <Button variant="chip" disabled={busy} onClick={onReject}>
+        {c.state === 'confirmed' ? 'Отвязать' : 'Не он'}
+        <VisuallyHidden> — {c.host}</VisuallyHidden>
+      </Button>
+    )}
+  </>
+);
+
+export const SiteCandidates: FC<ISiteCandidatesProps> = ({ candidates, canDecide, busy, onConfirm, onReject, compact = false }) => (
+  <ul className={compact ? `${styles.list} ${styles.compact}` : styles.list}>
     {candidates.map(c => (
       <li key={c.id} className={styles.item}>
         <Cluster gap={2} align="center">
           <SiteLink candidate={c} />
-          {c.state !== 'pending' && <Badge tone={c.state === 'confirmed' ? 'success' : 'neutral'}>{SITE_CANDIDATE_STATE_LABELS[c.state]}</Badge>}
-          <SiteSignals candidate={c} />
+          {/* Под заголовком «Сайт компании» ярлык «сайт компании» у подтверждённого — повтор. */}
+          {c.state !== 'pending' && !compact && (
+            <Badge tone={c.state === 'confirmed' ? 'success' : 'neutral'}>{SITE_CANDIDATE_STATE_LABELS[c.state]}</Badge>
+          )}
+          {(!compact || c.state === 'pending') && <SiteSignals candidate={c} />}
+          {compact && canDecide && <Decision candidate={c} busy={busy} onConfirm={() => onConfirm(c)} onReject={() => onReject(c)} />}
         </Cluster>
-        <p className={styles.muted}>
-          {SITE_FOUND_VIA_LABELS[c.foundVia]}
-          {c.pageTitle || c.title ? ` · «${c.pageTitle ?? c.title}»` : ''}
-          {c.decidedBy && c.state !== 'pending' ? ` · решение: ${c.decidedBy}, ${formatDateTime(c.decidedAt)}` : ''}
-          {c.decisionNote ? ` · ${c.decisionNote}` : ''}
-        </p>
-        {c.modelReason && c.state === 'pending' && <p className={styles.muted}>Модель: {c.modelReason}</p>}
+        {!compact && (
+          <p className={styles.muted}>
+            {SITE_FOUND_VIA_LABELS[c.foundVia]}
+            {c.pageTitle || c.title ? ` · «${c.pageTitle ?? c.title}»` : ''}
+            {c.decidedBy && c.state !== 'pending' ? ` · решение: ${c.decidedBy}, ${formatDateTime(c.decidedAt)}` : ''}
+            {c.decisionNote ? ` · ${c.decisionNote}` : ''}
+          </p>
+        )}
+        {!compact && c.modelReason && c.state === 'pending' && <p className={styles.muted}>Модель: {c.modelReason}</p>}
         {c.sharedWith.length > 0 && (
           <p className={styles.muted}>
             Уже сайт компании:{' '}
@@ -93,19 +121,9 @@ export const SiteCandidates: FC<ISiteCandidatesProps> = ({ candidates, canDecide
             ))}
           </p>
         )}
-        {canDecide && (
+        {!compact && canDecide && (
           <Cluster gap={2}>
-            {c.state !== 'confirmed' && (
-              <Button size="sm" variant={c.state === 'pending' ? 'primary' : 'ghost'} disabled={busy} onClick={() => onConfirm(c)}>
-                Это сайт компании<VisuallyHidden> — {c.host}</VisuallyHidden>
-              </Button>
-            )}
-            {c.state !== 'rejected' && (
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => onReject(c)}>
-                {c.state === 'confirmed' ? 'Отвязать' : 'Не он'}
-                <VisuallyHidden> — {c.host}</VisuallyHidden>
-              </Button>
-            )}
+            <Decision candidate={c} busy={busy} onConfirm={() => onConfirm(c)} onReject={() => onReject(c)} />
           </Cluster>
         )}
       </li>
@@ -130,7 +148,7 @@ interface ISiteControlsProps {
   onSearch: () => void;
 }
 
-/** «Искать снова» и «Указать вручную»: адрес оператора сразу становится сайтом компании. */
+/** «Искать снова» и «Указать вручную» — ярлычками: адрес оператора сразу становится сайтом компании. */
 export const SiteControls: FC<ISiteControlsProps> = ({ companyName, searched, busy, onManual, onSearch }) => {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
@@ -144,10 +162,10 @@ export const SiteControls: FC<ISiteControlsProps> = ({ companyName, searched, bu
   return (
     <Stack gap={2}>
       <Cluster gap={2}>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <Button variant="chip" onClick={() => setOpen(!open)} aria-expanded={open}>
           Указать вручную…<VisuallyHidden> — {companyName}</VisuallyHidden>
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onSearch}>
+        <Button variant="chip" disabled={busy} onClick={onSearch}>
           {searched ? 'Искать снова' : 'Искать сейчас'}
           <VisuallyHidden> — {companyName}</VisuallyHidden>
         </Button>

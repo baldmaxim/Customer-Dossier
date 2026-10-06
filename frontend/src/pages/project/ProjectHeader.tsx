@@ -1,12 +1,12 @@
 // Шапка объекта: уровень и родитель (ссылкой) над названием, город и очереди под ним, «Схема
-// связей» справа. В загрузке и ошибке — та же шапка на том же месте дерева: заголовок h1 не
+// связей» справа — окном. В загрузке и ошибке — та же шапка на том же месте дерева: заголовок h1 не
 // пересоздаётся, и фокус, который оболочка поставила на него после перехода, не теряется.
 
 import { FC, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { IProjectDossier } from '../../api/types';
-import { ButtonLink } from '../../components/ui/ButtonLink';
+import { GraphButton } from '../../components/graph/GraphButton';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { PROJECT_LEVEL_LABELS } from '../../lib/labels';
 import styles from '../ProjectPage.module.css';
@@ -61,11 +61,7 @@ export const ProjectHeader: FC<{ dossier: IProjectDossier | undefined; state: He
           )}
         </div>
       }
-      actions={
-        <ButtonLink to={`/links?project=${p.id}`} icon="links">
-          Схема связей
-        </ButtonLink>
-      }
+      actions={<GraphButton projectId={p.id} icon="links" />}
     />
   );
 };

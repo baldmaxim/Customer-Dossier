@@ -57,23 +57,6 @@
   font-size: var(--fs-sm);
 }
 
-/* Шеврон «Откуда известно» поворачивается, как у Disclosure. */
-.toggle svg {
-  transition: rotate var(--dur-fast) var(--ease-out);
-}
-
-.toggle[aria-expanded='true'] svg {
-  rotate: 180deg;
-}
-
-.evidence {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  min-width: 0;
-  animation: global(enter-up) var(--dur-base) var(--ease-out);
-}
-
 .quotes {
   display: flex;
   flex-direction: column;

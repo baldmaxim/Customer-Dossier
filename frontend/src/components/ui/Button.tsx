@@ -12,7 +12,8 @@ import { mergeRefs } from './mergeRefs';
 import { useHint } from './useHint';
 import styles from './Button.module.css';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' | 'link';
+/** chip — ярлычок-действие: мелкая «пилюля» для второстепенных действий блока (сайт компании). */
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' | 'link' | 'chip';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface IButtonLook {

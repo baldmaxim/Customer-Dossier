@@ -24,7 +24,6 @@ import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
 import { CHECKS_SECTION_ID } from './company/CompanyChecks';
 import { DELIVERY_SECTION_ID } from './company/CompanyDelivery';
 import { FINANCE_SECTION_ID } from './company/CompanyFinance';
-import { EVENTS_SECTION_ID } from './company/eventOrder';
 import { useCompanyBuilders, useCompanyChecks, useCompanyDelivery, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
 import { Heading } from './ui/Heading';
@@ -164,7 +163,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
           label="События"
           value={events.isSuccess ? formatCount(events.data.total ?? events.data.items.length) : '—'}
           detail={joinDetail([known('с датой за 12 мес.', media?.eventsDated12m)])}
-          to={{ search: '?tab=details', hash: EVENTS_SECTION_ID }}
+          to={{ search: '?tab=details' }}
           linkText="Все события"
         />
         <BriefTile
@@ -180,9 +179,8 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             label="Связи"
             value={aggregateText(experience.counterparties)}
             detail={joinDetail([known('договоров', experience.contractsCount), known('корпоративных', experience.corporateCount)])}
-            to={`/links?company=${companyId}`}
+            to={{ search: '?tab=details&dtab=links' }}
             linkText="Все связи"
-            viewTransition
           />
         )}
         {media && cases && (
@@ -194,7 +192,7 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
                 ? joinDetail([`истец — ${formatCount(media.courtRoles.plaintiff)}`, `ответчик — ${formatCount(media.courtRoles.defendant)}`])
                 : null
             }
-            to={{ search: '?tab=details', hash: 'company-signals' }}
+            to={{ search: '?tab=details&dtab=numbers' }}
             linkText="Дела подробно"
           />
         )}

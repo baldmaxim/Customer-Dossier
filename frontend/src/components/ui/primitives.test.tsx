@@ -60,12 +60,12 @@ describe('ButtonLink', () => {
   it('настоящая ссылка в виде кнопки', () => {
     render(
       <MemoryRouter>
-        <ButtonLink to="/links?company=7" icon="links">
-          Схема связей
+        <ButtonLink to="/company/7?tab=objects" icon="building">
+          Объекты
         </ButtonLink>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('link', { name: 'Схема связей' }).getAttribute('href')).toBe('/links?company=7');
+    expect(screen.getByRole('link', { name: 'Объекты' }).getAttribute('href')).toBe('/company/7?tab=objects');
   });
 });
 

@@ -1,7 +1,7 @@
-// Карточка компании: шапка (наименование по ЕГРЮЛ, реквизиты сеткой, «На контроле», «Схема связей») и
+// Карточка компании: шапка (наименование по ЕГРЮЛ, реквизиты сеткой, «На контроле», «Схема связей» окном) и
 // вкладки в порядке сути портала (ADR-016) — «Сведения · Объекты · Публикации · Подробно»: сначала
-// юрлицо, потом его объекты, потом публикации. Вкладка, открытый пост и фильтры объектов — в адресе
-// (?tab=, ?post=, ?orole=, ?osrc=): «Назад» возвращает прежнюю вкладку, ссылкой можно поделиться.
+// юрлицо, потом его объекты, потом публикации. Вкладка, открытый пост, фильтры объектов и вкладка
+// «Подробно» — в адресе (?tab=, ?post=, ?orole=, ?osrc=, ?dtab=): «Назад» возвращает прежнюю вкладку, ссылкой можно поделиться.
 // Содержимое вкладок — в components/company/*, здесь только сборка и состояния загрузки.
 //
 // Шапка одна во всех состояниях и стоит на том же месте дерева: заголовок страницы (h1)
@@ -20,6 +20,7 @@ import { CompanyPublications } from '../components/company/CompanyPublications';
 import { CompanyRequisites, objectRoleCounts } from '../components/company/CompanyRequisites';
 import { CompanyUnidentified } from '../components/company/CompanyUnidentified';
 import { CompanySimilar } from '../components/company/CompanySimilar';
+import { GraphButton } from '../components/graph/GraphButton';
 import { useCompany, useCompanyFocus, useCompanyObjects } from '../components/company/useCompanyQueries';
 import { WatchToggle } from '../components/company/WatchToggle';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -61,7 +62,7 @@ export const CompanyPage: FC = () => {
   const query = useCompany(companyId, valid);
   // Число объектов — у вкладки: запрос общий с «Обзором» и вкладкой, второго нет.
   const objects = useCompanyObjects(companyId, valid && query.isSuccess);
-  // Сведения ЕГРЮЛ для шапки — после карточки; не загрузились — шапка без них, ошибку покажет раздел «Подробно».
+  // Сведения ЕГРЮЛ для шапки — после карточки; не загрузились — шапка без них, ошибку покажет раздел ЕГРЮЛ на «Сведениях».
   const focus = useCompanyFocus(companyId, valid && Boolean(query.data?.company));
   const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'info'));
   const patch = useUrlPatch();
@@ -102,7 +103,7 @@ export const CompanyPage: FC = () => {
   } else {
     const { company } = data;
     const selectTab = (next: Tab): void =>
-      patch({ tab: next === 'info' ? null : next, post: null, orole: null, osrc: null }, { history: 'push' });
+      patch({ tab: next === 'info' ? null : next, post: null, orole: null, osrc: null, dtab: null }, { history: 'push' });
     const objectsTotal = objects.data?.coverage.total;
     const tabs = TAB_VALUES.map(value => ({
       value,
@@ -124,9 +125,7 @@ export const CompanyPage: FC = () => {
       actions: (
         <>
           <WatchToggle companyId={company.id} watch={data.watch ?? null} />
-          <ButtonLink to={`/links?company=${company.id}`} icon="links">
-            Схема связей
-          </ButtonLink>
+          <GraphButton companyId={company.id} icon="links" />
         </>
       ),
       children: (
@@ -137,8 +136,7 @@ export const CompanyPage: FC = () => {
               <CompanyUnidentified companyId={company.id} data={data} />
             </Disclosure>
           )}
-          {/* Похожие — только на «Сведениях»: в «Подробно» они в «Опознании», а на читалке каждая
-              строка высоты отнята у поста. */}
+          {/* Похожие — только на «Сведениях»: на читалке каждая строка высоты отнята у поста. */}
           {tab === 'info' && <CompanySimilar companyId={company.id} />}
           {/* Вкладки — записи истории: стрелки только ведут фокус, выбор — Enter или пробел. */}
           <Tabs label="Разделы компании" idBase={idBase} items={tabs} value={tab} onChange={selectTab} activation="manual" />
@@ -155,7 +153,7 @@ export const CompanyPage: FC = () => {
           </Stack>
         )}
         {tab === 'publications' && <CompanyPublications companyId={company.id} />}
-        {tab === 'details' && <CompanyDetails companyId={company.id} data={data} />}
+        {tab === 'details' && <CompanyDetails companyId={company.id} />}
       </TabPanel>
     );
   }

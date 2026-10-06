@@ -1,5 +1,6 @@
 // «Сайт компании» на карточке (этап 25A): подтверждённый сайт — ссылкой; кандидаты из поиска с признаками
-// проверки; оператор решает «Это сайт компании / Не он», читатель видит только «ждут решения оператора».
+// проверки; оператор решает «Это сайт компании / Не он» ярлычками, читатель видит только «ждут решения оператора».
+// На карточке коротко: как найден, заголовок страницы, кто решил и объяснение модели — в очереди «Сайты компаний».
 
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -54,7 +55,7 @@ const body = (over: Partial<ICompanySites> = {}): ICompanySites => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe('сайт компании на карточке', () => {
-  it('оператор: признаки проверки словами; «Это сайт компании» отправляет решение', async () => {
+  it('оператор: признаки проверки словами, без строк подробностей; «Это сайт компании» отправляет решение', async () => {
     const api = fakeApi([
       { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: body() }) },
       { match: 'POST /api/admin/company-site-candidates/11/confirm', respond: () => ({ status: 200, body: { companyId: 7, host: 'demo-stroy.ru' } }) },
@@ -62,7 +63,8 @@ describe('сайт компании на карточке', () => {
     renderWithProviders(as(['portal.read', 'sources.manage'], <CompanySite companyId={7} companyName="Демо-Строй" />));
     expect(await screen.findByText('ИНН компании на сайте')).toBeTruthy();
     expect(screen.getByText('на сайте другой ИНН')).toBeTruthy();
-    expect(screen.getByText('Модель: ИНН компании в подвале сайта')).toBeTruthy();
+    // Подробности поиска на карточке не печатаются.
+    expect(screen.queryByText(/Модель:|найден поиском|Демо-Строй — квартиры/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Это сайт компании — demo-stroy.ru' }));
     await waitFor(() => expect(api.calls.some(c => c.method === 'POST' && c.url.endsWith('/company-site-candidates/11/confirm'))).toBe(true));
     expect(await screen.findByText('demo-stroy.ru — сайт компании.')).toBeTruthy();
@@ -96,7 +98,10 @@ describe('сайт компании на карточке', () => {
     expect(screen.queryByRole('button', { name: /Искать/ })).toBeNull();
     // 25B: прочитан ли сайт и что на нём — ссылкой на вкладку «Объекты».
     expect(await screen.findByRole('link', { name: 'Проектов на сайте: 1, нет на портале: 1' })).toBeTruthy();
-    expect(screen.getByText(/demo\.ru: прочитан/)).toBeTruthy();
+    // Один сайт — адрес не повторяется в строке о чтении; кто и когда подтвердил — не на карточке.
+    expect(screen.getByText(/^прочитан 06\.10/)).toBeTruthy();
+    expect(screen.queryByText(/решение: oper/)).toBeNull();
+    expect(screen.queryByText('сайт компании')).toBeNull();
   });
 
   it('сайта нет, поиск выключен — так и сказано; СЗ показывает сайт группы', async () => {

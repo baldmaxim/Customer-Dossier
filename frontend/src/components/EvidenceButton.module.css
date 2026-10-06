@@ -1,0 +1,15 @@
+/* Окно «Откуда известно»: что известно — строкой сверху, под ней цитаты. */
+
+.lead {
+  margin: 0 0 var(--sp-3);
+  max-width: var(--prose);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-text);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}

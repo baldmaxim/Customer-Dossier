@@ -129,19 +129,10 @@
   text-decoration: none;
 }
 
-.evidenceRow td {
-  background: var(--surface-2);
-}
-
 .cardLine {
   color: var(--muted);
   font-size: var(--fs-sm);
   line-height: var(--lh-snug);
-}
-
-.cardEvidence {
-  flex: 1 1 100%;
-  min-width: 0;
 }
 
 /* ─── Раскрытия ─── */

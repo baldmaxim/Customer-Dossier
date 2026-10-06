@@ -48,7 +48,7 @@ const routes = (): RouteObject[] => [
       { path: '/projects/:id', element: <SlowProject /> },
       { path: '/documents/:id', element: <PageHeader title="Публикация" /> },
       { path: '/admin/process/:id', element: <PageHeader title="Разбор от 30.09.2026" /> },
-      { path: '/links', element: <PageHeader title="Связи" /> },
+      { path: '/news', element: <PageHeader title="Новое" /> },
     ],
   },
 ];
@@ -69,7 +69,7 @@ describe('оболочка', () => {
     const header = screen.getByRole('navigation', { name: 'Основная навигация' });
     const tabbar = screen.getByRole('navigation', { name: 'Навигация' });
     for (const nav of [header, tabbar]) {
-      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Компании', 'Новое', 'Связи', 'Админка']);
+      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Компании', 'Новое', 'Админка']);
       expect(within(nav).getByRole('link', { name: 'Компании' }).getAttribute('aria-current')).toBe('page');
     }
   });
@@ -91,7 +91,7 @@ describe('оболочка', () => {
   });
 
   it('на разделах верхнего уровня возврата нет', () => {
-    renderWithRouter(routes(), ['/links']);
+    renderWithRouter(routes(), ['/news']);
     expect(screen.queryByRole('link', { name: /^К (компаниям|разборам)$/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Назад' })).toBeNull();
   });

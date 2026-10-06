@@ -121,6 +121,25 @@
   transform: none;
 }
 
+/* Ярлычок-действие: выглядит как Badge, нажимается как кнопка. Под пальцем — полная тап-цель
+   (--ctl-h-sm = 44px), под мышью — 26px: высота ярлыка с рамкой, иначе «ярлычок» был бы кнопкой. */
+.chip {
+  min-height: var(--ctl-h-sm);
+  padding: 0 var(--sp-3);
+  border-color: var(--border-control);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+}
+
+@media (pointer: fine) {
+  .chip {
+    min-height: 26px;
+  }
+}
+
 @media (hover: hover) {
   /* ButtonLink — это <a>: глобальное a:hover подчеркнуло бы кнопку. */
   .button:hover {
@@ -141,6 +160,11 @@
   .ghost:hover:not(:disabled, [aria-disabled='true']) {
     background: var(--surface-2);
     color: var(--text);
+  }
+
+  .chip:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
   }
 
   .danger:hover:not(:disabled, [aria-disabled='true']) {

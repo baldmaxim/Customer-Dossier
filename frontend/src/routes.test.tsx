@@ -28,6 +28,10 @@ describe('маршруты', () => {
   it.each([
     ['/account', '/admin/account'],
     ['/contractors', '/'],
+    // Экран «Связи» снят: схема — окном на карточке; старая ссылка ведёт на карточку центра.
+    ['/links?company=7', '/company/7'],
+    ['/links?project=55', '/projects/55'],
+    ['/links', '/'],
     ['/runs', '/admin/process'],
     ['/runs/42', '/admin/process/42'],
     ['/review', '/admin/review'],
@@ -46,7 +50,6 @@ describe('маршруты', () => {
   it.each([
     '/',
     '/company/7',
-    '/links',
     '/documents/31',
     '/projects/55',
     '/admin/sources',

@@ -1,5 +1,5 @@
 // Объект: шапка с уровнем и родителем, паспорт ДОМ.РФ первым (или словами, что его нет, и похожие
-// объекты со сведениями), участники (карточки на телефоне, таблица шире) с «Откуда известно» у строки,
+// объекты со сведениями), участники (карточки на телефоне, таблица шире) с «Откуда известно» окном у строки,
 // период в адресе, разделы с содержимым раскрыты, схема строится только по раскрытию.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -121,7 +121,7 @@ describe('Объект', () => {
     // Надпись над названием: уровень и родитель (родитель — ссылкой рядом).
     expect(screen.getByText(/^корпус 12 · входит в\s*$/, { selector: 'p' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'очередь 1' }).getAttribute('href')).toBe('/projects/57');
-    expect(screen.getByRole('link', { name: 'Схема связей' }).getAttribute('href')).toBe('/links?project=56');
+    expect(screen.getByRole('button', { name: 'Схема связей' }).getAttribute('aria-haspopup')).toBe('dialog');
     expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
   });
 
@@ -159,7 +159,7 @@ describe('Объект', () => {
     expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
   });
 
-  it('на широком экране — таблица: строка ведёт на компанию, «Откуда известно» раскрывает цитаты', async () => {
+  it('на широком экране — таблица: строка ведёт на компанию, «Откуда известно» — окном', async () => {
     setup('/projects/56');
     const table = await screen.findByRole('table');
     const company = within(table).getByRole('link', { name: 'ООО «Бета-Демо»' });
@@ -167,13 +167,12 @@ describe('Объект', () => {
     expect(company.closest('tr')?.className).toContain('row-link');
     expect(screen.queryByText('Основания участия')).toBeNull();
 
-    const toggle = within(table).getAllByRole('button', { name: 'Откуда известно' })[0]!;
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(await screen.findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
+    fireEvent.click(within(table).getAllByRole('button', { name: 'Откуда известно' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: 'Откуда известно' });
+    expect(await within(dialog).findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
   });
 
-  it('на телефоне участники — карточки-ссылки, «Откуда известно» — внутри карточки', async () => {
+  it('на телефоне участники — карточки-ссылки, «Откуда известно» — окном', async () => {
     stubViewport(390);
     setup('/projects/56');
     const list = await screen.findByRole('list', { name: 'Участники' });
@@ -183,7 +182,8 @@ describe('Объект', () => {
     expect(within(card).getByText(/генподрядчик · корпус 12/)).toBeTruthy();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Откуда известно' }));
-    expect(await within(card).findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
+    const dialog = screen.getByRole('dialog', { name: 'Откуда известно' });
+    expect(await within(dialog).findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
   });
 
   it('период — в адресе: даты уходят в запрос, «только работавшие» отбирает участников', async () => {
@@ -200,18 +200,19 @@ describe('Объект', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''));
   });
 
-  it('раздел с содержимым раскрыт, пустой — свёрнут; схема не строится, пока её не открыли', async () => {
+  it('раздел с содержимым раскрыт, пустой — свёрнут; схема — окном из шапки, не строится, пока его не открыли', async () => {
     const { api } = setup('/projects/56');
     await screen.findByRole('table');
     expect(screen.getByRole('heading', { level: 2, name: 'Договоры по сообщениям источников' }).closest('details')?.open).toBe(true);
-    for (const name of ['События объекта', 'История состояния', 'Схема связей']) {
+    for (const name of ['События объекта', 'История состояния']) {
       expect(screen.getByRole('heading', { level: 2, name }).closest('details')?.open).toBe(false);
     }
+    // Раздела схемы на странице нет — только кнопка в шапке.
+    expect(screen.queryByRole('heading', { level: 2, name: 'Схема связей' })).toBeNull();
     expect(api.calls.some(c => c.url.startsWith('/api/graph'))).toBe(false);
 
-    const graph = screen.getByRole('heading', { level: 2, name: 'Схема связей' }).closest('details')!;
-    fireEvent.click(graph.querySelector('summary')!);
-    graph.dispatchEvent(new Event('toggle'));
+    fireEvent.click(screen.getByRole('button', { name: 'Схема связей' }));
+    expect(screen.getByRole('dialog', { name: 'Схема связей' })).toBeTruthy();
     await waitFor(() => expect(api.calls.some(c => c.url.startsWith('/api/graph?projectId=56'))).toBe(true));
   });
 

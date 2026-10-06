@@ -159,6 +159,69 @@ export const computedSignals = {
   },
 };
 
+/** Полный снимок показателей — для вкладки «Подробно» («Участие и связи», «Показатели»). */
+export const fullSignals = {
+  ...computedSignals,
+  signals: {
+    rulesVersion: 'signals@3',
+    cutoff: '2026-10-01T12:00:00Z',
+    companyId: 7,
+    identity: {
+      status: 'identified',
+      entityType: 'legal_entity',
+      identifiers: {},
+      aliases: 1,
+      openAmbiguities: 0,
+      pendingMerges: 0,
+      coverage: {
+        publications: agg(14),
+        sources: 3,
+        completeness: { full: 12, excerpt: 2 },
+        legacyUnimported: { participations: 0, events: 0 },
+        note: 'Сведения ограничены собранными публикациями.',
+      },
+    },
+    experience: {
+      projects: { ...agg(1), rule: 'разные объекты, где сообщается об участии компании; id — объекты' },
+      byRole: { general_contractor: agg(1) },
+      byWorkPackage: {},
+      reviewed: { ...agg(0), denominator: 1 },
+      contractsCount: agg(2),
+      corporateCount: agg(1),
+      counterparties: agg(3),
+      participations: [
+        {
+          assertionId: 301, projectId: 55, role: 'general_contractor', building: 'корпус 2', workPackage: null, workPackageLabel: null,
+          validFrom: '2024-03-01', validTo: null, periodPrecision: 'month', review: 'text_grounded', needsRevalidation: false,
+        },
+      ],
+      notCounted: [],
+      contracts: [],
+      note: 'Стоимость объекта участнику не приписывается.',
+    },
+    media: {
+      ...computedSignals.signals.media,
+      publications90d: { ...agg(4), denominator: 14, window: { from: '2026-07-03', to: '2026-10-01', basis: 'publication_date' } },
+      publicationsUndated: agg(0),
+      firstPublishedAt: { value: '2025-01-10T09:00:00Z', status: 'ok', rule: 'самая ранняя публикация', sourceItemId: 3 },
+      observations: 14,
+      families: agg(9),
+      familiesByOrigin: { established: agg(1), named: agg(0), unknown: agg(8) },
+      events: [],
+      eventsBoundary12m: agg(0),
+      eventsUndated: agg(6),
+      eventsUndatedPublished90d: agg(0),
+      eventsFuture: agg(0),
+      eventsByReview: { reviewed: 0, text_grounded: 8, legacy_unreviewed: 0, disputed: 0, rejected: 0 },
+      eventsByType: { court_case: agg(3) },
+      reviewedShare: { ...agg(0), denominator: 8 },
+      legalCases: [{ caseKey: 'case:А40-1/2026', caseNumber: 'А40-1/2026', companyProceduralRole: 'defendant', stages: [] }],
+      notCounted: [],
+      note: 'События — со слов источников.',
+    },
+  },
+};
+
 /** 24 месяца по месяц среза computedSignals (октябрь 2026), значения — с конца ряда. */
 const SERIES_MONTHS = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2026, 9 - (23 - i), 1)).toISOString().slice(0, 7));
 

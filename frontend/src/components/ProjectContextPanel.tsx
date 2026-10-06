@@ -1,5 +1,6 @@
-// Контекст объекта для участия компании: её роли на объекте и события объекта с пересечением
-// периодов. Событие объекта — контекст участия, а не вина компании: вывода здесь нет.
+// Контекст объекта для участия компании (окно «Контекст объекта»): её роли на объекте и события объекта
+// с пересечением периодов. Событие объекта — контекст участия, а не вина компании: вывода здесь нет.
+// Название объекта — в заголовке окна, здесь не повторяется.
 
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -18,12 +19,11 @@ import styles from './ProjectContextPanel.module.css';
 interface IProjectContextPanelProps {
   companyId: number;
   projectId: number;
-  projectName: string;
 }
 
 const periodText = (from: string | null, to: string | null, precision: string): string => formatPeriod(from, to, precision) || 'период неизвестен';
 
-export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, projectId, projectName }) => {
+export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, projectId }) => {
   const contextQuery = useQuery({
     queryKey: ['company', companyId, 'context', projectId],
     queryFn: () => api.get<IProjectContext>(`/api/companies/${companyId}/context?projectId=${projectId}`),
@@ -48,9 +48,7 @@ export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, 
 
   return (
     <div className={styles.context}>
-      <Heading className={styles.title}>
-        Объект «{projectName}» на {formatDate(ctx.cutoff)}
-      </Heading>
+      <p className={styles.note}>Сведения на {formatDate(ctx.cutoff)}</p>
       {ctx.currentState.length > 0 && (
         <p className={styles.line}>
           Состояние (по дате события):{' '}
@@ -60,22 +58,26 @@ export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, 
         </p>
       )}
       {ctx.participations.length > 0 && (
-        <ul className={styles.list}>
-          {ctx.participations.map(p => (
-            <li key={p.assertionId}>
-              {p.polarity === 'negative' ? 'не ' : ''}
-              {ASSERTION_ROLE_LABELS[p.role ?? ''] ?? 'роль не названа'}
-              {p.building && `, ${p.building}`}
-              {p.workPackage && `, ${p.workPackage}`} — {periodText(p.validFrom, p.validTo, p.periodPrecision)}
-              <span className={styles.meta}>
-                {' · '}
-                {MODALITY_LABELS[p.modality] ?? MODALITY_LABELS.unknown} · {REVIEW_LEVEL_LABELS[p.review] ?? ''}
-                {!p.counted && ' · не учитывается как участие'}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <Heading className={styles.title}>Роли компании на объекте</Heading>
+          <ul className={styles.list}>
+            {ctx.participations.map(p => (
+              <li key={p.assertionId}>
+                {p.polarity === 'negative' ? 'не ' : ''}
+                {ASSERTION_ROLE_LABELS[p.role ?? ''] ?? 'роль не названа'}
+                {p.building && `, ${p.building}`}
+                {p.workPackage && `, ${p.workPackage}`} — {periodText(p.validFrom, p.validTo, p.periodPrecision)}
+                <span className={styles.meta}>
+                  {' · '}
+                  {MODALITY_LABELS[p.modality] ?? MODALITY_LABELS.unknown} · {REVIEW_LEVEL_LABELS[p.review] ?? ''}
+                  {!p.counted && ' · не учитывается как участие'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+      <Heading className={styles.title}>События объекта</Heading>
       {ctx.projectEvents.length === 0 ? (
         <p className={styles.line}>Событий объекта в собранных публикациях не найдено.</p>
       ) : (

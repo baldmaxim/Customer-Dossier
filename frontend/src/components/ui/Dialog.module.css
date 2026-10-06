@@ -16,6 +16,10 @@
   --dialog-w: 760px;
 }
 
+.dialog[data-size='xl'] {
+  --dialog-w: 1200px;
+}
+
 .dialog::backdrop {
   background: var(--scrim);
   animation: global(fade-in) var(--dur-base) var(--ease-out);

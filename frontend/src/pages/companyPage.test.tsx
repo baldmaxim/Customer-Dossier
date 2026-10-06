@@ -3,8 +3,8 @@
 //
 // «Сведения» — ЕГРЮЛ, реестр застройщика, сводка-плитки и контрагенты с цитатой по раскрытию;
 // «Объекты» — карточки со сведениями ДОМ.РФ и объектами застройщиков группы, публикации — читалкой,
-// «Подробно» — опознание, все события, показатели, резюме и схема; ошибка загрузки не выдаётся за
-// «не найдена».
+// «Подробно» — вкладки «События · Участие и связи · Показатели», глубже — окнами; схема связей — окном из
+// шапки; ошибка загрузки не выдаётся за «не найдена».
 
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, efrsbView, deliveryHouse, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, efrsbView, deliveryHouse, financeBody, financeYear, event, fullSignals, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -61,8 +61,8 @@ describe('Карточка компании', () => {
     expect(await screen.findByText('ООО «Дорсервис»')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Коротко о компании' })).toBeTruthy();
     expect(screen.queryByText('Подряд на развязку передан другой фирме')).toBeNull();
-    // Путь к схеме — кнопка в шапке, а не колонка каталога.
-    expect(screen.getByRole('link', { name: 'Схема связей' }).getAttribute('href')).toBe('/links?company=7');
+    // Путь к схеме — кнопка в шапке, схема — окном.
+    expect(screen.getByRole('button', { name: 'Схема связей' }).getAttribute('aria-haspopup')).toBe('dialog');
   });
 
   it('группа компаний: над названием «Группа компаний» с подсказкой, а не блок на «Сведениях»', async () => {
@@ -224,10 +224,10 @@ describe('Карточка компании', () => {
 
     const href = (name: string): string | null => within(brief).getByRole('link', { name }).getAttribute('href');
     expect(href('Все объекты')).toBe('/company/7?tab=objects');
-    expect(href('Все события')).toBe('/company/7?tab=details#company-events');
+    expect(href('Все события')).toBe('/company/7?tab=details');
     expect(href('Все публикации')).toBe('/company/7?tab=publications');
-    expect(href('Все связи')).toBe('/links?company=7');
-    expect(href('Дела подробно')).toBe('/company/7?tab=details#company-signals');
+    expect(href('Все связи')).toBe('/company/7?tab=details&dtab=links');
+    expect(href('Дела подробно')).toBe('/company/7?tab=details&dtab=numbers');
     // Оценки надёжности в сводке нет (ADR-009).
     expect(within(brief).queryByText(/надёжн.*(высок|низк)|риск/i)).toBeNull();
   });
@@ -243,7 +243,7 @@ describe('Карточка компании', () => {
     expect(within(courts).getAllByRole('listitem').map(li => li.textContent)).toEqual(['истец, заявитель или кредитор1', 'ответчик или должник2']);
     expect(within(section).getByText(/из 3 дел/)).toBeTruthy();
     expect(within(section).getByText('Нет данных: события по видам, полнота текстов, происхождение текстов.')).toBeTruthy();
-    expect(within(section).getByRole('link', { name: 'Как посчитано' }).getAttribute('href')).toBe('/company/7?tab=details#company-signals');
+    expect(within(section).getByRole('link', { name: 'Как посчитано' }).getAttribute('href')).toBe('/company/7?tab=details&dtab=numbers');
   });
 
   it('публикации и события по месяцам (signals@3): два графика, что не вошло — словами, числа — таблицей', async () => {
@@ -721,36 +721,43 @@ describe('Карточка компании', () => {
     expect(await screen.findAllByText(/не оценка надёжности/)).toHaveLength(1);
   });
 
-  it('контрагенты: первые шесть, «Показать ещё»; полный ответ сервера — ссылка «Все связи»', async () => {
+  it('контрагенты: первые шесть, «Показать ещё»; полный ответ сервера — «Все связи» схемой в окне', async () => {
     fakeApi(replace('GET /api/companies/7/partners', () => ({ status: 200, body: { items: manyPartners(12) } })));
     renderCard();
 
     const section = (await screen.findByRole('heading', { name: 'С кем связана' })).closest('section')!;
     await within(section).findByRole('link', { name: 'ООО «Партнёр 1»' });
     expect(within(section).queryByRole('link', { name: 'ООО «Партнёр 7»' })).toBeNull();
-    expect(within(section).getByRole('link', { name: 'Все связи' }).getAttribute('href')).toBe('/links?company=7');
+    expect(within(section).getByRole('button', { name: 'Все связи' }).getAttribute('aria-haspopup')).toBe('dialog');
 
     fireEvent.click(within(section).getByRole('button', { name: 'Показать ещё 6' }));
     expect(within(section).getByRole('link', { name: 'ООО «Партнёр 12»' })).toBeTruthy();
     expect(within(section).queryByRole('button', { name: /Показать ещё/ })).toBeNull();
-    expect(within(section).getByText(/остальные в «Связях»/)).toBeTruthy();
+    expect(within(section).getByText(/остальные на схеме связей/)).toBeTruthy();
   });
 
-  it('событие показывает имя источника, объект — ссылкой', async () => {
+  it('событие — строкой «что, когда, где»; нажатие открывает окно: объект ссылкой, цитата и источник', async () => {
     fakeApi(
       replace('GET /api/companies/7/events', () => ({
         status: 200,
-        body: { items: [event({ id: 501, url: 'https://t.me/stroi_news/501', sourceTitle: 'Стройки — и точка', sourceKey: 'stroi_news', sourceKind: 'telegram' })] },
+        body: { items: [event({ id: 501, quote: 'Подряд на развязку передан другой фирме', url: 'https://t.me/stroi_news/501', sourceTitle: 'Стройки — и точка', sourceKey: 'stroi_news', sourceKind: 'telegram' })] },
       })),
     );
     renderCard('/company/7?tab=details');
 
-    const source = await screen.findByRole('link', { name: 'Стройки — и точка — открыть публикацию' });
-    expect(within(source).getByText('Стройки — и точка')).toBeTruthy();
+    const list = await screen.findByRole('list', { name: 'События компании' });
+    const row = within(list).getByRole('button', { name: /Развязка на М-7 · Стройки — и точка/ });
+    // В строке — ни ссылок, ни цитаты: подробности — окном.
+    expect(within(list).queryByRole('link')).toBeNull();
+    expect(screen.queryByText(/Подряд на развязку передан/)).toBeNull();
+
+    fireEvent.click(row);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('link', { name: 'Развязка на М-7' }).getAttribute('href')).toBe('/projects/55');
+    expect(within(dialog).getByText('«Подряд на развязку передан другой фирме»')).toBeTruthy();
+    const source = within(dialog).getByRole('link', { name: /Стройки — и точка/ });
     expect(source.getAttribute('href')).toBe('https://t.me/stroi_news/501');
     expect(source.getAttribute('rel')).toBe('noopener noreferrer');
-    const section = screen.getByRole('heading', { name: 'События', level: 2 }).closest('details')!;
-    expect(within(section).getByRole('link', { name: 'Развязка на М-7' }).getAttribute('href')).toBe('/projects/55');
   });
 
   it('похожие компании — одной строкой на «Сведениях» и не занимают место читалки', async () => {
@@ -796,7 +803,7 @@ describe('Карточка компании', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Подробно' }));
     await waitFor(() => expect(router.state.location.search).toBe('?tab=details'));
-    expect(await screen.findByRole('heading', { name: 'Опознание' })).toBeTruthy();
+    expect(await screen.findByRole('tablist', { name: 'Подробно о компании' })).toBeTruthy();
 
     await router.navigate(-1);
     await waitFor(() => expect(router.state.location.search).toBe('?tab=publications&post=12'));
@@ -820,49 +827,85 @@ describe('Карточка компании', () => {
     await waitFor(() => expect(document.activeElement?.textContent).toContain('Второй пост'));
   });
 
-  it('«Подробно»: опознание, все события, показатели, резюме и схема связей (ЕГРЮЛ и реестр — в «Сведениях»)', async () => {
+  it('«Подробно»: вкладки «События · Участие и связи · Показатели» в адресе; опознания, резюме и схемы нет', async () => {
     fakeApi(companyRoutes({ withRegistry: true }));
-    renderCard('/company/7?tab=details');
-
-    for (const name of ['Опознание', 'События', 'Показатели', 'Резюме и противоречия', 'Схема связей']) {
-      expect(await screen.findByRole('heading', { name, level: 2 })).toBeTruthy();
-    }
-    // Схема — свёрнутый раздел: граф грузится только после раскрытия.
-    expect(screen.queryByRole('link', { name: 'Открыть в «Связях»' })).toBeNull();
-    fireEvent.click(screen.getByRole('heading', { name: 'Схема связей', level: 2 }).closest('summary')!);
-    expect((await screen.findByRole('link', { name: 'Открыть в «Связях»' })).getAttribute('href')).toBe('/links?company=7');
-    expect(await screen.findByText('Нужна проверка')).toBeTruthy();
-    expect(screen.getByText(/противоречий — 1/)).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'ЕГРЮЛ — Контур.Фокус' })).toBeNull();
-    // В «Проверку» ведёт только тем, кому доступна админка.
-    expect(screen.getByRole('link', { name: 'Открыть «Проверку»' }).getAttribute('href')).toBe('/admin/review');
-  });
-
-  it('«Подробно»: меню разделов; на телефоне пункт меню раскрывает свёрнутый раздел и ставит якорь в адрес', async () => {
-    phone();
-    const api = fakeApi(companyRoutes({ withRegistry: true }));
     const { router } = renderWithRouter(cardRoutes, ['/company/7?tab=details']);
 
-    const nav = await screen.findByRole('navigation', { name: 'Разделы' });
-    expect(within(nav).getAllByRole('link').map(a => a.textContent)).toEqual([
-      'Опознание',
-      'События',
-      'Показатели',
-      'Резюме',
-      'Схема связей',
-    ]);
-    const graph = screen.getByRole('heading', { name: 'Схема связей', level: 2 }).closest('details')!;
-    expect(graph.open).toBe(false);
-    expect(api.calls.some(c => c.url.startsWith('/api/graph'))).toBe(false);
+    const tabs = await screen.findByRole('tablist', { name: 'Подробно о компании' });
+    expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['События', 'Участие и связи', 'Показатели']);
+    expect(await screen.findByText('В собранных публикациях событий компании не найдено.')).toBeTruthy();
+    for (const name of ['Опознание', 'Резюме и противоречия', 'Схема связей', 'ЕГРЮЛ — Контур.Фокус']) {
+      expect(screen.queryByRole('heading', { name })).toBeNull();
+    }
+    expect(screen.queryByRole('navigation', { name: 'Разделы' })).toBeNull();
 
-    fireEvent.click(within(nav).getByRole('link', { name: 'Схема связей' }));
-    await waitFor(() => expect(router.state.location.hash).toBe('#company-graph'));
-    expect(router.state.location.search).toBe('?tab=details');
-    // Якорь не плодит записей истории: «Назад» уводит с вкладки, а не по пунктам меню.
-    expect(router.state.historyAction).toBe('REPLACE');
-    await waitFor(() => expect(graph.open).toBe(true));
-    expect(await screen.findByRole('link', { name: 'Открыть в «Связях»' })).toBeTruthy();
-    expect(within(nav).getByRole('link', { name: 'Схема связей' }).getAttribute('aria-current')).toBe('location');
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'Участие и связи' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=details&dtab=links'));
+    expect(router.state.historyAction).toBe('PUSH');
+    expect(await screen.findByText('Нужна проверка')).toBeTruthy();
+    expect(screen.getByText(/противоречие источников — 1/)).toBeTruthy();
+    // В «Проверку» ведёт только тем, кому доступна админка.
+    expect(screen.getByRole('link', { name: 'Открыть «Проверку»' }).getAttribute('href')).toBe('/admin/review');
+    expect(screen.getByText('Список участий появится после расчёта показателей.')).toBeTruthy();
+
+    // Смена вкладки карточки сбрасывает вкладку «Подробно».
+    fireEvent.click(screen.getByRole('tab', { name: 'Сведения' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+  });
+
+  it('«Участие и связи»: объект и роль строкой; «Откуда известно» и «Контекст объекта» — окнами, грузятся по нажатию', async () => {
+    const api = fakeApi([
+      {
+        match: 'GET /api/companies/7/context',
+        respond: () => ({
+          status: 200,
+          body: { cutoff: '2026-10-01T12:00:00Z', participations: [], projectEvents: [], currentState: [], note: 'Событие объекта — контекст участия.' },
+        }),
+      },
+      ...replace('GET /api/companies/7/signals', () => ({ status: 200, body: fullSignals })),
+    ]);
+    renderCard('/company/7?tab=details&dtab=links');
+
+    const objects = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
+    const row = within(objects).getByRole('link', { name: 'Развязка на М-7' }).closest('li')!;
+    expect(row.textContent).toContain('генподрядчик, корпус 2');
+    expect(api.calls.some(c => c.url.startsWith('/api/assertions/') || c.url.includes('/context'))).toBe(false);
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Откуда известно' }));
+    expect(screen.getByRole('dialog', { name: 'Откуда известно' })).toBeTruthy();
+    await waitFor(() => expect(api.calls.some(c => c.url === '/api/assertions/301')).toBe(true));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Откуда известно' })).getByRole('button', { name: 'Закрыть' }));
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Контекст объекта' }));
+    const context = screen.getByRole('dialog', { name: 'Объект «Развязка на М-7»' });
+    expect(await within(context).findByText('Событий объекта в собранных публикациях не найдено.')).toBeTruthy();
+    expect(within(context).getByRole('link', { name: 'Карточка объекта' }).getAttribute('href')).toBe('/projects/55');
+  });
+
+  it('«Показатели»: три коротких списка чисел, правило — пояснением у подписи, без раскрывашек', async () => {
+    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: fullSignals })));
+    const { container } = renderWithProviders(
+      <Routes>
+        <Route path="/company/:id" element={<CompanyPage />} />
+      </Routes>,
+      '/company/7?tab=details&dtab=numbers',
+    );
+
+    const objects = (await screen.findByRole('heading', { name: 'Объекты и роли' })).closest('section')!;
+    expect(within(objects).getByText('Роли').closest('div')!.textContent).toContain('генподрядчик — 1');
+    // Как считается — пояснением у подписи; внутренних номеров («id — объекты») в нём нет.
+    expect(within(objects).getByRole('button', { name: 'Объектов' }).getAttribute('aria-description')).toBe(
+      'Разные объекты, где сообщается об участии компании.',
+    );
+    const publications = screen.getByRole('heading', { name: 'Публикации' }).closest('section')!;
+    expect(within(publications).getByText('За 90 дней').closest('div')!.textContent).toContain('4 из 14');
+    const events = screen.getByRole('heading', { name: 'События и дела' }).closest('section')!;
+    expect(within(events).getByText('Роль в делах').closest('div')!.textContent).toContain('ответчик или должник — 2');
+    expect(within(events).getByText('По видам').closest('div')!.textContent).toContain('Судебное дело — 3');
+    // Внутренние номера правил читателю не показываются, раскрытий у чисел нет.
+    expect(container.textContent).not.toMatch(/id —/);
+    const panel = screen.getAllByRole('tabpanel').at(-1)!;
+    expect(panel.querySelector('details')).toBeNull();
   });
 
   it('читателю «Подробно» не предлагает ссылок в админку', async () => {
@@ -873,7 +916,7 @@ describe('Карточка компании', () => {
           <Route path="/company/:id" element={<CompanyPage />} />
         </Routes>
       </AuthContext.Provider>,
-      '/company/7?tab=details',
+      '/company/7?tab=details&dtab=links',
     );
 
     expect(await screen.findByText('Нужна проверка')).toBeTruthy();

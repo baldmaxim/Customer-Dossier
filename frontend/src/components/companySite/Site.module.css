@@ -9,6 +9,11 @@
   list-style: none;
 }
 
+/* Карточка компании: строки плотнее — одна строка на сайт. */
+.compact {
+  gap: var(--sp-2);
+}
+
 .item {
   display: flex;
   flex-direction: column;

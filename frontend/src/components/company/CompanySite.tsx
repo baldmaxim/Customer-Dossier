@@ -1,7 +1,8 @@
 // «Сайт компании» на «Сведениях» (этап 25A, ADR-018): подтверждённый сайт ссылкой, сайт группы для СЗ,
 // кандидаты из веб-поиска с признаками проверки и решения оператора. Подтверждает человек: модель находит
 // адрес среди страниц выдачи, портал смотрит, написан ли там ИНН компании, — но «это сайт компании» говорит
-// оператор. Читателю — только подтверждённое и строка о поиске.
+// оператор. Читателю — только подтверждённое и строка о поиске. На карточке — коротко (06.10.2026): адрес,
+// одна строка о чтении, действия ярлычками; как найден и кто решил — в очереди «Сайты компаний».
 
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -30,9 +31,11 @@ const SiteReadSummary: FC<{ companyId: number }> = ({ companyId }) => {
   const data = query.data;
   if (!data || data.sites.length === 0) return null;
   const missing = data.projects.filter(p => !p.match).length;
+  // Один сайт — адрес уже стоит строкой выше, не повторяем.
+  const single = data.sites.length === 1;
   return (
     <p className={styles.muted}>
-      {data.sites.map(site => `${site.host}: ${siteReadText(site)}`).join('; ')}
+      {data.sites.map(site => (single ? siteReadText(site) : `${site.host}: ${siteReadText(site)}`)).join('; ')}
       {data.projects.length > 0 && (
         <>
           {'. '}
@@ -69,8 +72,8 @@ export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ co
         </Callout>
       )}
       {data && (
-        <Stack gap={3}>
-          {confirmed.length > 0 && <SiteCandidates candidates={confirmed} {...decide} />}
+        <Stack gap={2}>
+          {confirmed.length > 0 && <SiteCandidates candidates={confirmed} compact {...decide} />}
           {confirmed.length > 0 && <SiteReadSummary companyId={companyId} />}
           {family.length > 0 && (
             <ul className={styles.list}>
@@ -88,8 +91,8 @@ export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ co
           {pending.length > 0 &&
             (canDecide ? (
               <Stack gap={2}>
-                <p className={styles.muted}>Найдено поиском — решите, сайт ли это компании:</p>
-                <SiteCandidates candidates={pending} {...decide} />
+                <p className={styles.muted}>Найдено поиском — сайт ли это компании?</p>
+                <SiteCandidates candidates={pending} compact {...decide} />
               </Stack>
             ) : (
               <p className={styles.muted}>Найдены кандидаты: {formatCount(pending.length)} — ждут решения оператора.</p>
@@ -97,7 +100,7 @@ export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ co
           {confirmed.length === 0 && <p className={styles.muted}>{searchLine(data.search, data.mode)}</p>}
           {canDecide && rejected.length > 0 && (
             <Disclosure summary="Отклонённые" meta={formatCount(rejected.length)}>
-              <SiteCandidates candidates={rejected} {...decide} />
+              <SiteCandidates candidates={rejected} compact {...decide} />
             </Disclosure>
           )}
           {canDecide && (

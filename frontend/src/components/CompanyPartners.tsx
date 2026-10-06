@@ -2,7 +2,7 @@
 //
 // Договор, корпоративная связь и совместное участие на объекте — разные вещи: две фирмы на
 // одном объекте могут не иметь отношений между собой. Сервер отдаёт первые 12 контрагентов —
-// если их ровно столько, список честно называет себя неполным и ведёт в «Связи».
+// если их ровно столько, список честно называет себя неполным и ведёт к схеме связей (окном).
 // На обзоре видно первых SHOWN, остальные — «Показать ещё» концовкой блока.
 
 import { CSSProperties, FC, useState } from 'react';
@@ -14,12 +14,11 @@ import type { IPartnerLink, IPartnerRow } from '../api/types';
 import { formatCount } from '../lib/format';
 import { ASSERTION_ROLE_LABELS, PARTNER_KIND_HINTS, PARTNER_KIND_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
-import { AssertionDetail } from './AssertionDetail';
-import { LazyDisclosure } from './company/LazyDisclosure';
+import { EvidenceButton } from './EvidenceButton';
+import { GraphButton } from './graph/GraphButton';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
-import { ButtonLink } from './ui/ButtonLink';
 import { Callout } from './ui/Callout';
 import { EmptyState } from './ui/EmptyState';
 import { Section } from './ui/Section';
@@ -70,11 +69,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                 Показать ещё {formatCount(hidden)}
               </Button>
             )}
-            {truncated && (
-              <ButtonLink to={`/links?company=${companyId}`} variant="link" iconEnd="forward">
-                Все связи
-              </ButtonLink>
-            )}
+            {truncated && <GraphButton companyId={companyId} label="Все связи" variant="link" iconEnd="forward" />}
           </>
         )
       }
@@ -138,11 +133,11 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                             </span>
                           )}
                         </span>
-                        {/* Цитата грузится только при раскрытии, а не для всех связей сразу. */}
+                        {/* Цитата — окном и грузится только в открытом окне, а не для всех связей сразу. */}
                         {link.assertionId !== null && (
-                          <LazyDisclosure summary="Откуда известно">
-                            <AssertionDetail assertionId={link.assertionId} showSummary={false} />
-                          </LazyDisclosure>
+                          <div>
+                            <EvidenceButton assertionIds={[link.assertionId]} lead={`${partner.name}: ${PARTNER_KIND_LABELS[link.kind] ?? 'связь'} — ${linkText(link)}`} />
+                          </div>
                         )}
                       </li>
                     );
@@ -158,7 +153,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
       )}
 
       {truncated && expanded && (
-        <p className={styles.note}>Показаны первые {formatCount(PARTNERS_LIMIT)} контрагентов — остальные в «Связях».</p>
+        <p className={styles.note}>Показаны первые {formatCount(PARTNERS_LIMIT)} контрагентов — остальные на схеме связей.</p>
       )}
       {kinds.length > 0 && (
         <ul className={styles.legend} aria-label="Виды связей">

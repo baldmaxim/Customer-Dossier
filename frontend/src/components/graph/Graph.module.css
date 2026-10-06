@@ -229,23 +229,27 @@ td .seedName {
   padding-inline-start: var(--sp-5);
 }
 
-/* ─── Панель на карточке ─── */
+/* ─── Окно схемы (GraphButton) ─── */
 
-.panelBody {
+.dialogBody {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
   min-width: 0;
 }
 
-.panelActions {
+/* Чья схема сейчас и, после перестроения, путь к карточке нового центра и назад. */
+.dialogCenter {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
 }
 
-.panelPlain {
+.dialogCenterName {
+  margin: 0;
   min-width: 0;
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
 }

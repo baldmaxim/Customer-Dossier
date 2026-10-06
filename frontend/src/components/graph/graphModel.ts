@@ -47,8 +47,6 @@ export interface IGraphResponse extends IGraph {
   loaderTruncated?: string[];
 }
 
-export const isEdgeType = (value: string): value is GraphEdgeType => (ALL_EDGE_TYPES as readonly string[]).includes(value);
-
 export const isGraphDepth = (value: number): value is GraphDepth => (GRAPH_DEPTHS as readonly number[]).includes(value);
 
 export const sameTypes = (a: readonly GraphEdgeType[], b: readonly GraphEdgeType[]): boolean =>
@@ -92,9 +90,8 @@ export const isDefaultFilters = (filters: IGraphFilters): boolean =>
   extraFilterCount(filters) === 0 && sameTypes(filters.types, DEFAULT_EDGE_TYPES);
 
 /**
- * Что делает нажатие на узел схемы и на имя в таблице связей. На «Связях» — показать связи
- * этого узла (ссылка на тот же экран с новым центром), на карточках — открыть карточку узла.
- * `actionText` — глагол для имени ссылки у диктора: «показать связи», «открыть карточку».
+ * Что делает нажатие на узел схемы и на имя в таблице связей. В окне схемы — перестроить схему вокруг
+ * узла (кнопка); ссылка — открыть карточку узла. `actionText` — глагол для имени у диктора.
  */
 export type NodeTarget =
   | { kind: 'link'; to: (node: IGraphNode) => To | null; state?: (node: IGraphNode) => unknown; viewTransition: boolean; actionText: string }
@@ -105,15 +102,3 @@ export type NodeTarget =
 export const nodeCardHref = (node: Pick<IGraphNode, 'kind' | 'id'>): string =>
   node.kind === 'company' ? `/company/${node.id}` : `/projects/${node.id}`;
 
-/**
- * Экран «Связи» с другим центром и теми же фильтрами и видом: соседа смотрят в тех же
- * условиях, а «Назад» возвращает прежний центр.
- */
-export const linksHref = (center: IGraphCenter, current?: URLSearchParams): string => {
-  const search = new URLSearchParams(current);
-  search.delete('company');
-  search.delete('project');
-  const out = new URLSearchParams({ [center.kind]: String(center.id) });
-  search.forEach((value, key) => out.set(key, value));
-  return `/links?${out.toString()}`;
-};

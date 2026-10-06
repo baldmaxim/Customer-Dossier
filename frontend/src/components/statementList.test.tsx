@@ -1,5 +1,5 @@
-// Фразы сводки: атрибуция — одна на группу, «Откуда известно» раскрывает цитаты, без «#id».
-import { fireEvent, screen } from '@testing-library/react';
+// Фразы сводки: атрибуция — одна на группу, «Откуда известно» открывает цитаты окном, без «#id».
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { IStatement } from '../api/types';
@@ -31,18 +31,19 @@ describe('StatementList', () => {
     expect(screen.getAllByText('спорно по решению оператора')).toHaveLength(1);
   });
 
-  it('«Откуда известно» раскрывает цитаты сведения; служебных номеров на экране нет', async () => {
-    fakeApi([{ match: 'GET /api/assertions/5', respond: () => ({ status: 200, body: assertionResponse(5) }) }]);
-    const { container } = renderWithProviders(<StatementList items={[statement('a', 'Бета-Демо — генподрядчик на объекте.', 'source_reported', [5])]} />);
+  it('«Откуда известно» открывает цитаты окном и грузит их только тогда; служебных номеров нет', async () => {
+    const api = fakeApi([{ match: 'GET /api/assertions/5', respond: () => ({ status: 200, body: assertionResponse(5) }) }]);
+    renderWithProviders(<StatementList items={[statement('a', 'Бета-Демо — генподрядчик на объекте.', 'source_reported', [5])]} />);
 
-    const toggle = screen.getByRole('button', { name: 'Откуда известно' });
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(await screen.findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
+    expect(api.calls.some(c => c.url.startsWith('/api/assertions/'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Откуда известно' }));
+    const dialog = screen.getByRole('dialog', { name: 'Откуда известно' });
+    // Что известно — первой строкой окна, под ней цитаты.
+    expect(within(dialog).getByText('Бета-Демо — генподрядчик на объекте.')).toBeTruthy();
+    expect(await within(dialog).findByText('Бета-Демо заключила договор субподряда с Дельта-Демо')).toBeTruthy();
     // Фраза уже стоит выше — описание сведения не повторяется заголовком.
-    expect(screen.queryByRole('heading', { name: /Бета-Демо →|Бета-Демо — договор/ })).toBeNull();
-    expect(container.textContent).not.toMatch(/#\d|утверждение|доказательство/);
+    expect(within(dialog).queryByRole('heading', { name: /Бета-Демо →|Бета-Демо — договор/ })).toBeNull();
+    expect(dialog.textContent).not.toMatch(/#\d|утверждение|доказательство/);
   });
 
   it('пустой список — словами, если сказано что', () => {

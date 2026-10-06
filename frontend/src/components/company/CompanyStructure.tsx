@@ -155,7 +155,7 @@ export const CompanyStructure: FC<{ companyId: number }> = ({ companyId }) => {
       title="Роли, события и тексты"
       note={query.data?.refresh.active ? 'по расчёту показателей' : undefined}
       footer={
-        <Link className={styles.structureMore} to={{ search: '?tab=details', hash: 'company-signals' }}>
+        <Link className={styles.structureMore} to={{ search: '?tab=details&dtab=numbers' }}>
           Как посчитано <Icon name="forward" size="sm" />
         </Link>
       }

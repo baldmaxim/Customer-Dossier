@@ -8,7 +8,7 @@
 
 | Задача | Берите | Не берите |
 |---|---|---|
-| Разделы страницы («Обзор · Публикации · Подробно», вкладки «Проверки») | `Tabs` + `TabPanel` | `Segmented` |
+| Разделы страницы («Сведения · Объекты · Публикации · Подробно», вкладки «Подробно» и «Проверки») | `Tabs` + `TabPanel` | `Segmented` |
 | Разделы-адреса (админка: у каждого свой URL) | `TabLinks` | `Tabs` |
 | Фильтр или режим внутри экрана («По числу объектов / По названию») | `Segmented` | `Tabs` |
 | Раздел с заголовком на карточке | `Section` | `Card` + свой h2 |
@@ -18,8 +18,8 @@
 | Подтвердить необратимое (удалить, сменить роль) | `useConfirm()` | `window.confirm` |
 | Отдельная задача поверх страницы (новый пароль, форма) | `Dialog` (на телефоне — лист) | `window.prompt` |
 | Свернуть второстепенное на месте | `Disclosure` | кнопку-переключатель с `useState` |
+| «Откуда известно», контекст и подробности строки списка (решение владельца 06.10.2026) | `EvidenceButton`, `Dialog` | раскрытие под строкой, переход на другую страницу |
 | Пары «подпись — значение» | `DescriptionList` | свои `Row`/`Line`/`dl.facts` |
-| Меню разделов длинной страницы («Подробно») | `AnchorNav` | `Tabs` (разделы на одной странице — не вкладки) |
 | Широкая таблица | `TableScroll` на ≥ 600, `CardList` на < 600 | таблицу без прокрутки |
 | Загрузка | `Loading` (+ `Skeleton`) | «Загрузка…» голым текстом, «пусто», «0» |
 | Пусто | `EmptyState` (словами + действие) | команды CLI и имена env |
@@ -95,13 +95,9 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
 - `Segmented` — `{ label, items: {value,label,hint?,disabled?}[], value, onChange, size?, fill? }` — `role="group"` +
   `aria-pressed`; не помещается — прокрутка в строку. `fill` — пункты поровну во всю ширину (режимы на телефоне).
 - `ButtonLink` — `Link` в виде кнопки: пропсы `Link` + `variant/size/icon/iconEnd/block`; `viewTransition` по умолчанию.
-- `AnchorNav` — `{ label, items: {id,label}[] }` — липкое меню разделов длинной страницы: якоря текущего адреса (запрос
-  сохраняется, `replace`), текущий раздел — `aria-current="location"` (IntersectionObserver). Раскрыть свёрнутый раздел
-  по hash и прокрутить к нему — дело страницы (образец — `company/CompanyDetails.tsx`); разделам —
-  `scroll-margin-top` на высоту меню.
 
 **Действия**
-- `Button` — `{ variant?: 'primary'|'secondary'|'ghost'|'danger'|'danger-solid'|'link', size?: 'sm'|'md'|'lg', icon?, iconEnd?,
+- `Button` — `{ variant?: 'primary'|'secondary'|'ghost'|'danger'|'danger-solid'|'link'|'chip', size?: 'sm'|'md'|'lg', icon?, iconEnd?,
   iconOnly? (+ aria-label), block?, loading?, hint?, ref? }`. `loading` — спиннер, `aria-busy`, нажатия игнорируются, фокус остаётся.
   `buttonClass({variant,size})` — классы кнопки для `<a href>` на внешний адрес или `<summary>`.
 - `Switch` — `{ checked, onChange, label, onText?, offText?, disabled? }` — `role="switch"`, состояние словом.
@@ -118,7 +114,7 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
 - `useToast()` → `{ show({ text, tone?, action?: {label,onClick}, duration?: мс|null, id?, dismissLabel?, onDismiss? }), dismiss(id) }`.
   По умолчанию 6 с, `danger` — висит до закрытия; тот же `id` заменяет тост. Тост во время открытого модального диалога
   окажется под подложкой — показывайте его после закрытия.
-- `Dialog` — `{ open, onClose, title, description?, size?: 'sm'|'md'|'lg', variant?: 'auto'|'modal'|'sheet', footer?,
+- `Dialog` — `{ open, onClose, title, description?, size?: 'sm'|'md'|'lg'|'xl', variant?: 'auto'|'modal'|'sheet', footer?,
   initialFocus?, closeOnBackdrop? }`. `auto` — лист снизу < 600px, окно по центру шире. Esc, крестик, подложка → `onClose`.
 - `useConfirm()` → `confirm({ title, body?, confirmLabel, cancelLabel?, tone?: 'danger' })` → `Promise<boolean>`.
   Кнопка — глагол («Удалить»), не «ОК»; у `danger` фокус сначала на «Отмена».
@@ -137,7 +133,7 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
   `<th><VisuallyHidden>Действия</VisuallyHidden></th>`, не пустой `<th />`.
 - `CardList` + `CardListItem` — `{ to?, title, meta?, aside?, actions?, selected?, viewTransition? }` — таблица на телефоне.
 - `Disclosure` — `{ summary, meta?, defaultOpen?, open?, onToggle?, variant?: 'plain'|'card', level? }` на `<details>`;
-  `level` — заголовок раздела в summary (свёрнутые разделы «Подробно» на телефоне).
+  `level` — заголовок раздела в summary (свёрнутые разделы страницы объекта).
 - `Icon` — `{ name, size?: 'sm'|'md'|'lg', label? }`. Без `label` — декоративная. Стрелки и крестики — только иконками,
   не глифами ←/→/× в тексте (диктор читает их вслух).
 - `VisuallyHidden` — текст только для диктора.

@@ -1,6 +1,6 @@
 // Пункты главного меню: шапка (от 600px) и нижняя панель (телефон) — один список.
 // Портал строится от компании (ADR-016): первый пункт — «Компании»; общей ленты публикаций нет,
-// публикации — на вкладках компании и объекта.
+// публикации — на вкладках компании и объекта. Схема связей — окном с карточки, пункта «Связи» нет (06.10.2026).
 
 import { matchPath } from 'react-router-dom';
 
@@ -33,7 +33,6 @@ export const NAV: ReadonlyArray<INavItem> = [
   },
   // «Новое» (24F): новые объекты, сроки ДОМ.РФ, дела и ФССП; у пункта — число непросмотренного.
   { to: '/news', label: 'Новое', end: false, icon: 'inbox', permission: 'portal.read', counter: 'news' },
-  { to: '/links', label: 'Связи', end: false, icon: 'links', permission: 'portal.read' },
   { to: '/admin', label: 'Админка', end: false, icon: 'admin', permission: 'admin.view' },
 ];
 

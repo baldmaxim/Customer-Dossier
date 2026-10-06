@@ -1,7 +1,7 @@
 // «Участники» объекта: период (в адресе), затем список — карточками уже 900px и таблицей шире.
 // «Откуда известно» — у каждой строки: отдельного блока «Основания участия» с теми же строками больше нет.
 
-import { FC, ReactNode, useState } from 'react';
+import { FC, ReactNode } from 'react';
 
 import type { IProjectDossier } from '../../api/types';
 import { Button } from '../../components/ui/Button';
@@ -29,19 +29,10 @@ const OF_PARTICIPANTS = ['участника', 'участников', 'учас
 
 export const ProjectParticipants: FC<IProjectParticipantsProps> = ({ dossier, period, onPeriodChange, busy }) => {
   const wide = useMediaQuery(MQ.md);
-  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const periodSelected = Boolean(period.from || period.to);
   const all = dossier.participants;
   const shown = period.only && periodSelected ? all.filter(p => p.inPeriod === 'overlaps') : all;
   const note = shown.length === all.length ? formatCountWord(all.length, PARTICIPANTS) : `${formatCount(shown.length)} из ${formatCountWord(all.length, OF_PARTICIPANTS)}`;
-
-  const toggle = (key: string): void =>
-    setOpen(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
 
   let list: ReactNode;
   if (all.length === 0) {
@@ -65,9 +56,9 @@ export const ProjectParticipants: FC<IProjectParticipantsProps> = ({ dossier, pe
       </EmptyState>
     );
   } else if (wide) {
-    list = <ParticipantTable participants={shown} periodSelected={periodSelected} open={open} onToggle={toggle} />;
+    list = <ParticipantTable participants={shown} periodSelected={periodSelected} />;
   } else {
-    list = <ParticipantCards participants={shown} periodSelected={periodSelected} open={open} onToggle={toggle} />;
+    list = <ParticipantCards participants={shown} periodSelected={periodSelected} />;
   }
 
   return (
