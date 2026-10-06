@@ -36,7 +36,7 @@ export const BriefTile: FC<IBriefTileProps> = ({ label, value, detail, to, linkT
     <dd className={styles.tileMore}>
       <Link className={`row-link-target ${styles.tileLink}`} to={to} viewTransition={viewTransition}>
         <span className="visually-hidden">{linkText}</span>
-        <Icon name="forward" size="sm" />
+        <Icon name="forward" size="sm" className={styles.tileArrow} />
       </Link>
     </dd>
   </div>

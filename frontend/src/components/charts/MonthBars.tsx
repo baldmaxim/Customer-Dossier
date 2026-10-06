@@ -2,8 +2,8 @@
 // ряда рисуются двумя графиками на одной оси месяцев, а не двумя шкалами на одном (dataviz: dual-axis
 // — главная ошибка графиков).
 //
-// Наведение (или нажатие пальцем) показывает месяц и число строкой над графиком; без наведения там
-// итог и самый высокий месяц. График для диктора — role="img" со сводкой словами; все числа по месяцам
+// Наведение (или нажатие пальцем) показывает месяц и число строкой над графиком поверх итога (итог и самый
+// высокий месяц): итог задаёт размер строки, поэтому наведение раскладку не двигает. График для диктора — role="img" со сводкой словами; все числа по месяцам
 // — таблицей в ChartData рядом. Последний месяц обычно неполный (срез посреди месяца): его столбик
 // светлее, и это сказано словами — иначе спад в последнем месяце читается как спад активности.
 
@@ -48,16 +48,20 @@ export const MonthBars: FC<IMonthBarsProps> = ({ label, points, forms, partialLa
       ? `${label}, ${formatMonth(first.month)} — ${formatMonth(last.month)}: всего ${formatCountWord(total, forms)}, ${peakText}${partialText}`
       : `${label}: нет данных`;
   const hovered = active === null ? null : points[active];
-  const readout = hovered
+  const totalLine = `всего ${formatCountWord(total, forms)} · ${peakText}`;
+  const monthLine = hovered
     ? `${formatMonth(hovered.month)} — ${formatCountWord(hovered.value, forms)}${partialLast && active === lastIndex ? ', месяц не закончился' : ''}`
-    : `всего ${formatCountWord(total, forms)} · ${peakText}`;
+    : null;
 
   return (
     <figure className={[styles.months, className ?? ''].filter(Boolean).join(' ')}>
       <figcaption className={styles.monthsHead}>
         <span className={styles.monthsLabel}>{label}</span>
+        {/* Итог остаётся в разметке и при наведении (скрыт): строка месяца ложится поверх него, и размер
+            шапки не меняется — иначе короткая строка встаёт рядом с подписью и график прыгает на строку. */}
         <span className={styles.monthsReadout} aria-hidden="true">
-          {readout}
+          <span data-hidden={monthLine !== null || undefined}>{totalLine}</span>
+          {monthLine !== null && <span>{monthLine}</span>}
         </span>
       </figcaption>
       <div

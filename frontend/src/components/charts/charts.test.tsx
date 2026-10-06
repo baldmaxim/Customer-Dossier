@@ -108,8 +108,11 @@ describe('MonthBars', () => {
     expect(columns).toHaveLength(4);
     fireEvent.pointerEnter(columns[3]!);
     expect(screen.getByText('февраль 2026 — 1 событие, месяц не закончился')).toBeTruthy();
+    // Итог остаётся в разметке скрытым — он держит размер строки, график не прыгает.
+    expect(screen.getByText('всего 8 событий · больше всего — январь 2026 (5)').hasAttribute('data-hidden')).toBe(true);
     fireEvent.pointerLeave(screen.getByRole('img'));
-    expect(screen.getByText('всего 8 событий · больше всего — январь 2026 (5)')).toBeTruthy();
+    expect(screen.getByText('всего 8 событий · больше всего — январь 2026 (5)').hasAttribute('data-hidden')).toBe(false);
+    expect(screen.queryByText('февраль 2026 — 1 событие, месяц не закончился')).toBeNull();
   });
 });
 

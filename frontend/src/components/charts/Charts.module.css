@@ -226,8 +226,18 @@
 }
 
 .monthsReadout {
+  display: inline-grid;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Итог и строка месяца — в одной ячейке: размер задаёт итог, подмена текста раскладку не двигает. */
+.monthsReadout > span {
+  grid-area: 1 / 1;
+}
+
+.monthsReadout > [data-hidden] {
+  visibility: hidden;
 }
 
 /* Столбики растут от одной базовой линии (нижняя рамка — волосяная ось). */

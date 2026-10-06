@@ -70,12 +70,17 @@
   overflow-wrap: break-word;
 }
 
+/* Ячейка ссылки без позиционирования: иначе накладка ссылки (.row-link-target::after) растягивалась бы на
+   неё, а не на плитку, и плитка открывалась только попаданием в стрелку. В угол ставится сама стрелка. */
 .tileMore {
+  margin: 0;
+  line-height: 0;
+}
+
+.tileArrow {
   position: absolute;
   top: var(--sp-2);
   right: var(--sp-2);
-  margin: 0;
-  line-height: 0;
 }
 
 .tileLink {
