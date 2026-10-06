@@ -11,6 +11,7 @@ import { useRouteFocus } from '../hooks/useRouteFocus';
 import { useTheme } from '../hooks/useTheme';
 import { BackBar } from './BackBar';
 import { inSection, navFor, type INavItem } from './navItems';
+import { NewsCounter } from './news/NewsCounter';
 import { Icon } from './ui/Icon';
 import styles from './Layout.module.css';
 
@@ -69,6 +70,7 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
               >
                 <Icon name={item.icon} size="sm" />
                 {item.label}
+                {item.counter === 'news' && <NewsCounter />}
               </NavLink>
             ))}
           </nav>
@@ -106,6 +108,7 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
               <Icon name={item.icon} size="lg" />
             </span>
             <span className={styles.tabLabel}>{item.label}</span>
+            {item.counter === 'news' && <NewsCounter />}
           </NavLink>
         ))}
       </nav>

@@ -1955,6 +1955,31 @@ export interface ICompanyDelivery {
   truncated: boolean;
 }
 
+/** «Новое» (этап 24F): GET /api/news. */
+export type NewsKind = 'new_project' | 'deadline_shift' | 'court_case' | 'fssp';
+export type NewsScope = 'all' | 'watched';
+
+export interface INewsItem {
+  key: string;
+  kind: NewsKind;
+  at: string;
+  title: string;
+  detail: string | null;
+  companies: Array<{ id: number; name: string; role: string | null }>;
+  project: { id: number; name: string } | null;
+  source: { kind: 'publication' | 'registry' | 'kad' | 'fssp'; documentId: number | null; href: string | null };
+  watched: boolean;
+}
+
+export interface INewsFeed {
+  format: string;
+  since: string;
+  days: number;
+  scope: NewsScope;
+  items: INewsItem[];
+  counts: Record<NewsKind, number>;
+}
+
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────
 
 export type DomRfCardKind = 'developer' | 'group';

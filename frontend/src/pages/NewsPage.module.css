@@ -1,0 +1,61 @@
+/* «Новое»: дни заголовками, новость — ярлыки вида, заголовок ссылкой, подробности и основание мелко. */
+
+.day + .day {
+  margin-top: var(--sp-4);
+}
+
+.dayTitle {
+  margin: 0 0 var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+}
+
+.item + .item {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+}
+
+.time {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+.title {
+  margin: var(--sp-1) 0 0;
+  font-weight: var(--fw-semibold);
+  overflow-wrap: break-word;
+}
+
+.detail,
+.companies {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.source {
+  margin: var(--sp-1) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}

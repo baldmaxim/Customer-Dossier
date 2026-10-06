@@ -97,6 +97,13 @@ const proceedingOf = (row: Record<string, unknown>): IFsspProceeding => {
   };
 };
 
+/** Все производства снимка (для «Нового»: что появилось с прошлого снимка). Нет списка — пусто. */
+export const fsspProceedings = (payload: IDatasetPayload): IFsspProceeding[] => {
+  const body = payload.responses.find(r => r.method === 'fssp_ur')?.body;
+  if (!body || !Array.isArray(body.result)) return [];
+  return body.result.map(asObject).filter((x): x is Record<string, unknown> => x !== null).map(proceedingOf);
+};
+
 /**
  * @param checkedAt — когда проверяли: от неё «возбуждено за 12 месяцев».
  * @param complete — все страницы получены (parser_api_records.complete).

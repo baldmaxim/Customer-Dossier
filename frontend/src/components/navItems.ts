@@ -17,6 +17,8 @@ export interface INavItem {
   permission: AccessPermission;
   /** Детальные страницы раздела: пункт подсвечен и там (карточка компании — часть «Поиска»). */
   section?: ReadonlyArray<string>;
+  /** Счётчик у пункта: news — непросмотренное в «Новом». */
+  counter?: 'news';
 }
 
 export const NAV: ReadonlyArray<INavItem> = [
@@ -29,6 +31,8 @@ export const NAV: ReadonlyArray<INavItem> = [
     permission: 'portal.read',
     section: ['/company/:id', '/projects/:id', '/documents/:id'],
   },
+  // «Новое» (24F): новые объекты, сроки ДОМ.РФ, дела и ФССП; у пункта — число непросмотренного.
+  { to: '/news', label: 'Новое', end: false, icon: 'inbox', permission: 'portal.read', counter: 'news' },
   { to: '/links', label: 'Связи', end: false, icon: 'links', permission: 'portal.read' },
   { to: '/admin', label: 'Админка', end: false, icon: 'admin', permission: 'admin.view' },
 ];

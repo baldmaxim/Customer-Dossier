@@ -64,12 +64,12 @@ describe('оболочка', () => {
     expect(document.activeElement).toBe(screen.getByRole('main'));
   });
 
-  it('меню в шапке и нижняя панель — одни пункты; «Компании» — первый пункт (ADR-016)', () => {
+  it('меню в шапке и нижняя панель — одни пункты; «Компании» — первый, «Новое» — второй (ADR-016, 24F)', () => {
     renderWithRouter(routes(), ['/?view=unidentified']);
     const header = screen.getByRole('navigation', { name: 'Основная навигация' });
     const tabbar = screen.getByRole('navigation', { name: 'Навигация' });
     for (const nav of [header, tabbar]) {
-      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Компании', 'Связи', 'Админка']);
+      expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Компании', 'Новое', 'Связи', 'Админка']);
       expect(within(nav).getByRole('link', { name: 'Компании' }).getAttribute('aria-current')).toBe('page');
     }
   });

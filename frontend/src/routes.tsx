@@ -8,11 +8,13 @@ import { CompaniesPage } from './pages/CompaniesPage';
 import { CompanyPage } from './pages/CompanyPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { LinksPage } from './pages/LinksPage';
+import { NewsPage } from './pages/NewsPage';
 import { ProjectPage } from './pages/ProjectPage';
 
 export const portalRoutes: RouteObject[] = [
   { path: '/', element: <CompaniesPage /> },
   { path: '/company/:id', element: <CompanyPage /> },
+  { path: '/news', element: <NewsPage /> },
   { path: '/links', element: <LinksPage /> },
   { path: '/documents/:id', element: <DocumentPage /> },
   { path: '/projects/:id', element: <ProjectPage /> },

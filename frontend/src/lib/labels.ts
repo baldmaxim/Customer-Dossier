@@ -22,6 +22,7 @@ import type {
   DeliveryShiftDirection,
   CourtRole,
   FinanceLine,
+  NewsKind,
   ParserApiConnectionState,
   ParserApiDataset,
   ParserApiMethod,
@@ -977,6 +978,23 @@ export const HOUSE_FORMS = ['дом', 'дома', 'домов'] as const;
 /** «по 1 дому», «по 2 домам», «по 5 домам». */
 export const HOUSE_DATIVE_FORMS = ['дому', 'домам', 'домам'] as const;
 export const APARTMENT_FORMS = ['квартира', 'квартиры', 'квартир'] as const;
+
+/** «Новое» (24F): вид новости. */
+export const NEWS_KIND_LABELS: Record<NewsKind, string> = {
+  new_project: 'новый объект',
+  deadline_shift: 'срок сдачи',
+  court_case: 'арбитраж',
+  fssp: 'ФССП',
+};
+
+type INewsSourceKind = 'publication' | 'registry' | 'kad' | 'fssp';
+
+export const NEWS_SOURCE_LABELS: Record<INewsSourceKind, string> = {
+  publication: 'публикация',
+  registry: 'ДОМ.РФ',
+  kad: 'картотека дел',
+  fssp: 'ФССП',
+};
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {
   admin: 'хранится в базе зашифрованным; на экран возвращаются только четыре последних символа',
