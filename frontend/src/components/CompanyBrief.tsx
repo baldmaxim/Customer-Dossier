@@ -22,9 +22,10 @@ import { Sparkline } from './charts/Sparkline';
 import { BriefTile } from './company/BriefTile';
 import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
 import { CHECKS_SECTION_ID } from './company/CompanyChecks';
+import { DELIVERY_SECTION_ID } from './company/CompanyDelivery';
 import { FINANCE_SECTION_ID } from './company/CompanyFinance';
 import { EVENTS_SECTION_ID } from './company/eventOrder';
-import { useCompanyBuilders, useCompanyChecks, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
+import { useCompanyBuilders, useCompanyChecks, useCompanyDelivery, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
 import { Button } from './ui/Button';
 import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
@@ -82,6 +83,9 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const checks = useCompanyChecks(companyId);
   const courts = checks.data?.courts?.view?.recognized ? checks.data.courts.view : null;
   const fssp = checks.data?.fssp?.view?.recognized ? checks.data.fssp.view : null;
+  // Дома ДОМ.РФ (24E): плитка — только если у компании есть дома в реестре.
+  const delivery = useCompanyDelivery(companyId);
+  const houses = (delivery.data?.houses ?? 0) > 0 ? delivery.data! : null;
   // Старый сервер маршрута не знает: без objects плитки нет, а не падение сводки.
   const generals = (builders.data?.items ?? []).filter(b => b.roles.includes('general_contractor'));
   const signals = query.data?.signals ?? null;
@@ -123,6 +127,19 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             detail={joinDetail([`за ${latestYear.year}`, latestYear.netProfit !== null ? `чистая прибыль ${formatMoney(latestYear.netProfit)}` : null])}
             to={{ search: '', hash: FINANCE_SECTION_ID }}
             linkText="Финансы и налоги"
+          />
+        )}
+        {houses && (
+          <BriefTile
+            label="Стройка"
+            value={formatCount(houses.inProgress.count)}
+            detail={joinDetail([
+              'домов строится',
+              `сдано за 24 мес. — ${formatCount(houses.delivered.recent)}`,
+              houses.pastDue.length > 0 ? `срок прошёл — ${formatCount(houses.pastDue.length)}` : null,
+            ])}
+            to={{ search: '', hash: DELIVERY_SECTION_ID }}
+            linkText="Сроки и продажи"
           />
         )}
         {courts && (

@@ -1920,6 +1920,41 @@ export interface ICompanyChecksResponse {
   bankruptcy: IParserApiBlock<IBankruptcyView> | null;
 }
 
+/** Сроки и продажи по снимкам ДОМ.РФ (этап 24E): GET /api/companies/:id/delivery. */
+export type DeliveryShiftDirection = 'later' | 'earlier' | 'unknown';
+
+export interface IDeliveryHouse {
+  externalRef: string;
+  name: string;
+  projectId: number | null;
+  projectName: string | null;
+  status: string | null;
+  delivered: boolean;
+  completion: string | null;
+  completionParsed: { year: number; quarter: number | null } | null;
+  pastDue: boolean;
+  apartments: number | null;
+  soldShare: number | null;
+  price: number | null;
+  date: string;
+  url: string;
+}
+
+export interface ICompanyDelivery {
+  format: string;
+  observedSince: string | null;
+  houses: number;
+  inProgress: { count: number; apartments: number };
+  delivered: { recent: number; recentApartments: number; older: number; windowFrom: string };
+  pastDue: IDeliveryHouse[];
+  shifts: Array<{ externalRef: string; name: string; from: string; to: string; at: string; direction: DeliveryShiftDirection }>;
+  sales: { apartments: number; share: number | null; counted: number; price: { min: number; max: number; counted: number } | null };
+  dynamics: { houses: number; sold: number; fromDate: string; toDate: string } | null;
+  unparsed: { completion: number; apartments: number };
+  list: IDeliveryHouse[];
+  truncated: boolean;
+}
+
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────
 
 export type DomRfCardKind = 'developer' | 'group';

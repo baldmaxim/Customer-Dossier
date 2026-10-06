@@ -19,6 +19,7 @@ import type {
   LlmKeySource,
   LlmProvider,
   CourtCaseType,
+  DeliveryShiftDirection,
   CourtRole,
   FinanceLine,
   ParserApiConnectionState,
@@ -964,6 +965,18 @@ export const COURT_TYPE_LABELS: Record<CourtCaseType, string> = {
   bankruptcy: 'о банкротстве',
   unknown: 'вид не указан',
 };
+
+/** Перенос срока сдачи между снимками ДОМ.РФ (24E): в какую сторону. */
+export const SHIFT_DIRECTION_LABELS: Record<DeliveryShiftDirection, string> = {
+  later: 'позже',
+  earlier: 'раньше',
+  unknown: 'сдвиг не распознан',
+};
+
+export const HOUSE_FORMS = ['дом', 'дома', 'домов'] as const;
+/** «по 1 дому», «по 2 домам», «по 5 домам». */
+export const HOUSE_DATIVE_FORMS = ['дому', 'домам', 'домам'] as const;
+export const APARTMENT_FORMS = ['квартира', 'квартиры', 'квартир'] as const;
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {
   admin: 'хранится в базе зашифрованным; на экран возвращаются только четыре последних символа',

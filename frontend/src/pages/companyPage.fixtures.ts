@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
+import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, IDeliveryHouse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -320,6 +320,41 @@ export const checksBody = (over: Partial<ICompanyChecksResponse> = {}): ICompany
   ...over,
 });
 
+/** Сроки и продажи по домам ДОМ.РФ (24E). По умолчанию домов нет — блока нет. */
+export const deliveryBody = (over: Partial<ICompanyDelivery> = {}): ICompanyDelivery => ({
+  format: 'delivery@1',
+  observedSince: null,
+  houses: 0,
+  inProgress: { count: 0, apartments: 0 },
+  delivered: { recent: 0, recentApartments: 0, older: 0, windowFrom: '2024-10-06' },
+  pastDue: [],
+  shifts: [],
+  sales: { apartments: 0, share: null, counted: 0, price: null },
+  dynamics: null,
+  unparsed: { completion: 0, apartments: 0 },
+  list: [],
+  truncated: false,
+  ...over,
+});
+
+export const deliveryHouse = (ref: string, over: Partial<IDeliveryHouse> = {}): IDeliveryHouse => ({
+  externalRef: ref,
+  name: `Дом ${ref}`,
+  projectId: 60,
+  projectName: 'Река',
+  status: 'Строится',
+  delivered: false,
+  completion: 'IV кв. 2027',
+  completionParsed: { year: 2027, quarter: 4 },
+  pastDue: false,
+  apartments: 400,
+  soldShare: 0.5,
+  price: 500_000,
+  date: '2026-10-02',
+  url: `https://xn--80az8a.xn--d1aqf.xn--p1ai/сервисы/каталог-новостроек/объект/${ref}`,
+  ...over,
+});
+
 export const datasetState = (dataset: IParserApiDatasetState['dataset'], over: Partial<IParserApiDatasetState> = {}): IParserApiDatasetState => ({
   dataset,
   outcome: 'found',
@@ -373,6 +408,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
   { match: 'GET /api/companies/7/finance', respond: () => ({ status: 200, body: financeBody() }) },
   { match: 'GET /api/companies/7/registry-checks', respond: () => ({ status: 200, body: checksBody() }) },
+  { match: 'GET /api/companies/7/delivery', respond: () => ({ status: 200, body: deliveryBody() }) },
   { match: 'GET /api/companies/7/site-projects', respond: () => ({ status: 200, body: { sites: [], projects: [], waiting: 0 } }) },
   { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },

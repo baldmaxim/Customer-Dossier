@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -58,6 +58,13 @@ export const useCompanyChecks = (companyId: number): UseQueryResult<ICompanyChec
   useQuery({
     queryKey: companyChecksKey(companyId),
     queryFn: () => api.get<ICompanyChecksResponse>(`/api/companies/${companyId}/registry-checks`),
+  });
+
+/** Сроки и продажи по домам ДОМ.РФ (24E). */
+export const useCompanyDelivery = (companyId: number): UseQueryResult<ICompanyDelivery> =>
+  useQuery({
+    queryKey: ['company', companyId, 'delivery'],
+    queryFn: () => api.get<ICompanyDelivery>(`/api/companies/${companyId}/delivery`),
   });
 
 /** События: последние 100 по дате события и общее число (total; у прежнего сервера его нет — тогда длина списка). */

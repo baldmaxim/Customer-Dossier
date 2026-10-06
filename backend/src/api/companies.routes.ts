@@ -11,6 +11,7 @@ import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { loadCardExtras } from '../companies/cardExtras.js';
 import { loadCompanyBuilders } from './companyBuilders.js';
+import { loadCompanyDelivery } from '../registry/delivery.js';
 import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
@@ -355,6 +356,16 @@ companiesRouter.get('/:id/objects', async (req, res) => {
     return;
   }
   res.json(await loadCompanyObjects(id));
+});
+
+/** Сроки и продажи по снимкам ДОМ.РФ (этап 24E): по каждому дому, переносы срока и продажи между снимками. */
+companiesRouter.get('/:id/delivery', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  res.json(await loadCompanyDelivery(getPool(), id));
 });
 
 /** «Кто строит для компании» (этап 24D): генподрядчики из ДОМ.РФ и из публикаций на объектах заказчика. */

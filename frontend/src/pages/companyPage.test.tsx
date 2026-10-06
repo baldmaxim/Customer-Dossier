@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, deliveryHouse, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -564,6 +564,39 @@ describe('Карточка компании', () => {
     expect(within(section).getByText('Сведения ФССП: запрос не удался')).toBeTruthy();
     expect(within(section).getByText(/fssp_ur: network — timeout/)).toBeTruthy();
     expect(within(section).getByRole('button', { name: 'Обновить' })).toBeTruthy();
+  });
+
+  it('сроки и продажи ДОМ.РФ: по домам — строится, сдано за 24 месяца, срок по декларации прошёл, переносы, продажи; плитка', async () => {
+    const late = deliveryHouse('101', { completion: 'II кв. 2026', pastDue: true });
+    fakeApi(
+      replace('GET /api/companies/7/delivery', () => ({
+        status: 200,
+        body: deliveryBody({
+          observedSince: '2026-09-21',
+          houses: 4,
+          inProgress: { count: 2, apartments: 800 },
+          delivered: { recent: 1, recentApartments: 300, older: 1, windowFrom: '2024-10-06' },
+          pastDue: [late],
+          shifts: [{ externalRef: '102', name: 'Дом 102', from: 'III кв. 2027', to: 'I кв. 2028', at: '2026-10-01', direction: 'later' }],
+          sales: { apartments: 800, share: 0.55, counted: 2, price: { min: 400_000, max: 600_000, counted: 2 } },
+          list: [late, deliveryHouse('102')],
+        }),
+      })),
+    );
+    renderCard();
+
+    const section = (await screen.findByRole('heading', { name: 'Сроки и продажи — ДОМ.РФ' })).closest('section')!;
+    expect(within(section).getByText('2 дома — 800 квартир')).toBeTruthy();
+    expect(within(section).getByText('1 дом — 300 квартир; раньше — 1')).toBeTruthy();
+    expect(within(section).getByText('1 дом — список ниже')).toBeTruthy();
+    expect(within(section).getByText(/Дом 102: III кв\. 2027 → I кв\. 2028 \(позже\), снимок 01\.10\.2026/)).toBeTruthy();
+    expect(within(section).getByText(/55\s?% — по 2 домам, 800 квартир/)).toBeTruthy();
+    expect(within(section).getByText('появятся, когда между снимками дома пройдёт 30 дней')).toBeTruthy();
+    expect(within(section).getAllByRole('link', { name: 'Дом 101' })[0]!.getAttribute('href')).toContain('/объект/101');
+    // Слов «просрочка» и «риск» нет — только факт реестра.
+    expect(section.textContent).not.toMatch(/просроч|риск/i);
+    const tile = screen.getAllByText('Стройка').map(n => n.closest('div')!).find(d => d.className.includes('tile'))!;
+    expect(tile.textContent).toMatch(/срок прошёл\s—\s1/);
   });
 
   it('кто строит для компании: компания нигде не заказчик — ни блока, ни плитки', async () => {
