@@ -1,9 +1,11 @@
-// «Источники» (бывший «Сбор»): вкладки по виду источника — каналы, сайты, ручная вставка.
+// «Источники» (бывший «Сбор»): вкладки по виду источника — каналы, сайты, ручная вставка — и «Сервисы»
+// (Контур.Фокус, parser-api.com, сайты компаний: справочники по реквизиту, а не источники публикаций).
 //
 // У каждой вкладки своя форма добавления и свой список: раньше каналы, сайты и ручные
 // способы шли одним списком, и столбец «Тип» был единственным, что их различало.
 // Вкладка живёт в адресе (?tab=), чтобы «Назад» и ссылка вели на ту же вкладку; фильтр
-// «Не собираются» (?problems=1) относится к списку вкладки и при её смене снимается.
+// «Не собираются» (?problems=1) относится к списку вкладки и при её смене снимается; так же — раскрытый
+// сервис (?open=) и фильтр его очереди.
 
 import { FC, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +14,7 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { api } from '../../api/client';
 import type { ISourceRow } from '../../api/types';
 import { SiteProbeDialog } from '../../components/admin/SiteProbeDialog';
+import { ServicesPanel } from '../../components/admin/ServicesPanel';
 import { SourceDetailsDialog } from '../../components/admin/SourceDetailsDialog';
 import { SourcesPanel } from '../../components/admin/SourcesPanel';
 import { isSourceEnabled, useSourceActions } from '../../components/admin/useSourceActions';
@@ -23,9 +26,10 @@ import { Tabs } from '../../components/ui/Tabs';
 import { enumParam, useUrlPatch, useUrlState } from '../../hooks/useUrlState';
 import { describeLoadError } from '../../lib/loadError';
 
-type Tab = ISourceRow['kind'];
+type Tab = ISourceRow['kind'] | 'services';
 
-const TABS: readonly Tab[] = ['telegram', 'website', 'manual'];
+const SOURCE_TABS: readonly ISourceRow['kind'][] = ['telegram', 'website', 'manual'];
+const TABS: readonly Tab[] = [...SOURCE_TABS, 'services'];
 const DEFAULT_TAB: Tab = 'telegram';
 
 // Коротко: на 360px три вкладки с числами должны помещаться в строку без прокрутки.
@@ -33,10 +37,11 @@ const TAB_TITLES: Record<Tab, string> = {
   telegram: 'Telegram',
   website: 'Сайты',
   manual: 'Вручную',
+  services: 'Сервисы',
 };
 
 /** Имя списка для диктора — полным словом. */
-const LIST_LABELS: Record<Tab, string> = {
+const LIST_LABELS: Record<ISourceRow['kind'], string> = {
   telegram: 'Telegram-каналы',
   website: 'Сайты',
   manual: 'Способы ручной передачи',
@@ -53,26 +58,32 @@ export const SourcesPage: FC = () => {
   });
 
   const sources = sourcesQuery.data?.items ?? [];
-  const items = TABS.map(value => {
-    const all = sources.filter(s => s.kind === value);
-    const on = all.filter(isSourceEnabled).length;
-    return {
-      value,
-      label: TAB_TITLES[value],
-      // Сколько всего — числом на вкладке; сколько из них включено — в пояснении и над списком.
-      count: sourcesQuery.isSuccess ? all.length : null,
-      hint: all.length > 0 ? `включено ${on} из ${all.length}` : undefined,
-    };
-  });
+  const items = [
+    ...SOURCE_TABS.map(value => {
+      const all = sources.filter(s => s.kind === value);
+      const on = all.filter(isSourceEnabled).length;
+      return {
+        value: value as Tab,
+        label: TAB_TITLES[value],
+        // Сколько всего — числом на вкладке; сколько из них включено — в пояснении и над списком.
+        count: sourcesQuery.isSuccess ? all.length : null,
+        hint: all.length > 0 ? `включено ${on} из ${all.length}` : undefined,
+      };
+    }),
+    { value: 'services' as Tab, label: TAB_TITLES.services, count: null, hint: 'Контур.Фокус, parser-api.com, сайты компаний' },
+  ];
 
-  // Одной записью истории: вкладка и снятый фильтр (два сеттера подряд затёрли бы друг друга).
-  const selectTab = (next: Tab): void => patch({ tab: next === DEFAULT_TAB ? null : next, problems: null }, { history: 'push' });
+  // Одной записью истории: вкладка и снятые фильтры (два сеттера подряд затёрли бы друг друга).
+  const selectTab = (next: Tab): void =>
+    patch({ tab: next === DEFAULT_TAB ? null : next, problems: null, open: null, filter: null, q: null }, { history: 'push' });
 
   return (
     <Stack gap={4}>
       <Tabs label="Вид источника" idBase={idBase} items={items} value={tab} onChange={selectTab} variant="pill" />
       <TabPanel idBase={idBase} value={tab} focusable={false}>
-        {sourcesQuery.isLoading ? (
+        {tab === 'services' ? (
+          <ServicesPanel />
+        ) : sourcesQuery.isLoading ? (
           <LoadingSkeleton label="Загружаю источники…" lines={6} height="48px" />
         ) : sourcesQuery.isError ? (
           <Callout

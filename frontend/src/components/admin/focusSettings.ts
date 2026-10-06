@@ -9,6 +9,3 @@ export const focusSettingsQuery = {
   queryKey: FOCUS_SETTINGS_KEY,
   queryFn: () => api.get<IFocusSettings>('/api/admin/focus'),
 };
-
-/** Адрес страницы Контур.Фокуса в админке. */
-export const FOCUS_PAGE_PATH = '/admin/sources/focus';

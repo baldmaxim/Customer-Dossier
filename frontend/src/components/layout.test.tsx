@@ -49,6 +49,7 @@ const routes = (): RouteObject[] => [
       { path: '/documents/:id', element: <PageHeader title="Публикация" /> },
       { path: '/admin/process/:id', element: <PageHeader title="Разбор от 30.09.2026" /> },
       { path: '/news', element: <PageHeader title="Новое" /> },
+      { path: '/admin/sources/domrf', element: <PageHeader title="наш.дом.рф" /> },
     ],
   },
 ];
@@ -112,6 +113,16 @@ describe('оболочка', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Назад' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
     expect(decodeURIComponent(router.state.location.search)).toBe('?q=мост');
+  });
+});
+
+describe('возврат со страницы наш.дом.рф', () => {
+  it('всегда «К сайтам», даже с историей: шаг назад вёл на прежнюю вкладку ДОМ.РФ', async () => {
+    const { router } = renderWithRouter(routes(), ['/']);
+    await act(() => router.navigate('/admin/sources/domrf?tab=objects'));
+    await act(() => router.navigate('/admin/sources/domrf?tab=cards'));
+    expect(screen.queryByRole('button', { name: 'Назад' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'К сайтам' }).getAttribute('href')).toBe('/admin/sources?tab=website');
   });
 });
 

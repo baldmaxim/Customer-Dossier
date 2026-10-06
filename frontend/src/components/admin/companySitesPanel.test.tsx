@@ -1,10 +1,10 @@
-// Страница «Сайты компаний» (этап 25A): поиск выключен — так и сказано, сайт можно указать вручную; очередь —
+// «Сайты компаний» (вкладка «Сервисы», раскрытием; этап 25A): поиск выключен — так и сказано, сайт можно указать вручную; очередь —
 // компании с кандидатами и решениями; фильтр — в адресе и уходит в запрос.
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { fakeApi, renderWithProviders } from '../../test/render';
-import { CompanySitesPage } from './CompanySitesPage';
+import { CompanySitesPanel } from './CompanySitesPanel';
 
 const TOTALS = { searched: 40, withPending: 1, confirmed: 12, notFound: 9, usedLastDay: 7 };
 
@@ -49,7 +49,7 @@ describe('Страница «Сайты компаний»', () => {
       { match: 'GET /api/admin/company-sites', respond: () => ({ status: 200, body: { mode: 'off', dailyLimit: 50, items: [ROW], matched: 1, totals: TOTALS } }) },
       { match: 'POST /api/admin/company-sites/7/manual', respond: () => ({ status: 200, body: { id: 20, companyId: 7, host: 'demo.ru' } }) },
     ]);
-    renderWithProviders(<CompanySitesPage />, '/admin/sources/company-sites');
+    renderWithProviders(<CompanySitesPanel />, '/admin/sources?tab=services&open=company-sites');
 
     expect(await screen.findByText('Поиск сайтов выключен')).toBeTruthy();
     expect(await screen.findByText('Поисков за сутки: 7 из 50. Каждый поиск платный (веб-поиск OpenRouter).')).toBeTruthy();

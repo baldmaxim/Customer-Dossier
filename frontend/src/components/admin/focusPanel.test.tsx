@@ -1,4 +1,4 @@
-// Страница Контур.Фокуса в админке: состояние словами, расход тарифа за сутки, ключ — только
+// Контур.Фокус в админке (вкладка «Сервисы», раскрытием): состояние словами, расход тарифа за сутки, ключ — только
 // администратору (поле очищается после сохранения, ключ на экран не возвращается), журнал запросов
 // подписями, а не машинными значениями. Имена переменных окружения — только в пояснении.
 
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { AccessPermission, IFocusKeyStatus, IFocusSettings } from '../../api/types';
 import { AuthContext, LOCAL_AUTH } from '../../hooks/useAuth';
 import { fakeApi, renderWithProviders } from '../../test/render';
-import { FocusPage } from './FocusPage';
+import { FocusPanel } from './FocusPanel';
 
 const SECRET = 'focus-test-secret-9f3a';
 
@@ -50,7 +50,7 @@ const OPERATOR: AccessPermission[] = ['portal.read', 'admin.view', 'sources.mana
 describe('страница Контур.Фокуса', () => {
   it('состояние: расписание, расход за сутки, покрытие; журнал — подписями', async () => {
     fakeApi([{ match: 'GET /api/admin/focus', respond: () => ({ status: 200, body: settings() }) }]);
-    renderWithProviders(as(ADMIN, <FocusPage />));
+    renderWithProviders(as(ADMIN, <FocusPanel />));
 
     expect(await screen.findByText(/по расписанию, раз в 14 дн\./)).toBeTruthy();
     expect(screen.getByText('6 из 100 — компания стоит два запроса')).toBeTruthy();
@@ -80,7 +80,7 @@ describe('страница Контур.Фокуса', () => {
         },
       },
     ]);
-    renderWithProviders(as(ADMIN, <FocusPage />));
+    renderWithProviders(as(ADMIN, <FocusPanel />));
 
     const field = (await screen.findByLabelText(/Ключ Контур\.Фокуса/)) as HTMLInputElement;
     expect(field.type).toBe('password');
@@ -96,7 +96,7 @@ describe('страница Контур.Фокуса', () => {
 
   it('оператор видит состояние, но не форму ключа', async () => {
     fakeApi([{ match: 'GET /api/admin/focus', respond: () => ({ status: 200, body: settings({ key: keyStatus({ source: 'env' }) }) }) }]);
-    renderWithProviders(as(OPERATOR, <FocusPage />));
+    renderWithProviders(as(OPERATOR, <FocusPanel />));
 
     expect(await screen.findByText('из настроек сервера')).toBeTruthy();
     expect(screen.getByText('Ключ задаёт администратор.')).toBeTruthy();
@@ -106,7 +106,7 @@ describe('страница Контур.Фокуса', () => {
 
   it('состояние не получено — ошибка с «Повторить», а не пустая страница', async () => {
     fakeApi([{ match: 'GET /api/admin/focus', respond: () => ({ status: 500, body: { error: 'сбой' } }) }]);
-    renderWithProviders(as(ADMIN, <FocusPage />));
+    renderWithProviders(as(ADMIN, <FocusPanel />));
     expect(await screen.findByText('Состояние Контур.Фокуса не получено')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeTruthy();
   });

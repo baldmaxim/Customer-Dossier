@@ -1,4 +1,4 @@
-// Страница parser-api.com в админке (этап 24A): расход за сутки и месяц, охват компаний «на контроле», ключ —
+// parser-api.com в админке (вкладка «Сервисы», раскрытием; этап 24A): расход за сутки и месяц, охват компаний «на контроле», ключ —
 // только администратору (поле очищается после сохранения, ключ на экран не возвращается, «принят» не говорим),
 // журнал — подписями и с пометкой оплаченного.
 
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { AccessPermission, ILlmKeyStatus, IParserApiSettings } from '../../api/types';
 import { AuthContext, LOCAL_AUTH } from '../../hooks/useAuth';
 import { fakeApi, renderWithProviders } from '../../test/render';
-import { ParserApiPage } from './ParserApiPage';
+import { ParserApiPanel } from './ParserApiPanel';
 
 const SECRET = 'parser-test-secret-4c1d';
 
@@ -53,7 +53,7 @@ const OPERATOR: AccessPermission[] = ['portal.read', 'admin.view', 'sources.mana
 describe('страница parser-api.com', () => {
   it('состояние: только кнопкой, расход по сервисам тарифа, пауза сервиса, охват; журнал — подписями, оплаченное помечено', async () => {
     fakeApi([{ match: 'GET /api/admin/parser-api', respond: () => ({ status: 200, body: settings() }) }]);
-    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    renderWithProviders(as(ADMIN, <ParserApiPanel />));
 
     expect(await screen.findByText('только кнопкой в карточке компании')).toBeTruthy();
     expect(screen.getByText('на каждый сервис: 20 за сутки, 200 за месяц — как тариф parser-api.com')).toBeTruthy();
@@ -76,7 +76,7 @@ describe('страница parser-api.com', () => {
         }),
       },
     ]);
-    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    renderWithProviders(as(ADMIN, <ParserApiPanel />));
     expect((await screen.findByText('подключён')).className).toMatch(/success/);
   });
 
@@ -84,13 +84,13 @@ describe('страница parser-api.com', () => {
     fakeApi([
       { match: 'GET /api/admin/parser-api', respond: () => ({ status: 200, body: settings({ key: keyStatus({ source: 'admin', hint: 'e97c' }), connection: { state: 'unverified', at: null } }) }) },
     ]);
-    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    renderWithProviders(as(ADMIN, <ParserApiPanel />));
     expect((await screen.findByText('ключ задан, ждёт первого ответа')).className).not.toMatch(/success/);
   });
 
   it('оператор видит состояние, но не форму ключа', async () => {
     fakeApi([{ match: 'GET /api/admin/parser-api', respond: () => ({ status: 200, body: settings() }) }]);
-    renderWithProviders(as(OPERATOR, <ParserApiPage />));
+    renderWithProviders(as(OPERATOR, <ParserApiPanel />));
 
     expect(await screen.findByText('Ключ задаёт администратор.')).toBeTruthy();
     expect(screen.queryByLabelText(/Ключ parser-api\.com/)).toBeNull();
@@ -108,7 +108,7 @@ describe('страница parser-api.com', () => {
         },
       },
     ]);
-    renderWithProviders(as(ADMIN, <ParserApiPage />));
+    renderWithProviders(as(ADMIN, <ParserApiPanel />));
 
     const input = (await screen.findByLabelText(/Ключ parser-api\.com/)) as HTMLInputElement;
     fireEvent.change(input, { target: { value: SECRET } });

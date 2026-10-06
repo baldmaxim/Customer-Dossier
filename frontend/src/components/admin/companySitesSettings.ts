@@ -11,6 +11,3 @@ export const companySitesSummaryQuery = {
   queryKey: COMPANY_SITES_SUMMARY_KEY,
   queryFn: () => api.get<ICompanySitesSummary>('/api/admin/company-sites/summary'),
 };
-
-/** Адрес страницы «Сайты компаний» в админке. */
-export const COMPANY_SITES_PAGE_PATH = '/admin/sources/company-sites';

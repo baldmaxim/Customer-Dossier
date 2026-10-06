@@ -27,15 +27,16 @@ export const adminRoutes: RouteObject[] = [
   { path: '/admin/collect', element: <KeepQueryRedirect to="/admin/sources" /> },
   // «Результат» разошёлся по разделам: журнал — в «Обработку», дубли и упоминания — в «Проверку».
   { path: '/admin/result', element: <Navigate to="/admin/review?tab=duplicates" replace /> },
+  // Контур.Фокус, parser-api.com и «Сайты компаний» — раскрытием на вкладке «Сервисы» (06.10.2026), не страницами.
+  { path: '/admin/sources/focus', element: <Navigate to="/admin/sources?tab=services&open=focus" replace /> },
+  { path: '/admin/sources/parser-api', element: <Navigate to="/admin/sources?tab=services&open=parser-api" replace /> },
+  { path: '/admin/sources/company-sites', element: <Navigate to="/admin/sources?tab=services&open=company-sites" replace /> },
   {
     path: '/admin',
     lazy: lazyPage(pages => pages.AdminLayout),
     children: [
       { path: 'sources', lazy: lazyPage(pages => pages.SourcesPage) },
       { path: 'sources/domrf', lazy: lazyPage(pages => pages.DomRfPage) },
-      { path: 'sources/focus', lazy: lazyPage(pages => pages.FocusPage) },
-      { path: 'sources/parser-api', lazy: lazyPage(pages => pages.ParserApiPage) },
-      { path: 'sources/company-sites', lazy: lazyPage(pages => pages.CompanySitesPage) },
       { path: 'process', lazy: lazyPage(pages => pages.RunsPage) },
       { path: 'process/:id', lazy: lazyPage(pages => pages.RunPage) },
       { path: 'review', lazy: lazyPage(pages => pages.ReviewQueuePage) },

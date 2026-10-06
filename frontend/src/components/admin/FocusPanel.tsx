@@ -1,4 +1,4 @@
-// Страница Контур.Фокуса (Админка → Источники → Сайты → Контур.Фокус, ADR-015): подключён ли сервис,
+// Контур.Фокус (Админка → Источники → Сервисы, раскрытием на месте; ADR-015): подключён ли сервис,
 // сколько запросов ушло за сутки, у скольких компаний есть сведения, ключ и журнал последних запросов.
 //
 // Сервис платный: лимит запросов и срок обновления меняет владелец в настройках сервера, а не кнопка.
@@ -9,19 +9,18 @@ import { FC } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { IFocusKeySaved, IFocusKeyStatus, IFocusRequestRow } from '../../api/types';
-import { FocusKeyForm } from '../../components/admin/FocusKeyForm';
-import { FOCUS_SETTINGS_KEY, focusSettingsQuery } from '../../components/admin/focusSettings';
-import { LoadingSkeleton } from '../../components/LoadingSkeleton';
-import { Button } from '../../components/ui/Button';
-import { Callout } from '../../components/ui/Callout';
-import { Cluster } from '../../components/ui/Cluster';
-import { DescriptionList } from '../../components/ui/DescriptionList';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { Hint } from '../../components/ui/Hint';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { Section } from '../../components/ui/Section';
-import { Stack } from '../../components/ui/Stack';
-import { useToast } from '../../components/ui/toast';
+import { FocusKeyForm } from './FocusKeyForm';
+import { FOCUS_SETTINGS_KEY, focusSettingsQuery } from './focusSettings';
+import { LoadingSkeleton } from '../LoadingSkeleton';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
+import { Cluster } from '../ui/Cluster';
+import { DescriptionList } from '../ui/DescriptionList';
+import { EmptyState } from '../ui/EmptyState';
+import { Hint } from '../ui/Hint';
+import { Section } from '../ui/Section';
+import { Stack } from '../ui/Stack';
+import { useToast } from '../ui/toast';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
 import {
@@ -34,7 +33,7 @@ import {
   formatDateTime,
 } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
-import styles from './FocusPage.module.css';
+import styles from './ServicePanel.module.css';
 
 const keyLine = (key: IFocusKeyStatus): string =>
   key.source === 'admin' && key.hint ? `${LLM_KEY_SOURCE_LABELS.admin}, оканчивается на …${key.hint}` : LLM_KEY_SOURCE_LABELS[key.source];
@@ -61,7 +60,7 @@ const RequestLine: FC<{ row: IFocusRequestRow }> = ({ row }) => (
   </li>
 );
 
-export const FocusPage: FC = () => {
+export const FocusPanel: FC = () => {
   const canManage = useCan('focus.manage');
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -69,11 +68,10 @@ export const FocusPage: FC = () => {
   const refresh = (): void => void queryClient.invalidateQueries({ queryKey: FOCUS_SETTINGS_KEY });
 
   const header = (
-    <PageHeader
-      eyebrow="Админка · Источники · Сайты"
-      title="Контур.Фокус"
-      lead="Сведения ЕГРЮЛ/ЕГРИП о компаниях портала по ИНН и ОГРН: статус, руководитель, адрес, деятельность, учредители. Сервис платный — каждый запрос списывается с тарифа."
-    />
+    <p className={styles.muted}>
+      Сведения ЕГРЮЛ/ЕГРИП о компаниях портала по ИНН и ОГРН: статус, руководитель, адрес, деятельность, учредители. Сервис
+      платный — каждый запрос списывается с тарифа.
+    </p>
   );
 
   if (settings.isLoading) {
@@ -100,7 +98,7 @@ export const FocusPage: FC = () => {
   return (
     <Stack gap={4}>
       {header}
-      <Section title="Состояние" note="лимит и срок меняются в настройках сервера">
+      <Section title="Состояние" note="лимит и срок меняются в настройках сервера" variant="plain">
         <Stack gap={3}>
           <DescriptionList
             items={[
@@ -131,7 +129,7 @@ export const FocusPage: FC = () => {
         </Stack>
       </Section>
 
-      <Section title="Ключ Контур.Фокуса">
+      <Section title="Ключ Контур.Фокуса" variant="plain">
         <Stack gap={3}>
           <DescriptionList
             items={[
@@ -182,7 +180,7 @@ export const FocusPage: FC = () => {
         </Stack>
       </Section>
 
-      <Section title="Последние запросы" note="новые сверху">
+      <Section title="Последние запросы" note="новые сверху" variant="plain">
         {recent.length === 0 ? (
           <EmptyState size="sm">Запросов к Контур.Фокусу ещё не было.</EmptyState>
         ) : (

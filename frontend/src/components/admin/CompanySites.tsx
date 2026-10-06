@@ -72,6 +72,7 @@ export const CompanySites: FC = () => {
   return (
     <Section
       title="Компании"
+      variant="plain"
       note={totals ? `искали ${formatCount(totals.searched)}, сайт привязан у ${formatCount(totals.confirmed)}` : undefined}
       actions={
         <Cluster gap={2} align="center">

@@ -9,6 +9,3 @@ export const parserApiSettingsQuery = {
   queryKey: PARSER_API_SETTINGS_KEY,
   queryFn: () => api.get<IParserApiSettings>('/api/admin/parser-api'),
 };
-
-/** Адрес страницы parser-api.com в админке. */
-export const PARSER_API_PAGE_PATH = '/admin/sources/parser-api';

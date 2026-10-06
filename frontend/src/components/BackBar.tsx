@@ -3,7 +3,8 @@
 //
 // Есть история — шаг назад (туда, откуда пришли: поиск с тем же запросом, прежняя вкладка).
 // Нет истории (прямая ссылка, перезагрузка) — к родительскому списку, а не на главную:
-// с разбора — в «Обработку», с публикации — в ленту публикаций.
+// с разбора — в «Обработку», с публикации — в ленту публикаций. alwaysParent — всегда к родителю:
+// у наш.дом.рф свои вкладки, и шаг назад возвращал на прежнюю вкладку, а не к «Сайтам» (06.10.2026).
 //
 // Страница может спрятать возврат (пост открыт вместо списка на телефоне и свой «К списку»
 // рядом): data-hide-backbar на любом элементе внутри main — Layout.module.css.
@@ -19,6 +20,8 @@ interface IDetailRoute {
   parent: string;
   /** Подпись без истории: куда именно вернёт ссылка. */
   parentLabel: string;
+  /** Возврат всегда к родителю, а не шагом по истории. */
+  alwaysParent?: boolean;
 }
 
 export const DETAIL_ROUTES: ReadonlyArray<IDetailRoute> = [
@@ -28,9 +31,7 @@ export const DETAIL_ROUTES: ReadonlyArray<IDetailRoute> = [
   { pattern: '/documents/:id', parent: '/', parentLabel: 'К компаниям' },
   { pattern: '/admin/process/:id', parent: '/admin/process', parentLabel: 'К разборам' },
   { pattern: '/admin/users/:id', parent: '/admin/users', parentLabel: 'К пользователям' },
-  { pattern: '/admin/sources/domrf', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
-  { pattern: '/admin/sources/focus', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
-  { pattern: '/admin/sources/parser-api', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
+  { pattern: '/admin/sources/domrf', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам', alwaysParent: true },
 ];
 
 export const BackBar: FC = () => {
@@ -40,7 +41,7 @@ export const BackBar: FC = () => {
   if (!route) return null;
 
   // key === 'default' — первая запись истории: возвращаться некуда.
-  const hasHistory = location.key !== 'default';
+  const hasHistory = location.key !== 'default' && !route.alwaysParent;
 
   return (
     <div className={styles.backbar}>

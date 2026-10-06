@@ -1,4 +1,4 @@
-// Страница parser-api.com (Админка → Источники → Сайты → parser-api.com, этап 24A): подключён ли сервис,
+// parser-api.com (Админка → Источники → Сервисы, раскрытием на месте; этап 24A): подключён ли сервис,
 // расход за сутки и месяц, сколько компаний «на контроле» проверяется, ключ и журнал последних запросов.
 //
 // Тариф маленький (бесплатно — 200 запросов в месяц), поэтому по расписанию проверяются только компании
@@ -9,20 +9,19 @@ import { FC } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { ILlmKeyStatus, IParserApiRequestRow, IParserApiServiceUsage, IParserApiSettings } from '../../api/types';
-import { ParserApiConnectionBadge } from '../../components/admin/ParserApiConnectionBadge';
-import { parserApiSettingsQuery, PARSER_API_SETTINGS_KEY } from '../../components/admin/parserApiSettings';
-import { ServiceKeyForm, type IServiceKeySaved } from '../../components/admin/ServiceKeyForm';
-import { LoadingSkeleton } from '../../components/LoadingSkeleton';
-import { Button } from '../../components/ui/Button';
-import { Callout } from '../../components/ui/Callout';
-import { Cluster } from '../../components/ui/Cluster';
-import { DescriptionList } from '../../components/ui/DescriptionList';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { Hint } from '../../components/ui/Hint';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { Section } from '../../components/ui/Section';
-import { Stack } from '../../components/ui/Stack';
-import { useToast } from '../../components/ui/toast';
+import { ParserApiConnectionBadge } from './ParserApiConnectionBadge';
+import { parserApiSettingsQuery, PARSER_API_SETTINGS_KEY } from './parserApiSettings';
+import { ServiceKeyForm, type IServiceKeySaved } from './ServiceKeyForm';
+import { LoadingSkeleton } from '../LoadingSkeleton';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
+import { Cluster } from '../ui/Cluster';
+import { DescriptionList } from '../ui/DescriptionList';
+import { EmptyState } from '../ui/EmptyState';
+import { Hint } from '../ui/Hint';
+import { Section } from '../ui/Section';
+import { Stack } from '../ui/Stack';
+import { useToast } from '../ui/toast';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
 import {
@@ -35,7 +34,7 @@ import {
   formatDateTime,
 } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
-import styles from './FocusPage.module.css';
+import styles from './ServicePanel.module.css';
 
 const keyLine = (key: ILlmKeyStatus): string =>
   key.source === 'admin' && key.hint ? `${LLM_KEY_SOURCE_LABELS.admin}, оканчивается на …${key.hint}` : LLM_KEY_SOURCE_LABELS[key.source];
@@ -72,7 +71,7 @@ const serviceUsageText = (s: IParserApiServiceUsage, limits: IParserApiSettings[
   return s.paused ? `${usage} · пауза до ${formatDateTime(s.paused.until)} — ${PARSER_API_OUTCOME_LABELS[s.paused.reason]}` : usage;
 };
 
-export const ParserApiPage: FC = () => {
+export const ParserApiPanel: FC = () => {
   const canManage = useCan('parserapi.manage');
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -80,11 +79,11 @@ export const ParserApiPage: FC = () => {
   const refresh = (): void => void queryClient.invalidateQueries({ queryKey: PARSER_API_SETTINGS_KEY });
 
   const header = (
-    <PageHeader
-      eyebrow="Админка · Источники · Сайты"
-      title="parser-api.com"
-      lead="Открытые реестры о компаниях портала по ИНН: бухгалтерская отчётность (ГИР БО), налоги и численность («Прозрачный бизнес»), арбитражные дела, исполнительные производства, банкротство (Федресурс). Каждый успешный ответ списывается с тарифа."
-    />
+    <p className={styles.muted}>
+      Открытые реестры о компаниях портала по ИНН: бухгалтерская отчётность (ГИР БО), налоги и численность («Прозрачный
+      бизнес»), арбитражные дела, исполнительные производства, банкротство (Федресурс). Каждый успешный ответ списывается
+      с тарифа.
+    </p>
   );
 
   if (settings.isLoading) {
@@ -111,7 +110,7 @@ export const ParserApiPage: FC = () => {
   return (
     <Stack gap={4}>
       {header}
-      <Section title="Состояние" note="лимиты меняются в настройках сервера">
+      <Section title="Состояние" note="лимиты меняются в настройках сервера" variant="plain">
         <Stack gap={3}>
           <DescriptionList
             items={[
@@ -152,7 +151,7 @@ export const ParserApiPage: FC = () => {
         </Stack>
       </Section>
 
-      <Section title="Ключ parser-api.com">
+      <Section title="Ключ parser-api.com" variant="plain">
         <Stack gap={3}>
           <DescriptionList
             items={[
@@ -206,7 +205,7 @@ export const ParserApiPage: FC = () => {
         </Stack>
       </Section>
 
-      <Section title="Последние запросы" note="новые сверху">
+      <Section title="Последние запросы" note="новые сверху" variant="plain">
         {recent.length === 0 ? (
           <EmptyState size="sm">Запросов к parser-api.com ещё не было.</EmptyState>
         ) : (
