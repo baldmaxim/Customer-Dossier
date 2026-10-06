@@ -59,6 +59,8 @@ const TG_OPTIONAL = {
   edited: '.tgme_widget_message_edited',
   meta: '.tgme_widget_message_meta, .tgme_widget_message_footer',
   grouped: '.tgme_widget_message_grouped_wrap',
+  /** Цитата сообщения, на которое отвечает пост: её .tgme_widget_message_text — чужой текст. */
+  reply: '.tgme_widget_message_reply',
 } as const;
 
 export interface ITelegramWebForward {
@@ -224,7 +226,10 @@ export const parseChannelPage = (html: string, channel: string): IParsedChannelP
     const dataPost = inner.attr('data-post') ?? wrap.attr('data-post') ?? '';
     if (!dataPost) return;
 
-    const body = extractText(wrap.find(TG_SELECTORS.text).first().html());
+    // В ответе первым идёт цитата сообщения, на которое отвечают: её текст — чужой. До 06.10.2026 бралось первое
+    // вхождение, и ответ сохранялся обрезанной цитатой («…» на 263 символа) вместо собственного текста.
+    const ownText = wrap.find(TG_SELECTORS.text).filter((_, el) => $(el).closest(TG_OPTIONAL.reply).length === 0).first();
+    const body = extractText(ownText.html());
     // Пост без текста — фото/видео/стикер. Извлекать нечего.
     if (body.length === 0) return;
 

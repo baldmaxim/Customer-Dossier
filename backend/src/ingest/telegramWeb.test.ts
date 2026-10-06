@@ -82,6 +82,29 @@ describe('полнота поста (TC-016)', () => {
   });
 });
 
+describe('ответ на сообщение (06.10.2026)', () => {
+  const reply = (own: string): string => `<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="ch/36028">
+      <a class="tgme_widget_message_reply" href="https://t.me/ch/32630">
+        <div class="tgme_widget_message_author"><span class="tgme_widget_message_author_name">Канал</span></div>
+        <div class="tgme_widget_message_text js-message_reply_text">Вот и начали распродаваться активы KR Properties…</div>
+      </a>
+      ${own}
+      </div></div>`;
+
+  it('текст поста — собственный, а не цитата сообщения, на которое он отвечает', () => {
+    const post = parseChannelPage(
+      reply('<div class="tgme_widget_message_text js-message_text">October Group продолжает перекраивать проект в Столярном переулке.</div>'),
+      'ch',
+    ).posts[0]!;
+    expect(post.body).toBe('October Group продолжает перекраивать проект в Столярном переулке.');
+    expect(post.completeness).toBe('full');
+  });
+
+  it('ответ без своего текста (только цитата) — постом с текстом не считается', () => {
+    expect(parseChannelPage(reply(''), 'ch').posts).toEqual([]);
+  });
+});
+
 describe('looksLikeLayoutChange', () => {
   it('молчащий канал (маленькая страница, ноль постов) — не слом вёрстки', () => {
     const parsed = parseChannelPage('<html><body>пусто</body></html>', 'x');
