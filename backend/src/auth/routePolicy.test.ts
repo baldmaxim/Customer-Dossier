@@ -90,6 +90,9 @@ const WRITES: Record<string, string> = {
   'DELETE /companies/:id/dismissal': 'companies.manage',
   'PUT /admin/focus/key': 'focus.manage',
   'DELETE /admin/focus/key': 'focus.manage',
+  'POST /companies/:id/parser-api/refresh': 'sources.manage',
+  'PUT /admin/parser-api/key': 'parserapi.manage',
+  'DELETE /admin/parser-api/key': 'parserapi.manage',
 };
 
 describe('таблица прав маршрутов', () => {
@@ -134,6 +137,13 @@ describe('таблица прав маршрутов', () => {
     expect(permissionFor('GET', '/companies/5/focus')).toBe('portal.read');
     expect(permissionFor('POST', '/companies/5/focus/refresh')).toBe('sources.manage');
     expect(ROLE_PERMISSIONS.viewer.includes('sources.manage')).toBe(false);
+  });
+
+  it('parser-api.com: ключ — только администратор, «Обновить» — оператор, состояние читает любой вошедший (этап 24A)', () => {
+    for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('parserapi.manage'), role).toBe(role === 'admin');
+    expect(permissionFor('GET', '/admin/parser-api')).toBe('admin.view');
+    expect(permissionFor('GET', '/companies/5/parser-api')).toBe('portal.read');
+    expect(permissionFor('POST', '/companies/5/parser-api/refresh')).toBe('sources.manage');
   });
 
   it('заявку на доступ рассматривает только администратор; подаёт её роутер входа, не таблица', () => {

@@ -1513,6 +1513,7 @@ export type AccessPermission =
   | 'users.manage'
   | 'llm.manage'
   | 'focus.manage'
+  | 'parserapi.manage'
   | 'companies.manage';
 
 export interface IAuthUser {
@@ -1718,6 +1719,57 @@ export interface IFocusSettings {
 export interface IFocusKeySaved {
   key: IFocusKeyStatus;
   check: { verdict: 'accepted' | 'unknown'; error: string | null };
+}
+
+// ─── parser-api.com (этап 24A) ───────────────────────────────────────────────
+
+export type ParserApiDataset = 'finance' | 'tax' | 'courts' | 'fssp' | 'bankruptcy';
+export type ParserApiMethod = 'bo_search' | 'bo_details' | 'pb_org' | 'kad_search' | 'fssp_ur' | 'fedresurs_ur' | 'fedresurs_org' | 'key_check';
+export type ParserApiRequestOutcome =
+  | 'pending'
+  | 'ok'
+  | 'key_rejected'
+  | 'subscription_expired'
+  | 'ip_rejected'
+  | 'daily_limit'
+  | 'monthly_limit'
+  | 'bad_request'
+  | 'bad_response'
+  | 'http_error'
+  | 'network';
+
+export interface IParserApiRequestRow {
+  requestedAt: string;
+  method: ParserApiMethod;
+  inn: string | null;
+  page: number | null;
+  httpStatus: number | null;
+  apiCode: number | null;
+  outcome: ParserApiRequestOutcome;
+  billable: boolean;
+  error: string | null;
+  actor: string;
+}
+
+export interface IParserApiSettings {
+  key: ILlmKeyStatus;
+  enabled: boolean;
+  limits: { daily: number; monthly: number };
+  kadMaxPages: number;
+  usage: { day: number; month: number };
+  coverage: { watched: number; checked: number; failing: number; due: number };
+  recent: IParserApiRequestRow[];
+}
+
+/** Состояние набора сведений компании: не проверяли (outcome null без ошибки), есть, нет, часть, ошибка. */
+export interface IParserApiDatasetState {
+  dataset: ParserApiDataset;
+  outcome: 'found' | 'not_found' | 'partial' | null;
+  checkedAt: string | null;
+  nextCheckAt: string | null;
+  attemptCount: number;
+  lastError: string | null;
+  record: { fetchedAt: string; complete: boolean; missing: string[] } | null;
 }
 
 // ─── Найдено на ДОМ.РФ (этап 20D) ────────────────────────────────────────────

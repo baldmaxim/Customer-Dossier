@@ -20,6 +20,7 @@
     "review:model": "tsx src/resolve/modelReviewCli.ts",
     "metrics:refresh": "tsx src/metrics/cli.ts",
     "focus": "tsx src/focus/cli.ts",
+    "parserapi": "tsx src/parserApi/cli.ts",
     "backfill:revisions": "tsx src/revisions/cli.ts",
     "backfill:assertions": "tsx src/assertions/cli.ts",
     "seed:test-revisions": "tsx src/__tests__/integration/seedRevisionsDemo.ts",

@@ -51,6 +51,10 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
   { methods: 'write', pattern: /^\/admin\/focus(\/|$)/, permission: 'focus.manage' },
   { methods: 'write', pattern: /^\/companies\/[^/]+\/focus\/refresh$/, permission: 'sources.manage' },
 
+  // parser-api.com (этап 24A): ключ — только администратор; «Обновить» в карточке — запросы тарифа.
+  { methods: 'write', pattern: /^\/admin\/parser-api(\/|$)/, permission: 'parserapi.manage' },
+  { methods: 'write', pattern: /^\/companies\/[^/]+\/parser-api\/refresh$/, permission: 'sources.manage' },
+
   // Компании от оператора (ADR-016): завести по реквизиту, «На контроле».
   { methods: 'write', pattern: /^\/companies$/, permission: 'companies.manage' },
   { methods: 'write', pattern: /^\/companies\/[^/]+\/watch$/, permission: 'companies.manage' },

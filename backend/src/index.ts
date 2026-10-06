@@ -21,6 +21,8 @@ import { loadStoredLlmKey } from './settings/llmKey.js';
 import { startDomRfBrowserWorker } from './ingest/registry/domrfBrowserWorker.js';
 import { startFocusScheduler } from './focus/scheduler.js';
 import { loadStoredFocusKey } from './settings/focusKey.js';
+import { startParserApiScheduler } from './parserApi/scheduler.js';
+import { loadStoredParserApiKey } from './settings/parserApiKey.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -178,6 +180,15 @@ const main = async (): Promise<void> => {
     console.warn('[focus] ключ Контур.Фокуса из админки не расшифровывается (сменился пароль базы?) — задайте его в админке заново');
   }
 
+  // Ключ parser-api.com из админки — тоже до фоновых заданий (этап 24A).
+  const parserKey = await loadStoredParserApiKey().catch(err => {
+    console.warn(`[parser-api] ключ из админки не прочитан: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  });
+  if (parserKey?.problem === 'undecryptable') {
+    console.warn('[parser-api] ключ parser-api.com из админки не расшифровывается (сменился пароль базы?) — задайте его в админке заново');
+  }
+
   const decision = startBackgroundJobs(
     env,
     {
@@ -186,6 +197,7 @@ const main = async (): Promise<void> => {
       pipeline: startPipelineWorker,
       metrics: startMetricsScheduler,
       focus: startFocusScheduler,
+      parserApi: startParserApiScheduler,
       bot: signal => void runBotLoop(signal),
     },
     controller.signal,

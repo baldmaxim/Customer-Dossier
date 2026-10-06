@@ -30,6 +30,7 @@ export const DETAIL_ROUTES: ReadonlyArray<IDetailRoute> = [
   { pattern: '/admin/users/:id', parent: '/admin/users', parentLabel: 'К пользователям' },
   { pattern: '/admin/sources/domrf', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
   { pattern: '/admin/sources/focus', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
+  { pattern: '/admin/sources/parser-api', parent: '/admin/sources?tab=website', parentLabel: 'К сайтам' },
 ];
 
 export const BackBar: FC = () => {

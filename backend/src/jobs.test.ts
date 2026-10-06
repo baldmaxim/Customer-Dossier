@@ -13,6 +13,7 @@ const starters = (): IJobStarters & { calls: string[] } => {
     pipeline: vi.fn(() => void calls.push('pipeline')),
     metrics: vi.fn(() => void calls.push('metrics')),
     focus: vi.fn(() => void calls.push('focus')),
+    parserApi: vi.fn(() => void calls.push('parserApi')),
     bot: vi.fn(() => void calls.push('bot')),
   };
 };
@@ -28,6 +29,7 @@ const flags = (over: Partial<IJobFlags> = {}): IJobFlags => ({
   MODEL_REVIEW_APPLY: false,
   METRICS_AUTO_REFRESH: false,
   FOCUS_ENABLED: false,
+  PARSER_API_ENABLED: false,
   BOT_ENABLED: false,
   TG_BOT_TOKEN: '',
   ...over,
@@ -115,5 +117,13 @@ describe('startBackgroundJobs', () => {
     expect(on.calls).toEqual(['focus']);
     const off = startBackgroundJobs(flags(), starters(), new AbortController().signal);
     expect(off.notes.some(n => n.includes('FOCUS_ENABLED=false'))).toBe(true);
+  });
+
+  it('проверка в parser-api.com по расписанию — своим флагом, по умолчанию выключена (этап 24A)', () => {
+    const on = starters();
+    expect(startBackgroundJobs(flags({ PARSER_API_ENABLED: true }), on, new AbortController().signal).started).toEqual(['parserApi']);
+    expect(on.calls).toEqual(['parserApi']);
+    const off = startBackgroundJobs(flags(), starters(), new AbortController().signal);
+    expect(off.notes.some(n => n.includes('PARSER_API_ENABLED=false'))).toBe(true);
   });
 });

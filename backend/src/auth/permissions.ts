@@ -28,6 +28,8 @@ export const PERMISSIONS = [
   'llm.manage',
   // Контур.Фокус: ключ API в админке («Источники» → Контур.Фокус, ADR-015).
   'focus.manage',
+  // parser-api.com: ключ API в админке («Источники» → parser-api.com, этап 24A).
+  'parserapi.manage',
   // Компании: завести по ИНН/ОГРН, поставить на контроль и снять (ADR-016).
   'companies.manage',
 ] as const;
@@ -38,9 +40,9 @@ export const ROLES = ['admin', 'operator', 'viewer'] as const;
 
 export type Role = (typeof ROLES)[number];
 
-// Только администратору: пользователи и ключи платных сервисов — ключ OpenRouter и ключ Контур.Фокуса
-// это деньги счёта.
-const ADMIN_ONLY: readonly Permission[] = ['users.manage', 'llm.manage', 'focus.manage'];
+// Только администратору: пользователи и ключи платных сервисов — ключи OpenRouter, Контур.Фокуса и
+// parser-api.com это деньги счёта и лимит тарифа.
+const ADMIN_ONLY: readonly Permission[] = ['users.manage', 'llm.manage', 'focus.manage', 'parserapi.manage'];
 const OPERATOR_PERMISSIONS = PERMISSIONS.filter(p => !ADMIN_ONLY.includes(p));
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {

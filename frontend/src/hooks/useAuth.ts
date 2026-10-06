@@ -30,6 +30,7 @@ const ALL_PERMISSIONS: AccessPermission[] = [
   'users.manage',
   'llm.manage',
   'focus.manage',
+  'parserapi.manage',
   'companies.manage',
 ];
 

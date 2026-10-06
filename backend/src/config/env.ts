@@ -169,6 +169,18 @@ export const parseEnv = (source: EnvSource) => {
     FOCUS_DAILY_LIMIT: parsePositiveInt('FOCUS_DAILY_LIMIT', source.FOCUS_DAILY_LIMIT, 100),
     // Через сколько дней сведения компании запрашиваются снова.
     FOCUS_REFRESH_DAYS: parsePositiveInt('FOCUS_REFRESH_DAYS', source.FOCUS_REFRESH_DAYS, 14),
+    // parser-api.com (этап 24A, ADR-017): ГИР БО, «Прозрачный бизнес», картотека дел, ФССП, Федресурс по ИНН.
+    // Каждый успешный ответ списывается с тарифа (бесплатно — 200 в месяц). Без ключа запросов нет при
+    // любом флаге. PARSER_API_ENABLED — проверка компаний «на контроле» по расписанию; кнопка в карточке
+    // работает и без него. По умолчанию выключено: включает владелец после пробы.
+    PARSER_API_ENABLED: parseStrictBool('PARSER_API_ENABLED', source.PARSER_API_ENABLED, false),
+    // Секрет: не логируется и не входит в manifest. Ключ из админки главнее.
+    PARSER_API_KEY: source.PARSER_API_KEY?.trim() ?? '',
+    // Предел запросов портала (расписание, кнопка и проба вместе): скользящие сутки и календарный месяц.
+    PARSER_API_DAILY_LIMIT: parsePositiveInt('PARSER_API_DAILY_LIMIT', source.PARSER_API_DAILY_LIMIT, 20),
+    PARSER_API_MONTHLY_LIMIT: parsePositiveInt('PARSER_API_MONTHLY_LIMIT', source.PARSER_API_MONTHLY_LIMIT, 200),
+    // Страниц картотеки арбитражных дел на компанию: больше — набор помечается неполным, а не «дел нет».
+    PARSER_API_KAD_MAX_PAGES: parsePositiveInt('PARSER_API_KAD_MAX_PAGES', source.PARSER_API_KAD_MAX_PAGES, 3),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

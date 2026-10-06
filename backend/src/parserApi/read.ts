@@ -1,0 +1,101 @@
+// Чтение parser-api.com для карточки и админки (этап 24A): состояние наборов по ИНН и последний снимок.
+//
+// Состояние говорит словами, а не нулём: не проверяли (строки нет), проверено — есть / записей нет / получена
+// часть, последняя попытка не удалась (ошибка и когда повтор). «Проверено» — время последней проверки,
+// «сведения от» — время первого получения этого же ответа: повтор без изменений даты сведений не обновляет.
+
+import type { DbExecutor } from '../db/pool.js';
+import { PARSER_API_DATASETS, type DatasetOutcome, type IDatasetPayload, type ParserApiDataset } from './datasets.js';
+
+export interface IParserApiDatasetState {
+  dataset: ParserApiDataset;
+  outcome: DatasetOutcome | null;
+  checkedAt: string | null;
+  nextCheckAt: string | null;
+  attemptCount: number;
+  lastError: string | null;
+  /** Последний снимок набора: когда получен впервые, полный ли, чего в нём нет. */
+  record: { fetchedAt: string; complete: boolean; missing: string[] } | null;
+}
+
+const iso = (value: Date | string | null): string | null => (value instanceof Date ? value.toISOString() : value);
+
+export const loadParserApiStates = async (db: DbExecutor, inn: string): Promise<IParserApiDatasetState[]> => {
+  const [checks, records] = await Promise.all([
+    db.query<{ dataset: ParserApiDataset; outcome: DatasetOutcome | null; checked_at: Date | null; next_check_at: Date; attempt_count: number; last_error: string | null }>(
+      `SELECT dataset, outcome, checked_at, next_check_at, attempt_count, last_error FROM parser_api_checks WHERE inn = $1`,
+      [inn],
+    ),
+    db.query<{ dataset: ParserApiDataset; fetched_at: Date; complete: boolean; missing: string[] | null }>(
+      `SELECT DISTINCT ON (dataset) dataset, fetched_at, complete,
+              ARRAY(SELECT jsonb_array_elements_text(coalesce(payload->'missing', '[]'::jsonb))) AS missing
+       FROM parser_api_records WHERE inn = $1
+       ORDER BY dataset, fetched_at DESC, id DESC`,
+      [inn],
+    ),
+  ]);
+  return PARSER_API_DATASETS.map(dataset => {
+    const check = checks.rows.find(r => r.dataset === dataset);
+    const record = records.rows.find(r => r.dataset === dataset);
+    return {
+      dataset,
+      outcome: check?.outcome ?? null,
+      checkedAt: iso(check?.checked_at ?? null),
+      nextCheckAt: iso(check?.next_check_at ?? null),
+      attemptCount: check?.attempt_count ?? 0,
+      lastError: check?.last_error ?? null,
+      record: record ? { fetchedAt: iso(record.fetched_at)!, complete: record.complete, missing: record.missing ?? [] } : null,
+    };
+  });
+};
+
+/** Последний снимок набора целиком — для карт 24B/24C. */
+export const latestParserApiRecord = async (
+  db: DbExecutor,
+  inn: string,
+  dataset: ParserApiDataset,
+): Promise<{ payload: IDatasetPayload; fetchedAt: string; complete: boolean } | null> => {
+  const row = (
+    await db.query<{ payload: IDatasetPayload; fetched_at: Date; complete: boolean }>(
+      `SELECT payload, fetched_at, complete FROM parser_api_records WHERE inn = $1 AND dataset = $2
+       ORDER BY fetched_at DESC, id DESC LIMIT 1`,
+      [inn, dataset],
+    )
+  ).rows[0];
+  return row ? { payload: row.payload, fetchedAt: iso(row.fetched_at)!, complete: row.complete } : null;
+};
+
+export interface IParserApiCoverage {
+  /** Компании «на контроле» с одним ИНН — их проверяет расписание. */
+  watched: number;
+  /** Проверенные наборы (есть / нет / часть) и наборы с неудачей последней попытки. */
+  checked: number;
+  failing: number;
+  /** Наборы компаний «на контроле», которые ждут проверки. */
+  due: number;
+}
+
+export const parserApiCoverage = async (db: DbExecutor): Promise<IParserApiCoverage> => {
+  const row = (
+    await db.query<IParserApiCoverage>(
+      `WITH watched AS (
+         SELECT w.company_id, array_agg(DISTINCT ei.value) AS inns
+         FROM company_watch w
+         JOIN companies c ON c.id = w.company_id AND c.merged_into_id IS NULL
+         JOIN entity_identifiers ei ON ei.company_id = w.company_id AND ei.identifier_type = 'inn'
+           AND ei.status = 'active' AND ei.validation_status = 'checksum_valid'
+         WHERE w.removed_at IS NULL
+         GROUP BY w.company_id
+       ),
+       single AS (SELECT DISTINCT inns[1] AS inn FROM watched WHERE cardinality(inns) = 1)
+       SELECT (SELECT count(*) FROM single)::int AS watched,
+              (SELECT count(*) FROM parser_api_checks WHERE outcome IS NOT NULL)::int AS checked,
+              (SELECT count(*) FROM parser_api_checks WHERE attempt_count > 0)::int AS failing,
+              (SELECT count(*) FROM single s CROSS JOIN unnest($1::text[]) AS d(dataset)
+                 LEFT JOIN parser_api_checks ch ON ch.inn = s.inn AND ch.dataset = d.dataset
+                WHERE ch.id IS NULL OR ch.next_check_at <= now())::int AS due`,
+      [[...PARSER_API_DATASETS]],
+    )
+  ).rows[0];
+  return row ?? { watched: 0, checked: 0, failing: 0, due: 0 };
+};

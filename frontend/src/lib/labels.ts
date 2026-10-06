@@ -18,6 +18,9 @@ import type {
   LlmKeyProblem,
   LlmKeySource,
   LlmProvider,
+  ParserApiDataset,
+  ParserApiMethod,
+  ParserApiRequestOutcome,
   DomRfCandidateState,
   DomRfCardKind,
   DomRfHintVerdict,
@@ -750,7 +753,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const USER_ROLE_HINTS: Record<UserRole, string> = {
-  admin: 'всё, что может оператор, плюс пользователи, права, журнал входа, ключ модели и ключ Контур.Фокуса',
+  admin: 'всё, что может оператор, плюс пользователи, права, журнал входа, ключи модели, Контур.Фокуса и parser-api.com',
   operator: 'портал и админка: источники, обработка, проверка и объединение дублей',
   viewer: 'только поиск, карточки компаний и объектов, публикации и связи',
 };
@@ -768,6 +771,7 @@ export const ACCESS_PERMISSION_LABELS: Record<AccessPermission, string> = {
   'users.manage': 'Пользователи, права и журнал входа',
   'llm.manage': 'Модель: ключ OpenRouter',
   'focus.manage': 'Контур.Фокус: ключ доступа',
+  'parserapi.manage': 'parser-api.com: ключ доступа',
   'companies.manage': 'Компании: завести по ИНН, поставить на контроль',
 };
 
@@ -862,6 +866,51 @@ export const FOCUS_REQUEST_OUTCOME_LABELS: Record<FocusRequestOutcome, string> =
   bad_response: 'непонятный ответ',
   http_error: 'ошибка Фокуса',
   network: 'нет связи',
+};
+
+/** parser-api.com (этап 24A): наборы, методы журнала, исходы запросов. */
+export const PARSER_API_DATASET_LABELS: Record<ParserApiDataset, string> = {
+  finance: 'бухгалтерская отчётность (ГИР БО)',
+  tax: 'налоги и численность («Прозрачный бизнес»)',
+  courts: 'арбитражные дела',
+  fssp: 'исполнительные производства (ФССП)',
+  bankruptcy: 'банкротство (Федресурс)',
+};
+
+export const PARSER_API_METHOD_LABELS: Record<ParserApiMethod, string> = {
+  bo_search: 'ГИР БО: поиск',
+  bo_details: 'ГИР БО: отчётность',
+  pb_org: '«Прозрачный бизнес»',
+  kad_search: 'картотека дел',
+  fssp_ur: 'ФССП',
+  fedresurs_ur: 'Федресурс: поиск',
+  fedresurs_org: 'Федресурс: карточка',
+  key_check: 'проверка ключа',
+};
+
+export const PARSER_API_OUTCOME_LABELS: Record<ParserApiRequestOutcome, string> = {
+  pending: 'идёт запрос',
+  ok: 'ответ получен',
+  key_rejected: 'ключ не принят',
+  subscription_expired: 'подписка истекла',
+  ip_rejected: 'адрес портала не разрешён',
+  daily_limit: 'суточный лимит сервиса',
+  monthly_limit: 'месячный лимит сервиса',
+  bad_request: 'отказ по параметрам',
+  bad_response: 'непонятный ответ',
+  http_error: 'ошибка сервиса',
+  network: 'нет связи',
+};
+
+export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {
+  admin: 'хранится в базе зашифрованным; на экран возвращаются только четыре последних символа',
+  env: 'PARSER_API_KEY в .env сервера; ключ, заданный в админке, главнее',
+  none: 'без ключа портал не обращается к parser-api.com вовсе',
+};
+
+export const PARSER_API_KEY_PROBLEM_HINTS: Record<LlmKeyProblem, string> = {
+  store_missing: 'не применена миграция 032 (таблица app_secrets); до этого действует PARSER_API_KEY из .env',
+  undecryptable: 'ключ шифруется от пароля из DATABASE_URL: после смены пароля старый ключ не расшифровать',
 };
 
 export const DOMRF_CANDIDATE_STATE_LABELS: Record<DomRfCandidateState, string> = {

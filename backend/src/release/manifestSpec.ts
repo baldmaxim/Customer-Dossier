@@ -91,6 +91,9 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'focus_checks', class: 'operational', why: 'что и когда спрашивали у Контур.Фокуса: срок следующей проверки, ошибка' },
   { table: 'focus_records', class: 'domain', why: 'ответы Контур.Фокуса (ЕГРЮЛ/ЕГРИП) как есть: новая строка только при изменении' },
   { table: 'focus_requests', class: 'history', why: 'журнал запросов к API Контур.Фокуса: расход тарифа и отказы, без ключа' },
+  { table: 'parser_api_checks', class: 'operational', why: 'что и когда проверяли в parser-api.com по ИНН и набору: срок следующей проверки, ошибка' },
+  { table: 'parser_api_records', class: 'domain', why: 'ответы parser-api.com (ГИР БО, ФНС, КАД, ФССП, Федресурс) наборами как есть: новая строка только при изменении' },
+  { table: 'parser_api_requests', class: 'history', why: 'журнал запросов к parser-api.com: резерв лимита, оплаченные ответы и отказы, без ключа' },
   // Портал от компании (миграция 042, ADR-016)
   { table: 'company_watch', class: 'domain', why: 'компании «на контроле»: кто и когда поставил и снял' },
   // Назначение имён без ИНН (миграция 043, ADR-016)
@@ -118,6 +121,7 @@ export const CONFIG_KEYS = [
   'PIPELINE_ENABLED',
   'METRICS_AUTO_REFRESH',
   'FOCUS_ENABLED',
+  'PARSER_API_ENABLED',
   'BOT_ENABLED',
   'REPROCESS_AUTO_PUBLISH',
   'MERGE_APPLY_ENABLED',
@@ -150,8 +154,10 @@ export const CONFIG_DENYLIST = [
   'LLM_API_KEY',
   // Ключ Контур.Фокуса (ADR-015): ни значением, ни хешем.
   'FOCUS_API_KEY',
+  // Ключ parser-api.com (этап 24A): ни значением, ни хешем.
+  'PARSER_API_KEY',
   'DATABASE_SSL_CA_PATH',
 ] as const;
 
 /** Фоновые задания: после восстановления обязаны быть выключены до ручного решения оператора. */
-export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'DOMRF_BROWSER_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'FOCUS_ENABLED', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED', 'MODEL_REVIEW_APPLY'] as const;
+export const BACKGROUND_FLAGS = ['INGEST_ENABLED', 'DOMRF_BROWSER_ENABLED', 'PIPELINE_ENABLED', 'METRICS_AUTO_REFRESH', 'FOCUS_ENABLED', 'PARSER_API_ENABLED', 'BOT_ENABLED', 'REPROCESS_AUTO_PUBLISH', 'MERGE_APPLY_ENABLED', 'MODEL_REVIEW_APPLY'] as const;

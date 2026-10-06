@@ -389,6 +389,13 @@ Start-ScheduledTask -TaskName 'TG_Info LLM tunnel'
     (в `AllowedIPs` адреса `focus-api.kontur.ru` не добавлять). Ключ — админка → Источники → Сайты → Контур.Фокус
     (в .env не обязателен). После миграции 040 и ключа: `docker exec tginfo-api node dist/focus/cli.js --probe <ИНН>` —
     имена полей ответа и строки карточки (два запроса тарифа, снимков не пишет). Без ключа фон ничего не делает.
+17. **parser-api.com (этап 24A)** — российский сервис, с Selectel — напрямую, без `awg0` (если ответит
+    `403 Access denied by security policy` без `error_code` — это адрес, тогда как у OpenRouter: адреса в `AllowedIPs`).
+    Ключ бывает привязан к IP: отказ `40303` — добавить исходящий адрес сервера в личном кабинете parser-api.com.
+    Ключ — админка → Источники → Сайты → parser-api.com. После миграции 044 и ключа — проба по одному методу:
+    `docker exec tginfo-api node dist/parserApi/cli.js --probe bo_search <ИНН>` (затем `pb_org`, `kad_search`,
+    `fssp_ur`, `fedresurs_ur`; детали — `--probe bo_details <ИНН> --id <id>`): имена полей без значений, один запрос
+    тарифа на пробу. `PARSER_API_ENABLED=true` — после сверки карты, проверяет только компании «на контроле».
 
 ## Полный откат
 
