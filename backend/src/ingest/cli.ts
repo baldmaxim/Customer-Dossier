@@ -4,6 +4,9 @@
 //   npm run ingest:once -- --add-site <url> [--rss <feed>]  добавить сайт без сетевых запросов
 //   npm run ingest:once -- --probe kzbuild     проверить вёрстку канала (нужен допуск к сбору)
 //   npm run ingest:once -- --probe-site <key>  проверить сайт, ничего не сохраняя (нужен допуск)
+//   npm run ingest:once -- --reread <канал|all> [--apply] [--max-pages N] [--from <id>]
+//                                              перечитать историю канала исправленным разборщиком (tg_web@3):
+//                                              без --apply — сколько постов изменится; с --apply — новые редакции
 //   npm run ingest:once -- --site-profile <key> --file profile.json  проверить и записать профиль сайта
 //   npm run ingest:once -- --telegram-profile <канал> --file profile.json  проверить и записать профиль канала
 //   npm run ingest:once -- --registry-import <key> --file answer.json [--type developer] [--url <адрес>] [--project-id <id>]
@@ -30,6 +33,7 @@ import { listDomRfTargets } from './registry/domrfTargets.js';
 import { listTrackedRecords } from './registry/records.js';
 import { parseSourceProfile } from './crawl.js';
 import { telegramProfileSchema } from './telegram/webCrawler.js';
+import { rereadTelegramHistory, type IRereadReport } from './telegram/reread.js';
 import { fetchChannelPage, parseChannelPage, looksLikeLayoutChange } from './telegramWeb.js';
 import { runIngestPass, ingestTelegramSource } from './scheduler.js';
 import {
@@ -120,6 +124,45 @@ const probe = async (channel: string): Promise<void> => {
   }
 };
 
+const STOP_WORDS: Record<IRereadReport['stoppedBy'], string> = {
+  done: 'дошли до самого старого собранного поста',
+  max_pages: 'предел страниц',
+  policy: 'нет допуска к сбору',
+  fetch_error: 'ошибка запроса',
+  layout: 'вёрстка изменилась',
+  identity: 'другой канал',
+};
+
+/** Перечитать историю одного канала или всех допущенных (all) — по очереди, в темпе обходчика. */
+const reread = async (target: string): Promise<void> => {
+  const apply = process.argv.includes('--apply');
+  const maxPages = Number(argValue('--max-pages') ?? 1000);
+  const fromArg = argValue('--from');
+  const keys =
+    target === 'all'
+      ? (await getPool().query<{ key: string }>(`SELECT key FROM sources WHERE kind = 'telegram' ORDER BY id`)).rows.map(r => r.key)
+      : [target.replace(/^@/, '')];
+  console.log(`[reread] ${apply ? 'С ЗАПИСЬЮ новых редакций' : 'без записи (сколько изменится)'}, до ${maxPages} страниц на канал`);
+  for (const key of keys) {
+    const source = await getSourceByKey('telegram', key);
+    if (!source) {
+      console.error(`[reread] ${key}: канал не зарегистрирован`);
+      continue;
+    }
+    if (!evaluateSourcePolicy(source, 'collect').allowed) {
+      console.log(`[reread] ${key}: пропущен — нет допуска к сбору`);
+      continue;
+    }
+    const r = await rereadTelegramHistory(source, { dryRun: !apply, maxPages, from: target === 'all' ? null : fromArg ? Number(fromArg) : null });
+    console.log(
+      `[reread] ${key}: страниц ${r.pages}, известных постов ${r.seen}, ${apply ? 'новых редакций' : 'изменится'} ${r.changed}, ` +
+        `без изменений ${r.unchanged}, не собранных ${r.unknown}; ${STOP_WORDS[r.stoppedBy]}${r.error ? ` — ${r.error}` : ''}` +
+        (r.nextBefore !== null && r.stoppedBy !== 'done' ? `; продолжить: --reread ${key} --from ${r.nextBefore}` : ''),
+    );
+    for (const x of r.samples.slice(0, 3)) console.log(`         пост ${x.postId}: ${x.before} → ${x.after} символов`);
+  }
+};
+
 const printReports = (reports: Awaited<ReturnType<typeof runIngestPass>>): void => {
   if (reports.length === 0) {
     console.log('[ingest] просроченных источников нет');
@@ -144,6 +187,12 @@ const main = async (): Promise<void> => {
     for (const target of targets) console.log(`[domrf] ${target.externalRef} ${target.url}${target.projectId ? ` → объект портала №${target.projectId}` : ''}`);
     return;
   }
+  const rereadTarget = argValue('--reread');
+  if (rereadTarget) {
+    await reread(rereadTarget);
+    return;
+  }
+
   const probeChannel = argValue('--probe');
   if (probeChannel) {
     await probe(probeChannel);

@@ -32,7 +32,8 @@ import { WEB_PREVIEW_CAPABILITIES } from './capabilities.js';
 import { photosEnabled, savePostImages, type IImageStats } from './photos.js';
 import { sourceProfileMetaSchema } from '../profileMeta.js';
 
-export const TELEGRAM_WEB_PARSER_VERSION = 'tg_web@2';
+/** @3 (06.10.2026): текст ответа — собственный, а не цитата сообщения, на которое он отвечает. */
+export const TELEGRAM_WEB_PARSER_VERSION = 'tg_web@3';
 
 export const telegramProfileSchema = z
   .object({
@@ -89,7 +90,7 @@ const missingIds = (posts: readonly ITelegramPost[]): number => {
   return missing;
 };
 
-const toDocument = (source: ISource, post: ITelegramPost, runId: number | null, fetchedAt: Date): IIncomingDocument => ({
+export const toDocument = (source: ISource, post: ITelegramPost, runId: number | null, fetchedAt: Date): IIncomingDocument => ({
   sourceId: source.id,
   sourceRunId: runId,
   externalId: post.externalId,
@@ -126,7 +127,7 @@ interface IPolicyRow {
 }
 
 /** Актуальный допуск из базы: оператор мог отозвать его, пока проход ждал ответа. */
-const collectAllowed = async (client: PoolClient | null, sourceId: number): Promise<string | null> => {
+export const collectAllowed = async (client: PoolClient | null, sourceId: number): Promise<string | null> => {
   const exec = client ?? getPool();
   const row = (
     await exec.query<IPolicyRow>('SELECT key, access_status, ai_processing_status, policy_expires_at FROM sources WHERE id = $1', [sourceId])

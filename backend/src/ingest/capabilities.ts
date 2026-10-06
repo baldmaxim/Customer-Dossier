@@ -74,6 +74,6 @@ export const SOURCE_CAPABILITIES: readonly IAdapterCapabilities[] = [
   SITE_RSS_CAPABILITIES,
   SITE_HTML_LIST_CAPABILITIES,
   REGISTRY_API_CAPABILITIES,
-  telegram(WEB_PREVIEW_CAPABILITIES, 'telegram_web_preview', 'tg_web@2', 'текст поста полон; медиа-пост — caption_only'),
+  telegram(WEB_PREVIEW_CAPABILITIES, 'telegram_web_preview', 'tg_web@3', 'текст поста полон; медиа-пост — caption_only'),
   telegram(BOT_CAPABILITIES, 'telegram_bot', 'telegram_bot_text@1', 'пересланный текст полон; подпись без вложения — полнота неизвестна'),
 ];
