@@ -15,6 +15,7 @@ import {
   publishCandidateSet,
 } from '../reprocess/publish.js';
 import { lmStudioProvider } from '../reprocess/provider.js';
+import { RUN_LIST_STATES } from '../reprocess/revisionStates.js';
 import {
   RUN_PAGE_LIMIT,
   RUN_STATUSES,
@@ -40,6 +41,7 @@ const runsSchema = z.object({
   sourceItemId: z.coerce.number().int().positive().optional(),
   revisionId: z.coerce.number().int().positive().optional(),
   status: z.enum(RUN_STATUSES).optional(),
+  state: z.enum(RUN_LIST_STATES).optional(),
   schemaVersion: z.string().trim().min(1).max(40).optional(),
   fingerprint: z.string().regex(/^[0-9a-f]{4,64}$/).optional(),
   beforeId: z.coerce.number().int().positive().optional(),

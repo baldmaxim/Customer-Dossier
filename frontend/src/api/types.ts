@@ -1374,6 +1374,9 @@ export interface IAmbiguityDetail extends IAmbiguityListItem {
 // Этап 15B: рабочее место запусков
 export type RunStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
 
+/** Состояние текста из «Где тексты сейчас», которым фильтруется список разборов (`?state=`). */
+export type RunListState = 'failed_exhausted' | 'failed_retrying' | 'completed_unpublished' | 'in_queue' | 'cancelled';
+
 export interface IRunListItem {
   id: number;
   revisionId: number;

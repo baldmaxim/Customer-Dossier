@@ -9,10 +9,12 @@
 //    отправит следующий чанк; запрос, уже ушедший в модель, отменить нельзя — это показывается, а не обещается.
 // Публикация — publish.ts (токен предпросмотра). Массовых действий здесь нет.
 
+import { env } from '../config/env.js';
 import { withTransaction, getPool, type DbExecutor } from '../db/pool.js';
 import { evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { runComplete } from './publish.js';
 import { CANDIDATE_BUILD_VERSION, isHistoricalIdentity, type IModelProvider } from './provider.js';
+import { STATE_RUN_STATUSES, revisionStatesSql, type RunListState } from './revisionStates.js';
 import { enqueueRun, retryRun, type EnqueueResult } from './runs.js';
 
 export const RUN_PAGE_LIMIT = 100;
@@ -24,6 +26,11 @@ export interface IRunFilter {
   sourceItemId?: number;
   revisionId?: number;
   status?: RunStatus;
+  /**
+   * Состояние текста из «Где тексты сейчас»: по одному запуску на последнюю редакцию в этом состоянии —
+   * последнему из его статусов (STATE_RUN_STATUSES), так что «всего по фильтру» равно числу на плитке.
+   */
+  state?: RunListState;
   schemaVersion?: string;
   /** Префикс отпечатка запуска (hex). */
   fingerprint?: string;
@@ -137,9 +144,18 @@ const filterSql = (f: IRunFilter): { where: string; params: unknown[] } => {
     f.schemaVersion ?? null,
     f.fingerprint ? `${f.fingerprint}%` : null,
   ];
-  const where = `($1::bigint IS NULL OR s.id = $1) AND ($2::bigint IS NULL OR r.source_item_id = $2)
+  let where = `($1::bigint IS NULL OR s.id = $1) AND ($2::bigint IS NULL OR r.source_item_id = $2)
     AND ($3::bigint IS NULL OR er.revision_id = $3) AND ($4::text IS NULL OR er.status = $4)
     AND ($5::text IS NULL OR er.fingerprint_json->>'schemaVersion' = $5) AND ($6::text IS NULL OR er.fingerprint LIKE $6)`;
+  // Состояния считаются по всем последним редакциям — подзапрос добавляется, только когда фильтр задан.
+  if (f.state) {
+    params.push(f.state, [...STATE_RUN_STATUSES[f.state]], env.REPROCESS_RETRY_MAX);
+    where += `
+    AND er.status = ANY($8::text[])
+    AND NOT EXISTS (SELECT 1 FROM extraction_runs er2
+                    WHERE er2.revision_id = er.revision_id AND er2.status = ANY($8::text[]) AND er2.id > er.id)
+    AND er.revision_id IN (SELECT st.revision_id FROM (${revisionStatesSql(9)}) st WHERE st.state = $7)`;
+  }
   return { where, params };
 };
 
@@ -191,11 +207,11 @@ export const listRuns = async (filter: IRunFilter, exec: DbExecutor = getPool())
       )
     ).rows[0]?.n ?? 0;
   const rows = (
-    await exec.query<IRunListRow>(`${RUN_SELECT} WHERE ${where} AND ($7::bigint IS NULL OR er.id < $7) ORDER BY er.id DESC LIMIT $8`, [
-      ...params,
-      filter.beforeId ?? null,
-      limit + 1,
-    ])
+    await exec.query<IRunListRow>(
+      `${RUN_SELECT} WHERE ${where} AND ($${params.length + 1}::bigint IS NULL OR er.id < $${params.length + 1})
+       ORDER BY er.id DESC LIMIT $${params.length + 2}`,
+      [...params, filter.beforeId ?? null, limit + 1],
+    )
   ).rows;
   const page = rows.slice(0, limit);
   return {

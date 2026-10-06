@@ -4,8 +4,8 @@
 
 import { FC } from 'react';
 
-import type { ISourceRow, RunStatus } from '../../api/types';
-import { RUN_STATUS_LABELS } from '../../lib/labels';
+import type { ISourceRow, RunListState, RunStatus } from '../../api/types';
+import { REVISION_STATE_LABELS, RUN_STATUS_LABELS } from '../../lib/labels';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Select } from '../ui/Select';
@@ -18,10 +18,12 @@ interface IRunsFiltersProps {
   sources: ISourceRow[];
   sourceId: number | null;
   status: RunStatus | '';
-  onChange: (patch: { sourceId?: number | null; status?: RunStatus | '' }) => void;
+  /** Плитка «Где тексты сейчас» — фильтр без своего поля: виден здесь подписью, снимается «Сбросить». */
+  state: RunListState | '';
+  onChange: (patch: { sourceId?: number | null; status?: RunStatus | ''; state?: RunListState | '' }) => void;
 }
 
-export const RunsFilters: FC<IRunsFiltersProps> = ({ sources, sourceId, status, onChange }) => {
+export const RunsFilters: FC<IRunsFiltersProps> = ({ sources, sourceId, status, state, onChange }) => {
   const sorted = [...sources].sort((a, b) => sourceName(a).localeCompare(sourceName(b), 'ru'));
   // Источник из адреса может быть удалён или ещё не загружен — пункт остаётся, чтобы фильтр был виден.
   const known = sourceId === null || sorted.some(s => s.id === sourceId);
@@ -56,8 +58,9 @@ export const RunsFilters: FC<IRunsFiltersProps> = ({ sources, sourceId, status, 
           </Select>
         )}
       </Field>
-      {(sourceId !== null || status !== '') && (
-        <Button variant="ghost" icon="close" onClick={() => onChange({ sourceId: null, status: '' })}>
+      {state !== '' && <p className={styles.hint}>Тексты: {REVISION_STATE_LABELS[state]}</p>}
+      {(sourceId !== null || status !== '' || state !== '') && (
+        <Button variant="ghost" icon="close" onClick={() => onChange({ sourceId: null, status: '', state: '' })}>
           Сбросить
         </Button>
       )}

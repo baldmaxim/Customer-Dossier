@@ -1,13 +1,15 @@
 // «Где тексты сейчас» — по последним версиям текстов: каждое состояние отвечает на вопрос
-// «почему текста нет в карточках». Состояния, которые сводятся к статусу разбора (в очереди,
-// не удался, отменён), — кнопки-фильтры списка разборов ниже: раньше счётчики никуда не вели.
+// «почему текста нет в карточках». Состояния, которые сводятся к разборам (в очереди, не удался,
+// разобран и не перенесён, отменён), — кнопки-фильтры списка ниже по тому же правилу, что счётчик
+// (`?state=`): раньше «попытки исчерпаны» и «будет повтор» открывали один список всех упавших
+// запусков за всё время, и число в нём не совпадало ни с одной плиткой.
 
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { LoadingSkeleton } from '../LoadingSkeleton';
 import { api } from '../../api/client';
-import type { IPipelineOverview, RunStatus } from '../../api/types';
+import type { IPipelineOverview, RunListState } from '../../api/types';
 import { formatCount } from '../../lib/format';
 import { REVISION_STATE_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -20,13 +22,15 @@ import { Section } from '../ui/Section';
 import { Stack } from '../ui/Stack';
 import styles from './Runs.module.css';
 
-/** Состояние текста → статус разбора, которым его можно отфильтровать. */
-const STATE_FILTER: Partial<Record<string, RunStatus>> = {
-  in_queue: 'queued',
-  failed_retrying: 'failed',
-  failed_exhausted: 'failed',
-  cancelled: 'cancelled',
-};
+/** Состояния, по которым список разборов фильтруется (RUN_LIST_STATES на сервере). */
+export const RUN_LIST_STATES: readonly RunListState[] = [
+  'failed_exhausted',
+  'failed_retrying',
+  'completed_unpublished',
+  'in_queue',
+  'cancelled',
+];
+const isListState = (state: string): state is RunListState => (RUN_LIST_STATES as readonly string[]).includes(state);
 
 /** Сначала то, что требует внимания, затем штатные исходы. */
 const ORDER = [
@@ -43,11 +47,11 @@ const ORDER = [
 ];
 
 interface IRevisionStatesProps {
-  status: RunStatus | '';
-  onFilter: (status: RunStatus | '') => void;
+  state: RunListState | '';
+  onFilter: (state: RunListState | '') => void;
 }
 
-export const RevisionStates: FC<IRevisionStatesProps> = ({ status, onFilter }) => {
+export const RevisionStates: FC<IRevisionStatesProps> = ({ state, onFilter }) => {
   const pipeline = useQuery({
     queryKey: ['pipeline'],
     queryFn: () => api.get<IPipelineOverview>('/api/admin/pipeline'),
@@ -80,7 +84,7 @@ export const RevisionStates: FC<IRevisionStatesProps> = ({ status, onFilter }) =
           {states.map(s => {
             const label = REVISION_STATE_LABELS[s.state] ?? s.state;
             const tone = toneOf(REVISION_STATE_TONE, s.state);
-            const filter = STATE_FILTER[s.state];
+            const filter = isListState(s.state) ? s.state : null;
             const content = (
               <>
                 <span className={styles.tileValue}>{formatCount(s.n)}</span>
@@ -96,9 +100,9 @@ export const RevisionStates: FC<IRevisionStatesProps> = ({ status, onFilter }) =
                   <Button
                     variant="secondary"
                     className={styles.tile}
-                    aria-pressed={status === filter}
-                    hint={status === filter ? 'Показать все разборы' : 'Показать эти разборы в списке ниже'}
-                    onClick={() => onFilter(status === filter ? '' : filter)}
+                    aria-pressed={state === filter}
+                    hint={state === filter ? 'Показать все разборы' : 'Показать эти тексты в списке ниже — по последнему разбору каждого'}
+                    onClick={() => onFilter(state === filter ? '' : filter)}
                   >
                     {content}
                   </Button>

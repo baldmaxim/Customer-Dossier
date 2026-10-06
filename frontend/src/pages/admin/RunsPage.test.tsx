@@ -1,5 +1,5 @@
 // «Обработка»: ошибка загрузки отличима от пустого списка; итог разбора одним словом; фильтр по
-// источнику (по названию, в запрос — номер) и статусу — в адресе; счётчики состояний — фильтры;
+// источнику (по названию, в запрос — номер) и статусу — в адресе; счётчики состояний — фильтры `?state=`;
 // «Новее / Старее» по курсору.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -50,6 +50,7 @@ const PIPELINE = {
     { state: 'published', n: 81230 },
     { state: 'in_queue', n: 412 },
     { state: 'failed_exhausted', n: 4 },
+    { state: 'failed_retrying', n: 10 },
   ],
   failures: [],
   model: { ok: true, error: null, models: [] },
@@ -177,16 +178,35 @@ describe('«Обработка»: список разборов', () => {
     expect((screen.getByRole('combobox', { name: 'Статус разбора' }) as HTMLSelectElement).value).toBe('failed');
   });
 
-  it('счётчик «в очереди на разбор» — фильтр списка по статусу', async () => {
+  it('счётчик «в очереди на разбор» — фильтр списка по тому же правилу, что счётчик', async () => {
     const api = fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([run(10)]) }));
     renderWithProviders(<RunsPage />, '/admin/process');
 
     const tile = await screen.findByRole('button', { name: /412.*в очереди на разбор/ });
     expect(tile.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(tile);
-    await waitFor(() => expect(runsCalls(api).some(u => u.includes('status=queued'))).toBe(true));
+    await waitFor(() => expect(runsCalls(api).some(u => u.includes('state=in_queue'))).toBe(true));
     expect(screen.getByRole('button', { name: /412.*в очереди на разбор/ }).getAttribute('aria-pressed')).toBe('true');
-    // «В карточках» — не фильтр: к статусу разбора это состояние не сводится.
+    expect(screen.getByText('Тексты: в очереди на разбор')).toBeTruthy();
+    // «В карточках» — не фильтр: к разборам это состояние не сводится.
     expect(screen.queryByRole('button', { name: /81\s230/ })).toBeNull();
+  });
+
+  it('«попытки исчерпаны» и «будет повтор» — разные списки; статус разбора снимает плитку', async () => {
+    const api = fakeApi(around({ match: 'GET /api/reprocess/runs', respond: () => page([run(10)]) }));
+    renderWithProviders(<RunsPage />, '/admin/process?status=failed');
+
+    const exhausted = await screen.findByRole('button', { name: /4.*попытки исчерпаны/ });
+    const retrying = screen.getByRole('button', { name: /10.*будет повтор/ });
+    fireEvent.click(retrying);
+    await waitFor(() => expect(runsCalls(api).at(-1)).toMatch(/state=failed_retrying/));
+    expect(runsCalls(api).at(-1)).not.toMatch(/status=/);
+    expect(retrying.getAttribute('aria-pressed')).toBe('true');
+    expect(exhausted.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Статус разбора' }), { target: { value: 'partial' } });
+    await waitFor(() => expect(runsCalls(api).at(-1)).toMatch(/status=partial/));
+    expect(runsCalls(api).at(-1)).not.toMatch(/state=/);
+    expect(retrying.getAttribute('aria-pressed')).toBe('false');
   });
 });

@@ -10,11 +10,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { api } from '../../api/client';
-import type { IRunPage, ISourceRow, RunStatus } from '../../api/types';
+import type { IRunPage, ISourceRow, RunListState, RunStatus } from '../../api/types';
 import { BaseTotals } from '../../components/admin/BaseTotals';
 import { Pager } from '../../components/admin/Pager';
 import { PublicationLog } from '../../components/admin/PublicationLog';
-import { RevisionStates } from '../../components/admin/RevisionStates';
+import { RUN_LIST_STATES, RevisionStates } from '../../components/admin/RevisionStates';
 import { RUN_STATUSES, RunsFilters } from '../../components/admin/RunsFilters';
 import { RunsList } from '../../components/admin/RunsList';
 import { useCursorPaging } from '../../components/admin/useCursorPaging';
@@ -31,10 +31,12 @@ import formStyles from '../../components/admin/Forms.module.css';
 
 const PAGE = 50;
 const STATUS_VALUES: readonly (RunStatus | '')[] = ['', ...RUN_STATUSES];
+const STATE_VALUES: readonly (RunListState | '')[] = ['', ...RUN_LIST_STATES];
 
 export const RunsPage: FC = () => {
   const [sourceId] = useUrlState('source', numberParam(null));
   const [status] = useUrlState('status', enumParam(STATUS_VALUES, ''));
+  const [state] = useUrlState('state', enumParam(STATE_VALUES, ''));
   const patch = useUrlPatch();
   const listRef = useRef<HTMLDivElement>(null);
   const paging = useCursorPaging('before', listRef);
@@ -50,34 +52,36 @@ export const RunsPage: FC = () => {
   const byId = new Map(sourceItems.map(s => [s.id, s]));
 
   const page = useQuery({
-    queryKey: ['runs', sourceId, status, before],
+    queryKey: ['runs', sourceId, status, state, before],
     queryFn: () => {
       const params = new URLSearchParams({ limit: String(PAGE) });
       if (sourceId !== null) params.set('sourceId', String(sourceId));
       if (status) params.set('status', status);
+      if (state) params.set('state', state);
       if (before) params.set('beforeId', before);
       return api.get<IRunPage>(`/api/reprocess/runs?${params.toString()}`);
     },
   });
   const data = page.data;
 
-  // Смена фильтра начинает список сначала: курсор прежней выборки к новой не относится.
-  const filter = (next: { sourceId?: number | null; status?: RunStatus | '' }): void =>
+  // Смена фильтра начинает список сначала: курсор прежней выборки к новой не относится. Плитка и статус
+  // друг друга сменяют: у плитки свои статусы разборов, вместе они дали бы пустой список.
+  const filter = (next: { sourceId?: number | null; status?: RunStatus | ''; state?: RunListState | '' }): void =>
     patch({
       ...(next.sourceId !== undefined ? { source: next.sourceId } : {}),
-      ...(next.status !== undefined ? { status: next.status } : {}),
+      ...(next.status !== undefined || next.state !== undefined ? { status: next.status ?? null, state: next.state ?? null } : {}),
       before: null,
     });
 
   return (
     <Stack gap={4}>
       <BaseTotals />
-      <RevisionStates status={status} onFilter={next => filter({ status: next })} />
+      <RevisionStates state={state} onFilter={next => filter({ state: next })} />
 
       <div ref={listRef}>
         <Section title="Последние разборы" note={data ? `всего по фильтру: ${formatCount(data.total)}` : undefined} id="runs">
           <Stack gap={4}>
-            <RunsFilters sources={sourceItems} sourceId={sourceId} status={status} onChange={filter} />
+            <RunsFilters sources={sourceItems} sourceId={sourceId} status={status} state={state} onChange={filter} />
             {page.isLoading && (
               <LoadingSkeleton label="Загружаю разборы…" lines={6} height="44px" />
             )}
@@ -90,8 +94,8 @@ export const RunsPage: FC = () => {
               <EmptyState
                 size="sm"
                 action={
-                  sourceId !== null || status !== '' ? (
-                    <Button onClick={() => filter({ sourceId: null, status: '' })}>Сбросить фильтры</Button>
+                  sourceId !== null || status !== '' || state !== '' ? (
+                    <Button onClick={() => filter({ sourceId: null, status: '', state: '' })}>Сбросить фильтры</Button>
                   ) : undefined
                 }
               >

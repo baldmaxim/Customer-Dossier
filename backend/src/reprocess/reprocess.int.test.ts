@@ -4,6 +4,7 @@
 
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 
+import { env } from '../config/env.js';
 import { closeDb, getPool, withTransaction } from '../db/pool.js';
 import { insertSyntheticSource, resetAndMigrate } from '../__tests__/integration/db.js';
 import { startTestApi, type ITestApi } from '../__tests__/integration/http.js';
@@ -12,6 +13,7 @@ import type { ILlmResult } from '../llm/client.js';
 import { recordReviewDecision } from '../assertions/repository.js';
 import { PublicationConflictError, previewCandidateSet, publishCandidateSet } from './publish.js';
 import type { IChunkerParams, IModelProvider } from './provider.js';
+import { RUN_LIST_STATES, revisionStatesSql } from './revisionStates.js';
 import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunResult } from './runs.js';
 import { company, event, extraction, fakeProvider, INN_A, INN_B, link, ok, project } from './__fixtures__/extraction.js';
 
@@ -1033,5 +1035,45 @@ describe('этап 15B: запуски, отмена, повтор и публи
     const filtered = await api.call('GET', `/api/reprocess/runs?revisionId=${item.revisionId}&fingerprint=ab150001`, undefined);
     expect(filtered.body.total).toBe(1);
     expect((await api.call('GET', '/api/reprocess/runs?status=bogus', undefined)).status).toBe(400);
+  });
+
+  it('T22-01: плитка «Где тексты сейчас» и список по ней — одно число; «повтор» и «исчерпаны» — разные списки', async () => {
+    const runs = async (revisionId: number, statuses: string[]): Promise<number[]> =>
+      (
+        await pool().query<{ id: string }>(
+          `INSERT INTO extraction_runs (revision_id, fingerprint, fingerprint_json, status, requested_by, finished_at)
+           SELECT $1, md5(random()::text), '{}'::jsonb, st, 'test', now() FROM unnest($2::text[]) WITH ORDINALITY u(st, n)
+           ORDER BY n RETURNING id`,
+          [revisionId, statuses],
+        )
+      ).rows.map(r => Number(r.id));
+    const exhausted = await store(sourceMain, body('22-exhausted'));
+    const exhaustedIds = await runs(exhausted.revisionId, Array(env.REPROCESS_RETRY_MAX).fill('failed'));
+    const retrying = await store(sourceMain, body('22-retrying'));
+    const retryingIds = await runs(retrying.revisionId, ['failed', 'cancelled']);
+
+    const list = async (q: string) => (await api.call('GET', `/api/reprocess/runs?${q}`, undefined)).body;
+    // По одному запуску на текст — последнему упавшему, а не каждая попытка.
+    const a = await list(`sourceItemId=${exhausted.sourceItemId}&state=failed_exhausted`);
+    expect(a.total).toBe(1);
+    expect((a.items as Array<{ id: number }>)[0]?.id).toBe(exhaustedIds.at(-1));
+    expect((await list(`sourceItemId=${exhausted.sourceItemId}&state=failed_retrying`)).total).toBe(0);
+    const b = await list(`sourceItemId=${retrying.sourceItemId}&state=failed_retrying`);
+    expect(b.total).toBe(1);
+    expect((b.items as Array<{ id: number }>)[0]?.id).toBe(retryingIds[0]);
+
+    // Счётчик экрана и «всего по фильтру» считает одно правило.
+    const counts = new Map(
+      (
+        await pool().query<{ state: string; n: number }>(
+          `SELECT state, count(*)::int AS n FROM (${revisionStatesSql(1)}) st GROUP BY 1`,
+          [env.REPROCESS_RETRY_MAX],
+        )
+      ).rows.map(r => [r.state, r.n]),
+    );
+    for (const state of RUN_LIST_STATES) {
+      expect((await list(`state=${state}&limit=1`)).total, state).toBe(counts.get(state) ?? 0);
+    }
+    expect((await api.call('GET', '/api/reprocess/runs?state=waiting', undefined)).status).toBe(400);
   });
 });
