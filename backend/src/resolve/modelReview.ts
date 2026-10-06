@@ -9,8 +9,8 @@
 //   - different — пара отклонена, причина — в decision_note;
 //   - unsure — пара ждёт оператора.
 // Правила раньше модели: разные ИНН/ОГРН (identifier_conflict) — different без вызова; две разные записи
-// ДОМ.РФ у объектов — different без вызова. Направление слияния — к карточке с реквизитами или сведениями
-// ДОМ.РФ: иначе ИНН ушёл бы в карточку, которую слили.
+// ДОМ.РФ у объектов — different без вызова. Направление слияния — к карточке, которую терять дороже
+// (реквизиты, ДОМ.РФ, доказательства, имя — resolve/mergeDirection.ts): иначе ИНН ушёл бы в карточку, которую слили.
 
 import { randomUUID } from 'node:crypto';
 
@@ -20,6 +20,7 @@ import { extractEntityMatch, type ILlmResult } from '../llm/client.js';
 import { ENTITY_MATCH_PROMPT_VERSION, formatEntityMatchInput, type IEntityCard } from '../llm/entityMatch/prompt.js';
 import type { EntityMatchVerdict, IEntityMatch } from '../llm/entityMatch/schema.js';
 import { MergeNotFoundError, applyEntityMerge, previewMerge, type IEntitySummary, type IMergePreview } from './entityMerge.js';
+import { heavierCard, nameWeight, type ICardWeight } from './mergeDirection.js';
 
 /** Кто решил: модель с именем — в истории слияний и в решениях по паре видно, что это не оператор. */
 export const modelActor = (): string => `model:${env.LMSTUDIO_MODEL}`;
@@ -156,8 +157,26 @@ const projectExtras = async (projectId: number): Promise<{ lines: string[]; regi
   };
 };
 
-/** Вес карточки для направления слияния: реквизиты и сведения ДОМ.РФ дороже названия. */
-const weight = (s: IEntitySummary, registryRef: string | null): number => s.identifiers.length * 10 + (registryRef ? 5 : 0) + s.aliases.length;
+/** Вес карточки для направления слияния (порядок признаков — resolve/mergeDirection.ts). */
+const cardWeight = async (kind: 'company' | 'project', s: IEntitySummary, registryRef: string | null): Promise<ICardWeight> => {
+  const [subject, object] = kind === 'company' ? ['subject_company_id', 'object_company_id'] : ['subject_project_id', 'object_project_id'];
+  const evidence = await queryOne<{ n: number }>(
+    `SELECT count(*)::int AS n FROM evidence e JOIN assertions a ON a.id = e.assertion_id
+     WHERE e.status = 'active' AND (a.${subject} = $1 OR a.${object} = $1)`,
+    [s.id],
+  );
+  const domrf =
+    kind === 'company'
+      ? await queryOne<{ n: number }>(`SELECT count(*)::int AS n FROM domrf_company_links WHERE company_id = $1 AND state = 'confirmed'`, [s.id])
+      : null;
+  return {
+    identifiers: s.identifiers.length,
+    registry: registryRef || (domrf?.n ?? 0) > 0 ? 1 : 0,
+    evidence: evidence?.n ?? 0,
+    shortName: nameWeight(s.name),
+    aliases: s.aliases.length,
+  };
+};
 
 export interface IPairJudgement {
   queueId: number;
@@ -220,7 +239,10 @@ const mergePair = async (
   reason: string,
 ): Promise<{ action: 'merged' | 'blocked'; note: string | null }> => {
   if (!env.MERGE_APPLY_ENABLED) return { action: 'blocked', note: 'слияние выключено на сервере (MERGE_APPLY_ENABLED=false)' };
-  const swap = weight(preview.source, sourceRegistry) > weight(preview.target, targetRegistry);
+  const swap = heavierCard(
+    await cardWeight(pair.entity_kind, preview.source, sourceRegistry),
+    await cardWeight(pair.entity_kind, preview.target, targetRegistry),
+  );
   const plan = swap ? await previewMerge(pair.entity_kind, pair.target_entity_id, pair.source_entity_id) : preview;
   if (!plan.canApply) {
     const codes = [...new Set(plan.conflicts.map(c => c.code))].join(', ');
