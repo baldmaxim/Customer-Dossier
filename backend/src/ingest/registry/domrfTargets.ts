@@ -4,6 +4,7 @@
 import type { PoolClient } from 'pg';
 
 import { query, withTransaction } from '../../db/pool.js';
+import { likePattern } from '../../utils/likePattern.js';
 
 export interface IDomRfTarget {
   id: number;
@@ -63,6 +64,100 @@ export const listDomRfTargets = async (pendingOnly = false): Promise<IDomRfTarge
      ${pendingOnly ? 'WHERE t.captured_at IS NULL OR t.captured_at < t.requested_at' : ''}
      ORDER BY (t.captured_at IS NULL OR t.captured_at < t.requested_at) DESC, t.requested_at DESC, t.id DESC`,
   );
+
+export const DOMRF_TARGET_FILTERS = ['all', 'waiting', 'error', 'captured'] as const;
+export type DomRfTargetFilter = (typeof DOMRF_TARGET_FILTERS)[number];
+
+const PENDING_SQL = '(t.captured_at IS NULL OR t.captured_at < t.requested_at)';
+
+/**
+ * Причина ошибки — первая строка без адресов и номеров объектов: «HTTP 404» у сотни карточек — одна
+ * причина, а не сто. Код ответа (три цифры) и таймаут («45000ms») остаются: 403 и 404 — разные причины.
+ */
+const REASON_SQL = `regexp_replace(regexp_replace(regexp_replace(split_part(t.last_error, E'\\n', 1),
+  'https?://\\S+', '…', 'g'), '#\\d+', '#N', 'g'), '\\d{5,}(?!\\d|ms)', 'N', 'g')`;
+
+const FILTER_SQL: Record<DomRfTargetFilter, string> = {
+  all: 'true',
+  waiting: `${PENDING_SQL} AND t.last_error IS NULL`,
+  error: `${PENDING_SQL} AND t.last_error IS NOT NULL`,
+  captured: `NOT ${PENDING_SQL}`,
+};
+
+/** «Ждут» — в порядке, в котором их возьмёт работник; ошибки и прочитанные — свежие первыми. */
+const ORDER_SQL: Record<DomRfTargetFilter, string> = {
+  all: `${PENDING_SQL} DESC, t.requested_at DESC, t.id DESC`,
+  waiting: 't.requested_at, t.id',
+  error: 't.last_attempt_at DESC NULLS LAST, t.id DESC',
+  captured: 't.captured_at DESC, t.id DESC',
+};
+
+export interface IDomRfTargetPage {
+  items: IDomRfTarget[];
+  /** Совпавших с фильтром, поиском и причиной — для страниц. */
+  total: number;
+  page: number;
+  limit: number;
+  /** По всей очереди, без поиска: числа вкладок фильтра. */
+  counts: Record<DomRfTargetFilter, number>;
+  /** Причины ошибок с числом карточек, частые первыми. */
+  reasons: Array<{ reason: string; count: number }>;
+  /** За последние сутки: прочитано карточек и карточек с ошибкой последней попытки. */
+  day: { captured: number; failed: number };
+}
+
+export const pageDomRfTargets = async (input: {
+  filter: DomRfTargetFilter;
+  q?: string;
+  reason?: string;
+  page: number;
+  limit: number;
+}): Promise<IDomRfTargetPage> => {
+  const params: unknown[] = [];
+  const where = [FILTER_SQL[input.filter]];
+  const q = input.q?.trim() ?? '';
+  if (q) {
+    params.push(q, likePattern(q));
+    where.push(`(t.external_ref = $${params.length - 1} OR p.name ILIKE $${params.length})`);
+  }
+  if (input.reason) {
+    params.push(input.reason);
+    where.push(`t.last_error IS NOT NULL AND ${REASON_SQL} = $${params.length}`);
+  }
+  const from = `FROM domrf_targets t LEFT JOIN projects p ON p.id = t.project_id WHERE ${where.join(' AND ')}`;
+  const offset = (input.page - 1) * input.limit;
+  const [items, total, counts, reasons] = await Promise.all([
+    query<IDomRfTarget>(
+      `SELECT ${columns} ${from} ORDER BY ${ORDER_SQL[input.filter]} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, input.limit, offset],
+    ),
+    query<{ n: number }>(`SELECT count(*)::int AS n ${from}`, params),
+    query<{ all: number; waiting: number; error: number; captured: number; capturedDay: number; failedDay: number }>(
+      `SELECT count(*)::int AS "all",
+              count(*) FILTER (WHERE ${FILTER_SQL.waiting})::int AS waiting,
+              count(*) FILTER (WHERE ${FILTER_SQL.error})::int AS error,
+              count(*) FILTER (WHERE ${FILTER_SQL.captured})::int AS captured,
+              count(*) FILTER (WHERE t.captured_at > now() - interval '1 day')::int AS "capturedDay",
+              count(*) FILTER (WHERE t.last_error IS NOT NULL AND t.last_attempt_at > now() - interval '1 day')::int AS "failedDay"
+       FROM domrf_targets t`,
+    ),
+    query<{ reason: string; count: number }>(
+      `SELECT ${REASON_SQL} AS reason, count(*)::int AS count
+       FROM domrf_targets t WHERE ${FILTER_SQL.error}
+       GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 12`,
+    ),
+  ]);
+  const c = counts[0]!;
+  return {
+    items,
+    total: total[0]?.n ?? 0,
+    page: input.page,
+    limit: input.limit,
+    counts: { all: c.all, waiting: c.waiting, error: c.error, captured: c.captured },
+    reasons,
+    day: { captured: c.capturedDay, failed: c.failedDay },
+  };
+};
 
 /** Ссылки, привязанные к одной карточке объекта: страница объекта показывает, что ждёт сбора. */
 export const listProjectDomRfTargets = async (projectId: number): Promise<IDomRfTarget[]> =>

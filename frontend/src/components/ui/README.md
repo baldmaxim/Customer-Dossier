@@ -94,6 +94,9 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
   разделитель — между разными `group`. Переход не уводит фокус со вкладки.
 - `Segmented` — `{ label, items: {value,label,hint?,disabled?}[], value, onChange, size?, fill? }` — `role="group"` +
   `aria-pressed`; не помещается — прокрутка в строку. `fill` — пункты поровну во всю ширину (режимы на телефоне).
+- `Pagination` — `{ label, page, pageSize, total, onChange }` — «Назад · 51–100 из 4 700, страница 2 из 94 · Вперёд» для
+  списка, который считает сервер (offset): номер страницы — в адресе (`numberParam(1)`), смена фильтра сбрасывает его.
+  Лента «новее / старее» по курсору — `useCursorPaging` (admin).
 - `ButtonLink` — `Link` в виде кнопки: пропсы `Link` + `variant/size/icon/iconEnd/block`; `viewTransition` по умолчанию.
 
 **Действия**

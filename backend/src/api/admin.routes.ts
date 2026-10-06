@@ -29,17 +29,27 @@ import { revisionStatesSql } from '../reprocess/revisionStates.js';
 import { DELETE_WITH_DOCUMENTS_BLOCK_REASON } from '../pipeline/guard.js';
 import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
 import { classifySourceHealth } from '../ingest/sourceHealth.js';
-import { DomRfTargetError, listDomRfTargets, listProjectDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
+import { DOMRF_TARGET_FILTERS, DomRfTargetError, listProjectDomRfTargets, pageDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
 import { actorOf } from './auth.js';
 
 export const adminRouter = asyncRouter();
 
 /** Адреса для браузерного парсинга: здесь нет сетевого обращения к ДОМ.РФ. */
+// Очередь — тысячи карточек: страницами, с фильтром состояния, поиском и причиной ошибки.
+// С projectId — ссылки одного объекта целиком (страница объекта).
 adminRouter.get('/domrf-targets', async (req, res) => {
-  const parsed = z.object({ projectId: z.coerce.number().int().positive().optional() }).safeParse(req.query);
-  if (!parsed.success) { res.status(400).json({ error: 'Некорректный ID объекта портала' }); return; }
-  const { projectId } = parsed.data;
-  res.json({ items: projectId === undefined ? await listDomRfTargets() : await listProjectDomRfTargets(projectId) });
+  const parsed = z.object({
+    projectId: z.coerce.number().int().positive().optional(),
+    filter: z.enum(DOMRF_TARGET_FILTERS).default('all'),
+    q: z.string().trim().max(200).optional(),
+    reason: z.string().max(1000).optional(),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }).safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Некорректные параметры списка карточек' }); return; }
+  const { projectId, filter, q, reason, page, limit } = parsed.data;
+  if (projectId !== undefined) { res.json({ items: await listProjectDomRfTargets(projectId) }); return; }
+  res.json(await pageDomRfTargets({ filter, q, reason: reason || undefined, page, limit }));
 });
 
 adminRouter.post('/domrf-targets', async (req, res) => {

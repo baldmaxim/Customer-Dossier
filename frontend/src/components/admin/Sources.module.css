@@ -409,3 +409,22 @@
   overflow-wrap: anywhere;
   contain: none;
 }
+
+/* ── Карточки ДОМ.РФ: поиск и причина ошибки строкой над списком ── */
+
+/* Переход на другую страницу списка прокручивает к началу раздела, а не под липкую шапку. */
+.scrollAnchor {
+  scroll-margin-top: var(--sp-6);
+}
+
+.filterSearch {
+  flex: 1 1 18rem;
+  min-width: 0;
+  max-width: 28rem;
+}
+
+.filterReason {
+  flex: 1 1 18rem;
+  min-width: 0;
+  max-width: 32rem;
+}

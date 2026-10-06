@@ -29,7 +29,7 @@ export const DomRfPage: FC = () => {
   const data = summary.data;
 
   // У вкладок свои фильтры: смена вкладки их сбрасывает.
-  const select = (next: Tab): void => patch({ tab: next === 'companies' ? null : next, filter: null, q: null }, { history: 'push' });
+  const select = (next: Tab): void => patch({ tab: next === 'companies' ? null : next, filter: null, q: null, reason: null, page: null }, { history: 'push' });
 
   return (
     <Stack gap={4}>

@@ -26,8 +26,17 @@ const TARGETS = {
       requestedAt: '2026-09-28T08:00:00Z',
       capturedAt: '2026-09-28T09:00:00Z',
       status: 'captured',
+      attemptCount: 0,
+      lastError: null,
+      nextAttemptAt: null,
     },
   ],
+  total: 1,
+  page: 1,
+  limit: 50,
+  counts: { all: 1, waiting: 0, error: 0, captured: 1 },
+  reasons: [],
+  day: { captured: 1, failed: 0 },
 };
 
 describe('Страница наш.дом.рф', () => {
