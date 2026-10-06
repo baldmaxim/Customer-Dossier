@@ -58,6 +58,22 @@ const groupsOf = (alias: string): string => `
            SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
          OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))`;
 
+/**
+ * Пары «участник → группа» по тем же условиям, что groupsOf, — один раз на взятие из очереди (MATERIALIZED):
+ * проверка по каждой из тысяч компаний пересчитывала бы представление публикаций на каждую строку.
+ */
+const MEMBERSHIP_SQL = `
+  SELECT DISTINCT a.subject_company_id AS member_id, a.object_company_id AS group_id FROM assertions a
+  WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group'
+    AND a.subject_company_id <> a.object_company_id
+    AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
+    AND ((a.origin = 'registry' AND EXISTS (
+           SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
+         OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))`;
+
+/** СЗ по названию: своего сайта у специализированного застройщика обычно нет — сайт у группы. */
+const SZ_NAME_SQL = `(c.name ~ '^\\s*(СЗ|Сз|сз)(\\s|$)' OR c.name ~* '^\\s*специализированн')`;
+
 // ─── Очередь поиска ─────────────────────────────────────────────────────────────────────────
 
 export interface ISiteSearchTarget {
@@ -81,6 +97,8 @@ interface ICompanyRow {
   city: string | null;
   entity_type: string;
   tax_id: string | null;
+  /** В карточку по реестру или публикациям входят другие компании — это группа, даже если тип не «группа». */
+  has_members: boolean;
 }
 
 const projectsOf = async (client: PoolClient | null, companyId: number): Promise<string[]> => {
@@ -100,38 +118,44 @@ const toTarget = (row: ICompanyRow, projects: string[], attemptCount: number): I
   taxId: row.tax_id,
   city: row.city,
   projects,
-  isGroup: row.entity_type === 'group' || row.entity_type === 'brand',
+  isGroup: row.entity_type === 'group' || row.entity_type === 'brand' || row.has_members,
   attemptCount,
 });
 
 /**
- * Следующая компания к поиску: юрлицо с реквизитом или группа, срок пришёл, нет подтверждённого сайта и
- * нет кандидатов, ждущих решения (сначала решение оператора, потом новый платный поиск), и у её группы
- * сайт не подтверждён — СЗ группы показывают сайт группы. «На контроле» — вне очереди, затем срок, затем
- * заказчики и застройщики, с реквизитом, группы. Название без отличительных слов не ищется — помечается.
+ * Следующая компания к поиску: юрлицо с реквизитом или группа (тип «группа» или карточка, в которую входят другие
+ * компании), срок пришёл, нет подтверждённого сайта и нет кандидатов, ждущих решения (сначала решение оператора,
+ * потом новый платный поиск). Участник группы сам не ищется — у него сайт группы; искать его — только по «Искать
+ * снова» (06.10.2026: из 42 первых поисков 37 ушли на СЗ Донстроя, Смайнэкса и Инграда, своего сайта у СЗ нет).
+ * Порядок: «на контроле» → «Искать снова» → группы → заказчики и застройщики → не СЗ → с реквизитом → ещё не
+ * искавшиеся раньше повторов. Название без
+ * отличительных слов не ищется — помечается.
  */
 export const claimSiteSearch = async (): Promise<ISiteSearchTarget | null> =>
   withTransaction(async client => {
     const rows = (
       await client.query<ICompanyRow & { attempt_count: number | null }>(
-        `WITH roles AS MATERIALIZED (${ROLES_SQL})
-         SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id, s.attempt_count
+        `WITH roles AS MATERIALIZED (${ROLES_SQL}),
+              membership AS MATERIALIZED (${MEMBERSHIP_SQL})
+         SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id, s.attempt_count,
+                EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id) AS has_members
          FROM companies c
          ${TAX_ID_LATERAL}
          LEFT JOIN company_site_searches s ON s.company_id = c.id
          LEFT JOIN roles r ON r.company_id = c.id
          WHERE c.merged_into_id IS NULL
-           AND (c.entity_type IN ('group', 'brand') OR t.tax_id IS NOT NULL)
+           AND (c.entity_type IN ('group', 'brand') OR t.tax_id IS NOT NULL
+                OR EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id))
            AND (s.company_id IS NULL OR s.next_search_at <= now())
            AND NOT EXISTS (SELECT 1 FROM company_site_candidates k WHERE k.company_id = c.id AND k.state IN ('pending', 'confirmed'))
-           AND NOT EXISTS (
-             SELECT 1 FROM (${groupsOf('c')}) g
-             JOIN company_site_candidates k ON k.company_id = g.group_id AND k.state = 'confirmed')
+           AND (s.requested_by IS NOT NULL OR NOT EXISTS (SELECT 1 FROM membership m WHERE m.member_id = c.id))
          ORDER BY EXISTS (SELECT 1 FROM company_watch w WHERE w.company_id = c.id AND w.removed_at IS NULL) DESC,
-                  s.next_search_at NULLS LAST,
+                  (s.requested_by IS NOT NULL) DESC,
+                  (c.entity_type IN ('group', 'brand') OR EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id)) DESC,
                   coalesce(r.roles && ARRAY['customer', 'developer'], false) DESC,
+                  ${SZ_NAME_SQL} ASC,
                   (t.tax_id IS NOT NULL) DESC,
-                  (c.entity_type IN ('group', 'brand')) DESC,
+                  s.next_search_at NULLS FIRST,
                   c.id
          LIMIT $1`,
         [CLAIM_SKIP_MAX],
@@ -163,7 +187,9 @@ export const claimSiteSearch = async (): Promise<ISiteSearchTarget | null> =>
 /** Компания для пробы по реквизиту — без очереди и аренды. */
 export const loadSearchTargetByTaxId = async (taxId: string): Promise<ISiteSearchTarget | null> => {
   const row = await queryOne<ICompanyRow>(
-    `SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id
+    `WITH membership AS MATERIALIZED (${MEMBERSHIP_SQL})
+     SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id,
+            EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id) AS has_members
      FROM entity_identifiers ei
      JOIN companies c ON c.id = ei.company_id AND c.merged_into_id IS NULL
      ${TAX_ID_LATERAL}

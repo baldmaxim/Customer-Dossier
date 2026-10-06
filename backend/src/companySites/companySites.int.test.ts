@@ -82,11 +82,12 @@ afterAll(async () => {
 });
 
 describe('сайты компаний: очередь и поиск', () => {
-  it('очередь: заказчик с ИНН первым, затем юрлицо с ИНН, затем группа; без реквизита — нет; общее название — пометка', async () => {
-    const first = await claimSiteSearch();
-    expect(first).toMatchObject({ companyId: beta, taxId: INN, isGroup: false, projects: ['Демо-квартал Бета'] });
-    expect(await claimSiteSearch()).toMatchObject({ companyId: alpha, taxId: '7700001228' });
+  it('очередь: группа первой, затем заказчик с ИНН, затем юрлицо с ИНН; без реквизита — нет; общее название — пометка', async () => {
+    // Общее название группы («ГК») помечается при взятии, а не ищется.
     expect(await claimSiteSearch()).toMatchObject({ companyId: group, isGroup: true, taxId: null });
+    const next = await claimSiteSearch();
+    expect(next).toMatchObject({ companyId: beta, taxId: INN, isGroup: false, projects: ['Демо-квартал Бета'] });
+    expect(await claimSiteSearch()).toMatchObject({ companyId: alpha, taxId: '7700001228' });
     expect(await claimSiteSearch()).toBeNull();
     const marked = await pool().query<{ last_error: string; outcome: string }>('SELECT last_error, outcome FROM company_site_searches WHERE company_id = $1', [generic]);
     expect(marked.rows[0]).toEqual({ last_error: GENERIC_NAME_ERROR, outcome: 'none' });

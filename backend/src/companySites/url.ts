@@ -66,6 +66,8 @@ const NOT_COMPANY_SITE_DOMAINS: readonly string[] = [
   // Каталоги новостроек с отдельными страницами ЖК (проба 06.10.2026: «kutuzovgrad-ii.novopoisk.msk.ru» для Инграда).
   'novopoisk.msk.ru', 'novopoisk.ru', 'kvmeter.ru', 'kvadroom.ru', 'novostroyki.ru', 'novostroev.ru', 'novostrojki.ru',
   'novostroyki.org', 'nedvizhka.ru', 'kvartirkoff.ru', 'mirkvartir.ru', 'etagi.com', 'incom.ru',
+  // Из первого дня поиска (06.10.2026): каталог новостроек и сайт-каталог, перекидывающий на другой адрес.
+  'novostroy-gid.ru', 'catalogfactory.org',
   // Соцсети, мессенджеры, видео, справки.
   'vk.com', 'vk.ru', 'ok.ru', 't.me', 'telegram.me', 'telegram.org', 'facebook.com', 'instagram.com', 'youtube.com',
   'rutube.ru', 'dzen.ru', 'zen.yandex.ru', 'wikipedia.org', 'livejournal.com', 'pikabu.ru', 'otzovik.com', 'irecommend.ru',
