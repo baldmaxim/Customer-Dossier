@@ -8,7 +8,7 @@
 import { FC } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { ILlmKeyStatus, IParserApiRequestRow } from '../../api/types';
+import type { ILlmKeyStatus, IParserApiRequestRow, IParserApiServiceUsage, IParserApiSettings } from '../../api/types';
 import { ParserApiConnectionBadge } from '../../components/admin/ParserApiConnectionBadge';
 import { parserApiSettingsQuery, PARSER_API_SETTINGS_KEY } from '../../components/admin/parserApiSettings';
 import { ServiceKeyForm, type IServiceKeySaved } from '../../components/admin/ServiceKeyForm';
@@ -66,6 +66,12 @@ const RequestLine: FC<{ row: IParserApiRequestRow }> = ({ row }) => (
   </li>
 );
 
+/** «за сутки 31 из 1000, за месяц 120 из 1000 · пауза до 06.10.2026, 18:00 — месячный лимит сервиса». */
+const serviceUsageText = (s: IParserApiServiceUsage, limits: IParserApiSettings['limits']): string => {
+  const usage = `за сутки ${formatCount(s.day)} из ${formatCount(limits.daily)}, за месяц ${formatCount(s.month)} из ${formatCount(limits.monthly)}`;
+  return s.paused ? `${usage} · пауза до ${formatDateTime(s.paused.until)} — ${PARSER_API_OUTCOME_LABELS[s.paused.reason]}` : usage;
+};
+
 export const ParserApiPage: FC = () => {
   const canManage = useCan('parserapi.manage');
   const queryClient = useQueryClient();
@@ -100,7 +106,7 @@ export const ParserApiPage: FC = () => {
     );
   }
 
-  const { key, enabled, limits, kadMaxPages, kadCardsMax, usage, coverage, recent } = settings.data;
+  const { key, enabled, limits, kadMaxPages, kadCardsMax, services, coverage, recent } = settings.data;
 
   return (
     <Stack gap={4}>
@@ -114,8 +120,11 @@ export const ParserApiPage: FC = () => {
                 label: 'Проверка',
                 value: enabled ? 'по расписанию — компании «на контроле»; остальные — кнопкой в карточке' : 'только кнопкой в карточке компании',
               },
-              { label: 'Запросов за сутки', value: `${formatCount(usage.day)} из ${formatCount(limits.daily)}` },
-              { label: 'Запросов за месяц', value: `${formatCount(usage.month)} из ${formatCount(limits.monthly)} — полная проверка компании стоит 6–9 запросов` },
+              {
+                label: 'Лимит портала',
+                value: `на каждый сервис: ${formatCount(limits.daily)} за сутки, ${formatCount(limits.monthly)} за месяц — как тариф parser-api.com`,
+              },
+              ...services.map(s => ({ label: `Запросов ${s.service}`, value: serviceUsageText(s, limits) })),
               { label: 'На контроле с ИНН', value: formatCount(coverage.watched) },
               { label: 'Наборов проверено', value: formatCount(coverage.checked) },
               { label: 'Ждут проверки', value: formatCount(coverage.due) },
@@ -136,7 +145,7 @@ export const ParserApiPage: FC = () => {
               <p className={styles.muted}>Компании без ИНН и с несколькими разными ИНН не проверяются.</p>
               <Hint
                 label="где это настраивается"
-                text="PARSER_API_ENABLED — проверка по расписанию, PARSER_API_DAILY_LIMIT и PARSER_API_MONTHLY_LIMIT — лимиты портала, PARSER_API_KAD_MAX_PAGES — страниц картотеки, PARSER_API_KAD_CARDS_MAX — карточек дел; .env сервера."
+                text="PARSER_API_ENABLED — проверка по расписанию, PARSER_API_DAILY_LIMIT и PARSER_API_MONTHLY_LIMIT — лимиты портала на каждый сервис, PARSER_API_KAD_MAX_PAGES — страниц картотеки, PARSER_API_KAD_CARDS_MAX — карточек дел; .env сервера."
               />
             </Cluster>
           )}

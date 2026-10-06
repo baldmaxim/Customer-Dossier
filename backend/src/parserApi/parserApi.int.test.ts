@@ -61,17 +61,20 @@ describe('parser-api.com на базе (T24A-07)', () => {
     expect(await refreshParserApiDatasets(INN, ['tax'], 'ivanov', deps(answer))).toMatchObject({ datasets: { tax: { saved: false } } });
     const rows = await pool().query('SELECT count(*)::int AS n FROM parser_api_records WHERE inn = $1', [INN]);
     expect(rows.rows[0].n).toBe(1);
-    expect(await pgParserApiStore.usage()).toEqual({ day: 2, month: 2 });
+    expect(await pgParserApiStore.usage()).toMatchObject({ nalog_pb: { day: 2, month: 2 }, fssp: { day: 0, month: 0 } });
     const states = await loadParserApiStates(pool(), INN);
     expect(states.find(s => s.dataset === 'tax')).toMatchObject({ outcome: 'found', attemptCount: 0, record: { complete: true, missing: [] } });
     expect(states.find(s => s.dataset === 'courts')).toMatchObject({ outcome: null, record: null });
   });
 
-  it('резерв: лимит портала исчерпан — запроса нет, строки журнала нет', async () => {
+  it('резерв: лимит портала исчерпан у сервиса — запроса нет, строки журнала нет; у другого сервиса место своё', async () => {
     const before = (await pool().query('SELECT count(*)::int AS n FROM parser_api_requests')).rows[0].n;
-    const res = await refreshParserApiDatasets(INN, ['fssp'], 'scheduler', deps(call({ done: 1, result: [] }), 2));
-    expect(res).toMatchObject({ status: 'stopped', reason: 'daily_limit' });
+    const res = await refreshParserApiDatasets(INN, ['tax'], 'scheduler', deps(call({ success: 1, org: [] }), 2));
+    expect(res).toMatchObject({ status: 'done', blocked: { nalog_pb: 'daily_limit' }, datasets: { tax: { status: 'failed' } } });
     expect((await pool().query('SELECT count(*)::int AS n FROM parser_api_requests')).rows[0].n).toBe(before);
+    const other = await pgParserApiStore.reserve({ method: 'fssp_ur', inn: INN, page: null, actor: 'test' }, { daily: 2, monthly: 200 });
+    expect(other.ok).toBe(true);
+    if (other.ok) await pgParserApiStore.finish(other.id, { outcome: 'network', httpStatus: null, apiCode: null, error: 'тест' });
   });
 
   it('сбой — повтор через час, ошибка видна; отказ не оплачивается', async () => {
@@ -134,9 +137,9 @@ describe('parser-api.com на базе (T24A-07)', () => {
     };
     const byMethod: typeof callParserApi = async method => ({ ok: true, httpStatus: 200, body: replies[method]! }) as ParserApiCallResult;
     const first = await refreshParserApiDatasets(INN, ['bankruptcy'], 'ivanov', deps(byMethod));
-    expect(first).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: true } } });
+    expect(first).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: true } }, blocked: {} });
     const second = await refreshParserApiDatasets(INN, ['bankruptcy'], 'ivanov', deps(byMethod));
-    expect(second).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: false } } });
+    expect(second).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: false } }, blocked: {} });
     const journal = (await pool().query<{ method: string; n: number }>(
       `SELECT method, count(*)::int AS n FROM parser_api_requests WHERE method LIKE 'fedresurs%' GROUP BY method ORDER BY method`,
     )).rows;

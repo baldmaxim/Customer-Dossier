@@ -38,7 +38,12 @@ export interface IParserApiTarget {
  * Компании «на контроле» с одним ИНН, у которых хоть один набор ждёт проверки. Первыми — не проверявшиеся,
  * затем самые давние.
  */
-export const dueParserApiTargets = async (db: DbExecutor, limit: number): Promise<IParserApiTarget[]> => {
+export const dueParserApiTargets = async (
+  db: DbExecutor,
+  limit: number,
+  /** Наборы, которые можно спрашивать сейчас: у исчерпанного сервиса тарифа набор ждёт и очередь не держит. */
+  datasets: readonly ParserApiDataset[] = PARSER_API_DATASETS,
+): Promise<IParserApiTarget[]> => {
   const rows = (
     await db.query<{ companyId: number; inn: string; due: string[] }>(
       `WITH watched AS MATERIALIZED (
@@ -62,7 +67,7 @@ export const dueParserApiTargets = async (db: DbExecutor, limit: number): Promis
        GROUP BY company_id, inn, added_at
        ORDER BY bool_or(next_check_at IS NULL) DESC, min(next_check_at) NULLS FIRST, added_at, company_id
        LIMIT $1`,
-      [limit, [...PARSER_API_DATASETS]],
+      [limit, [...datasets]],
     )
   ).rows;
   return rows.map(r => ({

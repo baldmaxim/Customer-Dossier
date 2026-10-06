@@ -38,9 +38,9 @@ const memoryStore = (known: string[] = [], daily = 20) => {
   const journal: Array<{ method: string; outcome?: string }> = [];
   const saved: string[] = [];
   const store: IParserApiStore = {
-    usage: async () => ({ day: 0, month: 0 }),
+    usage: async () => ({}),
     reserve: async entry => {
-      if (journal.filter(j => j.outcome !== 'network').length + 1 > daily) return { ok: false, reason: 'daily_limit', usage: { day: daily, month: daily } };
+      if (journal.filter(j => j.outcome !== 'network').length + 1 > daily) return { ok: false, reason: 'daily_limit', service: 'arbitr', usage: { day: daily, month: daily } };
       journal.push({ method: entry.method });
       return { ok: true, id: journal.length - 1 };
     },

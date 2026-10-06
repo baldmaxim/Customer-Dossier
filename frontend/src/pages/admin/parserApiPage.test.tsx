@@ -29,7 +29,10 @@ const settings = (over: Partial<IParserApiSettings> = {}): IParserApiSettings =>
   enabled: false,
   limits: { daily: 20, monthly: 200 },
   kadMaxPages: 3,
-  usage: { day: 4, month: 37 },
+  services: [
+    { service: 'nalog_bo', day: 4, month: 37, paused: null },
+    { service: 'arbitr', day: 20, month: 120, paused: { reason: 'daily_limit', until: '2026-10-06T15:00:00Z' } },
+  ],
   coverage: { watched: 5, checked: 12, failing: 1, due: 13 },
   recent: [
     { requestedAt: '2026-10-06T08:00:00Z', method: 'kad_search', inn: '7736255508', page: 2, httpStatus: 403, apiCode: 40303, outcome: 'ip_rejected', billable: false, error: 'IP', actor: 'scheduler' },
@@ -48,13 +51,14 @@ const ADMIN: AccessPermission[] = ['portal.read', 'admin.view', 'sources.manage'
 const OPERATOR: AccessPermission[] = ['portal.read', 'admin.view', 'sources.manage'];
 
 describe('страница parser-api.com', () => {
-  it('состояние: только кнопкой, расход за сутки и месяц, охват; журнал — подписями, оплаченное помечено', async () => {
+  it('состояние: только кнопкой, расход по сервисам тарифа, пауза сервиса, охват; журнал — подписями, оплаченное помечено', async () => {
     fakeApi([{ match: 'GET /api/admin/parser-api', respond: () => ({ status: 200, body: settings() }) }]);
     renderWithProviders(as(ADMIN, <ParserApiPage />));
 
     expect(await screen.findByText('только кнопкой в карточке компании')).toBeTruthy();
-    expect(screen.getByText('4 из 20')).toBeTruthy();
-    expect(screen.getByText(/37 из 200 — полная проверка компании стоит 6–9 запросов/)).toBeTruthy();
+    expect(screen.getByText('на каждый сервис: 20 за сутки, 200 за месяц — как тариф parser-api.com')).toBeTruthy();
+    expect(screen.getByText('за сутки 4 из 20, за месяц 37 из 200')).toBeTruthy();
+    expect(screen.getByText(/^за сутки 20 из 20, за месяц 120 из 200 · пауза до .* — суточный лимит сервиса$/)).toBeTruthy();
     expect(screen.getByText(/картотека дел · ИНН 7736255508 · стр\. 2 · адрес портала не разрешён \(HTTP 403, код 40303\) · по расписанию/)).toBeTruthy();
     expect(screen.getByText(/ГИР БО: отчётность · ИНН 7736255508 · ответ получен \(списан с тарифа\) · boss/)).toBeTruthy();
     expect(screen.getByText('Без ключа портал к parser-api.com не обращается.')).toBeTruthy();

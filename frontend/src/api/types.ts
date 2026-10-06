@@ -1736,7 +1736,18 @@ export interface IFocusKeySaved {
 // ─── parser-api.com (этап 24A) ───────────────────────────────────────────────
 
 export type ParserApiDataset = 'finance' | 'tax' | 'courts' | 'fssp' | 'bankruptcy';
-export type ParserApiMethod = 'bo_search' | 'bo_details' | 'pb_org' | 'kad_search' | 'fssp_ur' | 'fedresurs_ur' | 'fedresurs_org' | 'key_check';
+export type ParserApiMethod =
+  | 'bo_search'
+  | 'bo_details'
+  | 'pb_org'
+  | 'kad_search'
+  | 'kad_details'
+  | 'fssp_ur'
+  | 'fedresurs_ur'
+  | 'fedresurs_org'
+  | 'fedresurs_messages'
+  | 'fedresurs_message'
+  | 'key_check';
 export type ParserApiRequestOutcome =
   | 'pending'
   | 'ok'
@@ -1774,9 +1785,18 @@ export interface IParserApiSettings {
   kadMaxPages: number;
   /** Карточек дел (суммы исков) за проверку компании; у старого сервера поля нет. */
   kadCardsMax?: number;
-  usage: { day: number; month: number };
+  /** Расход по сервисам тарифа (лимит — на каждый); пауза — недавний отказ сервиса или свой лимит портала. */
+  services: IParserApiServiceUsage[];
   coverage: { watched: number; checked: number; failing: number; due: number };
   recent: IParserApiRequestRow[];
+}
+
+export interface IParserApiServiceUsage {
+  /** Сервис тарифа parser-api.com: nalog_bo, nalog_pb, arbitr, fssp, fedresurs. */
+  service: string;
+  day: number;
+  month: number;
+  paused: { reason: ParserApiRequestOutcome; until: string } | null;
 }
 
 /** Состояние набора сведений компании: не проверяли (outcome null без ошибки), есть, нет, часть, ошибка. */
@@ -2032,6 +2052,8 @@ export interface ICompanyChecksResponse {
 /** Ответ «Обновить» (POST /companies/:id/parser-api/refresh): карточки дел догружаются после ответа. */
 export interface IParserApiRefreshResponse {
   cards?: { pending: number; started: boolean };
+  /** Исчерпанные сервисы словами: их наборы не обновлены; null — все запрошены. */
+  blockedNote?: string | null;
 }
 
 /** Сроки и продажи по снимкам ДОМ.РФ (этап 24E): GET /api/companies/:id/delivery. */

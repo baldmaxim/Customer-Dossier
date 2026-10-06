@@ -180,7 +180,8 @@ export const parseEnv = (source: EnvSource) => {
     PARSER_API_ENABLED: parseStrictBool('PARSER_API_ENABLED', source.PARSER_API_ENABLED, false),
     // Секрет: не логируется и не входит в manifest. Ключ из админки главнее.
     PARSER_API_KEY: source.PARSER_API_KEY?.trim() ?? '',
-    // Предел запросов портала (расписание, кнопка и проба вместе): скользящие сутки и календарный месяц.
+    // Предел запросов портала на КАЖДЫЙ сервис тарифа (arbitr, fssp, fedresurs, nalog_bo, nalog_pb — так считает
+    // parser-api.com; расписание, кнопка и проба вместе): скользящие сутки и календарный месяц.
     PARSER_API_DAILY_LIMIT: parsePositiveInt('PARSER_API_DAILY_LIMIT', source.PARSER_API_DAILY_LIMIT, 20),
     PARSER_API_MONTHLY_LIMIT: parsePositiveInt('PARSER_API_MONTHLY_LIMIT', source.PARSER_API_MONTHLY_LIMIT, 200),
     // Страниц картотеки арбитражных дел на компанию: больше — набор помечается неполным, а не «дел нет».

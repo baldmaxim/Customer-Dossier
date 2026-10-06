@@ -260,7 +260,8 @@ export const CompanyChecks: FC<{ companyId: number }> = ({ companyId }) => {
     mutationFn: () => api.post<IParserApiRefreshResponse>(`/api/companies/${companyId}/parser-api/refresh`, { datasets: ['courts', 'fssp', 'bankruptcy'] }),
     onSuccess: res => {
       const cards = res.cards?.started ? ` Суммы исков — по ${formatCount(res.cards.pending)} делам, появятся по мере получения.` : '';
-      toast.show({ tone: 'success', text: `Картотека дел, ФССП и Федресурс запрошены заново.${cards}` });
+      if (res.blockedNote) toast.show({ tone: 'warning', text: `Не всё обновлено — ${res.blockedNote}.${cards}` });
+      else toast.show({ tone: 'success', text: `Картотека дел, ФССП и Федресурс запрошены заново.${cards}` });
       void client.invalidateQueries({ queryKey: companyChecksKey(companyId) });
     },
     onError: (err: Error) => {

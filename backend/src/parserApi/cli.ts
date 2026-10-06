@@ -51,7 +51,8 @@ const status = async (): Promise<void> => {
   console.log(`[parser-api] ключ: ${keyLine}${key.problem ? ` (проблема: ${key.problem})` : ''}`);
   console.log(`[parser-api] по расписанию: ${env.PARSER_API_ENABLED ? 'да, компании «на контроле»' : 'нет (PARSER_API_ENABLED=false)'}`);
   const usage = await pgParserApiStore.usage();
-  console.log(`[parser-api] запросов: за сутки ${usage.day} из ${env.PARSER_API_DAILY_LIMIT}, за месяц ${usage.month} из ${env.PARSER_API_MONTHLY_LIMIT}`);
+  console.log(`[parser-api] лимит портала на сервис: за сутки ${env.PARSER_API_DAILY_LIMIT}, за месяц ${env.PARSER_API_MONTHLY_LIMIT}`);
+  for (const [service, u] of Object.entries(usage)) console.log(`  ${service}: за сутки ${u.day}, за месяц ${u.month}`);
   const c = await parserApiCoverage(getPool());
   console.log(`[parser-api] на контроле с ИНН: ${c.watched}; наборов проверено ${c.checked}, ждут ${c.due}, с ошибкой ${c.failing}`);
 };
@@ -101,7 +102,7 @@ const claimSumShape = (body: Record<string, unknown>): string[] => {
 const probe = async (method: ParserApiMethod, inn: string, id: string | null): Promise<void> => {
   const key = await requireKey();
   const reserved = await pgParserApiStore.reserve({ method, inn, page: null, actor: 'cli-probe' }, limits());
-  if (!reserved.ok) throw new Error(`лимит портала: сутки ${reserved.usage.day} из ${env.PARSER_API_DAILY_LIMIT}, месяц ${reserved.usage.month} из ${env.PARSER_API_MONTHLY_LIMIT}`);
+  if (!reserved.ok) throw new Error(`лимит портала ${reserved.service}: сутки ${reserved.usage.day} из ${env.PARSER_API_DAILY_LIMIT}, месяц ${reserved.usage.month} из ${env.PARSER_API_MONTHLY_LIMIT}`);
   const res = await callParserApi(method, probeParams(method, inn, id), key);
   await pgParserApiStore.finish(
     reserved.id,

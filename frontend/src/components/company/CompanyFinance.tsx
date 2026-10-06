@@ -14,7 +14,7 @@ import { FC, ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { FinanceLine, IFinanceView, IParserApiDatasetState, IPbPerson, ITaxView } from '../../api/types';
+import type { FinanceLine, IFinanceView, IParserApiDatasetState, IParserApiRefreshResponse, IPbPerson, ITaxView } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
 import { FINANCE_LINE_LABELS, formatDate, formatMoney } from '../../lib/labels';
@@ -213,9 +213,10 @@ export const CompanyFinance: FC<{ companyId: number }> = ({ companyId }) => {
   const client = useQueryClient();
   const toast = useToast();
   const refresh = useMutation({
-    mutationFn: () => api.post<unknown>(`/api/companies/${companyId}/parser-api/refresh`, { datasets: ['finance', 'tax'] }),
-    onSuccess: () => {
-      toast.show({ tone: 'success', text: 'Отчётность и сведения ФНС запрошены заново.' });
+    mutationFn: () => api.post<IParserApiRefreshResponse>(`/api/companies/${companyId}/parser-api/refresh`, { datasets: ['finance', 'tax'] }),
+    onSuccess: res => {
+      if (res.blockedNote) toast.show({ tone: 'warning', text: `Не всё обновлено — ${res.blockedNote}.` });
+      else toast.show({ tone: 'success', text: 'Отчётность и сведения ФНС запрошены заново.' });
       void client.invalidateQueries({ queryKey: companyFinanceKey(companyId) });
     },
     onError: (err: Error) => {

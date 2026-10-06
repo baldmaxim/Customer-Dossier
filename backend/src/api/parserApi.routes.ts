@@ -12,12 +12,13 @@ import { actorOfContext, LOCAL_CONTEXT } from '../auth/service.js';
 import { env } from '../config/env.js';
 import { getPool, query } from '../db/pool.js';
 import { caseCardsRunning, fetchCaseCards, pendingCaseCards } from '../parserApi/caseCards.js';
-import { checkParserApiKey } from '../parserApi/client.js';
-import { isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
+import { checkParserApiKey, PARSER_API_SERVICES } from '../parserApi/client.js';
+import { DATASET_SERVICE, isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
 import { loadCompanyChecks } from '../parserApi/checks.js';
 import { loadCompanyFinance } from '../parserApi/finance.js';
 import { loadParserApiStates, parserApiConnection, parserApiCoverage } from '../parserApi/read.js';
-import { refreshParserApiDatasets, type ParserApiStopReason } from '../parserApi/refresh.js';
+import { refreshParserApiDatasets, type ParserApiRefreshResult, type ParserApiStopReason } from '../parserApi/refresh.js';
+import { pausedServices } from '../parserApi/servicePauses.js';
 import { pgParserApiStore } from '../parserApi/store.js';
 import { companyInn } from '../parserApi/targets.js';
 import { clearParserApiKey, loadStoredParserApiKey, normalizeParserApiKey, parserApiKey, saveParserApiKey } from '../settings/parserApiKey.js';
@@ -126,19 +127,28 @@ parserApiRouter.post('/companies/:id/parser-api/refresh', async (req, res) => {
     return;
   }
   const deps = { store: pgParserApiStore, key, limits: limits() };
-  const result =
+  const result: ParserApiRefreshResult =
     datasets.length > 0
       ? await refreshParserApiDatasets(target.inn, datasets, actorOf(req), { ...deps, kadMaxPages: env.PARSER_API_KAD_MAX_PAGES })
-      : ({ status: 'done', datasets: {} } as const);
+      : { status: 'done', datasets: {}, blocked: {} };
   const states = await loadParserApiStates(getPool(), target.inn);
   if (result.status === 'stopped') {
     const { status, error } = STOP_ERRORS[result.reason];
     res.status(status).json({ error, code: `parser_api_${result.reason}`, datasets: result.datasets, states });
     return;
   }
+  // Тариф — по сервисам: исчерпанный сервис не мешает остальным. Ошибка — только если не удалось ни одного набора.
+  const blockedServices = Object.entries(result.blocked);
+  const blockedNote = blockedServices.map(([service, why]) => `${service}: ${STOP_ERRORS[why].error.toLowerCase()}`).join('; ');
+  const arbitrBlocked = result.blocked[DATASET_SERVICE.courts] !== undefined;
+  if (datasets.length > 0 && datasets.every(d => result.blocked[DATASET_SERVICE[d]] !== undefined) && (!wantsCards || arbitrBlocked)) {
+    const [, why] = blockedServices[0]!;
+    res.status(STOP_ERRORS[why].status).json({ error: `Лимит сервиса parser-api.com — ${blockedNote}`, code: `parser_api_${why}`, datasets: result.datasets, states, blocked: result.blocked });
+    return;
+  }
   // Карточки дел — после ответа: каждая — отдельный запрос сервиса, вместе они не уложатся в ожидание прокси.
   // Экран видит claimsFetching в /registry-checks и обновляется сам.
-  const pending = wantsCards ? await pendingCaseCards(target.inn, pgParserApiStore) : [];
+  const pending = wantsCards && !arbitrBlocked ? await pendingCaseCards(target.inn, pgParserApiStore) : [];
   const cardsStarted = pending.length > 0 && !caseCardsRunning(target.inn);
   if (cardsStarted) {
     void fetchCaseCards(target.inn, actorOf(req), env.PARSER_API_KAD_CARDS_MAX, deps)
@@ -147,7 +157,13 @@ parserApiRouter.post('/companies/:id/parser-api/refresh', async (req, res) => {
       })
       .catch(err => console.error(`[parser-api] карточки дел ИНН ${target.inn}: ${err instanceof Error ? err.message : String(err)}`));
   }
-  res.json({ datasets: result.datasets, states, cards: { pending: Math.min(pending.length, env.PARSER_API_KAD_CARDS_MAX), started: cardsStarted } });
+  res.json({
+    datasets: result.datasets,
+    states,
+    cards: { pending: Math.min(pending.length, env.PARSER_API_KAD_CARDS_MAX), started: cardsStarted },
+    blocked: result.blocked,
+    blockedNote: blockedNote === '' ? null : blockedNote,
+  });
 });
 
 parserApiRouter.get('/admin/parser-api', async (_req, res) => {
@@ -163,6 +179,7 @@ parserApiRouter.get('/admin/parser-api', async (_req, res) => {
       [RECENT_REQUESTS],
     ),
   ]);
+  const paused = pausedServices();
   res.json({
     key,
     connection,
@@ -170,7 +187,11 @@ parserApiRouter.get('/admin/parser-api', async (_req, res) => {
     limits: limits(),
     kadMaxPages: env.PARSER_API_KAD_MAX_PAGES,
     kadCardsMax: env.PARSER_API_KAD_CARDS_MAX,
-    usage,
+    // Тариф — по сервисам: лимит портала у каждого свой; пауза — недавний отказ сервиса или свой лимит.
+    services: PARSER_API_SERVICES.map(service => {
+      const pause = paused.get(service);
+      return { service, ...(usage[service] ?? { day: 0, month: 0 }), paused: pause ? { reason: pause.reason, until: new Date(pause.until).toISOString() } : null };
+    }),
     coverage,
     recent,
   });

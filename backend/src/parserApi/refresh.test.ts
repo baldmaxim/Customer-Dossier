@@ -2,23 +2,27 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { callParserApi, ParserApiCallResult } from './client.js';
+import { serviceOf, type callParserApi, type ParserApiCallResult } from './client.js';
 import { refreshParserApiDatasets } from './refresh.js';
 import type { IJournalFinish, IParserApiStore, IParserApiUsage } from './store.js';
 
 const INN = '7736255508';
 
-const memoryStore = (usage: IParserApiUsage = { day: 0, month: 0 }) => {
+/** Хранилище в памяти; лимит — по сервису тарифа, как в базе. */
+const memoryStore = (before: Record<string, IParserApiUsage> = {}) => {
   const journal: Array<{ method: string; finish?: IJournalFinish }> = [];
   const records: Array<{ dataset: string; complete: boolean }> = [];
   const checked: Array<{ dataset: string; outcome: string; requestedBy: string | null }> = [];
   const failed: Array<{ dataset: string; error: string }> = [];
   const store: IParserApiStore = {
-    usage: async () => usage,
+    usage: async () => before,
     reserve: async (entry, limits) => {
-      const used = journal.filter(j => !j.finish || j.finish.outcome === 'ok').length;
-      if (usage.day + used + 1 > limits.daily) return { ok: false, reason: 'daily_limit', usage: { day: usage.day + used, month: usage.month + used } };
-      if (usage.month + used + 1 > limits.monthly) return { ok: false, reason: 'monthly_limit', usage: { day: usage.day + used, month: usage.month + used } };
+      const service = serviceOf(entry.method);
+      const base = before[service] ?? { day: 0, month: 0 };
+      const used = journal.filter(j => serviceOf(j.method as 'key_check') === service && (!j.finish || j.finish.outcome === 'ok')).length;
+      const usage = { day: base.day + used, month: base.month + used };
+      if (usage.day + 1 > limits.daily) return { ok: false, reason: 'daily_limit', service, usage };
+      if (usage.month + 1 > limits.monthly) return { ok: false, reason: 'monthly_limit', service, usage };
       journal.push({ method: entry.method });
       return { ok: true, id: journal.length - 1 };
     },
@@ -64,7 +68,11 @@ describe('refreshParserApiDatasets (T24A-06)', () => {
       kadMaxPages: 3,
       call: fakeCall([ok({ success: 1, org: [{ inn: INN }] }), ok({ done: 1, result: [] })]),
     });
-    expect(res).toEqual({ status: 'done', datasets: { tax: { status: 'checked', outcome: 'found', saved: true }, fssp: { status: 'checked', outcome: 'not_found', saved: true } } });
+    expect(res).toEqual({
+      status: 'done',
+      datasets: { tax: { status: 'checked', outcome: 'found', saved: true }, fssp: { status: 'checked', outcome: 'not_found', saved: true } },
+      blocked: {},
+    });
     expect(m.journal.map(j => [j.method, j.finish?.outcome])).toEqual([
       ['pb_org', 'ok'],
       ['fssp_ur', 'ok'],
@@ -75,17 +83,53 @@ describe('refreshParserApiDatasets (T24A-06)', () => {
     ]);
   });
 
-  it('лимит портала кончился посреди набора — снимок части, проход остановлен, срок не сдвинут как неудача', async () => {
-    const m = memoryStore({ day: 19, month: 0 });
+  it('лимит портала сервиса кончился посреди набора — снимок части, срок не сдвинут как неудача; другие сервисы идут', async () => {
+    // У nalog_bo осталось одно место; у nalog_pb (налоги) лимит свой.
+    const m = memoryStore({ nalog_bo: { day: 19, month: 19 } });
     const res = await refreshParserApiDatasets(INN, ['finance', 'tax'], 'scheduler', {
       store: m.store,
       key: 'k',
       limits,
       kadMaxPages: 3,
-      call: fakeCall([ok({ success: 1, items: [{ id: 7, inn: INN }] })]),
+      call: fakeCall([ok({ success: 1, items: [{ id: 7, inn: INN }] }), ok({ success: 1, org: [{ inn: INN }] })]),
     });
-    expect(res).toMatchObject({ status: 'stopped', reason: 'daily_limit', datasets: { finance: { status: 'checked', outcome: 'partial' } } });
-    expect(m.records).toEqual([{ dataset: 'finance', complete: false }]);
+    expect(res).toMatchObject({
+      status: 'done',
+      blocked: { nalog_bo: 'daily_limit' },
+      datasets: { finance: { status: 'checked', outcome: 'partial' }, tax: { status: 'checked', outcome: 'found' } },
+    });
+    expect(m.records).toEqual([
+      { dataset: 'finance', complete: false },
+      { dataset: 'tax', complete: true },
+    ]);
+    expect(m.failed).toEqual([]);
+  });
+
+  it('отказ сервиса по месячному лимиту (40305) — его наборы дальше не спрашиваются, у других компаний прохода тоже', async () => {
+    const m = memoryStore();
+    const blocked = new Map();
+    const refused: ParserApiCallResult = { ok: false, failure: 'monthly_limit', httpStatus: 403, apiCode: 40305, error: 'Month limit of requests exceeded' };
+    const first = await refreshParserApiDatasets(INN, ['courts', 'fssp'], 'scheduler', {
+      store: m.store,
+      key: 'k',
+      limits,
+      kadMaxPages: 3,
+      blocked,
+      call: fakeCall([refused, ok({ done: 1, result: [] })]),
+    });
+    expect(first).toMatchObject({ status: 'done', blocked: { arbitr: 'monthly_limit' }, datasets: { courts: { status: 'failed' }, fssp: { status: 'checked' } } });
+    // Вторая компания того же прохода: картотека не спрашивается вовсе, ФССП — да.
+    const second = await refreshParserApiDatasets('7704412966', ['courts', 'fssp'], 'scheduler', {
+      store: m.store,
+      key: 'k',
+      limits,
+      kadMaxPages: 3,
+      blocked,
+      call: fakeCall([ok({ done: 1, result: [] })]),
+    });
+    expect(second).toMatchObject({ datasets: { courts: { status: 'failed', error: 'arbitr: monthly_limit — не запрашивалось' }, fssp: { status: 'checked' } } });
+    expect(m.journal.map(j => j.method)).toEqual(['kad_search', 'fssp_ur', 'fssp_ur']);
+    // Лимит — не неудача набора: срок проверки картотеки не сдвинут.
     expect(m.failed).toEqual([]);
   });
 

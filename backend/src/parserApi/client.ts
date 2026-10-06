@@ -33,6 +33,24 @@ export type ParserApiMethod = keyof typeof PARSER_API_METHODS;
 
 export const isParserApiMethod = (value: string): value is ParserApiMethod => Object.hasOwn(PARSER_API_METHODS, value);
 
+/**
+ * Сервис тарифа — первая часть пути без «_api»: nalog_bo, nalog_pb, arbitr, fssp, fedresurs. Тариф parser-api.com
+ * считается по сервисам: у каждого свои лимиты суток и месяца и своя подписка. Проверка ключа идёт поиском ГИР БО.
+ */
+export const serviceOf = (method: ParserApiMethod | 'key_check'): string =>
+  method === 'key_check' ? serviceOf('bo_search') : PARSER_API_METHODS[method].split('/')[0]!.replace(/_api$/, '');
+
+const ALL_METHODS = Object.keys(PARSER_API_METHODS) as ParserApiMethod[];
+
+/** Сервисы, которые портал спрашивает, в порядке методов. */
+export const PARSER_API_SERVICES: readonly string[] = [...new Set(ALL_METHODS.map(serviceOf))];
+
+/** Методы сервиса в журнале — по ним считается его лимит. */
+export const methodsOfService = (service: string): string[] => [
+  ...ALL_METHODS.filter(m => serviceOf(m) === service),
+  ...(serviceOf('key_check') === service ? ['key_check'] : []),
+];
+
 export type ParserApiFailure =
   | 'key_rejected'
   | 'subscription_expired'

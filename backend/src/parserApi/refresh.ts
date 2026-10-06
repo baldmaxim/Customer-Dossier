@@ -2,15 +2,18 @@
 //
 // Каждый запрос — место в лимите тарифа, поэтому:
 //  - без ключа запросов нет вовсе;
-//  - перед каждым запросом — резерв в лимите портала (сутки и месяц); нет места — проход останавливается;
-//  - ключ не принят, подписка истекла, адрес не разрешён, лимит сервиса — проход останавливается, очередь
-//    не перебирается: следующий запрос получил бы тот же отказ;
+//  - перед каждым запросом — резерв в лимите портала по сервису тарифа (сутки и месяц);
+//  - ключ не принят или адрес не разрешён — проход останавливается, очередь не перебирается: следующий запрос
+//    любого сервиса получил бы тот же отказ;
+//  - лимит или подписка одного сервиса (свой лимит портала, 40302 / 40304 / 40305) — наборы этого сервиса дальше
+//    не спрашиваются, остальные идут: тариф parser-api.com считается по сервисам (servicePauses.ts);
 //  - неудача первого запроса набора — набор уходит на повтор с растущей паузой, снимка нет;
 //  - неудача позже (детали, страница картотеки) — снимок того, что получено, с пометкой, чего нет (partial).
 
 import type { ISafeFetchDeps } from '../net/safeFetch.js';
-import { callParserApi, type ParserApiFailure } from './client.js';
-import { DATASET_REFRESH_DAYS, runDataset, type DatasetOutcome, type DatasetStep, type ParserApiDataset } from './datasets.js';
+import { callParserApi, serviceOf, type ParserApiFailure } from './client.js';
+import { DATASET_REFRESH_DAYS, DATASET_SERVICE, runDataset, type DatasetOutcome, type DatasetStep, type ParserApiDataset } from './datasets.js';
+import { isServiceStop, pauseService, resumeService } from './servicePauses.js';
 import { SCHEDULER_ACTOR, type IParserApiLimits, type IParserApiStore } from './store.js';
 
 export type ParserApiStopReason = 'no_key' | 'daily_limit' | 'monthly_limit' | 'key_rejected' | 'subscription_expired' | 'ip_rejected';
@@ -22,7 +25,12 @@ export type DatasetRefreshResult =
   | { status: 'failed'; error: string };
 
 export type ParserApiRefreshResult =
-  | { status: 'done'; datasets: Partial<Record<ParserApiDataset, DatasetRefreshResult>> }
+  | {
+      status: 'done';
+      datasets: Partial<Record<ParserApiDataset, DatasetRefreshResult>>;
+      /** Сервисы, исчерпанные в этом проходе (лимит, подписка): их наборы не спрашивались. */
+      blocked: Record<string, ParserApiStopReason>;
+    }
   | { status: 'stopped'; reason: ParserApiStopReason; detail: string; datasets: Partial<Record<ParserApiDataset, DatasetRefreshResult>> };
 
 export interface IParserApiRefreshDeps {
@@ -33,6 +41,8 @@ export interface IParserApiRefreshDeps {
   call?: typeof callParserApi;
   fetchDeps?: ISafeFetchDeps;
   now?: () => Date;
+  /** Исчерпанные сервисы — общие для компаний одного прохода расписания. */
+  blocked?: Map<string, ParserApiStopReason>;
 }
 
 /** Один запрос: резерв в лимите портала → запрос → итог в журнал; stop — дальше в этом проходе нельзя. */
@@ -40,10 +50,12 @@ export const parserApiStep = (inn: string, actor: string, key: string, deps: Omi
   const { store, limits } = deps;
   const call = deps.call ?? callParserApi;
   return async (method, params, page) => {
+    const service = serviceOf(method);
     const reserved = await store.reserve({ method, inn, page: page ?? null, actor }, limits);
     if (!reserved.ok) {
       const limit = reserved.reason === 'daily_limit' ? `за сутки ${reserved.usage.day} из ${limits.daily}` : `за месяц ${reserved.usage.month} из ${limits.monthly}`;
-      return { ok: false, failure: reserved.reason, httpStatus: null, apiCode: null, error: `лимит портала: ${limit}`, stop: true };
+      pauseService(service, reserved.reason);
+      return { ok: false, failure: reserved.reason, httpStatus: null, apiCode: null, error: `лимит портала ${service}: ${limit}`, stop: true };
     }
     const res = await call(method, params, key, deps.fetchDeps);
     await store.finish(
@@ -52,7 +64,12 @@ export const parserApiStep = (inn: string, actor: string, key: string, deps: Omi
         ? { outcome: 'ok', httpStatus: res.httpStatus, apiCode: null, error: null }
         : { outcome: res.failure, httpStatus: res.httpStatus, apiCode: res.apiCode, error: res.error },
     );
-    return res.ok ? res : { ...res, stop: STOPPING.has(res.failure) };
+    if (res.ok) {
+      resumeService(service);
+      return res;
+    }
+    if (isServiceStop(res.failure)) pauseService(service, res.failure);
+    return { ...res, stop: STOPPING.has(res.failure) };
   };
 };
 
@@ -68,8 +85,16 @@ export const refreshParserApiDatasets = async (
 
   const requestedBy = actor === SCHEDULER_ACTOR ? null : actor;
   const step = parserApiStep(inn, actor, key, deps);
+  const blocked = deps.blocked ?? new Map<string, ParserApiStopReason>();
 
   for (const dataset of datasets) {
+    const service = DATASET_SERVICE[dataset];
+    const exhausted = blocked.get(service);
+    if (exhausted) {
+      // Срок проверки не сдвигаем: спросим, когда у сервиса освободится место.
+      results[dataset] = { status: 'failed', error: `${service}: ${exhausted} — не запрашивалось` };
+      continue;
+    }
     // Сообщения ЕФРСБ неизменны: полученные прошлым снимком карточки не оплачиваются снова.
     const previous = dataset === 'bankruptcy' ? await store.latestRecord(inn, dataset) : null;
     const run = await runDataset(dataset, inn, step, { kadMaxPages: deps.kadMaxPages, now: deps.now?.() ?? new Date(), previous });
@@ -82,7 +107,8 @@ export const refreshParserApiDatasets = async (
       if (run.stop !== 'daily_limit' && run.stop !== 'monthly_limit') await store.markFailed(inn, dataset, run.error, requestedBy);
       results[dataset] = { status: 'failed', error: run.error };
     }
-    if (run.stop) return { status: 'stopped', reason: run.stop as ParserApiStopReason, detail: run.status === 'failed' ? run.error : `${dataset}: ${run.stop}`, datasets: results };
+    if (run.stop && isServiceStop(run.stop)) blocked.set(service, run.stop as ParserApiStopReason);
+    else if (run.stop) return { status: 'stopped', reason: run.stop as ParserApiStopReason, detail: run.status === 'failed' ? run.error : `${dataset}: ${run.stop}`, datasets: results };
   }
-  return { status: 'done', datasets: results };
+  return { status: 'done', datasets: results, blocked: Object.fromEntries(blocked) };
 };

@@ -896,9 +896,12 @@ export const PARSER_API_METHOD_LABELS: Record<ParserApiMethod, string> = {
   bo_details: 'ГИР БО: отчётность',
   pb_org: '«Прозрачный бизнес»',
   kad_search: 'картотека дел',
+  kad_details: 'карточка дела',
   fssp_ur: 'ФССП',
   fedresurs_ur: 'Федресурс: поиск',
   fedresurs_org: 'Федресурс: карточка',
+  fedresurs_messages: 'Федресурс: сообщения',
+  fedresurs_message: 'Федресурс: сообщение',
   key_check: 'проверка ключа',
 };
 

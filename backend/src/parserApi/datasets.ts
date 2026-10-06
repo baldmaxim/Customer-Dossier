@@ -33,6 +33,15 @@ export const DATASET_REFRESH_DAYS: Readonly<Record<ParserApiDataset, number>> = 
   bankruptcy: 7,
 };
 
+/** Сервис тарифа, чьими методами идёт набор: лимит и подписка у каждого свои. */
+export const DATASET_SERVICE: Readonly<Record<ParserApiDataset, string>> = {
+  finance: 'nalog_bo',
+  tax: 'nalog_pb',
+  courts: 'arbitr',
+  fssp: 'fssp',
+  bankruptcy: 'fedresurs',
+};
+
 /** Окно картотеки: 24 месяца. */
 export const COURTS_WINDOW_MONTHS = 24;
 
