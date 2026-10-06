@@ -5,10 +5,11 @@
 // success = 1 (так считает сервис); неудача место освобождает. Сутки — скользящие 24 часа, месяц —
 // календарный по Москве: так обычно считает тариф, а точный отказ (40304 / 40305) всё равно придёт от сервиса.
 
-import { execute, query, queryOne, withTransaction } from '../db/pool.js';
+import { execute, getPool, query, queryOne, withTransaction } from '../db/pool.js';
 import { payloadHash } from '../snapshot/canonical.js';
 import type { ParserApiFailure, ParserApiMethod } from './client.js';
 import type { DatasetOutcome, IDatasetPayload, ParserApiDataset } from './datasets.js';
+import { latestParserApiRecord } from './read.js';
 
 export const SCHEDULER_ACTOR = 'scheduler';
 
@@ -44,12 +45,12 @@ export interface IParserApiStore {
   saveRecord(inn: string, dataset: ParserApiDataset, payload: IDatasetPayload, complete: boolean): Promise<boolean>;
   markChecked(inn: string, dataset: ParserApiDataset, outcome: DatasetOutcome, requestedBy: string | null, refreshDays: number): Promise<void>;
   markFailed(inn: string, dataset: ParserApiDataset, error: string, requestedBy: string | null): Promise<void>;
-  /** Последний снимок картотеки по ИНН — из него выбираются дела для карточек. */
-  latestCourts(inn: string): Promise<IDatasetPayload | null>;
   /** Какие из CaseId (строчными) уже получены. */
   knownCaseCards(caseIds: readonly string[]): Promise<Set<string>>;
   /** true — карточка записана; false — она уже была (дело спросили параллельно). */
   saveCaseCard(caseId: string, body: Record<string, unknown>, requestedBy: string): Promise<boolean>;
+  /** Последний снимок набора: из картотеки выбираются дела для карточек, Федресурс переносит полученные сообщения. */
+  latestRecord(inn: string, dataset: ParserApiDataset): Promise<IDatasetPayload | null>;
 }
 
 /** Что занимает место в лимите: оплаченное и ещё не завершённое (упавший процесс — тоже, с запасом). */
@@ -127,14 +128,6 @@ export const pgParserApiStore: IParserApiStore = {
     );
   },
 
-  latestCourts: async inn =>
-    (
-      await queryOne<{ payload: IDatasetPayload }>(
-        `SELECT payload FROM parser_api_records WHERE inn = $1 AND dataset = 'courts' ORDER BY fetched_at DESC, id DESC LIMIT 1`,
-        [inn],
-      )
-    )?.payload ?? null,
-
   knownCaseCards: async caseIds => {
     if (caseIds.length === 0) return new Set();
     const rows = await query<{ case_id: string }>(`SELECT case_id FROM parser_api_case_cards WHERE case_id = ANY($1::text[])`, [[...caseIds]]);
@@ -149,4 +142,6 @@ export const pgParserApiStore: IParserApiStore = {
     );
     return row !== null;
   },
+
+  latestRecord: async (inn, dataset) => (await latestParserApiRecord(getPool(), inn, dataset))?.payload ?? null,
 };

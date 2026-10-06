@@ -23,7 +23,10 @@ export const PARSER_API_METHODS = {
   kad_details: 'arbitr_api/details_by_id',
   fssp_ur: 'fssp_api/search_ur_by_inn',
   fedresurs_ur: 'fedresurs_api/search_ur',
+  // Карточка должника: о банкротстве в ней ничего, в набор больше не входит; метод — для пробы и журнала.
   fedresurs_org: 'fedresurs_api/get_org',
+  fedresurs_messages: 'fedresurs_api/get_org_messages',
+  fedresurs_message: 'fedresurs_api/get_message',
 } as const;
 
 export type ParserApiMethod = keyof typeof PARSER_API_METHODS;

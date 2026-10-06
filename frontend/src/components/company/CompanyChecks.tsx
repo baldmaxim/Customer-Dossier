@@ -5,7 +5,8 @@
 // портал спрашивает только у экономических споров, где компания — ответчик) и подписана как иск, а не долг;
 // роль в деле о банкротстве не говорит, чьё это банкротство — банкротство самой компании видно по Федресурсу;
 // производство ФССП без даты окончания — «не окончено по данным ФССП», а остаток — тот, что указала ФССП, и у скольких
-// производств он указан. Оценки нет (ADR-009): ни «рискованно», ни цвета у чисел. Состояние набора — словами.
+// производств он указан; основание окончания — словами 229-ФЗ, «без взыскания» отдельно: окончено ≠ погашено.
+// Федресурс — CompanyEfrsb.tsx. Оценки нет (ADR-009): ни «рискованно», ни цвета у чисел. Состояние набора — словами.
 // Компании без ИНН блок не показывается; если сервис не подключён и сведений нет — тоже.
 
 import { FC, ReactNode } from 'react';
@@ -14,7 +15,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type {
   CourtRole,
-  IBankruptcyView,
   ICaseClaim,
   ICourtCase,
   ICourtsView,
@@ -24,7 +24,7 @@ import type {
 } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
-import { COURT_ROLE_LABELS, COURT_TYPE_LABELS, formatDate, formatMoney } from '../../lib/labels';
+import { COURT_ROLE_LABELS, COURT_TYPE_LABELS, formatDate, formatMoney, FSSP_STOP_MEANING_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
@@ -33,6 +33,7 @@ import { Disclosure } from '../ui/Disclosure';
 import { EmptyState } from '../ui/EmptyState';
 import { Section } from '../ui/Section';
 import { useToast } from '../ui/toast';
+import { EfrsbPart } from './CompanyEfrsb';
 import { checkedText, ParserApiStateNote, stateKeyOf } from './ParserApiState';
 import { companyChecksKey, useCompanyChecks } from './useCompanyQueries';
 import styles from './CompanyFinance.module.css';
@@ -190,8 +191,15 @@ const FsspPart: FC<{ view: IFsspView | null; state: IParserApiDatasetState; inn:
   if (view.ended.count > 0) {
     items.push({
       label: 'Окончено (в выдаче ФССП)',
-      value: `${formatCount(view.ended.count)} — ${view.ended.byReason.map(r => `${r.reason}: ${formatCount(r.count)}`).join('; ')}`,
+      value: `${formatCount(view.ended.count)} — ${view.ended.byMeaning.map(g => `${FSSP_STOP_MEANING_LABELS[g.meaning]}: ${formatCount(g.count)}`).join('; ')}`,
     });
+    const u = view.ended.uncollected;
+    if (u.count > 0) {
+      items.push({
+        label: 'Из них без взыскания',
+        value: `${formatCount(u.count)}${u.debtCovered > 0 ? ` — сумма долга ${formatMoney(u.debt)}, указана у ${formatCount(u.debtCovered)} из ${formatCount(u.count)}` : ''}`,
+      });
+    }
   }
   if (view.unknownStatus > 0) items.push({ label: 'Статус не ясен', value: formatCount(view.unknownStatus) });
   if (view.bySubject.length > 0) {
@@ -208,6 +216,17 @@ const FsspPart: FC<{ view: IFsspView | null; state: IParserApiDatasetState; inn:
         </p>
       )}
       <DescriptionList items={items} layout="auto" />
+      {view.ended.count > 0 && (
+        <Disclosure summary="Основания окончания — как пишет ФССП">
+          <ul className={styles.items}>
+            {view.ended.byReason.map(r => (
+              <li key={r.reason}>
+                {r.reason /* raw-ok: ссылка на закон словами ФССП */} — {FSSP_STOP_MEANING_LABELS[r.meaning]}: {formatCount(r.count)}
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      )}
       {view.recent.length > 0 && (
         <Disclosure summary={`Последние производства — ${formatCount(view.recent.length)}`}>
           <ul className={styles.items}>
@@ -224,30 +243,10 @@ const FsspPart: FC<{ view: IFsspView | null; state: IParserApiDatasetState; inn:
           </ul>
         </Disclosure>
       )}
-      <p className={styles.detail}>ФССП публикует окончённые производства не все; суммы — словами ФССП, не пересчитаны.</p>
-    </>
-  );
-};
-
-const BankruptcyPart: FC<{ view: IBankruptcyView | null; state: IParserApiDatasetState; inn: string }> = ({ view, state, inn }) => {
-  if (!view) return <ParserApiStateNote state={state} what="Федресурс" inn={inn} />;
-  if (!view.recognized) return <Callout tone="warning" title="Ответ Федресурса не распознан">{view.problems.join('; ')}</Callout>;
-  const checked = checkedText(state);
-  if (!view.found) {
-    return <p className={styles.meta}>Записей о компании в ЕФРСБ нет{checked ? ` · ${checked}` : ''}.</p>;
-  }
-  const r = view.record;
-  return (
-    <>
-      <p>
-        Компания есть в ЕФРСБ{r?.category ? `: ${r.category}` : ''}
-        {r?.region ? `, ${r.region}` : ''}. Это не вывод о банкротстве — сами сообщения на{' '}
-        <a href="https://bankrot.fedresurs.ru/" target="_blank" rel="noopener noreferrer">
-          bankrot.fedresurs.ru
-        </a>
-        .
+      <p className={styles.detail}>
+        ФССП публикует окончённые производства не все; суммы — словами ФССП, не пересчитаны. Окончено — не значит погашено:
+        по ст. 46 ч. 1 п. 3–4 документ возвращён взыскателю без взыскания.
       </p>
-      {checked && <p className={styles.meta}>{checked}</p>}
     </>
   );
 };
@@ -307,7 +306,7 @@ export const CompanyChecks: FC<{ companyId: number }> = ({ companyId }) => {
         </div>
         <div>
           <h3 className={styles.subhead}>Банкротство — Федресурс</h3>
-          <BankruptcyPart view={data.bankruptcy.view} state={data.bankruptcy.state} inn={data.inn} />
+          <EfrsbPart view={data.bankruptcy.view} state={data.bankruptcy.state} inn={data.inn} />
         </div>
       </div>
     </Section>

@@ -9,13 +9,61 @@
 //  - суммы — словами ФССП: «Сумма долга» (по исполнительному документу), «Остаток долга по исполнительному документу»
 //    (остаток по данным ФССП), «Исполнительский сбор» — отдельно, не складываются в одно «долг сейчас»;
 //  - остаток считается только по производствам, где ФССП его указала, и это число показывается рядом («у K из N»);
-//  - сервис отдаёт и окончённые производства не все (ФССП публикует их выборочно) — экран так и говорит.
+//  - сервис отдаёт и окончённые производства не все (ФССП публикует их выборочно) — экран так и говорит;
+//  - основание окончания ФССП пишет ссылкой на закон («ст. 46 ч. 1 п. 4») — stopMeaning раскладывает её по 229-ФЗ
+//    «Об исполнительном производстве» (fssp-map@2, 06.10.2026): ст. 46 ч. 1 — документ возвращён взыскателю (п. 3 —
+//    не найдены должник, имущество или счета, п. 4 — нет имущества для взыскания), ст. 47 ч. 1 п. 1–2 — фактическое
+//    исполнение, п. 6 — удержание периодических платежей, п. 7 — должник признан банкротом, п. 8 — ликвидация, п. 9 —
+//    истёк срок давности, ст. 43 — прекращение. «Окончено» не значит «погашено»: по ст. 46 ч. 1 п. 3–4 долг не взыскан,
+//    и это число показывается отдельно с суммой долга. Незнакомая ссылка — «другое основание», ссылка остаётся рядом.
 // Оценки нет (ADR-009).
 
 import { asObject } from '../client.js';
 import type { IDatasetPayload } from '../datasets.js';
 
-export const FSSP_MAP_VERSION = 'fssp-map@1';
+export const FSSP_MAP_VERSION = 'fssp-map@2';
+
+/** Что значит основание окончания по 229-ФЗ — раскладка ссылки на закон, а не оценка. */
+export type FsspStopMeaning =
+  | 'executed'
+  | 'not_found'
+  | 'no_property'
+  | 'returned'
+  | 'periodic'
+  | 'bankruptcy'
+  | 'liquidation'
+  | 'terminated'
+  | 'expired'
+  | 'other';
+
+/** «ст. 46 ч. 1 п. 4» → no_property. Ссылку ФССП пишет по-разному («ст.46 ч.1 п.4») — пробелы не важны. */
+export const stopMeaning = (reason: string | null): FsspStopMeaning => {
+  const m = reason ? /ст\.?\s*(\d+)(?:\s*ч\.?\s*(\d+))?(?:\s*п\.?\s*(\d+))?/i.exec(reason) : null;
+  if (!m) return 'other';
+  const [article, part, point] = [Number(m[1]), m[2] ? Number(m[2]) : null, m[3] ? Number(m[3]) : null];
+  if (article === 43) return 'terminated';
+  if (article === 46 && part === 1) return point === 3 ? 'not_found' : point === 4 ? 'no_property' : 'returned';
+  if (article === 47 && part === 1) {
+    if (point === 1 || point === 2) return 'executed';
+    if (point === 4) return 'returned';
+    if (point === 5) return 'terminated';
+    if (point === 6) return 'periodic';
+    if (point === 7) return 'bankruptcy';
+    if (point === 8) return 'liquidation';
+    if (point === 9) return 'expired';
+  }
+  return 'other';
+};
+
+/** Окончено без взыскания: долг остался (ст. 46 ч. 1 п. 3–4). */
+const UNCOLLECTED: ReadonlySet<FsspStopMeaning> = new Set(['not_found', 'no_property']);
+
+export interface IFsspEndedGroup {
+  count: number;
+  /** «Сумма долга» по документам этих производств — где ФССП её указала. */
+  debt: number;
+  debtCovered: number;
+}
 
 const DEBT = 'Сумма долга';
 const REMAINING = 'Остаток долга по исполнительному документу';
@@ -44,7 +92,14 @@ export interface IFsspView {
   complete: boolean;
   /** Не окончено по данным ФССП: даты окончания нет. */
   open: { count: number; debt: number; remaining: number; remainingCovered: number; fee: number };
-  ended: { count: number; byReason: Array<{ reason: string; count: number }> };
+  ended: {
+    count: number;
+    /** По ссылке на закон словами ФССП, с её значением. */
+    byReason: Array<{ reason: string; meaning: FsspStopMeaning } & IFsspEndedGroup>;
+    byMeaning: Array<{ meaning: FsspStopMeaning } & IFsspEndedGroup>;
+    /** Возвращено взыскателю без взыскания: не найдены должник, имущество или счета; нет имущества. */
+    uncollected: IFsspEndedGroup;
+  };
   unknownStatus: number;
   openedByYear: Array<{ year: number; count: number }>;
   /** Возбуждено за 12 месяцев до проверки. */
@@ -118,7 +173,7 @@ export const mapFssp = (payload: IDatasetPayload, checkedAt: string | null, comp
     loaded: 0,
     complete,
     open: { count: 0, debt: 0, remaining: 0, remainingCovered: 0, fee: 0 },
-    ended: { count: 0, byReason: [] },
+    ended: { count: 0, byReason: [], byMeaning: [], uncollected: { count: 0, debt: 0, debtCovered: 0 } },
     unknownStatus: 0,
     openedByYear: [],
     last12m: null,
@@ -156,8 +211,15 @@ export const mapFssp = (payload: IDatasetPayload, checkedAt: string | null, comp
     }
   }
 
-  const reasons = new Map<string, number>();
-  for (const p of ended) reasons.set(p.stopReason ?? 'основание не указано', (reasons.get(p.stopReason ?? 'основание не указано') ?? 0) + 1);
+  const group = (list: IFsspProceeding[]): IFsspEndedGroup => {
+    const withDebt = list.filter(p => p.debt !== null);
+    return { count: list.length, debt: round2(withDebt.reduce((a, p) => a + (p.debt ?? 0), 0)), debtCovered: withDebt.length };
+  };
+  const groupBy = <K extends string>(keyOf: (p: IFsspProceeding) => K): Array<[K, IFsspEndedGroup]> => {
+    const groups = new Map<K, IFsspProceeding[]>();
+    for (const p of ended) groups.set(keyOf(p), [...(groups.get(keyOf(p)) ?? []), p]);
+    return [...groups].map(([k, list]): [K, IFsspEndedGroup] => [k, group(list)]).sort((a, b) => b[1].count - a[1].count);
+  };
   const subjects = new Map<string, number>();
   for (const p of open) if (p.subject) subjects.set(p.subject, (subjects.get(p.subject) ?? 0) + 1);
   const withRemaining = open.filter(p => p.remaining !== null);
@@ -179,7 +241,12 @@ export const mapFssp = (payload: IDatasetPayload, checkedAt: string | null, comp
       remainingCovered: withRemaining.length,
       fee: round2(fee),
     },
-    ended: { count: ended.length, byReason: [...reasons].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count) },
+    ended: {
+      count: ended.length,
+      byReason: groupBy(p => p.stopReason ?? 'основание не указано').map(([reason, g]) => ({ reason, meaning: stopMeaning(reason), ...g })),
+      byMeaning: groupBy(p => stopMeaning(p.stopReason)).map(([meaning, g]) => ({ meaning, ...g })),
+      uncollected: group(ended.filter(p => UNCOLLECTED.has(stopMeaning(p.stopReason)))),
+    },
     unknownStatus,
     openedByYear: [...byYear].map(([y, count]) => ({ year: y, count })).sort((a, b) => b.year - a.year),
     last12m: from ? { from, count: all.filter(p => p.date !== null && p.date >= from).length } : null,

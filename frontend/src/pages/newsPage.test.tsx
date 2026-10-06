@@ -28,7 +28,7 @@ const feed = (items: INewsItem[]): INewsFeed => ({
   days: 14,
   scope: 'all',
   items,
-  counts: { new_project: 1, deadline_shift: 1, court_case: 0, fssp: 0 },
+  counts: { new_project: 1, deadline_shift: 1, court_case: 0, fssp: 0, bankruptcy: 0 },
 });
 
 const ITEMS = [

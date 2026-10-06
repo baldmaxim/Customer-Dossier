@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, IDeliveryHouse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
+import type { IBankruptcyView, ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, IDeliveryHouse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -317,6 +317,23 @@ export const checksBody = (over: Partial<ICompanyChecksResponse> = {}): ICompany
   courts: null,
   fssp: null,
   bankruptcy: null,
+  ...over,
+});
+
+/** ЕФРСБ (bankruptcy-map@2). По умолчанию — должник найден, сообщения не запрашивались (снимок до @2). */
+export const efrsbView = (over: Partial<IBankruptcyView> = {}): IBankruptcyView => ({
+  format: 'bankruptcy-map@2',
+  recognized: true,
+  problems: [],
+  found: true,
+  record: { name: 'ООО «ДЕМО»', category: 'Обычная организация', region: 'г. Москва', address: null },
+  missing: [],
+  messages: null,
+  courtActs: null,
+  courtActsCoverage: null,
+  procedureAct: null,
+  laterAct: null,
+  caseNumbers: [],
   ...over,
 });
 

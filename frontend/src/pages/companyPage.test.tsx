@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, deliveryHouse, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, efrsbView, deliveryHouse, financeBody, financeYear, event, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -400,7 +400,7 @@ describe('Карточка компании', () => {
           tax: {
             state: datasetState('tax'),
             view: {
-              format: 'tax-map@1',
+              format: 'tax-map@2',
               recognized: true,
               problems: [],
               unit: 'RUB',
@@ -412,6 +412,9 @@ describe('Карточка компании', () => {
               flags: { bailiffDebt: false, noReporting: false, asOf: '2026-09-01' },
               taxModes: [],
               msp: null,
+              status: 'Действующая организация',
+              offenses: [{ year: 2024, fine: 15_000 }],
+              people: { directors: [{ name: 'ИВАНОВ ИВАН ИВАНОВИЧ', position: 'ГЕНЕРАЛЬНЫЙ ДИРЕКТОР', companies: 7 }], owners: [] },
             },
           },
         }),
@@ -430,6 +433,10 @@ describe('Карточка компании', () => {
     expect(within(section).getByText('65 чел. в 2025; в 2024 — 31')).toBeTruthy();
     expect(within(section).getByText(/недоимка 99,1 млн ₽ · пени 20,1 млн ₽ · штрафы 0 ₽/)).toBeTruthy();
     expect(within(section).getAllByText('нет')).toHaveLength(2);
+    // tax-map@2: правонарушения и число юрлиц руководителя — словами ФНС; действующий статус не повторяется.
+    expect(within(section).getByText(/^2024 — штрафы 15\s?000\s₽$/)).toBeTruthy();
+    expect(within(section).getByText('ИВАНОВ ИВАН ИВАНОВИЧ, генеральный директор — руководитель в 7 юрлицах, считая эту')).toBeTruthy();
+    expect(within(section).queryByText('Статус по ФНС')).toBeNull();
     // Таблица по годам — под раскрытием, со ссылкой на PDF отчёта.
     fireEvent.click(within(section).getByText('Все годы — 2'));
     const pdf = within(section).getAllByRole('link', { name: 'PDF' });
@@ -515,7 +522,18 @@ describe('Карточка компании', () => {
               loaded: 678,
               complete: true,
               open: { count: 677, debt: 431_164_180, remaining: 423_787_007, remainingCovered: 652, fee: 7_377_174 },
-              ended: { count: 1, byReason: [{ reason: 'ст. 46 ч. 1 п. 3', count: 1 }] },
+              ended: {
+                count: 3,
+                byReason: [
+                  { reason: 'ст. 47 ч. 1 п. 7', meaning: 'bankruptcy', count: 2, debt: 500, debtCovered: 2 },
+                  { reason: 'ст. 46 ч. 1 п. 3', meaning: 'not_found', count: 1, debt: 1_200_000, debtCovered: 1 },
+                ],
+                byMeaning: [
+                  { meaning: 'bankruptcy', count: 2, debt: 500, debtCovered: 2 },
+                  { meaning: 'not_found', count: 1, debt: 1_200_000, debtCovered: 1 },
+                ],
+                uncollected: { count: 1, debt: 1_200_000, debtCovered: 1 },
+              },
               unknownStatus: 0,
               openedByYear: [{ year: 2026, count: 191 }, { year: 2025, count: 419 }],
               last12m: { from: '2025-10-06', count: 248 },
@@ -523,7 +541,7 @@ describe('Карточка компании', () => {
               recent: [],
             },
           },
-          bankruptcy: { state: datasetState('bankruptcy', { outcome: 'not_found' }), view: { format: 'bankruptcy-map@1', recognized: true, problems: [], found: false, record: null } },
+          bankruptcy: { state: datasetState('bankruptcy', { outcome: 'not_found' }), view: efrsbView({ found: false, record: null }) },
         }),
       })),
     );
@@ -545,13 +563,89 @@ describe('Карточка компании', () => {
     ).toBeTruthy();
     expect(within(section).getByText('677 — сумма долга по документам 431,2 млн ₽')).toBeTruthy();
     expect(within(section).getByText('423,8 млн ₽ — указан у 652 из 677')).toBeTruthy();
-    expect(within(section).getByText('1 — ст. 46 ч. 1 п. 3: 1')).toBeTruthy();
+    expect(
+      within(section).getByText(
+        '3 — должник признан банкротом — документ передан арбитражному управляющему: 2; возвращено без взыскания: не найдены должник, имущество или счета: 1',
+      ),
+    ).toBeTruthy();
+    expect(within(section).getByText('1 — сумма долга 1,2 млн ₽, указана у 1 из 1')).toBeTruthy();
     expect(within(section).getByText(/Записей о компании в ЕФРСБ нет · проверено 06\.10\.2026/)).toBeTruthy();
+    // «Записей нет» — не «рисков нет»: намерения кредиторов на fedresurs.ru портал не проверяет.
+    expect(within(section).getByText(/Намерения кредиторов обратиться в суд .* портал их не проверяет/)).toBeTruthy();
     // Плитки сводки.
     const tile = (label: string) => screen.getAllByText(label).map(n => n.closest('div')!).find(d => d.className.includes('tile'))!;
     expect(tile('Арбитраж').textContent).toContain('ответчик');
     expect(tile('ФССП').textContent).toContain('остаток 423,8');
     expect(screen.getByText(/Картотека арбитражных дел \(kad\.arbitr\.ru\)/)).toBeTruthy();
+  });
+
+  it('ЕФРСБ: процедура по последнему акту словами реестра, продление — строкой «позже»; старый снимок — «не запрашивались»', async () => {
+    const act = (id: string, date: string, text: string, effect: 'competition' | 'procedural' | 'observation') =>
+      ({ messageId: id, date, act: text, effect, caseNumber: 'А40-1/2025', annulled: false });
+    const competition = act('M2', '2026-02-01', 'о признании должника банкротом и открытии конкурсного производства', 'competition');
+    const prolonged = act('M4', '2026-04-01', 'о продлении срока процедуры', 'procedural');
+    fakeApi(
+      replace('GET /api/companies/7/registry-checks', () => ({
+        status: 200,
+        body: checksBody({
+          inn: '7702336269',
+          problem: null,
+          courts: { state: datasetState('courts', { outcome: null, checkedAt: null, record: null }), view: null },
+          fssp: { state: datasetState('fssp', { outcome: null, checkedAt: null, record: null }), view: null },
+          bankruptcy: {
+            state: datasetState('bankruptcy'),
+            view: efrsbView({
+              messages: {
+                total: 12,
+                loaded: 12,
+                complete: true,
+                first: '2025-12-15',
+                last: '2026-05-01',
+                annulled: 1,
+                byKind: [{ kind: 'meeting', count: 7 }, { kind: 'court_act', count: 4 }],
+                otherTypes: [],
+                recent: [{ id: 'M5', date: '2026-05-01', type: 'Сообщение о собрании кредиторов', kind: 'meeting', annulled: false }],
+              },
+              courtActs: [prolonged, competition, act('M1', '2026-01-01', 'о введении наблюдения', 'observation')],
+              courtActsCoverage: { listed: 4, fetched: 3 },
+              procedureAct: competition,
+              laterAct: prolonged,
+              caseNumbers: ['А40-1/2025'],
+            }),
+          },
+        }),
+      })),
+    );
+    renderCard();
+    const section = (await screen.findByRole('heading', { name: 'Суды, ФССП и банкротство' })).closest('section')!;
+    // Строка сводки (dd) и та же строка в списке актов под раскрытием.
+    const procedure = within(section).getAllByText(/«о признании должника банкротом и открытии конкурсного производства» — 01\.02\.2026 — дело А40-1\/2025/);
+    expect(procedure[0]!.closest('dd')).toBeTruthy();
+    expect(within(section).getByText('позже: «о продлении срока процедуры» — 01.04.2026 — дело А40-1/2025')).toBeTruthy();
+    expect(within(section).getByText('получены у 3 из 4 — остальные следующей проверкой')).toBeTruthy();
+    expect(within(section).getByText('12 — с 15.12.2025 по 01.05.2026; аннулировано 1')).toBeTruthy();
+    expect(within(section).getByText('о собраниях — 7; о судебных актах — 4')).toBeTruthy();
+    expect(within(section).getByText('Судебные акты — 3')).toBeTruthy();
+    // Оценки нет: слова реестра, без «риска».
+    expect(section.textContent).not.toMatch(/риск/i);
+  });
+
+  it('ЕФРСБ: снимок без сообщений (до bankruptcy-map@2) — сказано, что они не запрашивались', async () => {
+    fakeApi(
+      replace('GET /api/companies/7/registry-checks', () => ({
+        status: 200,
+        body: checksBody({
+          inn: '7702336269',
+          problem: null,
+          courts: { state: datasetState('courts', { outcome: null, checkedAt: null, record: null }), view: null },
+          fssp: { state: datasetState('fssp', { outcome: null, checkedAt: null, record: null }), view: null },
+          bankruptcy: { state: datasetState('bankruptcy'), view: efrsbView() },
+        }),
+      })),
+    );
+    renderCard();
+    const section = (await screen.findByRole('heading', { name: 'Суды, ФССП и банкротство' })).closest('section')!;
+    expect(within(section).getByText(/Компания есть в ЕФРСБ: Обычная организация, г\. Москва\. Сообщения должника в этом снимке не запрашивались/)).toBeTruthy();
   });
 
   it('суды, ФССП, банкротство: сбой ФССП — причина и повтор словами; без ИНН блока нет', async () => {

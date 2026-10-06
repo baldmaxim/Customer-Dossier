@@ -97,15 +97,90 @@ describe('ФССП и Федресурс (T24A-05)', () => {
     expect(await runDataset('fssp', INN, scripted([{ done: 1, total_pages_count: 0, result: [] }]).step, options)).toMatchObject({ outcome: 'not_found', complete: true });
   });
 
-  it('Федресурс: должник найден по ИНН — карточка по id', async () => {
+  it('Федресурс: должник не найден — один запрос, «записей нет»', async () => {
+    const { step, calls } = scripted([{ success: 1, total_count: '1', records: [{ id: 'X', inn: '7704412966' }] }]);
+    expect(await runDataset('bankruptcy', INN, step, options)).toMatchObject({ outcome: 'not_found', complete: true });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe('Федресурс: сообщения должника и судебные акты (bankruptcy-map@2)', () => {
+  const found = { success: 1, total_count: '1', records: [{ id: 'D1', inn: INN }] };
+  const msg = (id: string, date: string, type: string) => ({ id, date: `${date} 10:00:00`, type });
+  const act = (id: string, act: string) => ({ success: 1, record: { id, act, is_actual: 1, date_published: '01.01.2026' } });
+
+  it('поиск → список сообщений → карточки только неаннулированных судебных актов, новые первыми; get_org не спрашивается', async () => {
     const { step, calls } = scripted([
-      { success: 1, total_count: '1', records: [{ id: '69F4C34B', inn: INN }] },
-      { success: 1, record: { inn: INN } },
+      found,
+      {
+        success: 1,
+        total_count: '4',
+        records: [
+          msg('M1', '01.02.2026', 'Сообщение о собрании кредиторов'),
+          msg('M2', '01.01.2026', 'Сообщение о судебном акте'),
+          msg('M3', '01.03.2026', 'Сообщение о судебном акте'),
+          msg('M4', '01.04.2026', 'Сообщение о судебном акте (аннулировано)'),
+        ],
+      },
+      act('M3', 'о признании должника банкротом и открытии конкурсного производства'),
+      act('M2', 'о введении наблюдения'),
     ]);
     expect(await runDataset('bankruptcy', INN, step, options)).toMatchObject({ outcome: 'found', complete: true });
     expect(calls.map(c => [c.method, c.params])).toEqual([
       ['fedresurs_ur', { orgCode: INN }],
-      ['fedresurs_org', { id: '69F4C34B' }],
+      ['fedresurs_messages', { id: 'D1' }],
+      ['fedresurs_message', { id: 'M3' }],
+      ['fedresurs_message', { id: 'M2' }],
     ]);
+  });
+
+  it('список длиннее страницы — следующая с from_record = сколько получено', async () => {
+    const { step, calls } = scripted([
+      found,
+      { success: 1, total_count: '3', records: [msg('M1', '01.02.2026', 'Иное сообщение'), msg('M2', '01.01.2026', 'Иное сообщение')] },
+      { success: 1, total_count: '3', records: [msg('M3', '01.12.2025', 'Иное сообщение')] },
+    ]);
+    expect(await runDataset('bankruptcy', INN, step, options)).toMatchObject({ outcome: 'found', complete: true });
+    expect(calls.slice(1).map(c => c.params)).toEqual([{ id: 'D1' }, { id: 'D1', from_record: '2' }]);
+  });
+
+  it('карточка, полученная прошлым снимком, переносится без запроса; сверх предела — «часть» с причиной', async () => {
+    const records = Array.from({ length: 7 }, (_, i) => msg(`A${i}`, `0${i + 1}.01.2026`, 'Сообщение о судебном акте'));
+    const previous = {
+      format: 'parser-api-dataset@1' as const,
+      dataset: 'bankruptcy' as const,
+      inn: INN,
+      window: null,
+      missing: [],
+      responses: [{ method: 'fedresurs_message' as const, params: { id: 'A6' }, body: act('A6', 'о введении наблюдения') }],
+    };
+    const replies: Array<Record<string, unknown>> = [found, { success: 1, total_count: '7', records }];
+    for (let i = 5; i >= 1; i -= 1) replies.push(act(`A${i}`, 'о продлении срока процедуры'));
+    const { step, calls } = scripted(replies);
+    const res = await runDataset('bankruptcy', INN, step, { ...options, previous });
+    expect(res).toMatchObject({ outcome: 'partial', complete: false });
+    // A6 — из прошлого снимка, A5…A1 — запросы (предел 5), A0 — следующим проходом.
+    expect(calls.filter(c => c.method === 'fedresurs_message').map(c => c.params.id)).toEqual(['A5', 'A4', 'A3', 'A2', 'A1']);
+    expect(res.status === 'done' && res.payload.responses.filter(r => r.method === 'fedresurs_message').map(r => r.params.id)).toEqual(['A6', 'A5', 'A4', 'A3', 'A2', 'A1']);
+    expect(res.status === 'done' && res.payload.missing).toEqual(['судебные акты: ещё 1 — следующим проходом (не больше 5 за проход)']);
+  });
+
+  it('список не пришёл — снимок поиска с причиной; лимит останавливает проход', async () => {
+    const { step } = scripted([found, { fail: 'daily_limit', stop: true }]);
+    const res = await runDataset('bankruptcy', INN, step, options);
+    expect(res).toMatchObject({ outcome: 'partial', complete: false, stop: 'daily_limit' });
+    expect(res.status === 'done' && res.payload.missing[0]).toMatch(/^сообщения должника: daily_limit/);
+  });
+
+  it('карточка акта не пришла без остановки — остальные спрашиваются, набор неполный', async () => {
+    const { step, calls } = scripted([
+      found,
+      { success: 1, total_count: '2', records: [msg('M2', '02.01.2026', 'Сообщение о судебном акте'), msg('M1', '01.01.2026', 'Сообщение о судебном акте')] },
+      { fail: 'network' },
+      act('M1', 'о введении наблюдения'),
+    ]);
+    const res = await runDataset('bankruptcy', INN, step, options);
+    expect(res).toMatchObject({ outcome: 'partial', complete: false, stop: null });
+    expect(calls).toHaveLength(4);
   });
 });

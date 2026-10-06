@@ -25,7 +25,7 @@ const MAX_FAILURES = 2;
 
 /** CaseId дел (строчными), чьи карточки ещё нужны, новые сверху. */
 export const pendingCaseCards = async (inn: string, store: IParserApiRefreshDeps['store']): Promise<string[]> => {
-  const payload = await store.latestCourts(inn);
+  const payload = await store.latestRecord(inn, 'courts');
   if (!payload) return [];
   const targets = claimCardTargets(mapCourts(payload, null, true)).map(id => id.toLowerCase());
   const known = await store.knownCaseCards(targets);

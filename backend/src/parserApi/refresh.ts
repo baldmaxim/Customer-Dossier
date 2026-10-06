@@ -70,7 +70,9 @@ export const refreshParserApiDatasets = async (
   const step = parserApiStep(inn, actor, key, deps);
 
   for (const dataset of datasets) {
-    const run = await runDataset(dataset, inn, step, { kadMaxPages: deps.kadMaxPages, now: deps.now?.() ?? new Date() });
+    // Сообщения ЕФРСБ неизменны: полученные прошлым снимком карточки не оплачиваются снова.
+    const previous = dataset === 'bankruptcy' ? await store.latestRecord(inn, dataset) : null;
+    const run = await runDataset(dataset, inn, step, { kadMaxPages: deps.kadMaxPages, now: deps.now?.() ?? new Date(), previous });
     if (run.status === 'done') {
       const saved = await store.saveRecord(inn, dataset, run.payload, run.complete);
       await store.markChecked(inn, dataset, run.outcome, requestedBy, DATASET_REFRESH_DAYS[dataset]);

@@ -11,8 +11,9 @@
 //   npm run parserapi -- --pass                          один проход расписания сейчас
 //
 // Методы пробы: bo_search, bo_details (--id из bo_search), pb_org, kad_search, kad_details (--id — CaseId из
-// kad_search; печатает, у каких событий есть сумма иска, без сумм), fssp_ur, fedresurs_ur, fedresurs_org (--id из
-// fedresurs_ur). Ключ — из админки (база) или PARSER_API_KEY; значение не печатается.
+// kad_search; печатает, у каких событий есть сумма иска, без сумм), fssp_ur, fedresurs_ur, fedresurs_org и
+// fedresurs_messages (--id из fedresurs_ur), fedresurs_message (--id из fedresurs_messages).
+// Ключ — из админки (база) или PARSER_API_KEY; значение не печатается.
 
 import { env } from '../config/env.js';
 import { closeDb, getPool } from '../db/pool.js';
@@ -68,11 +69,15 @@ const probeParams = (method: ParserApiMethod, inn: string, id: string | null): R
       return { orgCode: inn };
     case 'bo_details':
     case 'fedresurs_org':
+    case 'fedresurs_messages':
       if (!id) throw new Error(`${method}: нужен --id из ответа поиска`);
       return { id };
     case 'kad_details':
       if (!id) throw new Error('kad_details: нужен --id — CaseId из kad_search');
       return { CaseId: id };
+    case 'fedresurs_message':
+      if (!id) throw new Error('fedresurs_message: нужен --id из списка сообщений (fedresurs_messages)');
+      return { id };
   }
 };
 

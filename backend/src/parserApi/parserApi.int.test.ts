@@ -126,6 +126,29 @@ describe('parser-api.com на базе (T24A-07)', () => {
     expect(checks.courts?.view?.cases.map(c => c.claim?.amount ?? null)).toEqual([1250000, null]);
   });
 
+  it('ЕФРСБ (049): сообщения и акт в журнале; повтор переносит карточку акта без запроса и нового снимка не пишет', async () => {
+    const replies: Record<string, Record<string, unknown>> = {
+      fedresurs_ur: { success: 1, total_count: '1', records: [{ id: 'D1', inn: INN, debtor: 'ООО «ДЕМО»' }] },
+      fedresurs_messages: { success: 1, total_count: '2', records: [{ id: 'M2', date: '01.02.2026 10:00:00', type: 'Сообщение о судебном акте' }, { id: 'M1', date: '01.01.2026 10:00:00', type: 'Сообщение о собрании кредиторов' }] },
+      fedresurs_message: { success: 1, record: { id: 'M2', act: 'о введении наблюдения', date_published: '01.02.2026', case_num: 'А40-1/2026', is_actual: 1 } },
+    };
+    const byMethod: typeof callParserApi = async method => ({ ok: true, httpStatus: 200, body: replies[method]! }) as ParserApiCallResult;
+    const first = await refreshParserApiDatasets(INN, ['bankruptcy'], 'ivanov', deps(byMethod));
+    expect(first).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: true } } });
+    const second = await refreshParserApiDatasets(INN, ['bankruptcy'], 'ivanov', deps(byMethod));
+    expect(second).toEqual({ status: 'done', datasets: { bankruptcy: { status: 'checked', outcome: 'found', saved: false } } });
+    const journal = (await pool().query<{ method: string; n: number }>(
+      `SELECT method, count(*)::int AS n FROM parser_api_requests WHERE method LIKE 'fedresurs%' GROUP BY method ORDER BY method`,
+    )).rows;
+    expect(journal).toEqual([
+      { method: 'fedresurs_message', n: 1 },
+      { method: 'fedresurs_messages', n: 2 },
+      { method: 'fedresurs_ur', n: 2 },
+    ]);
+    const checks = await loadCompanyChecks(pool(), watched);
+    expect(checks.bankruptcy?.view).toMatchObject({ found: true, procedureAct: { act: 'о введении наблюдения', caseNumber: 'А40-1/2026' } });
+  });
+
   it('подключение по журналу: успех — подключён; ключ сменили позже — ждёт первого ответа; без ключа — не подключён', async () => {
     expect(await parserApiConnection(pool(), true, null)).toMatchObject({ state: 'connected' });
     expect(await parserApiConnection(pool(), true, new Date(Date.now() + 60_000).toISOString())).toEqual({ state: 'unverified', at: null });

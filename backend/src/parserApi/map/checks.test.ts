@@ -147,7 +147,7 @@ describe('ФССП (T24C-02)', () => {
       proceeding(3, '2024-04-05', { 'Сумма долга': 30 }, { stop_date: '2024-07-08', stop_reason: 'ст. 46 ч. 1 п. 3' }),
     ]);
     expect(view.open).toEqual({ count: 2, debt: 150, remaining: 80, remainingCovered: 1, fee: 7 });
-    expect(view.ended).toEqual({ count: 1, byReason: [{ reason: 'ст. 46 ч. 1 п. 3', count: 1 }] });
+    expect(view.ended).toMatchObject({ count: 1, byReason: [{ reason: 'ст. 46 ч. 1 п. 3', meaning: 'not_found', count: 1, debt: 30 }] });
     expect(view.unknownStatus).toBe(0);
   });
 

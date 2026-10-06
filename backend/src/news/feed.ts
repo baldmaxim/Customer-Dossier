@@ -4,7 +4,10 @@
 //                   к такому заказчику генподрядчик может выйти первым;
 //  deadline_shift — срок сдачи дома ДОМ.РФ сменился между снимками (смена формата того же квартала — не перенос);
 //  court_case     — в новом снимке картотеки появились дела, которых не было в прошлом снимке этой компании;
-//  fssp           — то же для исполнительных производств ФССП.
+//  fssp           — то же для исполнительных производств ФССП;
+//  bankruptcy     — компания появилась в ЕФРСБ или в списке её сообщений появилось новое «Сообщение о судебном акте»
+//                   (bankruptcy-map@2). Первый список сообщений после снимка без них (bankruptcy-map@1) — начальная
+//                   загрузка, а не новость; акт, чью карточку получили позже, — тоже не новость: сравнивается список.
 // Первый снимок компании новостями не считается: это начальная загрузка, а не «появилось». Ленты в базе нет — второй
 // источник правды о тех же фактах разошёлся бы с первым. «Просмотрено до» — в браузере читателя (localStorage):
 // это его удобство, а не данные портала, и читатель по-прежнему ничего не записывает на сервер.
@@ -14,11 +17,12 @@ import type { DbExecutor } from '../db/pool.js';
 import { domRfObjectUrl } from '../ingest/registry/domrfCards.js';
 import type { IDatasetPayload } from '../parserApi/datasets.js';
 import { mapCourts } from '../parserApi/map/courts.js';
+import { efrsbMessageList, mapBankruptcy } from '../parserApi/map/bankruptcy.js';
 import { fsspProceedings } from '../parserApi/map/fssp.js';
 import { completionKey, parseCompletion } from '../registry/values.js';
 
 export const NEWS_VERSION = 'news@1';
-export const NEWS_KINDS = ['new_project', 'deadline_shift', 'court_case', 'fssp'] as const;
+export const NEWS_KINDS = ['new_project', 'deadline_shift', 'court_case', 'fssp', 'bankruptcy'] as const;
 export type NewsKind = (typeof NEWS_KINDS)[number];
 export type NewsScope = 'all' | 'watched';
 
@@ -45,7 +49,7 @@ export interface INewsItem {
   companies: INewsCompany[];
   project: { id: number; name: string } | null;
   /** Основание: публикация (id документа), страница ДОМ.РФ, раздел карточки компании. */
-  source: { kind: 'publication' | 'registry' | 'kad' | 'fssp'; documentId: number | null; href: string | null };
+  source: { kind: 'publication' | 'registry' | 'kad' | 'fssp' | 'efrsb'; documentId: number | null; href: string | null };
   /** Касается компании «на контроле». */
   watched: boolean;
 }
@@ -170,7 +174,7 @@ export const shiftItems = (
 
 interface IRecordPairRow {
   inn: string;
-  dataset: 'courts' | 'fssp';
+  dataset: 'courts' | 'fssp' | 'bankruptcy';
   fetchedAt: Date;
   complete: boolean;
   payload: IDatasetPayload;
@@ -183,7 +187,7 @@ const RECORD_PAIRS_SQL = `
            WHERE p.inn = r.inn AND p.dataset = r.dataset AND (p.fetched_at, p.id) < (r.fetched_at, r.id)
            ORDER BY p.fetched_at DESC, p.id DESC LIMIT 1) AS prev
   FROM parser_api_records r
-  WHERE r.dataset IN ('courts', 'fssp') AND r.fetched_at >= $1
+  WHERE r.dataset IN ('courts', 'fssp', 'bankruptcy') AND r.fetched_at >= $1
   ORDER BY r.fetched_at DESC`;
 
 const COMPANIES_BY_INN_SQL = `
@@ -192,6 +196,29 @@ const COMPANIES_BY_INN_SQL = `
   WHERE ei.identifier_type = 'inn' AND ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.value = ANY($1::text[])`;
 
 const moneyText = (n: number): string => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
+
+/** ЕФРСБ: появление компании или новые сообщения о судебных актах — заголовок и подробности; null — нового нет. */
+export const efrsbItem = (prevPayload: IDatasetPayload, payload: IDatasetPayload): { title: string; detail: string | null } | null => {
+  const prev = mapBankruptcy(prevPayload);
+  const cur = mapBankruptcy(payload);
+  if (!cur.found) return null;
+  const actText = (a: { act: string | null; date: string | null }): string => `«${a.act ?? 'акт не указан'}»${a.date ? ` от ${a.date.split('-').reverse().join('.')}` : ''}`;
+  if (!prev.found) {
+    return { title: 'Компания появилась в ЕФРСБ', detail: cur.procedureAct ? `процедура по последнему акту: ${actText(cur.procedureAct)}` : null };
+  }
+  const before = efrsbMessageList(prevPayload);
+  const now = efrsbMessageList(payload);
+  if (!before || !now) return null;
+  const known = new Set(before.map(m => m.id));
+  const fresh = now.filter(m => m.id !== null && !m.annulled && m.kind === 'court_act' && !known.has(m.id));
+  if (fresh.length === 0) return null;
+  const acts = new Map((cur.courtActs ?? []).map(a => [a.messageId, a]));
+  const described = fresh.map(m => acts.get(m.id!)).filter(a => a !== undefined);
+  return {
+    title: `ЕФРСБ: новые сообщения о судебных актах — ${fresh.length}`,
+    detail: described.length > 0 ? `${described.slice(0, NUMBERS_SHOWN).map(actText).join('; ')}${described.length > NUMBERS_SHOWN ? ' и другие' : ''}` : null,
+  };
+};
 
 /** Новые дела и производства — разница с прошлым снимком той же компании; первый снимок — не новость. */
 export const recordItems = (
@@ -207,6 +234,13 @@ export const recordItems = (
     if (scope === 'watched' && !isWatched) return [];
     const at = iso(row.fetchedAt);
     const companyId = companies[0]?.id ?? null;
+    const checksHref = companyId !== null ? `/company/${companyId}#company-checks` : null;
+    if (row.dataset === 'bankruptcy') {
+      const item = efrsbItem(row.prev, row.payload);
+      return item
+        ? [{ key: `efrsb:${row.inn}:${at}`, kind: 'bankruptcy', at, ...item, companies, project: null, source: { kind: 'efrsb', documentId: null, href: checksHref }, watched: isWatched }]
+        : [];
+    }
     if (row.dataset === 'courts') {
       const before = new Set(mapCourts(row.prev, null, true).cases.map(c => c.id ?? c.number));
       const fresh = mapCourts(row.payload, null, row.complete).cases.filter(c => !before.has(c.id ?? c.number));
@@ -221,7 +255,7 @@ export const recordItems = (
           detail: `${fresh.slice(0, NUMBERS_SHOWN).map(c => c.number).join(', ')}${fresh.length > NUMBERS_SHOWN ? ' и другие' : ''}${respondent > 0 ? `; ответчик — в ${respondent}` : ''}`,
           companies,
           project: null,
-          source: { kind: 'kad', documentId: null, href: companyId !== null ? `/company/${companyId}#company-checks` : null },
+          source: { kind: 'kad', documentId: null, href: checksHref },
           watched: isWatched,
         },
       ];
@@ -239,7 +273,7 @@ export const recordItems = (
         detail: debt > 0 ? `сумма долга по документам ${moneyText(debt)}` : null,
         companies,
         project: null,
-        source: { kind: 'fssp', documentId: null, href: companyId !== null ? `/company/${companyId}#company-checks` : null },
+        source: { kind: 'fssp', documentId: null, href: checksHref },
         watched: isWatched,
       },
     ];

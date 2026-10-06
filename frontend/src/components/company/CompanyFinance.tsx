@@ -2,7 +2,8 @@
 // из снимков parser-api.com.
 //
 // Последний год — сеткой «подпись над значением», под каждым числом — то же число за прошлый год; все годы — таблицей
-// под раскрытием, со ссылкой на PDF отчёта. Ниже — налоги и численность. Оценки нет (ADR-009): только числа отчёта,
+// под раскрытием, со ссылкой на PDF отчёта. Ниже — налоги, численность, налоговые правонарушения и сколько юрлиц у
+// руководителя и учредителей по ФНС (tax-map@2: число, без порога «массовости»). Оценки нет (ADR-009): только числа отчёта,
 // год и откуда; ни «роста», ни «падения», ни цвета у сумм. Суммы — в рублях (ГИР БО отдаёт тысячи, сервер пересчитал).
 //
 // Состояние словами: не запрашивалось, записей нет, получена часть, запрос не удался — это разные вещи, а не «пусто».
@@ -13,7 +14,7 @@ import { FC, ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { FinanceLine, IFinanceView, IParserApiDatasetState, ITaxView } from '../../api/types';
+import type { FinanceLine, IFinanceView, IParserApiDatasetState, IPbPerson, ITaxView } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
 import { FINANCE_LINE_LABELS, formatDate, formatMoney } from '../../lib/labels';
@@ -124,6 +125,16 @@ const FinancePart: FC<{ view: IFinanceView | null; state: IParserApiDatasetState
 
 const yesNo = (value: boolean | null): string => (value === null ? 'нет сведений' : value ? 'да' : 'нет');
 
+/** Статус «Прозрачного бизнеса» — только если компания не действующая: действующий статус уже в шапке (ЕГРЮЛ). */
+const ACTIVE_STATUS = /^действующ/i;
+
+/** «ИВАНОВ ИВАН, генеральный директор — в 7 юрлицах»; число ФНС считает вместе с этой компанией. */
+const personText = (p: IPbPerson, role: string): string =>
+  `${p.name}${p.position ? `, ${p.position.toLowerCase()}` : ''}${p.companies !== null && p.companies > 1 ? ` — ${role} в ${formatCount(p.companies)} юрлицах, считая эту` : ''}`;
+
+/** Учредителей в строке. */
+const OWNERS_SHOWN = 3;
+
 const TaxPart: FC<{ view: ITaxView | null; state: IParserApiDatasetState; inn: string }> = ({ view, state, inn }) => {
   if (!view || !view.recognized) {
     if (view) return <Callout tone="warning" title="Сведения ФНС не распознаны">{view.problems.join('; ')}</Callout>;
@@ -133,6 +144,7 @@ const TaxPart: FC<{ view: ITaxView | null; state: IParserApiDatasetState; inn: s
   const income = view.incomeExpenses[0];
   const taxes = view.taxesPaid[0];
   const items: Array<{ label: string; value: ReactNode }> = [];
+  if (view.status && !ACTIVE_STATUS.test(view.status)) items.push({ label: 'Статус по ФНС', value: view.status /* raw-ok: слова ФНС */ });
   if (staff) items.push({ label: 'Среднесписочная численность', value: `${formatCount(staff.count)} чел. в ${staff.year}${staffPrev ? `; в ${staffPrev.year} — ${formatCount(staffPrev.count)}` : ''}` });
   if (income) items.push({ label: `Доходы и расходы за ${income.year}`, value: `доходы ${money(income.income)}, расходы ${money(income.expense)}` });
   if (taxes) items.push({ label: `Уплачено налогов и взносов за ${taxes.year}`, value: money(taxes.total) });
@@ -171,6 +183,19 @@ const TaxPart: FC<{ view: ITaxView | null; state: IParserApiDatasetState; inn: s
   const asOf = view.flags.asOf ? ` на ${formatDate(view.flags.asOf)}` : '';
   items.push({ label: `Долг перед приставами больше 1000 ₽${asOf}`, value: yesNo(view.flags.bailiffDebt) });
   items.push({ label: `Не сдаёт отчётность больше года${asOf}`, value: yesNo(view.flags.noReporting) });
+  if (view.offenses) {
+    items.push({
+      label: 'Налоговые правонарушения',
+      value: view.offenses.length === 0 ? 'ФНС не указала' : view.offenses.map(o => `${o.year} — штрафы ${money(o.fine)}`).join('; '),
+    });
+  }
+  const director = view.people.directors[0];
+  if (director) items.push({ label: 'Руководитель по ФНС', value: personText(director, 'руководитель') });
+  if (view.people.owners.length > 0) {
+    const shown = view.people.owners.slice(0, OWNERS_SHOWN).map(o => personText(o, 'учредитель'));
+    const more = view.people.owners.length - shown.length;
+    items.push({ label: 'Учредители-физлица по ФНС', value: `${shown.join('; ')}${more > 0 ? `; и ещё ${formatCount(more)}` : ''}` });
+  }
   if (view.taxModes.length > 0) items.push({ label: 'Налоговый режим', value: view.taxModes.join(', ') });
   if (view.msp) items.push({ label: 'Реестр МСП', value: view.msp });
   const checked = checkedText(state);

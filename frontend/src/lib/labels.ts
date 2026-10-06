@@ -19,6 +19,8 @@ import type {
   LlmKeySource,
   LlmProvider,
   CourtCaseType,
+  EfrsbMessageKind,
+  FsspStopMeaning,
   DeliveryShiftDirection,
   CourtRole,
   FinanceLine,
@@ -967,6 +969,37 @@ export const COURT_TYPE_LABELS: Record<CourtCaseType, string> = {
   unknown: 'вид не указан',
 };
 
+/**
+ * Основание окончания исполнительного производства по 229-ФЗ (fssp-map@2): ФССП пишет ссылку на закон, подпись
+ * говорит, что она значит. Окончено — не значит погашено: по ст. 46 ч. 1 п. 3–4 документ вернули взыскателю без взыскания.
+ */
+export const FSSP_STOP_MEANING_LABELS: Record<FsspStopMeaning, string> = {
+  executed: 'фактически исполнено',
+  not_found: 'возвращено без взыскания: не найдены должник, имущество или счета',
+  no_property: 'возвращено без взыскания: нет имущества для взыскания',
+  returned: 'возвращено взыскателю по другому основанию',
+  periodic: 'передано для удержания периодических платежей',
+  bankruptcy: 'должник признан банкротом — документ передан арбитражному управляющему',
+  liquidation: 'передано ликвидационной комиссии',
+  terminated: 'прекращено',
+  expired: 'истёк срок давности исполнения',
+  other: 'другое основание',
+};
+
+/** Вид сообщения ЕФРСБ (bankruptcy-map@2) — по его типу в реестре. */
+export const EFRSB_KIND_LABELS: Record<EfrsbMessageKind, string> = {
+  court_act: 'о судебных актах',
+  intent: 'о намерении обратиться в суд',
+  meeting: 'о собраниях',
+  claims: 'о требованиях кредиторов',
+  transactions: 'об оспаривании сделок',
+  liability: 'о субсидиарной ответственности и убытках',
+  sale: 'о торгах и продаже имущества',
+  property: 'об инвентаризации и оценке имущества',
+  annulment: 'об аннулировании сообщений',
+  other: 'другие',
+};
+
 /** Перенос срока сдачи между снимками ДОМ.РФ (24E): в какую сторону. */
 export const SHIFT_DIRECTION_LABELS: Record<DeliveryShiftDirection, string> = {
   later: 'позже',
@@ -985,15 +1018,17 @@ export const NEWS_KIND_LABELS: Record<NewsKind, string> = {
   deadline_shift: 'срок сдачи',
   court_case: 'арбитраж',
   fssp: 'ФССП',
+  bankruptcy: 'банкротство',
 };
 
-type INewsSourceKind = 'publication' | 'registry' | 'kad' | 'fssp';
+type INewsSourceKind = 'publication' | 'registry' | 'kad' | 'fssp' | 'efrsb';
 
 export const NEWS_SOURCE_LABELS: Record<INewsSourceKind, string> = {
   publication: 'публикация',
   registry: 'ДОМ.РФ',
   kad: 'картотека дел',
   fssp: 'ФССП',
+  efrsb: 'ЕФРСБ',
 };
 
 export const PARSER_API_KEY_SOURCE_HINTS: Record<LlmKeySource, string> = {

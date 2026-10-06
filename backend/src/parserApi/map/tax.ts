@@ -4,12 +4,16 @@
 // Форма сверена с живым ответом (06.10.2026): search_org → org[] (берём запись с тем же ИНН), суммы — в рублях.
 // Недоимка приходит несколькими выгрузками ФНС ({year, period}); показываем последнюю (наибольшие год и период),
 // прежние — только итогом. Это сведения ФНС на дату выгрузки, а не «долг сейчас». Флаги — на flags_date.
+// tax-map@2 (06.10.2026, по документации сервиса и живым ответам): налоговые правонарушения (offenses — год и сумма
+// штрафа; пустой список — ФНС нарушений не указала), статус по ФНС (status) и сколько юрлиц у руководителя и
+// учредителей (director[].count, owner[].count — по данным ФНС, сама компания входит в число). Это слова ФНС, а не
+// признак «массового руководителя»: порога портал не ставит.
 // Нет поля — null или пустой список, не ноль. Оценки нет (ADR-009).
 
 import { asObject } from '../client.js';
 import type { IDatasetPayload } from '../datasets.js';
 
-export const TAX_MAP_VERSION = 'tax-map@1';
+export const TAX_MAP_VERSION = 'tax-map@2';
 
 export interface IArrearsSnapshot {
   year: number;
@@ -38,6 +42,19 @@ export interface ITaxView {
   flags: { bailiffDebt: boolean | null; noReporting: boolean | null; asOf: string | null };
   taxModes: string[];
   msp: string | null;
+  /** Статус словами ФНС: «Действующая организация», «Находится в процедуре банкротства». */
+  status: string | null;
+  /** Налоговые правонарушения: штраф за год, по убыванию лет; null — поля нет в ответе. */
+  offenses: Array<{ year: number; fine: number }> | null;
+  /** Лица без доверенности и учредители-физлица с числом юрлиц, где они в той же роли (по ФНС). */
+  people: { directors: IPbPerson[]; owners: IPbPerson[] };
+}
+
+export interface IPbPerson {
+  name: string;
+  position: string | null;
+  /** Во скольких юрлицах — включая эту компанию; null — ФНС не указала. */
+  companies: number | null;
 }
 
 const num = (value: unknown): number | null => {
@@ -66,7 +83,15 @@ const empty = (problems: string[]): ITaxView => ({
   flags: { bailiffDebt: null, noReporting: null, asOf: null },
   taxModes: [],
   msp: null,
+  status: null,
+  offenses: null,
+  people: { directors: [], owners: [] },
 });
+
+const person = (r: Record<string, unknown>): IPbPerson[] => {
+  const name = text(r.name);
+  return name ? [{ name, position: text(r.position), companies: num(r.count) }] : [];
+};
 
 const byYearDesc = <T extends { year: number }>(list: T[]): T[] => list.sort((a, b) => b.year - a.year);
 
@@ -141,5 +166,16 @@ export const mapTax = (payload: IDatasetPayload): ITaxView => {
     taxModes: rows(org.tax_modes).map(m => text(m.name) ?? text(m.title)).filter((m): m is string => m !== null)
       .concat(Array.isArray(org.tax_modes) ? org.tax_modes.filter((m): m is string => typeof m === 'string') : []),
     msp: text(org.msp) ?? text(asObject(org.msp)?.category) ?? null,
+    status: text(org.status),
+    offenses: Array.isArray(org.offenses)
+      ? byYearDesc(
+          rows(org.offenses).flatMap(r => {
+            const year = num(r.year);
+            const fine = num(r.fine_sum);
+            return year !== null && fine !== null ? [{ year, fine }] : [];
+          }),
+        )
+      : null,
+    people: { directors: rows(org.director).flatMap(person), owners: rows(org.owner).flatMap(person) },
   };
 };

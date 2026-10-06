@@ -65,4 +65,28 @@ describe('карта «Прозрачного бизнеса» (T24B-02)', () =>
     expect(view).toMatchObject({ recognized: false, headcount: [] });
     expect(view.problems[0]).toMatch(/ИНН/);
   });
+
+  it('tax-map@2: правонарушения по годам, статус и число юрлиц у руководителя и учредителей — словами ФНС', () => {
+    const view = mapTax(
+      payload([
+        org({
+          status: 'Находится в процедуре банкротства',
+          offenses: [{ year: 2023, fine_sum: 5000 }, { year: 2024, fine_sum: 11527564.2 }],
+          director: [{ inn: '770000000001', name: 'ИВАНОВ ИВАН', position: 'ГЕНЕРАЛЬНЫЙ ДИРЕКТОР', count: 7 }],
+          owner: [{ inn: '770000000001', name: 'ИВАНОВ ИВАН', count: 1 }, { name: '' }],
+        }),
+      ]),
+    );
+    expect(view.status).toBe('Находится в процедуре банкротства');
+    expect(view.offenses).toEqual([{ year: 2024, fine: 11527564.2 }, { year: 2023, fine: 5000 }]);
+    expect(view.people).toEqual({
+      directors: [{ name: 'ИВАНОВ ИВАН', position: 'ГЕНЕРАЛЬНЫЙ ДИРЕКТОР', companies: 7 }],
+      owners: [{ name: 'ИВАНОВ ИВАН', position: null, companies: 1 }],
+    });
+  });
+
+  it('пустой список правонарушений — «нарушений нет» ([]), нет поля — не знаем (null)', () => {
+    expect(mapTax(payload([org({ offenses: [] })])).offenses).toEqual([]);
+    expect(mapTax(payload([org()])).offenses).toBeNull();
+  });
 });

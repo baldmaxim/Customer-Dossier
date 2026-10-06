@@ -5,7 +5,11 @@
 //  courts     — картотека арбитражных дел за 24 месяца (с первого числа месяца — окно не дрожит каждый день),
 //               любая роль, страниц не больше PARSER_API_KAD_MAX_PAGES: не все страницы — неполный набор;
 //  fssp       — исполнительные производства по ИНН;
-//  bankruptcy — Федресурс (ЕФРСБ): поиск юрлица по ИНН → карточка по id.
+//  bankruptcy — Федресурс (ЕФРСБ): поиск должника по ИНН → список его сообщений (страницы по from_record) →
+//               карточки «Сообщение о судебном акте», новые первыми, не больше EFRSB_MAX_ACTS за проход;
+//               карточка, полученная прежним снимком, переносится без запроса: сообщение ЕФРСБ не меняется
+//               (аннулирование — отдельное сообщение и пометка в списке). Карточку должника (get_org) больше не
+//               спрашиваем: о банкротстве в ней ничего, имя и адрес есть в поиске.
 //
 // Состояние набора — три слова: found (сведения есть), not_found (сервис ответил «записей нет»), partial
 // (получена часть: детали или страницы не пришли). «Не проверяли» — отсутствие строки, «ошибка» — неудача
@@ -13,6 +17,7 @@
 // решает карта на чтении (24B, 24C) — после пробы живого ответа.
 
 import { asObject, type ParserApiCallResult, type ParserApiFailure, type ParserApiMethod } from './client.js';
+import { efrsbDate, efrsbType, messageKind } from './map/bankruptcy.js';
 
 export const PARSER_API_DATASETS = ['finance', 'tax', 'courts', 'fssp', 'bankruptcy'] as const;
 export type ParserApiDataset = (typeof PARSER_API_DATASETS)[number];
@@ -30,6 +35,11 @@ export const DATASET_REFRESH_DAYS: Readonly<Record<ParserApiDataset, number>> = 
 
 /** Окно картотеки: 24 месяца. */
 export const COURTS_WINDOW_MONTHS = 24;
+
+/** Страниц списка сообщений должника ЕФРСБ за проход (на живых ответах список до 118 записей приходил одной страницей). */
+export const EFRSB_MAX_LIST_PAGES = 5;
+/** Карточек судебных актов ЕФРСБ за проход; остальные — следующим, полученные не спрашиваются снова. */
+export const EFRSB_MAX_ACTS = 5;
 
 export const DATASET_FORMAT = 'parser-api-dataset@1';
 
@@ -64,6 +74,8 @@ export type DatasetRunResult =
 export interface IDatasetOptions {
   kadMaxPages: number;
   now: Date;
+  /** Последний снимок этого набора по ИНН: из него Федресурс берёт уже полученные карточки сообщений. */
+  previous?: IDatasetPayload | null;
 }
 
 const list = (value: unknown): Array<Record<string, unknown>> =>
@@ -181,6 +193,83 @@ const runCourts = async (inn: string, step: DatasetStep, options: IDatasetOption
   return { status: 'done', outcome: 'partial', payload, complete: false, stop: null };
 };
 
+const runBankruptcy = async (inn: string, step: DatasetStep, options: IDatasetOptions): Promise<DatasetRunResult> => {
+  const payload = payloadOf('bankruptcy', inn);
+  const search = { orgCode: inn };
+  const first = await step('fedresurs_ur', search);
+  if (!first.ok) return { status: 'failed', error: failureNote('fedresurs_ur', first), stop: stopOf(first) };
+  payload.responses.push({ method: 'fedresurs_ur', params: search, body: first.body });
+  const match = byInn(list(first.body.records), inn);
+  if (!match) return { status: 'done', outcome: 'not_found', payload, complete: true, stop: null };
+  const id = text(match.id);
+  if (id === null) {
+    payload.missing.push('сообщения должника: в ответе поиска нет id');
+    return { status: 'done', outcome: 'partial', payload, complete: false, stop: null };
+  }
+  const partial = (stop: ParserApiFailure | null): DatasetRunResult => ({ status: 'done', outcome: 'partial', payload, complete: false, stop });
+
+  // Список сообщений: from_record — сколько записей уже получено.
+  const messages: Array<Record<string, unknown>> = [];
+  let total: number | null = null;
+  for (let page = 1; page <= EFRSB_MAX_LIST_PAGES; page += 1) {
+    const params: Record<string, string> = messages.length > 0 ? { id, from_record: String(messages.length) } : { id };
+    const res = await step('fedresurs_messages', params, page);
+    if (!res.ok) {
+      payload.missing.push(failureNote(page === 1 ? 'сообщения должника' : `сообщения с ${messages.length + 1}-го`, res));
+      return partial(stopOf(res));
+    }
+    payload.responses.push({ method: 'fedresurs_messages', params, body: res.body });
+    const rows = list(res.body.records);
+    total = numberOf(res.body.total_count) ?? total;
+    messages.push(...rows);
+    if (rows.length === 0 || total === null || messages.length >= total) break;
+  }
+  let complete = true;
+  if (total !== null && messages.length < total) {
+    payload.missing.push(`сообщения ${messages.length + 1}–${total}: предел страниц списка`);
+    complete = false;
+  }
+
+  // Карточки судебных актов: неаннулированные, новые первыми.
+  const acts = messages
+    .map(m => ({ id: text(m.id), date: efrsbDate(m.date), ...efrsbType(m.type) }))
+    .filter((m): m is { id: string; date: string | null; type: string; annulled: boolean } => m.id !== null && !m.annulled && messageKind(m.type) === 'court_act')
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  const known = new Map(
+    (options.previous?.responses ?? [])
+      .filter(r => r.method === 'fedresurs_message' && r.params.id)
+      .map(r => [r.params.id!, r.body] as const),
+  );
+  let asked = 0;
+  let deferred = 0;
+  for (const act of new Map(acts.map(a => [a.id, a])).values()) {
+    const params = { id: act.id };
+    const body = known.get(act.id);
+    if (body) {
+      payload.responses.push({ method: 'fedresurs_message', params, body });
+      continue;
+    }
+    if (asked >= EFRSB_MAX_ACTS) {
+      deferred += 1;
+      continue;
+    }
+    asked += 1;
+    const res = await step('fedresurs_message', params);
+    if (!res.ok) {
+      payload.missing.push(failureNote(`судебный акт ${act.date ?? act.id}`, res));
+      if (res.stop) return partial(stopOf(res));
+      complete = false;
+      continue;
+    }
+    payload.responses.push({ method: 'fedresurs_message', params, body: res.body });
+  }
+  if (deferred > 0) {
+    payload.missing.push(`судебные акты: ещё ${deferred} — следующим проходом (не больше ${EFRSB_MAX_ACTS} за проход)`);
+    complete = false;
+  }
+  return complete ? { status: 'done', outcome: 'found', payload, complete: true, stop: null } : partial(null);
+};
+
 export const runDataset = (dataset: ParserApiDataset, inn: string, step: DatasetStep, options: IDatasetOptions): Promise<DatasetRunResult> => {
   switch (dataset) {
     case 'finance':
@@ -192,6 +281,6 @@ export const runDataset = (dataset: ParserApiDataset, inn: string, step: Dataset
     case 'fssp':
       return single(dataset, inn, step, 'fssp_ur', { inn }, 'result', 'total_pages_count');
     case 'bankruptcy':
-      return searchThenDetails(dataset, inn, step, { method: 'fedresurs_ur', params: { orgCode: inn }, listKey: 'records' }, { method: 'fedresurs_org', idKey: 'id', label: 'карточка Федресурса' });
+      return runBankruptcy(inn, step, options);
   }
 };

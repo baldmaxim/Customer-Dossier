@@ -50,7 +50,7 @@ const memoryStore = (known: string[] = [], daily = 20) => {
     saveRecord: async () => true,
     markChecked: async () => undefined,
     markFailed: async () => undefined,
-    latestCourts: async () => COURTS,
+    latestRecord: async (_inn, dataset) => (dataset === 'courts' ? COURTS : null),
     knownCaseCards: async ids => new Set(ids.filter(id => known.includes(id) || saved.includes(id))),
     saveCaseCard: async caseId => {
       saved.push(caseId);

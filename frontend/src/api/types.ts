@@ -1831,6 +1831,17 @@ export interface ITaxView {
   flags: { bailiffDebt: boolean | null; noReporting: boolean | null; asOf: string | null };
   taxModes: string[];
   msp: string | null;
+  /** tax-map@2: статус словами ФНС, налоговые правонарушения (null — поля нет в ответе), руководитель и учредители. */
+  status: string | null;
+  offenses: Array<{ year: number; fine: number }> | null;
+  people: { directors: IPbPerson[]; owners: IPbPerson[] };
+}
+
+export interface IPbPerson {
+  name: string;
+  position: string | null;
+  /** Во скольких юрлицах в той же роли, включая эту компанию (по ФНС). */
+  companies: number | null;
 }
 
 export interface IParserApiBlock<TView> {
@@ -1902,6 +1913,25 @@ export interface IFsspProceeding {
   stopReason: string | null;
 }
 
+/** Основание окончания по 229-ФЗ (fssp-map@2). */
+export type FsspStopMeaning =
+  | 'executed'
+  | 'not_found'
+  | 'no_property'
+  | 'returned'
+  | 'periodic'
+  | 'bankruptcy'
+  | 'liquidation'
+  | 'terminated'
+  | 'expired'
+  | 'other';
+
+export interface IFsspEndedGroup {
+  count: number;
+  debt: number;
+  debtCovered: number;
+}
+
 export interface IFsspView {
   format: string;
   recognized: boolean;
@@ -1910,12 +1940,62 @@ export interface IFsspView {
   loaded: number;
   complete: boolean;
   open: { count: number; debt: number; remaining: number; remainingCovered: number; fee: number };
-  ended: { count: number; byReason: Array<{ reason: string; count: number }> };
+  ended: {
+    count: number;
+    byReason: Array<{ reason: string; meaning: FsspStopMeaning } & IFsspEndedGroup>;
+    byMeaning: Array<{ meaning: FsspStopMeaning } & IFsspEndedGroup>;
+    /** Возвращено взыскателю без взыскания (ст. 46 ч. 1 п. 3–4): долг остался. */
+    uncollected: IFsspEndedGroup;
+  };
   unknownStatus: number;
   openedByYear: Array<{ year: number; count: number }>;
   last12m: { from: string; count: number } | null;
   bySubject: Array<{ subject: string; count: number }>;
   recent: IFsspProceeding[];
+}
+
+/** Сообщения ЕФРСБ (bankruptcy-map@2): вид сообщения и что судебный акт делает с процедурой. */
+export type EfrsbMessageKind = 'court_act' | 'intent' | 'meeting' | 'claims' | 'transactions' | 'liability' | 'sale' | 'property' | 'annulment' | 'other';
+export type EfrsbActEffect =
+  | 'observation'
+  | 'financial_recovery'
+  | 'external_management'
+  | 'competition'
+  | 'restructuring'
+  | 'property_sale'
+  | 'settlement'
+  | 'terminated'
+  | 'completed'
+  | 'procedural';
+
+export interface IEfrsbMessage {
+  id: string | null;
+  date: string | null;
+  type: string;
+  kind: EfrsbMessageKind;
+  annulled: boolean;
+}
+
+export interface IEfrsbCourtAct {
+  messageId: string;
+  date: string | null;
+  /** Судебный акт словами ЕФРСБ. */
+  act: string | null;
+  effect: EfrsbActEffect | null;
+  caseNumber: string | null;
+  annulled: boolean;
+}
+
+export interface IEfrsbMessages {
+  total: number | null;
+  loaded: number;
+  complete: boolean;
+  first: string | null;
+  last: string | null;
+  annulled: number;
+  byKind: Array<{ kind: EfrsbMessageKind; count: number }>;
+  otherTypes: string[];
+  recent: IEfrsbMessage[];
 }
 
 export interface IBankruptcyView {
@@ -1924,6 +2004,17 @@ export interface IBankruptcyView {
   problems: string[];
   found: boolean;
   record: { name: string | null; category: string | null; region: string | null; address: string | null } | null;
+  /** Чего в снимке нет и почему. */
+  missing: string[];
+  /** null — сообщения должника не запрашивались (снимок до bankruptcy-map@2). */
+  messages: IEfrsbMessages | null;
+  courtActs: IEfrsbCourtAct[] | null;
+  courtActsCoverage: { listed: number; fetched: number } | null;
+  /** Последний неаннулированный акт, меняющий процедуру. */
+  procedureAct: IEfrsbCourtAct | null;
+  /** Акт новее procedureAct, который процедуру не меняет (продление, смена управляющего). */
+  laterAct: IEfrsbCourtAct | null;
+  caseNumbers: string[];
 }
 
 export interface ICompanyChecksResponse {
@@ -1979,7 +2070,7 @@ export interface ICompanyDelivery {
 }
 
 /** «Новое» (этап 24F): GET /api/news. */
-export type NewsKind = 'new_project' | 'deadline_shift' | 'court_case' | 'fssp';
+export type NewsKind = 'new_project' | 'deadline_shift' | 'court_case' | 'fssp' | 'bankruptcy';
 export type NewsScope = 'all' | 'watched';
 
 export interface INewsItem {
@@ -1990,7 +2081,7 @@ export interface INewsItem {
   detail: string | null;
   companies: Array<{ id: number; name: string; role: string | null }>;
   project: { id: number; name: string } | null;
-  source: { kind: 'publication' | 'registry' | 'kad' | 'fssp'; documentId: number | null; href: string | null };
+  source: { kind: 'publication' | 'registry' | 'kad' | 'fssp' | 'efrsb'; documentId: number | null; href: string | null };
   watched: boolean;
 }
 

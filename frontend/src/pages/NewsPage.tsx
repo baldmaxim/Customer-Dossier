@@ -28,7 +28,7 @@ import { describeLoadError } from '../lib/loadError';
 import styles from './NewsPage.module.css';
 
 const SCOPES = ['all', 'watched'] as const;
-const KINDS = ['any', 'new_project', 'deadline_shift', 'court_case', 'fssp'] as const;
+const KINDS = ['any', 'new_project', 'deadline_shift', 'court_case', 'fssp', 'bankruptcy'] as const;
 /** Окна ленты — те же, что принимает сервер (NEWS_DAYS), строками для адреса. */
 const DAYS = ['7', '14', '30'] as const;
 
@@ -122,7 +122,7 @@ export const NewsPage: FC = () => {
     <Stack gap={4}>
       <PageHeader
         title="Новое"
-        lead="Что портал узнал за последние дни: новые объекты с названным заказчиком, смена сроков сдачи домов ДОМ.РФ, новые арбитражные дела и исполнительные производства у проверенных компаний."
+        lead="Что портал узнал за последние дни: новые объекты с названным заказчиком, смена сроков сдачи домов ДОМ.РФ, новые арбитражные дела, исполнительные производства и сообщения ЕФРСБ о судебных актах у проверенных компаний."
       />
       <Cluster gap={3} align="center">
         <Segmented

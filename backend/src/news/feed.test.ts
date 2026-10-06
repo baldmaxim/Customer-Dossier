@@ -94,3 +94,42 @@ describe('новые дела и производства (T24F-03)', () => {
     expect(recordItems([{ inn: INN, dataset: 'fssp' as const, fetchedAt: created, complete: true, payload: fsspPayload(['A']), prev: fsspPayload(['A']) }], byInn, new Set(), 'all')).toEqual([]);
   });
 });
+
+const efrsbPayload = (found: boolean, list: Array<[string, string]> | null, acts: Array<[string, string]> = []): IDatasetPayload => ({
+  format: 'parser-api-dataset@1',
+  dataset: 'bankruptcy',
+  inn: INN,
+  window: null,
+  missing: [],
+  responses: [
+    { method: 'fedresurs_ur', params: { orgCode: INN }, body: { success: 1, records: found ? [{ id: 'D1', inn: INN }] : [] } },
+    ...(found && list ? [{ method: 'fedresurs_messages' as const, params: { id: 'D1' }, body: { success: 1, total_count: String(list.length), records: list.map(([id, type]) => ({ id, type, date: '01.10.2026 10:00:00' })) } }] : []),
+    ...acts.map(([id, act]) => ({ method: 'fedresurs_message' as const, params: { id }, body: { success: 1, record: { id, act, date_published: '01.10.2026', is_actual: 1 } } })),
+  ],
+});
+
+describe('ЕФРСБ в «Новом» (bankruptcy-map@2)', () => {
+  const byInn = new Map([[INN, [{ id: 10, name: 'Подрядчик', role: null }]]]);
+  const row = (payload: IDatasetPayload, prev: IDatasetPayload) => ({ inn: INN, dataset: 'bankruptcy' as const, fetchedAt: created, complete: true, payload, prev });
+  const ACT = 'Сообщение о судебном акте';
+
+  it('новое сообщение о судебном акте — новость словами акта; собрание кредиторов — не новость', () => {
+    const prev = efrsbPayload(true, [['M1', ACT]], [['M1', 'о введении наблюдения']]);
+    const cur = efrsbPayload(true, [['M3', 'Сообщение о собрании кредиторов'], ['M2', ACT], ['M1', ACT]], [['M2', 'о признании должника банкротом и открытии конкурсного производства'], ['M1', 'о введении наблюдения']]);
+    const [item] = recordItems([row(cur, prev)], byInn, new Set(), 'all');
+    expect(item).toMatchObject({
+      kind: 'bankruptcy',
+      title: 'ЕФРСБ: новые сообщения о судебных актах — 1',
+      detail: '«о признании должника банкротом и открытии конкурсного производства» от 01.10.2026',
+      source: { kind: 'efrsb', href: '/company/10#company-checks' },
+    });
+  });
+
+  it('компания появилась в ЕФРСБ — новость; первый список после снимка без сообщений (@1) — не новость', () => {
+    const appeared = recordItems([row(efrsbPayload(true, [['M1', ACT]]), efrsbPayload(false, null))], byInn, new Set(), 'all');
+    expect(appeared).toMatchObject([{ kind: 'bankruptcy', title: 'Компания появилась в ЕФРСБ' }]);
+    expect(recordItems([row(efrsbPayload(true, [['M1', ACT]]), efrsbPayload(true, null))], byInn, new Set(), 'all')).toEqual([]);
+    // Карточку старого акта получили позже (предел за проход) — список тот же, новости нет.
+    expect(recordItems([row(efrsbPayload(true, [['M1', ACT]], [['M1', 'о введении наблюдения']]), efrsbPayload(true, [['M1', ACT]]))], byInn, new Set(), 'all')).toEqual([]);
+  });
+});
