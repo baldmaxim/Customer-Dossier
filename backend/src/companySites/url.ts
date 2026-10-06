@@ -7,8 +7,10 @@
 import net from 'node:net';
 import { domainToASCII } from 'node:url';
 
+import { nameCore } from '../ingest/registry/domrfCompanies.js';
 import type { ILlmCitation } from '../llm/client.js';
 import type { ISiteSearchSite } from '../llm/siteSearch/schema.js';
+import { normalizeName } from '../resolve/normalize.js';
 
 export interface ISiteAddress {
   /** Хост без «www.» в нижнем регистре (punycode): ключ кандидата. */
@@ -131,4 +133,34 @@ export const acceptCandidates = (sites: readonly ISiteSearchSite[], citations: r
     accepted.push({ ...address, reason: site.reason, title: match.citation.title, snippet: match.citation.content?.slice(0, 500) ?? null });
   }
   return { accepted, rejected, citationHosts };
+};
+
+/** Причина у кандидата из выдачи без выбора модели: оператор видит, что это не её вывод. */
+export const CITATION_FALLBACK_REASON = 'в выдаче поиска: название компании в адресе и на странице (модель сайт не выбрала)';
+
+/** Сколько кандидатов брать из выдачи без выбора модели. */
+const FALLBACK_MAX = 2;
+
+/**
+ * Модель выдачу видела, но сайт не выбрала (06.10.2026: «ПИК» — выдача pik.ru и welcome.pik.ru, ответ пустой; та же
+ * модель днём нашла ingrad.ru). Тогда кандидаты — сами страницы выдачи, у которых слово названия стоит в адресе
+ * (pik.ru, lsr.ru, etalongroup.ru), а всё название — в заголовке или фрагменте страницы. Справочники отсеяны тем же
+ * стоп-листом. Сначала корень сайта, затем поддомены. Решает по-прежнему оператор.
+ */
+export const citationFallback = (citations: readonly ILlmCitation[], companyName: string): IAcceptedSite[] => {
+  const core = nameCore(companyName).filter(word => word.length >= 3);
+  if (core.length === 0) return [];
+  const out: IAcceptedSite[] = [];
+  for (const citation of citations) {
+    const address = normalizeSiteUrl(citation.url);
+    if (!address || isNotCompanySite(address.host)) continue;
+    const host = address.host.replace(/[^a-z0-9]/g, '');
+    if (!core.some(word => host.includes(word))) continue;
+    const words = new Set(normalizeName(`${citation.title ?? ''} ${citation.content ?? ''}`).latin.split(' '));
+    if (!core.every(word => words.has(word))) continue;
+    if (out.some(o => o.host === address.host)) continue;
+    out.push({ ...address, reason: CITATION_FALLBACK_REASON, title: citation.title, snippet: citation.content?.slice(0, 500) ?? null });
+  }
+  // Корень раньше поддомена: pik.ru, затем welcome.pik.ru.
+  return out.sort((a, b) => a.host.split('.').length - b.host.split('.').length).slice(0, FALLBACK_MAX);
 };

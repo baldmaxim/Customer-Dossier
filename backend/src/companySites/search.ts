@@ -26,7 +26,7 @@ import {
   type IUncheckedCandidate,
   type SiteSearchOutcome,
 } from './store.js';
-import { acceptCandidates, type IAcceptedSite, type SiteRejection } from './url.js';
+import { acceptCandidates, citationFallback, type IAcceptedSite, type SiteRejection } from './url.js';
 import { verifyCandidate, type ISiteCheck } from './verify.js';
 
 export type SiteSearchMode = 'off' | 'needs_openrouter' | 'on';
@@ -122,7 +122,9 @@ export const searchCompanySite = async (
     const citations = result.citations ?? [];
     const acceptance = acceptCandidates(result.data.sites, citations);
     // Поиск не вернул ни одной страницы — предложениям модели верить не на чем, даже если она их дала.
-    const accepted = citations.length === 0 ? [] : acceptance.accepted;
+    // Модель страницы видела, но сайт не выбрала — кандидаты из самой выдачи по названию (citationFallback).
+    const accepted =
+      citations.length === 0 ? [] : acceptance.accepted.length > 0 ? acceptance.accepted : citationFallback(citations, target.name);
     const outcome: SiteSearchOutcome = citations.length === 0 ? 'no_citations' : accepted.length > 0 ? 'found' : 'none';
     await deps.finish(slot.id, { outcome, citations: citations.length, accepted: accepted.length, error: null });
     const run: ISiteSearchRun = {

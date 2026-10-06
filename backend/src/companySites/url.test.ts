@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { acceptCandidates, isNotCompanySite, normalizeSiteUrl } from './url.js';
+import { CITATION_FALLBACK_REASON, acceptCandidates, citationFallback, isNotCompanySite, normalizeSiteUrl } from './url.js';
 
 describe('адрес сайта компании', () => {
   it('origin без пути; без схемы — https; www. — только в адресе, не в ключе', () => {
@@ -63,5 +63,30 @@ describe('приём предложений модели', () => {
 
   it('поиск ничего не вернул — не принят ни один адрес', () => {
     expect(acceptCandidates([{ url: 'https://donstroy.moscow', reason: 'знаю и так' }], []).accepted).toEqual([]);
+  });
+});
+
+describe('кандидаты из выдачи, когда модель сайт не выбрала', () => {
+  const cite = (url: string, title: string | null, content: string | null = null) => ({ url, title, content });
+
+  it('слово названия в адресе и название на странице; корень раньше поддомена; справочники и чужие — нет', () => {
+    const sites = citationFallback(
+      [
+        cite('https://welcome.pik.ru/', 'ПИК — квартиры от застройщика'),
+        cite('https://www.pik.ru/', 'Группа компаний ПИК'),
+        cite('https://www.rusprofile.ru/id/1', 'ПАО ПИК — реквизиты'),
+        cite('https://pikabu.ru/story/1', 'ПИК'),
+        cite('https://novosti-pik.example.ru/', 'Новости района'),
+      ],
+      'ПИК',
+    );
+    expect(sites.map(s => s.host)).toEqual(['pik.ru', 'welcome.pik.ru']);
+    expect(sites[0]).toMatchObject({ url: 'https://www.pik.ru/', reason: CITATION_FALLBACK_REASON, title: 'Группа компаний ПИК' });
+  });
+
+  it('у короткого или общего названия кандидатов нет; без названия на странице — нет', () => {
+    expect(citationFallback([cite('https://sz.ru/', 'СЗ')], 'СЗ')).toEqual([]);
+    expect(citationFallback([cite('https://lsr.ru/', 'Квартиры в Петербурге')], 'группа ЛСР')).toEqual([]);
+    expect(citationFallback([cite('https://lsr.ru/', 'Группа ЛСР — недвижимость')], 'группа ЛСР').map(s => s.host)).toEqual(['lsr.ru']);
   });
 });
