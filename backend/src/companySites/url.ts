@@ -63,6 +63,9 @@ const NOT_COMPANY_SITE_DOMAINS: readonly string[] = [
   'cian.ru', 'avito.ru', 'domclick.ru', 'novostroy.ru', 'novostroy-m.ru', 'novostroy-spb.ru', 'yandex.ru', 'ya.ru',
   'google.com', '2gis.ru', '2gis.com', 'hh.ru', 'superjob.ru', 'zarplata.ru', 'irr.ru', 'n1.ru', 'restate.ru', 'realty.ru',
   'move.ru', 'domofond.ru', 'gdeetotdom.ru', 'nmarket.pro', 'bn.ru', 'flatoutlet.ru',
+  // Каталоги новостроек с отдельными страницами ЖК (проба 06.10.2026: «kutuzovgrad-ii.novopoisk.msk.ru» для Инграда).
+  'novopoisk.msk.ru', 'novopoisk.ru', 'kvmeter.ru', 'kvadroom.ru', 'novostroyki.ru', 'novostroev.ru', 'novostrojki.ru',
+  'novostroyki.org', 'nedvizhka.ru', 'kvartirkoff.ru', 'mirkvartir.ru', 'etagi.com', 'incom.ru',
   // Соцсети, мессенджеры, видео, справки.
   'vk.com', 'vk.ru', 'ok.ru', 't.me', 'telegram.me', 'telegram.org', 'facebook.com', 'instagram.com', 'youtube.com',
   'rutube.ru', 'dzen.ru', 'zen.yandex.ru', 'wikipedia.org', 'livejournal.com', 'pikabu.ru', 'otzovik.com', 'irecommend.ru',

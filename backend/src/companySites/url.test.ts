@@ -23,7 +23,7 @@ describe('адрес сайта компании', () => {
   });
 
   it('справочники, агрегаторы, соцсети, СМИ и госсайты — не сайт компании (с поддоменами)', () => {
-    for (const host of ['rusprofile.ru', 'companies.rbc.ru', 'vk.com', 't.me', 'cian.ru', 'xn--80az8a.xn--d1aqf.xn--p1ai', 'minstroy.gov.ru', 'hh.ru']) {
+    for (const host of ['rusprofile.ru', 'companies.rbc.ru', 'vk.com', 't.me', 'cian.ru', 'xn--80az8a.xn--d1aqf.xn--p1ai', 'minstroy.gov.ru', 'hh.ru', 'kutuzovgrad-ii.novopoisk.msk.ru', 'kvmeter.ru']) {
       expect(isNotCompanySite(host), host).toBe(true);
     }
     expect(isNotCompanySite('donstroy.moscow')).toBe(false);
