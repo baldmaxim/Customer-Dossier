@@ -6,6 +6,7 @@
 
 import type { DbExecutor } from '../db/pool.js';
 import { PARSER_API_DATASETS, type DatasetOutcome, type IDatasetPayload, type ParserApiDataset } from './datasets.js';
+import { mapCaseCard, type ICaseClaim } from './map/caseCard.js';
 
 export interface IParserApiDatasetState {
   dataset: ParserApiDataset;
@@ -63,6 +64,19 @@ export const latestParserApiRecord = async (
     )
   ).rows[0];
   return row ? { payload: row.payload, fetchedAt: iso(row.fetched_at)!, complete: row.complete } : null;
+};
+
+/** Суммы исков из полученных карточек дел (миграция 048) по CaseId строчными. */
+export const loadCaseClaims = async (db: DbExecutor, caseIds: readonly string[]): Promise<Map<string, ICaseClaim>> => {
+  const ids = [...new Set(caseIds.map(id => id.toLowerCase()))];
+  if (ids.length === 0) return new Map();
+  const rows = (
+    await db.query<{ case_id: string; payload: Record<string, unknown>; fetched_at: Date }>(
+      `SELECT case_id, payload, fetched_at FROM parser_api_case_cards WHERE case_id = ANY($1::text[])`,
+      [ids],
+    )
+  ).rows;
+  return new Map(rows.map(r => [r.case_id, mapCaseCard(r.payload, r.case_id, iso(r.fetched_at)!)]));
 };
 
 /**

@@ -480,6 +480,7 @@ describe('Карточка компании', () => {
       counterparties: ['ДГИ Москвы'],
       counterpartiesTotal: 1,
       url: `https://kad.arbitr.ru/Card/${n}1111111-2222-3333-4444-555555555555`,
+      claim: n === 2 ? { fetchedAt: '2026-10-06T09:00:00Z', recognized: true, amount: 1_250_000, latest: 2_000_000 } : n === 4 ? { fetchedAt: '2026-10-06T09:00:00Z', recognized: true, amount: null, latest: null } : null,
     });
     fakeApi(
       replace('GET /api/companies/7/registry-checks', () => ({
@@ -500,8 +501,10 @@ describe('Карточка компании', () => {
               byType: { economic: 5, administrative: 0, bankruptcy: 1, unknown: 0 },
               last12m: { from: '2025-10-06', total: 3, respondent: 2, plaintiff: 1 },
               cases: [1, 2, 3, 4, 5, 6].map(n => caseRow(n, `2026-0${n}-01`, n === 1 ? 'bankruptcy' : 'economic', n % 3 === 0 ? 'plaintiff' : 'respondent')),
+              claims: { wanted: 3, fetched: 2, withAmount: 1 },
             },
           },
+          claimsFetching: true,
           fssp: {
             state: datasetState('fssp'),
             view: {
@@ -534,6 +537,12 @@ describe('Карточка компании', () => {
     // Пять дел сразу, шестое — под раскрытием.
     expect(within(section).getByText('Остальные дела — 1')).toBeTruthy();
     expect(within(section).getByText(/Роль в деле о банкротстве не говорит, чьё это банкротство/)).toBeTruthy();
+    // Сумма иска — из карточки дела, подписана как иск; нет суммы — словами, а не 0 ₽; покрытие — «у K из N».
+    expect(within(section).getByText(/иск 1,3 млн ₽, позже в карточке 2 млн ₽/)).toBeTruthy();
+    expect(within(section).getByText(/сумма иска в карточке не указана/)).toBeTruthy();
+    expect(
+      within(section).getByText('получены у 2 из 3 дел, где компания — ответчик в экономическом споре; в 1 сумма не указана; запрашиваются сейчас'),
+    ).toBeTruthy();
     expect(within(section).getByText('677 — сумма долга по документам 431,2 млн ₽')).toBeTruthy();
     expect(within(section).getByText('423,8 млн ₽ — указан у 652 из 677')).toBeTruthy();
     expect(within(section).getByText('1 — ст. 46 ч. 1 п. 3: 1')).toBeTruthy();

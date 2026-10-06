@@ -54,10 +54,14 @@ export const useCompanyFinance = (companyId: number): UseQueryResult<ICompanyFin
 /** Суды, ФССП и банкротство (24C): карты снимков картотеки, ФССП и ЕФРСБ. */
 export const companyChecksKey = (companyId: number): readonly unknown[] => ['company', companyId, 'registry-checks'];
 
+/** Пока сервер получает карточки дел (суммы исков), блок перечитывается сам. */
+const CLAIMS_POLL_MS = 10_000;
+
 export const useCompanyChecks = (companyId: number): UseQueryResult<ICompanyChecksResponse> =>
   useQuery({
     queryKey: companyChecksKey(companyId),
     queryFn: () => api.get<ICompanyChecksResponse>(`/api/companies/${companyId}/registry-checks`),
+    refetchInterval: q => (q.state.data?.claimsFetching ? CLAIMS_POLL_MS : false),
   });
 
 /** Сроки и продажи по домам ДОМ.РФ (24E). */

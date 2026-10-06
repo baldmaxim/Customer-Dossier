@@ -3,10 +3,12 @@
 // Проход — раз в PARSER_API_TICK_MS: компании, у которых срок набора пришёл, по одной, с паузой. Сколько
 // запросов — решает резерв лимита перед каждым запросом (parserApi/store.ts): нет места — проход стоит до
 // следующего. Без ключа проход ничего не делает; ключ, заданный в админке, подхватывается следующим проходом.
+// После наборов — карточки арбитражных дел тех, чью картотеку проход проверил (суммы исков, caseCards.ts).
 
 import { env } from '../config/env.js';
 import { getPool } from '../db/pool.js';
 import { loadStoredParserApiKey, parserApiKey } from '../settings/parserApiKey.js';
+import { fetchCaseCards, type ICaseCardsResult } from './caseCards.js';
 import { refreshParserApiDatasets, type ParserApiRefreshResult } from './refresh.js';
 import { pgParserApiStore, SCHEDULER_ACTOR } from './store.js';
 import { dueParserApiTargets } from './targets.js';
@@ -20,6 +22,8 @@ const DELAY_BETWEEN_TARGETS_MS = 2000;
 export interface IParserApiPassReport {
   skipped: 'no_key' | 'limit' | null;
   results: Array<{ companyId: number; result: ParserApiRefreshResult }>;
+  /** Карточки дел (суммы исков) — после наборов всех компаний прохода. */
+  cards: Array<{ companyId: number; result: ICaseCardsResult }>;
 }
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
@@ -36,12 +40,14 @@ const limits = () => ({ daily: env.PARSER_API_DAILY_LIMIT, monthly: env.PARSER_A
 export const runParserApiPass = async (signal?: AbortSignal): Promise<IParserApiPassReport> => {
   await loadStoredParserApiKey();
   const key = parserApiKey();
-  if (key === null) return { skipped: 'no_key', results: [] };
+  if (key === null) return { skipped: 'no_key', results: [], cards: [] };
   const usage = await pgParserApiStore.usage();
-  if (usage.day >= env.PARSER_API_DAILY_LIMIT || usage.month >= env.PARSER_API_MONTHLY_LIMIT) return { skipped: 'limit', results: [] };
+  if (usage.day >= env.PARSER_API_DAILY_LIMIT || usage.month >= env.PARSER_API_MONTHLY_LIMIT) return { skipped: 'limit', results: [], cards: [] };
 
   const results: IParserApiPassReport['results'] = [];
-  for (const [i, target] of (await dueParserApiTargets(getPool(), MAX_TARGETS_PER_PASS)).entries()) {
+  const targets = await dueParserApiTargets(getPool(), MAX_TARGETS_PER_PASS);
+  let stopped = false;
+  for (const [i, target] of targets.entries()) {
     if (signal?.aborted) break;
     if (i > 0) await sleep(DELAY_BETWEEN_TARGETS_MS, signal);
     const result = await refreshParserApiDatasets(target.inn, target.datasets, SCHEDULER_ACTOR, {
@@ -51,9 +57,22 @@ export const runParserApiPass = async (signal?: AbortSignal): Promise<IParserApi
       kadMaxPages: env.PARSER_API_KAD_MAX_PAGES,
     });
     results.push({ companyId: target.companyId, result });
-    if (result.status === 'stopped') break;
+    if (result.status === 'stopped') {
+      stopped = true;
+      break;
+    }
   }
-  return { skipped: null, results };
+  // Суммы исков — только у тех, чью картотеку проход проверил, и только если на наборы хватило лимита.
+  const cards: IParserApiPassReport['cards'] = [];
+  const checkedCourts = results.filter(r => r.result.datasets.courts?.status === 'checked');
+  for (const r of stopped ? [] : checkedCourts) {
+    if (signal?.aborted) break;
+    const inn = targets.find(t => t.companyId === r.companyId)!.inn;
+    const result = await fetchCaseCards(inn, SCHEDULER_ACTOR, env.PARSER_API_KAD_CARDS_MAX, { store: pgParserApiStore, key, limits: limits() });
+    cards.push({ companyId: r.companyId, result });
+    if (result.stop) break;
+  }
+  return { skipped: null, results, cards };
 };
 
 const STOP_TEXT: Record<string, string> = {
@@ -77,11 +96,13 @@ export const startParserApiScheduler = (signal: AbortSignal): void => {
     try {
       const pass = await runParserApiPass(signal);
       const stopped = pass.results.find(r => r.result.status === 'stopped')?.result;
-      const reason = pass.skipped ?? (stopped?.status === 'stopped' ? stopped.reason : null);
+      const reason = pass.skipped ?? (stopped?.status === 'stopped' ? stopped.reason : null) ?? pass.cards.find(c => c.result.stop)?.result.stop ?? null;
       if (reason !== null && reason !== reported) console.warn(`[parser-api] ${STOP_TEXT[reason] ?? reason}`);
       reported = reason;
       const checked = pass.results.filter(r => Object.values(r.result.datasets).some(d => d?.status === 'checked'));
       if (checked.length > 0) console.log(`[parser-api] проверено компаний: ${checked.length}`);
+      const cardsFetched = pass.cards.reduce((n, c) => n + c.result.fetched, 0);
+      if (cardsFetched > 0) console.log(`[parser-api] карточек дел (суммы исков): ${cardsFetched}`);
       for (const r of pass.results) {
         for (const [dataset, d] of Object.entries(r.result.datasets)) {
           if (d?.status === 'failed') console.warn(`[parser-api] компания ${r.companyId}, ${dataset}: ${d.error}`);

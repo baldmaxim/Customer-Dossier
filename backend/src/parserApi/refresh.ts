@@ -35,19 +35,11 @@ export interface IParserApiRefreshDeps {
   now?: () => Date;
 }
 
-export const refreshParserApiDatasets = async (
-  inn: string,
-  datasets: readonly ParserApiDataset[],
-  actor: string,
-  deps: IParserApiRefreshDeps,
-): Promise<ParserApiRefreshResult> => {
-  const { store, key, limits } = deps;
+/** Один запрос: резерв в лимите портала → запрос → итог в журнал; stop — дальше в этом проходе нельзя. */
+export const parserApiStep = (inn: string, actor: string, key: string, deps: Omit<IParserApiRefreshDeps, 'key' | 'kadMaxPages'>): DatasetStep => {
+  const { store, limits } = deps;
   const call = deps.call ?? callParserApi;
-  const results: Partial<Record<ParserApiDataset, DatasetRefreshResult>> = {};
-  if (key === null) return { status: 'stopped', reason: 'no_key', detail: 'ключ parser-api.com не задан', datasets: results };
-
-  const requestedBy = actor === SCHEDULER_ACTOR ? null : actor;
-  const step: DatasetStep = async (method, params, page) => {
+  return async (method, params, page) => {
     const reserved = await store.reserve({ method, inn, page: page ?? null, actor }, limits);
     if (!reserved.ok) {
       const limit = reserved.reason === 'daily_limit' ? `за сутки ${reserved.usage.day} из ${limits.daily}` : `за месяц ${reserved.usage.month} из ${limits.monthly}`;
@@ -62,6 +54,20 @@ export const refreshParserApiDatasets = async (
     );
     return res.ok ? res : { ...res, stop: STOPPING.has(res.failure) };
   };
+};
+
+export const refreshParserApiDatasets = async (
+  inn: string,
+  datasets: readonly ParserApiDataset[],
+  actor: string,
+  deps: IParserApiRefreshDeps,
+): Promise<ParserApiRefreshResult> => {
+  const { store, key } = deps;
+  const results: Partial<Record<ParserApiDataset, DatasetRefreshResult>> = {};
+  if (key === null) return { status: 'stopped', reason: 'no_key', detail: 'ключ parser-api.com не задан', datasets: results };
+
+  const requestedBy = actor === SCHEDULER_ACTOR ? null : actor;
+  const step = parserApiStep(inn, actor, key, deps);
 
   for (const dataset of datasets) {
     const run = await runDataset(dataset, inn, step, { kadMaxPages: deps.kadMaxPages, now: deps.now?.() ?? new Date() });

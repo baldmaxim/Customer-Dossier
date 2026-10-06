@@ -69,6 +69,7 @@ export const COUNTED_TABLES = [
   'parser_api_checks',
   'parser_api_records',
   'parser_api_requests',
+  'parser_api_case_cards',
   'company_watch',
   'company_name_searches',
   'company_name_suggestions',

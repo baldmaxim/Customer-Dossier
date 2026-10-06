@@ -1,7 +1,8 @@
 // «Суды, ФССП и банкротство» на «Сведениях» (этап 24C): картотека арбитражных дел, банк данных исполнительных
 // производств ФССП и ЕФРСБ (Федресурс) из снимков parser-api.com.
 //
-// Только то, что сказал реестр, его словами: роль компании в деле — по её ИНН; сумм исков в списке картотеки нет;
+// Только то, что сказал реестр, его словами: роль компании в деле — по её ИНН; сумма иска — из карточки дела (её
+// портал спрашивает только у экономических споров, где компания — ответчик) и подписана как иск, а не долг;
 // роль в деле о банкротстве не говорит, чьё это банкротство — банкротство самой компании видно по Федресурсу;
 // производство ФССП без даты окончания — «не окончено по данным ФССП», а остаток — тот, что указала ФССП, и у скольких
 // производств он указан. Оценки нет (ADR-009): ни «рискованно», ни цвета у чисел. Состояние набора — словами.
@@ -11,7 +12,16 @@ import { FC, ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { CourtRole, IBankruptcyView, ICourtCase, ICourtsView, IFsspView, IParserApiDatasetState } from '../../api/types';
+import type {
+  CourtRole,
+  IBankruptcyView,
+  ICaseClaim,
+  ICourtCase,
+  ICourtsView,
+  IFsspView,
+  IParserApiDatasetState,
+  IParserApiRefreshResponse,
+} from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
 import { COURT_ROLE_LABELS, COURT_TYPE_LABELS, formatDate, formatMoney } from '../../lib/labels';
@@ -42,29 +52,55 @@ const byRoleText = (counts: Partial<Record<CourtRole, number>>): string =>
     .map(r => `${COURT_ROLE_LABELS[r]} ${formatCount(counts[r] ?? 0)}`)
     .join(', ');
 
-const CaseLine: FC<{ c: ICourtCase }> = ({ c }) => (
-  <li>
-    {c.startDate ? `${formatDate(c.startDate)} · ` : ''}
-    {c.url ? (
-      <a href={c.url} target="_blank" rel="noopener noreferrer">
-        {c.number}
-      </a>
-    ) : (
-      c.number
-    )}{' '}
-    · {COURT_TYPE_LABELS[c.type]} · {COURT_ROLE_LABELS[c.roles[0] ?? 'unknown']}
-    {c.counterparties.length > 0 && (
-      <>
-        {' '}
-        · {c.counterparties.join(', ')}
-        {c.counterpartiesTotal > c.counterparties.length ? ` и ещё ${formatCount(c.counterpartiesTotal - c.counterparties.length)}` : ''}
-      </>
-    )}
-    {c.court && <span className={styles.detail}>{c.court /* raw-ok: название суда из картотеки */}</span>}
-  </li>
-);
+/** «иск 1,3 млн ₽, позже в карточке 2 млн ₽»; карточки нет — null. */
+const claimText = (claim: ICaseClaim | null | undefined): string | null => {
+  if (!claim) return null;
+  if (!claim.recognized) return 'карточка дела не распознана';
+  if (claim.amount === null) return 'сумма иска в карточке не указана';
+  return `иск ${formatMoney(claim.amount)}${claim.latest !== null ? `, позже в карточке ${formatMoney(claim.latest)}` : ''}`;
+};
 
-const CourtsPart: FC<{ view: ICourtsView | null; state: IParserApiDatasetState; inn: string }> = ({ view, state, inn }) => {
+const CaseLine: FC<{ c: ICourtCase }> = ({ c }) => {
+  const claim = claimText(c.claim);
+  return (
+    <li>
+      {c.startDate ? `${formatDate(c.startDate)} · ` : ''}
+      {c.url ? (
+        <a href={c.url} target="_blank" rel="noopener noreferrer">
+          {c.number}
+        </a>
+      ) : (
+        c.number
+      )}{' '}
+      · {COURT_TYPE_LABELS[c.type]} · {COURT_ROLE_LABELS[c.roles[0] ?? 'unknown']}
+      {claim && <> · {claim}</>}
+      {c.counterparties.length > 0 && (
+        <>
+          {' '}
+          · {c.counterparties.join(', ')}
+          {c.counterpartiesTotal > c.counterparties.length ? ` и ещё ${formatCount(c.counterpartiesTotal - c.counterparties.length)}` : ''}
+        </>
+      )}
+      {c.court && <span className={styles.detail}>{c.court /* raw-ok: название суда из картотеки */}</span>}
+    </li>
+  );
+};
+
+/** «получены у 8 из 12 дел, где компания — ответчик в экономическом споре; в 1 сумма не указана». */
+const claimsText = (claims: NonNullable<ICourtsView['claims']>, fetching: boolean): string => {
+  const parts = [`получены у ${formatCount(claims.fetched)} из ${formatCount(claims.wanted)} дел, где компания — ответчик в экономическом споре`];
+  const noAmount = claims.fetched - claims.withAmount;
+  if (noAmount > 0) parts.push(`в ${formatCount(noAmount)} сумма не указана`);
+  if (fetching) parts.push('запрашиваются сейчас');
+  return parts.join('; ');
+};
+
+const CourtsPart: FC<{ view: ICourtsView | null; state: IParserApiDatasetState; inn: string; claimsFetching: boolean }> = ({
+  view,
+  state,
+  inn,
+  claimsFetching,
+}) => {
   if (!view) return <ParserApiStateNote state={state} what="Картотека дел" inn={inn} />;
   if (!view.recognized) return <Callout tone="warning" title="Картотека не распознана">{view.problems.join('; ')}</Callout>;
   const meta = [view.window ? `за 24 месяца с ${formatDate(view.window.from)}` : null, checkedText(state)].filter(Boolean).join(' · ');
@@ -90,6 +126,7 @@ const CourtsPart: FC<{ view: ICourtsView | null; state: IParserApiDatasetState; 
     });
   }
   items.push({ label: 'По видам', value: typeText });
+  if (view.claims && view.claims.wanted > 0) items.push({ label: 'Суммы исков', value: claimsText(view.claims, claimsFetching) });
   const shown = view.cases.slice(0, CASES_SHOWN);
   const rest = view.cases.slice(CASES_SHOWN);
   return (
@@ -112,8 +149,9 @@ const CourtsPart: FC<{ view: ICourtsView | null; state: IParserApiDatasetState; 
         </Disclosure>
       )}
       <p className={styles.detail}>
-        Сумм исков в списке картотеки нет — они в карточке дела. Роль в деле о банкротстве не говорит, чьё это банкротство:
-        о самой компании — строка «Федресурс» ниже.
+        Сумма иска — требование истца по карточке дела на дату её получения, а не долг компании; карточки запрашиваются
+        только по экономическим спорам, где компания — ответчик. Роль в деле о банкротстве не говорит, чьё это
+        банкротство: о самой компании — строка «Федресурс» ниже.
       </p>
     </>
   );
@@ -220,9 +258,10 @@ export const CompanyChecks: FC<{ companyId: number }> = ({ companyId }) => {
   const client = useQueryClient();
   const toast = useToast();
   const refresh = useMutation({
-    mutationFn: () => api.post<unknown>(`/api/companies/${companyId}/parser-api/refresh`, { datasets: ['courts', 'fssp', 'bankruptcy'] }),
-    onSuccess: () => {
-      toast.show({ tone: 'success', text: 'Картотека дел, ФССП и Федресурс запрошены заново.' });
+    mutationFn: () => api.post<IParserApiRefreshResponse>(`/api/companies/${companyId}/parser-api/refresh`, { datasets: ['courts', 'fssp', 'bankruptcy'] }),
+    onSuccess: res => {
+      const cards = res.cards?.started ? ` Суммы исков — по ${formatCount(res.cards.pending)} делам, появятся по мере получения.` : '';
+      toast.show({ tone: 'success', text: `Картотека дел, ФССП и Федресурс запрошены заново.${cards}` });
       void client.invalidateQueries({ queryKey: companyChecksKey(companyId) });
     },
     onError: (err: Error) => {
@@ -260,7 +299,7 @@ export const CompanyChecks: FC<{ companyId: number }> = ({ companyId }) => {
       <div className={styles.parts}>
         <div>
           <h3 className={styles.subhead}>Арбитражные дела — картотека</h3>
-          <CourtsPart view={data.courts.view} state={data.courts.state} inn={data.inn} />
+          <CourtsPart view={data.courts.view} state={data.courts.state} inn={data.inn} claimsFetching={data.claimsFetching === true} />
         </div>
         <div>
           <h3 className={styles.subhead}>Исполнительные производства — ФССП</h3>

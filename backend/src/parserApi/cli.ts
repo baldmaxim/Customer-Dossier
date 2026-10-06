@@ -5,15 +5,19 @@
 //                                                        полей ответа, размеры списков и числа верхнего уровня
 //                                                        (count, pages) — без имён и сумм; снимков
 //                                                        не пишет, но запрос занимает место в лимите и идёт в журнал
-//   npm run parserapi -- --refresh <ИНН> [--dataset d]   проверить наборы ИНН, как кнопка в карточке
+//   npm run parserapi -- --refresh <ИНН> [--dataset d]   проверить наборы ИНН, как кнопка в карточке; с картотекой —
+//                                                        и карточки дел (суммы исков, PARSER_API_KAD_CARDS_MAX)
+//   npm run parserapi -- --cards <ИНН>                   только карточки дел, которых ещё нет (по последнему снимку)
 //   npm run parserapi -- --pass                          один проход расписания сейчас
 //
-// Методы пробы: bo_search, bo_details (--id из bo_search), pb_org, kad_search, fssp_ur, fedresurs_ur,
-// fedresurs_org (--id из fedresurs_ur). Ключ — из админки (база) или PARSER_API_KEY; значение не печатается.
+// Методы пробы: bo_search, bo_details (--id из bo_search), pb_org, kad_search, kad_details (--id — CaseId из
+// kad_search; печатает, у каких событий есть сумма иска, без сумм), fssp_ur, fedresurs_ur, fedresurs_org (--id из
+// fedresurs_ur). Ключ — из админки (база) или PARSER_API_KEY; значение не печатается.
 
 import { env } from '../config/env.js';
 import { closeDb, getPool } from '../db/pool.js';
 import { loadStoredParserApiKey, parserApiKey } from '../settings/parserApiKey.js';
+import { fetchCaseCards } from './caseCards.js';
 import { asObject, availablePaths, callParserApi, isParserApiMethod, PARSER_API_METHODS, type ParserApiMethod } from './client.js';
 import { COURTS_WINDOW_MONTHS, isParserApiDataset, PARSER_API_DATASETS, windowFrom } from './datasets.js';
 import { parserApiCoverage } from './read.js';
@@ -66,7 +70,27 @@ const probeParams = (method: ParserApiMethod, inn: string, id: string | null): R
     case 'fedresurs_org':
       if (!id) throw new Error(`${method}: нужен --id из ответа поиска`);
       return { id };
+    case 'kad_details':
+      if (!id) throw new Error('kad_details: нужен --id — CaseId из kad_search');
+      return { CaseId: id };
   }
+};
+
+/** Где в карточке дела суммы иска: инстанции, события с ClaimSum > 0 и их типы — без самих сумм. */
+const claimSumShape = (body: Record<string, unknown>): string[] => {
+  const lines: string[] = [];
+  const cases = Array.isArray(body.Cases) ? body.Cases.map(asObject).filter((c): c is Record<string, unknown> => c !== null) : [];
+  for (const c of cases) {
+    const instances = Array.isArray(c.CaseInstances) ? c.CaseInstances.map(asObject).filter((i): i is Record<string, unknown> => i !== null) : [];
+    for (const i of instances) {
+      const events = Array.isArray(i.InstanceEvents) ? i.InstanceEvents.map(asObject).filter((e): e is Record<string, unknown> => e !== null) : [];
+      const withSum = events.filter(e => Number(e.ClaimSum) > 0);
+      const types = [...new Set(withSum.map(e => String(e.EventTypeName ?? '?')))];
+      const distinct = new Set(withSum.map(e => Number(e.ClaimSum))).size;
+      lines.push(`  инстанция «${String(i.Name ?? '?')}»: событий ${events.length}, с суммой ${withSum.length} (разных сумм ${distinct}; типы: ${types.join(', ') || '—'})`);
+    }
+  }
+  return lines;
 };
 
 const probe = async (method: ParserApiMethod, inn: string, id: string | null): Promise<void> => {
@@ -90,19 +114,28 @@ const probe = async (method: ParserApiMethod, inn: string, id: string | null): P
     else if (asObject(value)) console.log(`  объект ${name}`);
   }
   console.log(`[parser-api] ${method}: поля ответа — ${availablePaths(res.body).join(', ')}`);
+  if (method === 'kad_details') for (const line of claimSumShape(res.body)) console.log(line);
+};
+
+const deps = (key: string) => ({ store: pgParserApiStore, key, limits: limits() });
+
+const cards = async (inn: string): Promise<void> => {
+  const key = await requireKey();
+  const result = await fetchCaseCards(inn, 'cli', env.PARSER_API_KAD_CARDS_MAX, deps(key));
+  console.log(`[parser-api] ИНН ${inn}, карточки дел: ${JSON.stringify(result)}`);
+  if (result.stop) process.exitCode = 1;
 };
 
 const refresh = async (inn: string, dataset: string | null): Promise<void> => {
   const key = await requireKey();
   if (dataset !== null && !isParserApiDataset(dataset)) throw new Error(`--dataset: один из ${PARSER_API_DATASETS.join(', ')}`);
-  const result = await refreshParserApiDatasets(inn, dataset ? [dataset] : PARSER_API_DATASETS, 'cli', {
-    store: pgParserApiStore,
-    key,
-    limits: limits(),
-    kadMaxPages: env.PARSER_API_KAD_MAX_PAGES,
-  });
+  const result = await refreshParserApiDatasets(inn, dataset ? [dataset] : PARSER_API_DATASETS, 'cli', { ...deps(key), kadMaxPages: env.PARSER_API_KAD_MAX_PAGES });
   console.log(`[parser-api] ИНН ${inn}: ${JSON.stringify(result)}`);
-  if (result.status === 'stopped') process.exitCode = 1;
+  if (result.status === 'stopped') {
+    process.exitCode = 1;
+    return;
+  }
+  if (result.datasets.courts?.status === 'checked') await cards(inn);
 };
 
 const main = async (): Promise<void> => {
@@ -111,7 +144,13 @@ const main = async (): Promise<void> => {
     const pass = await runParserApiPass();
     console.log(`[parser-api] проход: ${pass.skipped ? `пропущен (${pass.skipped})` : `компаний ${pass.results.length}`}`);
     for (const r of pass.results) console.log(`  #${r.companyId}: ${JSON.stringify(r.result)}`);
+    for (const c of pass.cards) console.log(`  #${c.companyId}, карточки дел: ${JSON.stringify(c.result)}`);
     return;
+  }
+  if (process.argv.includes('--cards')) {
+    const inn = parseInn(argValue('--cards'));
+    if (!inn) throw new Error('--cards: ожидается ИНН (10 или 12 цифр)');
+    return cards(inn);
   }
   if (process.argv.includes('--probe')) {
     const method = argValue('--probe') ?? '';
@@ -125,7 +164,7 @@ const main = async (): Promise<void> => {
     if (!inn) throw new Error('--refresh: ожидается ИНН (10 или 12 цифр)');
     return refresh(inn, argValue('--dataset'));
   }
-  console.log('npm run parserapi -- --status | --probe <метод> <ИНН> [--id X] | --refresh <ИНН> [--dataset d] | --pass');
+  console.log('npm run parserapi -- --status | --probe <метод> <ИНН> [--id X] | --refresh <ИНН> [--dataset d] | --cards <ИНН> | --pass');
 };
 
 main()

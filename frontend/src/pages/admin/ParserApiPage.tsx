@@ -100,7 +100,7 @@ export const ParserApiPage: FC = () => {
     );
   }
 
-  const { key, enabled, limits, kadMaxPages, usage, coverage, recent } = settings.data;
+  const { key, enabled, limits, kadMaxPages, kadCardsMax, usage, coverage, recent } = settings.data;
 
   return (
     <Stack gap={4}>
@@ -121,6 +121,14 @@ export const ParserApiPage: FC = () => {
               { label: 'Ждут проверки', value: formatCount(coverage.due) },
               { label: 'Не удалось, ждут повтора', value: formatCount(coverage.failing) },
               { label: 'Страниц картотеки дел', value: `не больше ${formatCount(kadMaxPages)} на компанию — остальное помечается неполным` },
+              ...(kadCardsMax !== undefined
+                ? [
+                    {
+                      label: 'Карточек дел (суммы исков)',
+                      value: `не больше ${formatCount(kadCardsMax)} за проверку компании — только экономические споры, где компания — ответчик; каждое дело один раз`,
+                    },
+                  ]
+                : []),
             ]}
           />
           {canManage && (
@@ -128,7 +136,7 @@ export const ParserApiPage: FC = () => {
               <p className={styles.muted}>Компании без ИНН и с несколькими разными ИНН не проверяются.</p>
               <Hint
                 label="где это настраивается"
-                text="PARSER_API_ENABLED — проверка по расписанию, PARSER_API_DAILY_LIMIT и PARSER_API_MONTHLY_LIMIT — лимиты портала, PARSER_API_KAD_MAX_PAGES — страниц картотеки; .env сервера."
+                text="PARSER_API_ENABLED — проверка по расписанию, PARSER_API_DAILY_LIMIT и PARSER_API_MONTHLY_LIMIT — лимиты портала, PARSER_API_KAD_MAX_PAGES — страниц картотеки, PARSER_API_KAD_CARDS_MAX — карточек дел; .env сервера."
               />
             </Cluster>
           )}

@@ -31,6 +31,9 @@ const memoryStore = (usage: IParserApiUsage = { day: 0, month: 0 }) => {
     },
     markChecked: async (_inn, dataset, outcome, requestedBy) => void checked.push({ dataset, outcome, requestedBy }),
     markFailed: async (_inn, dataset, error) => void failed.push({ dataset, error }),
+    latestCourts: async () => null,
+    knownCaseCards: async () => new Set(),
+    saveCaseCard: async () => true,
   };
   return { store, journal, records, checked, failed };
 };

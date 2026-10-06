@@ -5,13 +5,16 @@
 //  - роль компании — по её ИНН среди участников дела, а не по названию; не нашлась — «роль не указана», не догадка;
 //  - вид дела — по CaseType: Г — экономический спор, А — административный, Б — банкротство. Роль в деле о банкротстве
 //    не говорит, чьё это банкротство (бывает спор внутри чужого дела): банкротство самой компании — по Федресурсу;
-//  - сумм исков в списке картотеки нет (они только в карточке дела) — их нет и здесь, суммы не выдумываются;
+//  - сумм исков в списке картотеки нет — они в карточке дела (details_by_id, case-card-map@1): её портал спрашивает
+//    только у экономических споров, где компания — ответчик (claimCardTargets), один раз на дело; полученная для
+//    другой стороны карточка тоже показывается. Карточки нет — суммы нет, она не выдумывается;
 //  - «за 12 месяцев» считается от даты проверки, а не от сегодняшнего дня: число не плывёт само;
 //  - не все страницы получены — complete: false, и экран говорит «не все дела», а не «дел столько».
 // Оценки нет (ADR-009): только числа картотеки и откуда.
 
 import { asObject } from '../client.js';
 import type { IDatasetPayload } from '../datasets.js';
+import type { ICaseClaim } from './caseCard.js';
 
 export const COURTS_MAP_VERSION = 'courts-map@1';
 
@@ -31,6 +34,8 @@ export interface ICourtCase {
   counterpartiesTotal: number;
   /** Карточка дела на kad.arbitr.ru. */
   url: string | null;
+  /** Сумма иска из карточки дела parser-api.com; null — карточку не получали. */
+  claim: ICaseClaim | null;
 }
 
 export interface ICourtsView {
@@ -46,6 +51,8 @@ export interface ICourtsView {
   last12m: { from: string; total: number; respondent: number; plaintiff: number } | null;
   /** Все дела, новые сверху. */
   cases: ICourtCase[];
+  /** Суммы исков: сколько дел портал спрашивает (экономический спор, компания — ответчик), у скольких карточка есть. */
+  claims: { wanted: number; fetched: number; withAmount: number };
 }
 
 const TYPE_BY_CODE: Readonly<Record<string, CourtCaseType>> = {
@@ -81,15 +88,37 @@ const yearBefore = (iso: string): string => {
   return new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0, 10);
 };
 
+/** Дело, у которого портал спрашивает карточку ради суммы иска: экономический спор, компания — ответчик, CaseId — GUID. */
+const wantsClaim = (c: ICourtCase): boolean => c.type === 'economic' && c.roles.includes('respondent') && c.id !== null && GUID.test(c.id);
+
+/** CaseId дел, чьи карточки нужны ради суммы иска, новые сверху. */
+export const claimCardTargets = (view: ICourtsView): string[] => view.cases.filter(wantsClaim).map(c => c.id!);
+
 /**
  * @param checkedAt — когда проверяли (parser_api_checks.checked_at): от неё считается «за 12 месяцев».
  * @param complete — получены ли все страницы (parser_api_records.complete).
+ * @param claims — суммы исков из полученных карточек по CaseId строчными буквами.
  */
-export const mapCourts = (payload: IDatasetPayload, checkedAt: string | null, complete: boolean): ICourtsView => {
+export const mapCourts = (
+  payload: IDatasetPayload,
+  checkedAt: string | null,
+  complete: boolean,
+  claims: ReadonlyMap<string, ICaseClaim> = new Map(),
+): ICourtsView => {
   const pages = payload.responses.filter(r => r.method === 'kad_search');
   const base = { format: COURTS_MAP_VERSION, window: payload.window, complete } as const;
   if (pages.length === 0) {
-    return { ...base, recognized: false, problems: ['в снимке нет страниц картотеки (kad_search)'], total: 0, byRole: zeroRoles(), byType: zeroTypes(), last12m: null, cases: [] };
+    return {
+      ...base,
+      recognized: false,
+      problems: ['в снимке нет страниц картотеки (kad_search)'],
+      total: 0,
+      byRole: zeroRoles(),
+      byType: zeroTypes(),
+      last12m: null,
+      cases: [],
+      claims: { wanted: 0, fetched: 0, withAmount: 0 },
+    };
   }
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -124,6 +153,7 @@ export const mapCourts = (payload: IDatasetPayload, checkedAt: string | null, co
         counterparties: names.slice(0, 3),
         counterpartiesTotal: names.length,
         url: id && GUID.test(id) ? `https://kad.arbitr.ru/Card/${id}` : null,
+        claim: id ? (claims.get(id.toLowerCase()) ?? null) : null,
       });
     }
   }
@@ -146,5 +176,11 @@ export const mapCourts = (payload: IDatasetPayload, checkedAt: string | null, co
       plaintiff: recent.filter(c => c.roles[0] === 'plaintiff').length,
     };
   }
-  return { ...base, recognized: problems.length < pages.length, problems, total: cases.length, byRole, byType, last12m, cases };
+  const wanted = cases.filter(wantsClaim);
+  const claimSummary = {
+    wanted: wanted.length,
+    fetched: wanted.filter(c => c.claim !== null).length,
+    withAmount: wanted.filter(c => c.claim !== null && c.claim.amount !== null).length,
+  };
+  return { ...base, recognized: problems.length < pages.length, problems, total: cases.length, byRole, byType, last12m, cases, claims: claimSummary };
 };

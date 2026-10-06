@@ -1772,6 +1772,8 @@ export interface IParserApiSettings {
   enabled: boolean;
   limits: { daily: number; monthly: number };
   kadMaxPages: number;
+  /** Карточек дел (суммы исков) за проверку компании; у старого сервера поля нет. */
+  kadCardsMax?: number;
   usage: { day: number; month: number };
   coverage: { watched: number; checked: number; failing: number; due: number };
   recent: IParserApiRequestRow[];
@@ -1859,6 +1861,18 @@ export interface ICourtCase {
   counterparties: string[];
   counterpartiesTotal: number;
   url: string | null;
+  /** Сумма иска из карточки дела; null — карточку не получали; у старого сервера поля нет. */
+  claim?: ICaseClaim | null;
+}
+
+/** Сумма иска из карточки арбитражного дела (case-card-map@1), руб. */
+export interface ICaseClaim {
+  fetchedAt: string;
+  recognized: boolean;
+  /** При подаче; null — в карточке не указана. */
+  amount: number | null;
+  /** Другая сумма у самого позднего события (уточнение). */
+  latest: number | null;
 }
 
 export interface ICourtsView {
@@ -1872,6 +1886,8 @@ export interface ICourtsView {
   byType: Record<CourtCaseType, number>;
   last12m: { from: string; total: number; respondent: number; plaintiff: number } | null;
   cases: ICourtCase[];
+  /** Суммы исков: нужны (экономический спор, компания — ответчик), получены, с суммой; у старого сервера поля нет. */
+  claims?: { wanted: number; fetched: number; withAmount: number };
 }
 
 export interface IFsspProceeding {
@@ -1916,8 +1932,15 @@ export interface ICompanyChecksResponse {
   configured: boolean;
   scheduled: boolean;
   courts: IParserApiBlock<ICourtsView> | null;
+  /** Карточки дел (суммы исков) запрашиваются сейчас; у старого сервера поля нет. */
+  claimsFetching?: boolean;
   fssp: IParserApiBlock<IFsspView> | null;
   bankruptcy: IParserApiBlock<IBankruptcyView> | null;
+}
+
+/** Ответ «Обновить» (POST /companies/:id/parser-api/refresh): карточки дел догружаются после ответа. */
+export interface IParserApiRefreshResponse {
+  cards?: { pending: number; started: boolean };
 }
 
 /** Сроки и продажи по снимкам ДОМ.РФ (этап 24E): GET /api/companies/:id/delivery. */

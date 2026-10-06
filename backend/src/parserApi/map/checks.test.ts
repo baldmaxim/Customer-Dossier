@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { IDatasetPayload, IDatasetResponse } from '../datasets.js';
 import { mapBankruptcy } from './bankruptcy.js';
-import { mapCourts } from './courts.js';
+import { mapCaseCard } from './caseCard.js';
+import { claimCardTargets, mapCourts } from './courts.js';
 import { mapFssp } from './fssp.js';
 
 const INN = '7736255508';
@@ -74,6 +75,55 @@ describe('картотека дел (T24C-01)', () => {
   it('нет страниц — не распознано; неполный набор — complete: false', () => {
     expect(mapCourts(payload('courts', []), null, true)).toMatchObject({ recognized: false, total: 0 });
     expect(mapCourts(payload('courts', [kadPage(1, [])]), null, false).complete).toBe(false);
+  });
+});
+
+describe('суммы исков из карточек дел (case-card-map@1)', () => {
+  const event = (date: string, claimSum: unknown, type = 'Определение') => ({ Date: date, EventTypeName: type, ClaimSum: claimSum });
+  const card = (instances: unknown[], caseId = GUID_A) => ({ Success: 1, Cases: [{ CaseId: caseId, CaseInstances: instances }] });
+
+  it('при подаче — самое раннее событие первой инстанции с суммой; другая поздняя — «позже в карточке»', () => {
+    const claim = mapCaseCard(
+      card([
+        { Name: 'Апелляционная инстанция', InstanceEvents: [event('2026-01-10', 999)] },
+        { Name: 'Первая инстанция', InstanceEvents: [event('2025-11-01', 0), event('2025-09-02', 1_500_000.5, 'Исковое заявление'), event('2025-12-01', '2000000,00')] },
+      ]),
+      GUID_A,
+      '2026-10-06T08:00:00Z',
+    );
+    expect(claim).toEqual({ fetchedAt: '2026-10-06T08:00:00Z', recognized: true, amount: 1_500_000.5, latest: 2_000_000 });
+  });
+
+  it('суммы нет или 0 — «не указана», а не 0 ₽; без первой инстанции — события всех; без инстанций — не распознано', () => {
+    expect(mapCaseCard(card([{ Name: 'Первая инстанция', InstanceEvents: [event('2025-09-02', 0), event('2025-09-03', null)] }]), GUID_A, 'x')).toMatchObject({ recognized: true, amount: null, latest: null });
+    expect(mapCaseCard(card([{ Name: 'Кассационная инстанция', InstanceEvents: [event('2025-09-02', 300), event('2025-10-02', 300)] }]), GUID_A, 'x')).toMatchObject({ amount: 300, latest: null });
+    expect(mapCaseCard({ Success: 1, Cases: [] }, GUID_A, 'x')).toMatchObject({ recognized: false, amount: null });
+  });
+
+  const courts = (claims: Map<string, ReturnType<typeof mapCaseCard>>) =>
+    mapCourts(
+      payload('courts', [
+        kadPage(1, [
+          kadCase(GUID_A, '2026-09-01', 'Г', [party('Истец', '7705031674')], [ME]),
+          kadCase(GUID_B, '2026-08-01', 'Г', [ME], [party('Ответчик')]),
+          kadCase(GUID_C, '2026-07-01', 'А', [party('ИФНС')], [ME]),
+        ]),
+      ]),
+      '2026-10-06T08:00:00Z',
+      true,
+      claims,
+    );
+
+  it('карточки нужны только экономическим спорам, где компания — ответчик; сумма — у дела, чья карточка есть', () => {
+    const empty = courts(new Map());
+    expect(claimCardTargets(empty)).toEqual([GUID_A]);
+    expect(empty.claims).toEqual({ wanted: 1, fetched: 0, withAmount: 0 });
+    const claim = { fetchedAt: '2026-10-06T09:00:00Z', recognized: true, amount: 5_000_000, latest: null };
+    // Карточка дела, где компания — истец, получена для другой стороны: показывается, но в «нужные» не входит.
+    const other = { ...claim, amount: 70_000 };
+    const view = courts(new Map([[GUID_A, claim], [GUID_B, other]]));
+    expect(view.cases.map(c => c.claim?.amount ?? null)).toEqual([5_000_000, 70_000, null]);
+    expect(view.claims).toEqual({ wanted: 1, fetched: 1, withAmount: 1 });
   });
 });
 

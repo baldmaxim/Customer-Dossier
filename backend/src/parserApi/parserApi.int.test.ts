@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { clearParserApiKey, loadStoredParserApiKey, parserApiKey, saveParserApiKey } from '../settings/parserApiKey.js';
+import { fetchCaseCards } from './caseCards.js';
 import type { callParserApi, ParserApiCallResult } from './client.js';
 import { loadCompanyChecks } from './checks.js';
 import { loadCompanyFinance } from './finance.js';
@@ -97,6 +98,32 @@ describe('parser-api.com на базе (T24A-07)', () => {
       fssp: { state: { outcome: null, attemptCount: 1 }, view: null },
       bankruptcy: { state: { outcome: null }, view: null },
     });
+  });
+
+  it('суммы исков (048): карточка — только нужным делам и один раз; сумма видна в картотеке компании', async () => {
+    const GUID_A = '11111111-2222-3333-4444-555555555555';
+    const GUID_B = '21111111-2222-3333-4444-555555555555';
+    const page = {
+      Success: 1,
+      PagesCount: 1,
+      Cases: [
+        { CaseId: GUID_A, CaseNumber: 'А40-1/2026', CaseType: 'Г', StartDate: '2026-09-01', Plaintiffs: [{ Name: 'Истец' }], Respondents: [{ Name: 'Демо', Inn: INN }] },
+        { CaseId: GUID_B, CaseNumber: 'А40-2/2026', CaseType: 'Г', StartDate: '2026-08-01', Plaintiffs: [{ Name: 'Демо', Inn: INN }], Respondents: [{ Name: 'Должник' }] },
+      ],
+    };
+    await refreshParserApiDatasets(INN, ['courts'], 'ivanov', deps(call(page)));
+    const cardBody = { Success: 1, Cases: [{ CaseId: GUID_A, CaseInstances: [{ Name: 'Первая инстанция', InstanceEvents: [{ Date: '2026-09-01', ClaimSum: 1250000 }] }] }] };
+    const res = await fetchCaseCards(INN, 'ivanov', 10, deps(call(cardBody)));
+    expect(res).toEqual({ fetched: 1, pending: 0, failed: 0, stop: null });
+    // Повтор ничего не спрашивает: карточка уже есть.
+    expect(await fetchCaseCards(INN, 'ivanov', 10, deps(call(cardBody)))).toEqual({ fetched: 0, pending: 0, failed: 0, stop: null });
+    expect(await pgParserApiStore.saveCaseCard(GUID_A, cardBody, 'ivanov')).toBe(false);
+    const journal = (await pool().query(`SELECT method, billable FROM parser_api_requests WHERE method = 'kad_details'`)).rows;
+    expect(journal).toEqual([{ method: 'kad_details', billable: true }]);
+    const checks = await loadCompanyChecks(pool(), watched);
+    expect(checks.claimsFetching).toBe(false);
+    expect(checks.courts?.view?.claims).toEqual({ wanted: 1, fetched: 1, withAmount: 1 });
+    expect(checks.courts?.view?.cases.map(c => c.claim?.amount ?? null)).toEqual([1250000, null]);
   });
 
   it('подключение по журналу: успех — подключён; ключ сменили позже — ждёт первого ответа; без ключа — не подключён', async () => {

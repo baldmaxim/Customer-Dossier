@@ -185,6 +185,9 @@ export const parseEnv = (source: EnvSource) => {
     PARSER_API_MONTHLY_LIMIT: parsePositiveInt('PARSER_API_MONTHLY_LIMIT', source.PARSER_API_MONTHLY_LIMIT, 200),
     // Страниц картотеки арбитражных дел на компанию: больше — набор помечается неполным, а не «дел нет».
     PARSER_API_KAD_MAX_PAGES: parsePositiveInt('PARSER_API_KAD_MAX_PAGES', source.PARSER_API_KAD_MAX_PAGES, 3),
+    // Карточек арбитражных дел за проход на компанию (сумма иска; только экономические споры, где компания — ответчик,
+    // один запрос на дело один раз). Остальные — следующим проходом.
+    PARSER_API_KAD_CARDS_MAX: parsePositiveInt('PARSER_API_KAD_CARDS_MAX', source.PARSER_API_KAD_CARDS_MAX, 10),
     // Сайты компаний (этап 25A, ADR-018): модель с веб-поиском OpenRouter предлагает официальный сайт, решает
     // оператор. Каждая попытка — платный поиск. Идёт тем же заданием, что разбор (PIPELINE_ENABLED), и только
     // при LLM_PROVIDER=openrouter. По умолчанию выключено: включает владелец после пробы (`site-search -- --probe`).

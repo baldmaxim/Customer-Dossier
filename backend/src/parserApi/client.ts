@@ -20,6 +20,7 @@ export const PARSER_API_METHODS = {
   bo_details: 'nalog_bo_api/details',
   pb_org: 'nalog_pb_api/search_org',
   kad_search: 'arbitr_api/search',
+  kad_details: 'arbitr_api/details_by_id',
   fssp_ur: 'fssp_api/search_ur_by_inn',
   fedresurs_ur: 'fedresurs_api/search_ur',
   fedresurs_org: 'fedresurs_api/get_org',

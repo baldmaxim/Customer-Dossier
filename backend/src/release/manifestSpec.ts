@@ -94,6 +94,7 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'parser_api_checks', class: 'operational', why: 'что и когда проверяли в parser-api.com по ИНН и набору: срок следующей проверки, ошибка' },
   { table: 'parser_api_records', class: 'domain', why: 'ответы parser-api.com (ГИР БО, ФНС, КАД, ФССП, Федресурс) наборами как есть: новая строка только при изменении' },
   { table: 'parser_api_requests', class: 'history', why: 'журнал запросов к parser-api.com: резерв лимита, оплаченные ответы и отказы, без ключа' },
+  { table: 'parser_api_case_cards', class: 'domain', why: 'карточки арбитражных дел parser-api.com ради суммы иска: ответ как есть, одна строка на дело' },
   // Портал от компании (миграция 042, ADR-016)
   { table: 'company_watch', class: 'domain', why: 'компании «на контроле»: кто и когда поставил и снял' },
   // Назначение имён без ИНН (миграция 043, ADR-016)
