@@ -26,6 +26,8 @@ process.env.FOCUS_ENABLED = 'false';
 process.env.PARSER_API_ENABLED = 'false';
 process.env.FOCUS_API_KEY = '';
 process.env.PARSER_API_KEY = '';
+// Поиск сайтов — платный веб-поиск: в unit-тестах выключен, что бы ни стояло в оболочке.
+process.env.SITE_SEARCH_ENABLED = 'false';
 process.env.BOT_ENABLED = 'false';
 // Флаги записи из сессии разработчика (например, после проверки слияния) не должны
 // менять поведение unit-тестов.

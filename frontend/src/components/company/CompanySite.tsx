@@ -1,0 +1,91 @@
+// «Сайт компании» на «Сведениях» (этап 25A, ADR-018): подтверждённый сайт ссылкой, сайт группы для СЗ,
+// кандидаты из веб-поиска с признаками проверки и решения оператора. Подтверждает человек: модель находит
+// адрес среди страниц выдачи, портал смотрит, написан ли там ИНН компании, — но «это сайт компании» говорит
+// оператор. Читателю — только подтверждённое и строка о поиске.
+
+import { FC } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
+import { api } from '../../api/client';
+import type { ICompanySites } from '../../api/types';
+import { useCan } from '../../hooks/useAuth';
+import { formatCount } from '../../lib/format';
+import { describeLoadError } from '../../lib/loadError';
+import { SiteCandidates, SiteControls, searchLine } from '../companySite/SiteCandidates';
+import { companySiteKey, useSiteActions } from '../companySite/useSiteActions';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
+import { Disclosure } from '../ui/Disclosure';
+import { Loading } from '../ui/Loading';
+import { Section } from '../ui/Section';
+import { Stack } from '../ui/Stack';
+import styles from '../companySite/Site.module.css';
+
+export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ companyId, companyName }) => {
+  const query = useQuery({
+    queryKey: companySiteKey(companyId),
+    queryFn: () => api.get<ICompanySites>(`/api/companies/${companyId}/site`),
+  });
+  const canDecide = useCan('sources.manage');
+  const actions = useSiteActions();
+  const data = query.data;
+  const candidates = data?.candidates ?? [];
+  const confirmed = candidates.filter(c => c.state === 'confirmed');
+  const pending = candidates.filter(c => c.state === 'pending');
+  const rejected = candidates.filter(c => c.state === 'rejected');
+  const family = (data?.familySites ?? []).filter(f => !confirmed.some(c => c.host === f.host));
+  const decide = { canDecide, busy: actions.busy, onConfirm: actions.confirm, onReject: (c: (typeof candidates)[number]) => void actions.reject(c) };
+
+  return (
+    <Section id="company-site" title="Сайт компании">
+      {query.isLoading && <Loading label="Загружаю сайт компании…" />}
+      {query.isError && (
+        <Callout tone="danger" title="Сайт не загрузился" action={<Button onClick={() => void query.refetch()}>Повторить</Button>}>
+          {describeLoadError(query.error)}
+        </Callout>
+      )}
+      {data && (
+        <Stack gap={3}>
+          {confirmed.length > 0 && <SiteCandidates candidates={confirmed} {...decide} />}
+          {family.length > 0 && (
+            <ul className={styles.list}>
+              {family.map(f => (
+                <li key={`${f.companyId}-${f.host}`} className={styles.item}>
+                  <a href={f.url} target="_blank" rel="noreferrer noopener" className={styles.host}>
+                    {f.host}
+                  </a>
+                  <p className={styles.muted}>сайт группы «{f.companyName}»</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {confirmed.length === 0 && family.length === 0 && <p className={styles.muted}>Сайт не привязан.</p>}
+          {pending.length > 0 &&
+            (canDecide ? (
+              <Stack gap={2}>
+                <p className={styles.muted}>Найдено поиском — решите, сайт ли это компании:</p>
+                <SiteCandidates candidates={pending} {...decide} />
+              </Stack>
+            ) : (
+              <p className={styles.muted}>Найдены кандидаты: {formatCount(pending.length)} — ждут решения оператора.</p>
+            ))}
+          {confirmed.length === 0 && <p className={styles.muted}>{searchLine(data.search, data.mode)}</p>}
+          {canDecide && rejected.length > 0 && (
+            <Disclosure summary="Отклонённые" meta={formatCount(rejected.length)}>
+              <SiteCandidates candidates={rejected} {...decide} />
+            </Disclosure>
+          )}
+          {canDecide && (
+            <SiteControls
+              companyName={companyName}
+              searched={Boolean(data.search?.searchedAt)}
+              busy={actions.busy}
+              onManual={url => actions.manual(companyId, url)}
+              onSearch={() => actions.search(companyId)}
+            />
+          )}
+        </Stack>
+      )}
+    </Section>
+  );
+};

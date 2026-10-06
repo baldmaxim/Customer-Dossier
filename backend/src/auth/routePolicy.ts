@@ -42,6 +42,8 @@ export const ROUTE_RULES: readonly IRouteRule[] = [
 
   // Источники и сбор.
   { methods: 'write', pattern: /^\/admin\/(sources|domrf-targets|domrf-candidates|domrf-companies|domrf-company-links|domrf-hints)(\/|$)/, permission: 'sources.manage' },
+  // Сайты компаний (этап 25A): поиск стоит денег, подтверждённый сайт станет источником.
+  { methods: 'write', pattern: /^\/admin\/(company-sites|company-site-candidates)(\/|$)/, permission: 'sources.manage' },
   { methods: 'write', pattern: /^\/manual$/, permission: 'sources.manage' },
 
   // Модель: ключ OpenRouter.

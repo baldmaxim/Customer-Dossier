@@ -17,6 +17,8 @@ import { DOMRF_HINT_JSON_SCHEMA, domRfHintSchema, type IDomRfHint } from './domr
 import { buildEntityMatchSystemMessage, buildEntityMatchUserMessage } from './entityMatch/prompt.js';
 import { ENTITY_MATCH_JSON_SCHEMA, entityMatchSchema, type IEntityMatch } from './entityMatch/schema.js';
 import { buildDomRfHintSystemMessage, buildDomRfHintUserMessage } from './domrfHint/prompt.js';
+import { SITE_SEARCH_JSON_SCHEMA, siteSearchSchema, type ISiteSearch } from './siteSearch/schema.js';
+import { buildSiteSearchSystemMessage, siteSearchPlugins } from './siteSearch/prompt.js';
 import { checkOpenRouter, requestHeaders, requestRouting, type ILlmConnection, type ILlmTarget } from './endpoint.js';
 
 export type LlmFailure = 'invalid_json' | 'schema_error' | 'llm_error';
@@ -27,6 +29,13 @@ export interface ILlmUsage {
   latencyMs: number;
 }
 
+/** Страница из результатов веб-поиска OpenRouter (`message.annotations[].url_citation`). */
+export interface ILlmCitation {
+  url: string;
+  title: string | null;
+  content: string | null;
+}
+
 export type ILlmResult<T = IExtraction> =
   | {
       ok: true;
@@ -35,11 +44,18 @@ export type ILlmResult<T = IExtraction> =
       rawResponse: string;
       /** Ответ получен на укороченном тексте: он описывает не весь вход. */
       truncatedInput?: boolean;
+      /** Только у спецификации с веб-поиском: страницы, которые поиск отдал модели. */
+      citations?: ILlmCitation[];
     }
   | { ok: false; failure: LlmFailure; message: string; usage: ILlmUsage; rawResponse: string | null };
 
+interface IUrlCitationAnnotation {
+  type?: string;
+  url_citation?: { url?: unknown; title?: unknown; content?: unknown };
+}
+
 interface IChatCompletionResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{ message?: { content?: string; annotations?: IUrlCitationAnnotation[] } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   /** OpenRouter: сбой хостинга приходит телом ответа, а не только статусом. */
   error?: { message?: string; code?: number | string };
@@ -81,6 +97,11 @@ export interface IExtractSpec<T> {
   validator: ZodType<T, ZodTypeDef, unknown>;
   system: () => string;
   user: (body: string, publishedAt: Date | null) => string;
+  /**
+   * Плагины OpenRouter (веб-поиск) — только у спецификации, которой они нужны. В идентичность исполнения
+   * запусков разбора (reprocess/provider.ts) тело запроса не входит, у прежних спецификаций поля нет.
+   */
+  plugins?: () => unknown[];
 }
 
 export const LEGACY_SPEC: IExtractSpec<IExtraction> = {
@@ -129,6 +150,28 @@ export const ENTITY_MATCH_SPEC: IExtractSpec<IEntityMatch> = {
   user: body => buildEntityMatchUserMessage(body),
 };
 
+/**
+ * site-search@1 — официальный сайт компании через веб-поиск OpenRouter (этап 25A). Сообщение пользователя —
+ * сам поисковый запрос (formatSiteSearchQuery): плагин ищет по нему, маркеры ему не нужны.
+ */
+export const SITE_SEARCH_SPEC: IExtractSpec<ISiteSearch> = {
+  schemaName: 'tg_info_site_search',
+  jsonSchema: SITE_SEARCH_JSON_SCHEMA,
+  validator: siteSearchSchema,
+  system: buildSiteSearchSystemMessage,
+  user: body => body,
+  plugins: () => siteSearchPlugins(env.SITE_SEARCH_MAX_RESULTS),
+};
+
+/** Цитаты веб-поиска из ответа: только с адресом; заголовок и фрагмент — по возможности. */
+export const parseCitations = (annotations: IUrlCitationAnnotation[] | undefined): ILlmCitation[] =>
+  (annotations ?? []).flatMap(a => {
+    const c = a.type === 'url_citation' ? a.url_citation : undefined;
+    if (!c || typeof c.url !== 'string' || c.url.trim() === '') return [];
+    const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim().slice(0, max) : null);
+    return [{ url: c.url.trim(), title: text(c.title, 300), content: text(c.content, 2000) }];
+  });
+
 export interface IExtractOptions {
   body: string;
   publishedAt: Date | null;
@@ -167,6 +210,10 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
 
   const target = llmTarget();
   const routing = requestRouting(target);
+  if (spec.plugins && target.provider !== 'openrouter') {
+    // Веб-поиск — услуга OpenRouter; у LM Studio его нет, и молча отвечать без поиска модель не должна.
+    return { ok: false, failure: 'llm_error', message: 'веб-поиск доступен только через OpenRouter (LLM_PROVIDER=openrouter)', usage: emptyUsage(), rawResponse: null };
+  }
   let response: Response;
   try {
     response = await fetch(`${target.baseUrl}/chat/completions`, {
@@ -186,6 +233,7 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
           json_schema: { name: spec.schemaName, strict: true, schema: spec.jsonSchema },
         },
         ...(routing ? { provider: routing } : {}),
+        ...(spec.plugins ? { plugins: spec.plugins() } : {}),
       }),
       signal: options.signal
         ? AbortSignal.any([options.signal, AbortSignal.timeout(llmTimeoutMs())])
@@ -219,6 +267,7 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
     return { ok: false, failure: 'llm_error', message: `ошибка провайдера${code}: ${(payload.error.message ?? '').slice(0, 500)}`, usage, rawResponse: null };
   }
   const content = payload.choices?.[0]?.message?.content ?? '';
+  const citations = spec.plugins ? parseCitations(payload.choices?.[0]?.message?.annotations) : undefined;
 
   if (content.trim() === '') {
     // Классический симптом: Qwen3 ушёл в режим рассуждения и сжёг max_tokens.
@@ -253,7 +302,7 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
     return { ok: false, failure: 'schema_error', message: details, usage, rawResponse: content };
   }
 
-  return { ok: true, data: validated.data, usage, rawResponse: content };
+  return { ok: true, data: validated.data, usage, rawResponse: content, ...(citations ? { citations } : {}) };
 };
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
@@ -320,6 +369,12 @@ export const extractEntityMatch = (options: IExtractOptions): Promise<ILlmResult
 /** headline@1 — тема публикации. Канон не трогает: результат живёт в revision_headlines. */
 export const extractHeadline = (options: IExtractOptions): Promise<ILlmResult<IHeadline>> =>
   extractWith(options, HEADLINE_SPEC);
+
+/**
+ * site-search@1 — ровно одна попытка: каждая попытка — платный поиск, повторы и их учёт в лимите решает
+ * вызывающий (companySites/search.ts).
+ */
+export const extractSiteSearch = (options: IExtractOptions): Promise<ILlmResult<ISiteSearch>> => callOnce(options, SITE_SEARCH_SPEC);
 
 /**
  * Сколько ждать проверку перед проходом и на экране. LM Studio — локальный адрес, 3 с хватает с запасом;

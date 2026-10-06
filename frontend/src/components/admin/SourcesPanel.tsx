@@ -20,6 +20,7 @@ import { Stack } from '../ui/Stack';
 import { DomRfEntry } from './DomRfEntry';
 import { FocusEntry } from './FocusEntry';
 import { ParserApiEntry } from './ParserApiEntry';
+import { CompanySitesEntry } from './CompanySitesEntry';
 import { MANUAL_HINT, ManualPaste } from './ManualPaste';
 import { SourceAdd } from './SourceAdd';
 import { SourceCards } from './SourceCards';
@@ -118,6 +119,7 @@ export const SourcesPanel: FC<ISourcesPanelProps> = ({ kind, sources, actions, l
       {kind === 'website' && <DomRfEntry />}
       {kind === 'website' && <FocusEntry />}
       {kind === 'website' && <ParserApiEntry />}
+      {kind === 'website' && <CompanySitesEntry />}
     </Stack>
   );
 };

@@ -189,6 +189,9 @@ export const dependencyState = async (
     put('companyNameSearches', await rows(`SELECT id || ':' || company_id AS k FROM company_name_searches WHERE company_id = ANY($1::bigint[])`));
     put('companyNameSuggestions', await rows(`SELECT id || ':' || company_id AS k FROM company_name_suggestions WHERE company_id = ANY($1::bigint[])`));
     put('companyDismissals', await rows(`SELECT id || ':' || company_id || ':' || coalesce(revoked_at::text, '') AS k FROM company_dismissals WHERE company_id = ANY($1::bigint[])`));
+    // Сайты компаний (этап 25A, миграция 045): поиск и кандидаты с решениями оператора.
+    put('companySiteSearches', await rows(`SELECT id || ':' || company_id AS k FROM company_site_searches WHERE company_id = ANY($1::bigint[])`));
+    put('companySiteCandidates', await rows(`SELECT id || ':' || company_id || ':' || state AS k FROM company_site_candidates WHERE company_id = ANY($1::bigint[])`));
   } else {
     put('registryRecords', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM registry_records WHERE project_id = ANY($1::bigint[])`));
     put('domRfTargets', await rows(`SELECT id || ':' || coalesce(project_id::text, '') AS k FROM domrf_targets WHERE project_id = ANY($1::bigint[])`));
@@ -369,6 +372,7 @@ const buildPreview = async (
     counts.events = await count(client, 'SELECT count(*)::int AS n FROM events WHERE company_id = $1 OR counterparty_id = $1', [s]);
     counts.registryRecords = await count(client, 'SELECT count(*)::int AS n FROM registry_records WHERE company_id = $1', [s]);
     counts.domRfCompanyLinks = await count(client, 'SELECT count(*)::int AS n FROM domrf_company_links WHERE company_id = $1', [s]);
+    counts.companySiteCandidates = await count(client, 'SELECT count(*)::int AS n FROM company_site_candidates WHERE company_id = $1', [s]);
     counts.participants = await count(client, 'SELECT count(*)::int AS n FROM project_participants WHERE company_id = $1', [s]);
     counts.participantDuplicates = await count(
       client,
@@ -563,6 +567,9 @@ const MOVABLE: Record<string, Record<string, string>> = {
   company_name_searches: { company_id: 'bigint' },
   company_name_suggestions: { company_id: 'bigint' },
   company_dismissals: { company_id: 'bigint' },
+  // Сайты компаний (этап 25A): поиск и кандидаты переносятся к цели.
+  company_site_searches: { company_id: 'bigint' },
+  company_site_candidates: { company_id: 'bigint' },
   entity_identifiers: { company_id: 'bigint' },
   company_relations: { from_company_id: 'bigint', to_company_id: 'bigint' },
   merge_queue: { status: 'merge_status' },
@@ -581,6 +588,8 @@ const DELETABLE = new Set([
   'company_name_searches',
   'company_name_suggestions',
   'company_dismissals',
+  'company_site_searches',
+  'company_site_candidates',
 ]);
 
 const updateColumn = async (
@@ -740,6 +749,28 @@ const moveLegacyRows = async (client: PoolClient, moves: IMove[], kind: MergeEnt
       if (d.active) await deleteRow(client, moves, 'company_dismissals', d.id);
       else await updateColumn(client, moves, 'company_dismissals', d.id, 'company_id', s, t);
     }
+    // Сайты компаний (этап 25A): тот же сайт у цели уже есть — строка источника удаляется с образом, решение
+    // цели остаётся; поиск — один на компанию, как поиск ДОМ.РФ.
+    const sites = (
+      await client.query<{ id: number; duplicate: boolean }>(
+        `SELECT k.id, EXISTS (SELECT 1 FROM company_site_candidates x WHERE x.company_id = $2 AND x.host = k.host) AS duplicate
+         FROM company_site_candidates k WHERE k.company_id = $1 ORDER BY k.id`,
+        [s, t],
+      )
+    ).rows;
+    for (const site of sites) {
+      if (site.duplicate) await deleteRow(client, moves, 'company_site_candidates', site.id);
+      else await updateColumn(client, moves, 'company_site_candidates', site.id, 'company_id', s, t);
+    }
+    const siteSearch = (
+      await client.query<{ id: number; target: boolean }>(
+        `SELECT x.id, EXISTS (SELECT 1 FROM company_site_searches y WHERE y.company_id = $2) AS target
+         FROM company_site_searches x WHERE x.company_id = $1`,
+        [s, t],
+      )
+    ).rows[0];
+    if (siteSearch?.target) await deleteRow(client, moves, 'company_site_searches', siteSearch.id);
+    else if (siteSearch) await updateColumn(client, moves, 'company_site_searches', siteSearch.id, 'company_id', s, t);
   } else {
     for (const id of await idsOf(client, 'SELECT id FROM domrf_targets WHERE project_id = $1 ORDER BY id', [s])) {
       await updateColumn(client, moves, 'domrf_targets', id, 'project_id', s, t);

@@ -91,6 +91,10 @@ const WRITES: Record<string, string> = {
   'PUT /admin/focus/key': 'focus.manage',
   'DELETE /admin/focus/key': 'focus.manage',
   'POST /companies/:id/parser-api/refresh': 'sources.manage',
+  'POST /admin/company-sites/:companyId/search': 'sources.manage',
+  'POST /admin/company-sites/:companyId/manual': 'sources.manage',
+  'POST /admin/company-site-candidates/:id/confirm': 'sources.manage',
+  'POST /admin/company-site-candidates/:id/reject': 'sources.manage',
   'PUT /admin/parser-api/key': 'parserapi.manage',
   'DELETE /admin/parser-api/key': 'parserapi.manage',
 };
@@ -144,6 +148,14 @@ describe('таблица прав маршрутов', () => {
     expect(permissionFor('GET', '/admin/parser-api')).toBe('admin.view');
     expect(permissionFor('GET', '/companies/5/parser-api')).toBe('portal.read');
     expect(permissionFor('POST', '/companies/5/parser-api/refresh')).toBe('sources.manage');
+  });
+
+  it('сайты компаний: карточку читает любой вошедший, очередь — админка, поиск и решения — оператор (этап 25A)', () => {
+    expect(permissionFor('GET', '/companies/5/site')).toBe('portal.read');
+    expect(permissionFor('GET', '/admin/company-sites')).toBe('admin.view');
+    expect(permissionFor('POST', '/admin/company-sites/5/search')).toBe('sources.manage');
+    expect(permissionFor('POST', '/admin/company-site-candidates/7/confirm')).toBe('sources.manage');
+    expect(ROLE_PERMISSIONS.viewer.includes('sources.manage')).toBe(false);
   });
 
   it('заявку на доступ рассматривает только администратор; подаёт её роутер входа, не таблица', () => {

@@ -185,6 +185,16 @@ export const parseEnv = (source: EnvSource) => {
     PARSER_API_MONTHLY_LIMIT: parsePositiveInt('PARSER_API_MONTHLY_LIMIT', source.PARSER_API_MONTHLY_LIMIT, 200),
     // Страниц картотеки арбитражных дел на компанию: больше — набор помечается неполным, а не «дел нет».
     PARSER_API_KAD_MAX_PAGES: parsePositiveInt('PARSER_API_KAD_MAX_PAGES', source.PARSER_API_KAD_MAX_PAGES, 3),
+    // Сайты компаний (этап 25A, ADR-018): модель с веб-поиском OpenRouter предлагает официальный сайт, решает
+    // оператор. Каждая попытка — платный поиск. Идёт тем же заданием, что разбор (PIPELINE_ENABLED), и только
+    // при LLM_PROVIDER=openrouter. По умолчанию выключено: включает владелец после пробы (`site-search -- --probe`).
+    SITE_SEARCH_ENABLED: parseStrictBool('SITE_SEARCH_ENABLED', source.SITE_SEARCH_ENABLED, false),
+    // Попыток поиска за скользящие сутки (расписание, «Искать снова» и проба вместе).
+    SITE_SEARCH_DAILY_LIMIT: parsePositiveInt('SITE_SEARCH_DAILY_LIMIT', source.SITE_SEARCH_DAILY_LIMIT, 50),
+    // Сколько страниц выдачи отдаёт поиск модели: больше — дороже и шумнее.
+    SITE_SEARCH_MAX_RESULTS: parsePositiveInt('SITE_SEARCH_MAX_RESULTS', source.SITE_SEARCH_MAX_RESULTS, 5),
+    // Через сколько дней компанию без найденного сайта искать снова.
+    SITE_SEARCH_REFRESH_DAYS: parsePositiveInt('SITE_SEARCH_REFRESH_DAYS', source.SITE_SEARCH_REFRESH_DAYS, 90),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

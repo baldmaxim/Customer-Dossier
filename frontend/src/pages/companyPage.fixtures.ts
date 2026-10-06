@@ -320,6 +320,7 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
+  { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },

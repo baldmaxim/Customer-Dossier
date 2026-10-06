@@ -100,6 +100,10 @@ export const TABLE_SPECS: readonly ITableSpec[] = [
   { table: 'company_name_searches', class: 'operational', why: 'поиск юрлица по названию в Контур.Фокусе: запрос, срок, ошибка' },
   { table: 'company_name_suggestions', class: 'operational', why: 'подсказки Контур.Фокуса по названию: кэш платного ответа, не решение' },
   { table: 'company_dismissals', class: 'domain', why: '«не компания»: решение человека по имени без ИНН, кто, когда, почему' },
+  // Сайты компаний (миграция 045, этап 25A)
+  { table: 'company_site_searches', class: 'operational', why: 'поиск сайта компании веб-поиском: запрос, исход, срок, ошибка' },
+  { table: 'company_site_candidates', class: 'domain', why: 'найденные и указанные сайты компаний, признаки проверки и решения оператора' },
+  { table: 'site_search_requests', class: 'history', why: 'журнал попыток веб-поиска сайтов: расход суточного лимита' },
   // Реестр схемы
   { table: 'schema_migrations', class: 'registry', why: 'применённые миграции и время применения' },
 ];
@@ -127,6 +131,7 @@ export const CONFIG_KEYS = [
   'MERGE_APPLY_ENABLED',
   'MODEL_REVIEW_ENABLED',
   'MODEL_REVIEW_APPLY',
+  'SITE_SEARCH_ENABLED',
   'REVISION_WRITE_ENABLED',
   'GRAPH_ENABLED',
   'GRAPH_EXPORT_ENABLED',

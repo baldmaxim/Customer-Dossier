@@ -44,6 +44,7 @@ export const TEST_PROCESS_ENV: Readonly<Record<string, string>> = {
   PARSER_API_ENABLED: 'false',
   FOCUS_API_KEY: '',
   PARSER_API_KEY: '',
+  SITE_SEARCH_ENABLED: 'false',
   BOT_ENABLED: 'false',
   REPROCESS_AUTO_PUBLISH: 'false',
   MERGE_APPLY_ENABLED: 'false',

@@ -23,6 +23,7 @@ import { startFocusScheduler } from './focus/scheduler.js';
 import { loadStoredFocusKey } from './settings/focusKey.js';
 import { startParserApiScheduler } from './parserApi/scheduler.js';
 import { loadStoredParserApiKey } from './settings/parserApiKey.js';
+import { runSiteCheckPass, runSiteSearchPass } from './companySites/search.js';
 
 /** Как часто шедулер проверяет, не пора ли опросить источники. */
 const INGEST_TICK_MS = 60_000;
@@ -45,6 +46,9 @@ const startIngestScheduler = (signal: AbortSignal): void => {
       for (const r of reports.filter(r => !r.ok)) {
         console.error(`[ingest] ${r.sourceKey}: ${r.error}`);
       }
+      // Признаки кандидатов в сайты компаний (этап 25A): сеть без модели — в тике сбора.
+      const checks = await runSiteCheckPass(3);
+      for (const c of checks) console.log(`[site-check] ${c.host}: ${c.check.status}${c.check.innOnPage ? ', ИНН на сайте' : ''}`);
     } catch (err) {
       console.error(`[ingest] проход упал: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -122,6 +126,9 @@ const startPipelineWorker = (signal: AbortSignal): void => {
         }
         if (pairs.length > 0) console.log(`[model-review] пар с вердиктом: ${pairs.length}`);
       }
+      // Сайты компаний (этап 25A): веб-поиск OpenRouter — тем же заданием и последним; без флага — ничего.
+      const sites = await runSiteSearchPass(2);
+      for (const s of sites) console.log(`[site-search] ${s.name}: ${s.outcome}${s.inserted > 0 ? `, новых кандидатов ${s.inserted}` : ''}${s.error ? ` — ${s.error}` : ''}`);
     } catch (err) {
       console.error(`[pipeline] проход упал: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

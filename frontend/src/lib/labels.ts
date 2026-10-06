@@ -27,6 +27,11 @@ import type {
   DomRfCompanyLinkState,
   DomRfFoundBy,
   Role,
+  SiteCandidateState,
+  SiteCheckStatus,
+  SiteFoundVia,
+  SiteSearchMode,
+  SiteSearchOutcome,
   TextCompleteness,
   UserRole,
 } from '../api/types';
@@ -930,6 +935,40 @@ export const DOMRF_FOUND_BY_LABELS: Record<DomRfFoundBy, string> = {
   inn: 'по ИНН',
   name: 'по названию',
   manual: 'указано вручную',
+};
+
+// Сайты компаний (этап 25A): проверка кандидата, решение оператора, откуда взят, итог поиска.
+export const SITE_CHECK_STATUS_LABELS: Record<SiteCheckStatus, string> = {
+  not_checked: 'ещё не проверен',
+  ok: 'открывается',
+  unreachable: 'не открывается',
+  blocked: 'закрыт для портала',
+  redirect_other_host: 'ведёт на другой сайт',
+  js_only: 'показывается только в браузере',
+  not_html: 'не страница сайта',
+};
+
+export const SITE_CANDIDATE_STATE_LABELS: Record<SiteCandidateState, string> = {
+  pending: 'ждёт решения',
+  confirmed: 'сайт компании',
+  rejected: 'не он',
+};
+
+export const SITE_FOUND_VIA_LABELS: Record<SiteFoundVia, string> = {
+  web_search: 'найден поиском',
+  operator: 'указан вручную',
+};
+
+export const SITE_SEARCH_OUTCOME_LABELS: Record<SiteSearchOutcome, string> = {
+  found: 'найдены кандидаты',
+  none: 'сайта не нашлось',
+  no_citations: 'поиск ничего не вернул',
+};
+
+export const SITE_SEARCH_MODE_LABELS: Record<SiteSearchMode, string> = {
+  off: 'поиск сайтов выключен',
+  needs_openrouter: 'поиск сайтов включён, но модель не OpenRouter — искать нечем',
+  on: 'поиск сайтов идёт в фоне',
 };
 
 /** Подсказка модели — со строчной: стоит после «Модель:». */

@@ -3,7 +3,7 @@
 // (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — кто строит для
 // компании (генподрядчики её объектов, 24D), объекты по
 // данным ДОМ.РФ с записью застройщика, публикации и события по месяцам и разбивки (роли, события, тексты),
-// справа — остальное ЕГРЮЛ и
+// справа — остальное ЕГРЮЛ, сайт компании (25A) и
 // «С кем связана» (05.10.2026: раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
 //
 // У имени без ИНН и у группы сведений ЕГРЮЛ нет: об этом — надпись с подсказкой над названием, а назначение
@@ -24,6 +24,7 @@ import { CompanyActivity } from './CompanyActivity';
 import { CompanyBuilders } from './CompanyBuilders';
 import { CompanyFocus } from './CompanyFocus';
 import { CompanyPortfolio } from './CompanyPortfolio';
+import { CompanySite } from './CompanySite';
 import { CompanySources } from './CompanySources';
 import { CompanyStructure } from './CompanyStructure';
 import { useCompanyFocus, useCompanyObjects } from './useCompanyQueries';
@@ -100,6 +101,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
               <CompanyFocus companyId={companyId} hideKeys={focusHidden} layout="stacked" />
             </Section>
           )}
+          <CompanySite companyId={companyId} companyName={data.egrul?.name ?? data.company.name} />
           <CompanyPartners companyId={companyId} />
         </div>
       </div>

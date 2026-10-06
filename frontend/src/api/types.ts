@@ -1909,3 +1909,85 @@ export interface IDomRfCompanies {
   matched: number;
   totals: { companies: number; searched: number; withPending: number; confirmed: number; notFound: number; several: number };
 }
+
+// ─── Сайты компаний (этап 25A, ADR-018) ──────────────────────────────────────────────────────
+
+/** Поиск сайтов: выключен владельцем, включён без OpenRouter (веб-поиска нет) или идёт. */
+export type SiteSearchMode = 'off' | 'needs_openrouter' | 'on';
+export type SiteCheckStatus = 'not_checked' | 'ok' | 'unreachable' | 'blocked' | 'redirect_other_host' | 'js_only' | 'not_html';
+export type SiteCandidateState = 'pending' | 'confirmed' | 'rejected';
+export type SiteFoundVia = 'web_search' | 'operator';
+export type SiteSearchOutcome = 'found' | 'none' | 'no_citations';
+export type CompanySitesFilter = 'pending' | 'confirmed' | 'notFound' | 'all';
+
+export interface ISiteCandidate {
+  id: number;
+  companyId: number;
+  host: string;
+  url: string;
+  foundVia: SiteFoundVia;
+  /** Заголовок и фрагмент найденной поиском страницы. */
+  title: string | null;
+  snippet: string | null;
+  /** Почему модель считает это сайтом компании — объяснение, не решение. */
+  modelReason: string | null;
+  model: string | null;
+  checkStatus: SiteCheckStatus;
+  checkedAt: string | null;
+  checkError: string | null;
+  pageTitle: string | null;
+  /** null — не проверялось (нет реквизита или страница не открылась). */
+  innOnPage: boolean | null;
+  ogrnOnPage: boolean | null;
+  nameOnPage: boolean | null;
+  /** Другие ИНН на страницах сайта. */
+  otherInns: string[];
+  state: SiteCandidateState;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  firstSeenAt: string;
+  /** Тот же сайт подтверждён у других компаний. */
+  sharedWith: Array<{ companyId: number; name: string }>;
+}
+
+export interface ISiteSearchState {
+  query: string | null;
+  outcome: SiteSearchOutcome | null;
+  resultCount: number | null;
+  searchedAt: string | null;
+  nextSearchAt: string;
+  lastError: string | null;
+  requestedBy: string | null;
+}
+
+export interface IFamilySite {
+  companyId: number;
+  companyName: string;
+  host: string;
+  url: string;
+}
+
+export interface ICompanySites {
+  mode: SiteSearchMode;
+  candidates: ISiteCandidate[];
+  /** Подтверждённые сайты групп, в которые входит компания. */
+  familySites: IFamilySite[];
+  search: ISiteSearchState | null;
+}
+
+export interface ICompanySitesRow {
+  companyId: number;
+  name: string;
+  roles: string[];
+  search: ISiteSearchState | null;
+  candidates: ISiteCandidate[];
+}
+
+export interface ICompanySitesList {
+  mode: SiteSearchMode;
+  dailyLimit: number;
+  items: ICompanySitesRow[];
+  matched: number;
+  totals: { searched: number; withPending: number; confirmed: number; notFound: number; usedLastDay: number };
+}

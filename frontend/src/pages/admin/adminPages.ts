@@ -3,6 +3,7 @@
 
 export { AccountPage } from '../AccountPage';
 export { AdminLayout } from './AdminLayout';
+export { CompanySitesPage } from './CompanySitesPage';
 export { DomRfPage } from './DomRfPage';
 export { FocusPage } from './FocusPage';
 export { ParserApiPage } from './ParserApiPage';
