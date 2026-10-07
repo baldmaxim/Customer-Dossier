@@ -101,23 +101,28 @@ export const runIngestPass = async (limit = 20): Promise<IIngestReport[]> => {
   const sources = due.filter(source => !isCompanySiteConfig(source.config) || (companySites += 1) <= COMPANY_SITES_PER_PASS);
   const reports: IIngestReport[] = [];
 
-  for (const [index, source] of sources.entries()) {
-    const blocked = policyBlocked(source);
-    if (blocked) {
-      // Без паузы: запроса не было, троттлить нечего.
-      reports.push(blocked);
-      continue;
+  // Две очереди одновременно (07.10.2026): каналы Telegram — один хост t.me, по одному с паузой, как прежде; сайты —
+  // свои хосты, своей очередью с той же паузой. Раньше сайты ждали все каналы и их паузы, а каналы — сайты компаний.
+  const lane = async (kind: 'telegram' | 'website'): Promise<void> => {
+    const own = sources.filter(source => source.kind === kind);
+    for (const [index, source] of own.entries()) {
+      const blocked = policyBlocked(source);
+      if (blocked) {
+        // Без паузы: запроса не было, троттлить нечего.
+        reports.push(blocked);
+        continue;
+      }
+      reports.push(kind === 'telegram' ? await ingestTelegramSource(source) : await ingestWebsiteSource(source));
+      // Пауза только между запросами, после последнего не нужна.
+      if (index < own.length - 1) await sleep(env.TG_FETCH_DELAY_MS);
     }
-    if (source.kind === 'telegram') {
-      reports.push(await ingestTelegramSource(source));
-    } else if (source.kind === 'website') {
-      reports.push(await ingestWebsiteSource(source));
-    } else {
-      continue;
-    }
-    // Пауза только между запросами, после последнего не нужна.
-    if (index < sources.length - 1) await sleep(env.TG_FETCH_DELAY_MS);
+  };
+  // Остальные виды (ручная вставка) не опрашиваются; отказ политики по ним — в отчёт, как раньше.
+  for (const source of sources) {
+    const blocked = source.kind !== 'telegram' && source.kind !== 'website' ? policyBlocked(source) : null;
+    if (blocked) reports.push(blocked);
   }
+  await Promise.all([lane('telegram'), lane('website')]);
 
   return reports;
 };
