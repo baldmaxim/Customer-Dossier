@@ -27,8 +27,9 @@ let idleEnqueue: { signature: string; at: number } | null = null;
 
 /**
  * Подпись того, от чего зависит выбор новых редакций (07.10.2026, замер на сервере: ~100 мс каждые 30 с, найдено 0):
- * последняя редакция, допуски и режимы источников, число legacy-документов «разобран/пропущен» (их меняет
- * --retry-skipped). Запуски не входят: выбираются редакции без единого запуска, а запуски не удаляются.
+ * последняя редакция, допуски и режимы источников. Запуски не входят: выбираются редакции без единого запуска, а
+ * запуски не удаляются. Статус legacy-документа (его меняет только --retry-skipped) не входит: подсчёт по
+ * raw_documents стоил 12 мс на каждом проходе — такие правки подхватываются не позже ENQUEUE_IDLE_RECHECK_MS.
  */
 const enqueueSignature = async (): Promise<string> =>
   (
@@ -36,8 +37,7 @@ const enqueueSignature = async (): Promise<string> =>
       `SELECT concat_ws('|',
          (SELECT max(id) FROM document_revisions),
          (SELECT string_agg(id || ':' || ai_processing_status || ':' || coalesce(policy_expires_at::text, '') || ':' ||
-                            coalesce(config->>'mode', ''), ',' ORDER BY id) FROM sources),
-         (SELECT count(*) FROM raw_documents WHERE status IN ('extracted', 'skipped'))) AS sig`,
+                            coalesce(config->>'mode', ''), ',' ORDER BY id) FROM sources)) AS sig`,
     )
   ).rows[0]?.sig ?? '';
 

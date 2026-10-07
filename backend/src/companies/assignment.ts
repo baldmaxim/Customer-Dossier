@@ -97,14 +97,22 @@ const portalCandidates = async (db: DbExecutor, companyId: number, latin: string
       similarity: number | null; queue_id: number | null; model_verdict: IPortalCandidate['modelVerdict']; model_reason: string | null;
     }>(
       // «similar» — ключевое слово PostgreSQL (SIMILAR TO): имя CTE — alike.
+      // Похожие — двумя выборками по триграммным индексам имени и написаний (07.10.2026, замер на сервере 130 мс):
+      // «имя % q OR EXISTS (написание % q)» индекс не брал и сравнивал каждую компанию. % — это similarity не ниже
+      // порога, поэтому максимум по совпавшим строкам равен прежнему greatest по имени и всем написаниям.
+      // Реквизиты — только кандидатов, а не всей базы.
       `WITH alike AS (
-         SELECT c.id, greatest(similarity(c.name_latin, $2),
-                  coalesce((SELECT max(similarity(a.alias_latin, $2)) FROM entity_aliases a
-                            WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)) AS similarity
-         FROM companies c
-         WHERE c.merged_into_id IS NULL AND c.id <> $1
-           AND (c.name_latin % $2 OR EXISTS (SELECT 1 FROM entity_aliases a WHERE a.entity_kind = 'company'
-                                               AND a.entity_id = c.id AND a.alias_latin % $2))
+         SELECT x.id, max(x.s) AS similarity
+         FROM (
+           SELECT c.id, similarity(c.name_latin, $2) AS s
+           FROM companies c
+           WHERE c.merged_into_id IS NULL AND c.id <> $1 AND c.name_latin % $2
+           UNION ALL
+           SELECT c.id, similarity(a.alias_latin, $2)
+           FROM entity_aliases a JOIN companies c ON c.id = a.entity_id AND c.merged_into_id IS NULL AND c.id <> $1
+           WHERE a.entity_kind = 'company' AND a.alias_latin % $2
+         ) x
+         GROUP BY x.id
        ),
        pairs AS (
          SELECT DISTINCT ON (other) q.id, CASE WHEN q.source_entity_id = $1 THEN q.target_entity_id ELSE q.source_entity_id END AS other,
@@ -113,15 +121,21 @@ const portalCandidates = async (db: DbExecutor, companyId: number, latin: string
          WHERE q.entity_kind = 'company' AND q.status = 'pending' AND $1 IN (q.source_entity_id, q.target_entity_id)
          ORDER BY other, q.id DESC
        ),
+       cand AS (
+         SELECT id FROM alike UNION SELECT other FROM pairs
+       ),
        ids AS (
          SELECT company_id,
                 min(value) FILTER (WHERE identifier_type = 'inn') AS inn,
                 min(value) FILTER (WHERE identifier_type IN ('ogrn', 'ogrnip')) AS ogrn
-         FROM entity_identifiers WHERE status = 'active' AND validation_status = 'checksum_valid' AND identifier_type = ANY($3::text[])
+         FROM entity_identifiers
+         WHERE company_id IN (SELECT id FROM cand)
+           AND status = 'active' AND validation_status = 'checksum_valid' AND identifier_type = ANY($3::text[])
          GROUP BY company_id
        )
        SELECT c.id, c.name, c.city, c.entity_type, ids.inn, ids.ogrn, s.similarity, p.id AS queue_id, p.model_verdict, p.model_reason
-       FROM companies c
+       FROM cand
+       JOIN companies c ON c.id = cand.id
        LEFT JOIN alike s ON s.id = c.id
        LEFT JOIN pairs p ON p.other = c.id
        LEFT JOIN ids ON ids.company_id = c.id

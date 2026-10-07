@@ -21,6 +21,7 @@ import {
   reserveSiteSearch,
   saveSiteCheck,
   saveSiteSearch,
+  siteSearchUsedLastDay,
   uncheckedCandidates,
   type ISiteSearchTarget,
   type IUncheckedCandidate,
@@ -156,8 +157,15 @@ export const searchCompanySite = async (
  * Проход поиска: не больше `limit` компаний из очереди. Выключен флагом или без OpenRouter — ничего.
  * Лимит исчерпан — проход заканчивается: следующие компании упрутся в тот же предел.
  */
-export const runSiteSearchPass = async (limit = 2, claim: () => Promise<ISiteSearchTarget | null> = claimSiteSearch): Promise<ISiteSearchRun[]> => {
+export const runSiteSearchPass = async (
+  limit = 2,
+  claim: () => Promise<ISiteSearchTarget | null> = claimSiteSearch,
+  usedLastDay: () => Promise<number> = siteSearchUsedLastDay,
+): Promise<ISiteSearchRun[]> => {
   if (siteSearchMode() !== 'on') return [];
+  // Лимит за сутки исчерпан — очередь не считаем (07.10.2026, замер на сервере): её расчёт по ролям и членству всех
+  // компаний (~15 мс) шёл на каждом проходе разбора, а поиск всё равно отказывал. Место резервирует reserveSiteSearch.
+  if ((await usedLastDay()) >= env.SITE_SEARCH_DAILY_LIMIT) return [];
   const runs: ISiteSearchRun[] = [];
   for (let i = 0; i < limit; i += 1) {
     const target = await claim();
