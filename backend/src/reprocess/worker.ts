@@ -21,7 +21,30 @@ import { NotPublishableError, PublicationConflictError, publishCandidateSet, typ
 import type { IModelProvider } from './provider.js';
 import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunClaim, type IRunResult } from './runs.js';
 
+/** Пустая постановка с той же подписью не повторяется чаще (страховка на изменение, которого подпись не видит). */
+const ENQUEUE_IDLE_RECHECK_MS = 10 * 60_000;
+let idleEnqueue: { signature: string; at: number } | null = null;
+
+/**
+ * Подпись того, от чего зависит выбор новых редакций (07.10.2026, замер на сервере: ~100 мс каждые 30 с, найдено 0):
+ * последняя редакция, допуски и режимы источников, число legacy-документов «разобран/пропущен» (их меняет
+ * --retry-skipped). Запуски не входят: выбираются редакции без единого запуска, а запуски не удаляются.
+ */
+const enqueueSignature = async (): Promise<string> =>
+  (
+    await getPool().query<{ sig: string }>(
+      `SELECT concat_ws('|',
+         (SELECT max(id) FROM document_revisions),
+         (SELECT string_agg(id || ':' || ai_processing_status || ':' || coalesce(policy_expires_at::text, '') || ':' ||
+                            coalesce(config->>'mode', ''), ',' ORDER BY id) FROM sources),
+         (SELECT count(*) FROM raw_documents WHERE status IN ('extracted', 'skipped'))) AS sig`,
+    )
+  ).rows[0]?.sig ?? '';
+
 export const enqueueNewRevisions = async (provider: IModelProvider, limit: number): Promise<number> => {
+  // Прошлая проверка ничего не нашла, а подпись та же — новых редакций для постановки нет.
+  const signature = await enqueueSignature();
+  if (idleEnqueue && idleEnqueue.signature === signature && Date.now() - idleEnqueue.at < ENQUEUE_IDLE_RECHECK_MS) return 0;
   const rows = (
     await getPool().query<{ id: number }>(
       `SELECT r.id
@@ -38,6 +61,7 @@ export const enqueueNewRevisions = async (provider: IModelProvider, limit: numbe
       [limit],
     )
   ).rows;
+  idleEnqueue = rows.length === 0 ? { signature, at: Date.now() } : null;
   let queued = 0;
   for (const row of rows) {
     const result = await enqueueRun(getPool(), { revisionId: row.id, provider, requestedBy: 'worker' });
