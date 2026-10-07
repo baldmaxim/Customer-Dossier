@@ -1,28 +1,38 @@
 // Публикации об объекте (ADR-016): общей ленты в портале нет — публикации об объекте живут здесь,
-// вместе с очередями и корпусами. Строка — источник, дата и тема или начало текста; ведёт на страницу
-// публикации. Тема — подпись, составленная моделью, когда у публикации нет заголовка.
+// вместе с очередями и корпусами. Строка — та же карточка, что в читалке компании (PublicationCard: дата,
+// канал, заголовок или тема с пометкой «тема от модели»); пост открывается окном поверх страницы
+// (PublicationModal — тот же TelegramPost), а не уводит со страницы объекта. Читалка «в один экран» здесь не
+// подходит: публикации — один из разделов страницы.
 
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import type { IPublicationRow } from '../../api/types';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton';
+import type { IPublicationListItem } from '../../components/PublicationBrowser';
+import { PublicationModal } from '../../components/PublicationModal';
+import { PublicationCard } from '../../components/publication/PublicationCard';
 import { Button } from '../../components/ui/Button';
 import { Callout } from '../../components/ui/Callout';
-import { CardList } from '../../components/ui/CardList';
-import { CardListItem } from '../../components/ui/CardListItem';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { formatDate, sourceLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import browserStyles from '../../components/PublicationBrowser.module.css';
 import styles from '../ProjectPage.module.css';
 
-const SNIPPET_CHARS = 140;
-
-const headline = (row: IPublicationRow): string => {
-  const text = row.title ?? row.topic ?? row.snippet;
-  return text.length > SNIPPET_CHARS ? `${text.slice(0, SNIPPET_CHARS).trimEnd()}…` : text;
-};
+const toListItem = (row: IPublicationRow): IPublicationListItem => ({
+  key: row.itemId,
+  revisionId: row.revisionId,
+  title: row.title,
+  topic: row.topic,
+  publishedAt: row.publishedAt,
+  observedAt: row.observedAt,
+  sourceTitle: row.sourceTitle,
+  sourceKey: row.sourceKey,
+  sourceKind: row.sourceKind,
+  url: row.url,
+  snippet: row.snippet,
+});
 
 export const ProjectPublications: FC<{ projectId: number }> = ({ projectId }) => {
   const query = useInfiniteQuery({
@@ -35,8 +45,11 @@ export const ProjectPublications: FC<{ projectId: number }> = ({ projectId }) =>
     },
     getNextPageParam: last => last.nextCursor,
   });
+  // Окно смонтировано после первого открытия: закрытие доигрывает анимацию и возвращает фокус на карточку.
+  const [shown, setShown] = useState<IPublicationListItem | null>(null);
+  const [open, setOpen] = useState(false);
 
-  if (query.isLoading) return <LoadingSkeleton label="Загружаю публикации об объекте…" lines={3} height="44px" />;
+  if (query.isLoading) return <LoadingSkeleton label="Загружаю публикации об объекте…" lines={3} height="88px" radius="md" />;
   if (query.isError) {
     return (
       <Callout tone="danger" title="Публикации не загрузились" action={<Button onClick={() => void query.refetch()}>Повторить</Button>}>
@@ -44,21 +57,25 @@ export const ProjectPublications: FC<{ projectId: number }> = ({ projectId }) =>
       </Callout>
     );
   }
-  const rows = query.data?.pages.flatMap(p => p.items) ?? [];
-  if (rows.length === 0) return <EmptyState size="sm">В собранных публикациях об объекте ничего не найдено.</EmptyState>;
+  const items = (query.data?.pages ?? []).flatMap(p => p.items.map(toListItem));
+  if (items.length === 0) return <EmptyState size="sm">В собранных публикациях об объекте ничего не найдено.</EmptyState>;
 
   return (
     <>
-      <CardList label="Публикации об объекте">
-        {rows.map(row => (
-          <CardListItem
-            key={row.itemId}
-            to={row.documentId ? `/documents/${row.documentId}` : undefined}
-            title={headline(row)}
-            meta={[sourceLabel(row), formatDate(row.publishedAt ?? row.observedAt)].filter(Boolean).join(' · ')}
+      <ul className={browserStyles.items} aria-label="Публикации об объекте">
+        {items.map(item => (
+          <PublicationCard
+            key={item.key}
+            item={item}
+            active={open && shown?.key === item.key}
+            onOpen={() => {
+              setShown(item);
+              setOpen(true);
+            }}
+            buttonRef={null}
           />
         ))}
-      </CardList>
+      </ul>
       {query.hasNextPage && (
         <div className={styles.more}>
           <Button loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
@@ -66,6 +83,7 @@ export const ProjectPublications: FC<{ projectId: number }> = ({ projectId }) =>
           </Button>
         </div>
       )}
+      {shown && <PublicationModal source={shown} open={open} onClose={() => setOpen(false)} />}
     </>
   );
 };

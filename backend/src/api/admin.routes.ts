@@ -31,6 +31,7 @@ import { SOURCE_CAPABILITIES } from '../ingest/capabilities.js';
 import { classifySourceHealth } from '../ingest/sourceHealth.js';
 import { DOMRF_TARGET_FILTERS, DomRfTargetError, listProjectDomRfTargets, pageDomRfTargets, registerDomRfTarget, removeDomRfTarget, requestDomRfRescan } from '../ingest/registry/domrfTargets.js';
 import { actorOf } from './auth.js';
+import { catalogCounts } from './companyCatalog.js';
 
 export const adminRouter = asyncRouter();
 
@@ -483,9 +484,8 @@ const REVISION_STATES_SQL = `
   ORDER BY 2 DESC`;
 
 adminRouter.get('/pipeline', async (_req, res) => {
-  const queue = await query(
-    `SELECT status, count(*)::int AS n FROM raw_documents GROUP BY status ORDER BY n DESC`,
-  );
+  // Где последние редакции — по запускам нового конвейера (revisionStates), а не по raw_documents.status:
+  // ту колонку новый путь не меняет, и счётчик по ней стоял бы на месте.
   const revisions = await query<{ state: string; n: number }>(REVISION_STATES_SQL, [env.REPROCESS_RETRY_MAX]);
   // Причины падений словами: без них «упало» не отличить от «модель не была запущена».
   const failures = await query<{ reason: string; n: number }>(
@@ -496,25 +496,12 @@ adminRouter.get('/pipeline', async (_req, res) => {
   );
   // Доступность локальной модели: без неё разбор не идёт, и это не поломка данных.
   const llm = await checkLlmConnection(modelProbeTimeoutMs());
-  const extractions = await query(
-    `SELECT prompt_version AS "promptVersion", model, status, count(*)::int AS n
-     FROM extractions GROUP BY prompt_version, model, status
-     ORDER BY prompt_version DESC, n DESC`,
-  );
-  const rejected = await query(
-    `SELECT type, count(*)::int AS n FROM events WHERE status = 'rejected' GROUP BY type`,
-  );
   // Состояние фоновых заданий — здесь, а не только в /reprocess/runs: экран конвейера
   // обязан отличать «выключено оператором» от «сломано» и от «нет данных».
   res.json({
-    // queue — состояния старого конвейера; новый путь их не меняет. Оставлено для чтения
-    // исторических баз, экран строится по revisions.
-    queue,
     revisions,
     failures,
     model: { ok: llm.ok, error: llm.error ?? null, models: llm.models },
-    extractions,
-    rejectedEvents: rejected,
     worker: {
       ingestEnabled: env.INGEST_ENABLED,
       pipelineEnabled: env.PIPELINE_ENABLED,
@@ -522,6 +509,33 @@ adminRouter.get('/pipeline', async (_req, res) => {
       metricsAutoRefresh: env.METRICS_AUTO_REFRESH,
       retryEnabled: env.REPROCESS_RETRY_ENABLED,
       retryMax: env.REPROCESS_RETRY_MAX,
+    },
+  });
+});
+
+/**
+ * Строка «В базе» на «Обработке»: компании — числами вкладок каталога (что портал считает компанией, решает одно
+ * правило, ADR-016), тексты — публикации источников новостей, как в списке источников (сайты компаний — не они).
+ */
+adminRouter.get('/summary', async (_req, res) => {
+  const [companies, totals] = await Promise.all([
+    catalogCounts(),
+    query<{ projects: number; documents: number; pendingMerges: number }>(
+      `SELECT
+         (SELECT count(*) FROM projects WHERE merged_into_id IS NULL)::int AS projects,
+         (SELECT count(*) FROM source_items si JOIN sources s ON s.id = si.source_id
+           WHERE coalesce(s.config->>'mode', '') <> 'company_site')::int AS documents,
+         (SELECT count(*) FROM merge_queue WHERE status = 'pending')::int AS "pendingMerges"`,
+    ),
+  ]);
+  res.json({
+    totals: {
+      companies: companies.legal,
+      groups: companies.groups,
+      unidentified: companies.unidentified,
+      projects: totals[0]?.projects ?? 0,
+      documents: totals[0]?.documents ?? 0,
+      pendingMerges: totals[0]?.pendingMerges ?? 0,
     },
   });
 });

@@ -13,6 +13,7 @@ import { query } from '../db/pool.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
 import type { IItemRow, IPublicationRow } from './companyPublications.js';
+import { liveMentionSql } from './legacyMentions.js';
 
 // Тот же список колонок и порядок, что у ленты компании (companyPublications.ts): текст запроса —
 // целиком здесь, чтобы проверка плейсхолдеров (sql-sanity.test.ts) видела его полностью.
@@ -33,7 +34,7 @@ const ITEMS_SQL = `
     SELECT DISTINCT r.source_item_id
     FROM mentions m
     JOIN document_revisions r ON r.legacy_document_id = m.document_id
-    WHERE m.entity_kind = 'project' AND m.entity_id IN (SELECT id FROM tree)
+    WHERE m.entity_kind = 'project' AND m.entity_id IN (SELECT id FROM tree) AND ${liveMentionSql('m')}
   )
   SELECT si.id AS "itemId",
          rev.id AS "revisionId",

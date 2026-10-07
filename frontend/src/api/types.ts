@@ -517,6 +517,9 @@ export interface IEvidenceRow {
   /** Запуск нового конвейера, из чанка которого пришло доказательство (этап 15B); null — legacy или вручную. */
   runId?: number | null;
   sourceTitle: string;
+  /** Ключ и вид источника: подпись — sourceLabel («@ключ», пока у канала нет имени). У прежнего сервера полей нет. */
+  sourceKey?: string | null;
+  sourceKind?: string;
   url: string | null;
   publishedAt: string | null;
 }
@@ -880,19 +883,18 @@ export interface ISignalRefreshState {
 }
 
 /** Сводка по базе для главной и для ступени «Результат». */
+/** Строка «В базе» (GET /api/admin/summary): компании — числами вкладок каталога, тексты — публикации источников. */
 export interface ISummaryResponse {
-  byIdentity: Array<{ identityStatus: string; n: number }>;
   totals: {
     companies: number;
+    groups: number;
+    unidentified: number;
     projects: number;
     documents: number;
     pendingMerges: number;
-    lonelyCompanies: number;
-  } | null;
-  refresh: ISignalRefreshState;
+  };
 }
 
-/** Состояние конвейера: очередь, извлечения и включённость фоновых заданий. */
 /** Строка ленты публикаций о компании (этап 22). Одна публикация — одна строка. */
 export interface IPublicationFact {
   assertionId: number | null;
@@ -951,17 +953,14 @@ export interface IPartnerRow {
   links: IPartnerLink[];
 }
 
+/** Состояние конвейера: где последние редакции, причины падений, модель и фоновые задания. */
 export interface IPipelineOverview {
-  /** Состояния старого конвейера: новый путь их не меняет, экран по ним не строится. */
-  queue: Array<{ status: string; n: number }>;
   /** Где сейчас последние редакции: почему текст не в карточках (этап 22). */
   revisions: Array<{ state: string; n: number }>;
   /** Причины падений за неделю, словами. */
   failures: Array<{ reason: string; n: number }>;
   /** Отвечает ли локальная модель. Не отвечает — разбор стоит, данные целы. */
   model: { ok: boolean; error: string | null; models: string[] };
-  extractions: Array<{ promptVersion: string; model: string; status: string; n: number }>;
-  rejectedEvents: Array<{ type: string; n: number }>;
   worker: {
     ingestEnabled: boolean;
     pipelineEnabled: boolean;
@@ -2106,6 +2105,8 @@ export interface INewsItem {
   at: string;
   title: string;
   detail: string | null;
+  /** Суммы по строкам (производство ФССП — долг по документу); текст — formatMoney, суммы не складываются. */
+  amounts?: Array<{ label: string; rub: number | null }>;
   companies: Array<{ id: number; name: string; role: string | null }>;
   project: { id: number; name: string } | null;
   source: { kind: 'publication' | 'registry' | 'kad' | 'fssp' | 'efrsb'; documentId: number | null; href: string | null };

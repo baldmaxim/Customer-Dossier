@@ -69,7 +69,7 @@ reprocessRouter.get('/reprocess/publications', async (req, res) => {
     `SELECT h.id, h.action, h.actor, h.note, h.created_at AS "createdAt",
             h.from_set_id AS "fromSetId", h.to_set_id AS "toSetId",
             h.source_item_id AS "sourceItemId",
-            s.title AS "sourceTitle", s.key AS "sourceKey",
+            s.title AS "sourceTitle", s.key AS "sourceKey", s.kind AS "sourceKind",
             cs.run_id AS "runId"
      FROM publication_history h
      JOIN source_items i ON i.id = h.source_item_id

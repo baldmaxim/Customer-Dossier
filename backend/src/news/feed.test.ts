@@ -90,7 +90,9 @@ describe('новые дела и производства (T24F-03)', () => {
       'all',
     );
     expect(item).toMatchObject({ kind: 'fssp', title: 'Новые исполнительные производства: 2' });
-    expect(item!.detail).toMatch(/^сумма долга по документам 2\s000 ₽$/);
+    // Долг — по каждому производству числом, без суммы (текст денег — на экране).
+    expect(item!.amounts).toEqual([{ label: 'B', rub: 1000 }, { label: 'C', rub: 1000 }]);
+    expect(item!.detail).toBeNull();
     expect(recordItems([{ inn: INN, dataset: 'fssp' as const, fetchedAt: created, complete: true, payload: fsspPayload(['A']), prev: fsspPayload(['A']) }], byInn, new Set(), 'all')).toEqual([]);
   });
 });

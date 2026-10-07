@@ -6,7 +6,7 @@ import { FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { IEvidenceRow } from '../../api/types';
-import { COMPLETENESS_LABELS, formatDate } from '../../lib/labels';
+import { COMPLETENESS_LABELS, formatDate, sourceLabel } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -32,6 +32,7 @@ const trimEdge = (text: string, side: 'start' | 'end'): string =>
   side === 'start' ? text.replace(/^[\s….]+/u, '') : text.replace(/[\s….]+$/u, '');
 
 export const EvidenceQuote: FC<{ row: IEvidenceRow } & IEvidenceToolsProps> = ({ row, tools, showRun, onWithdraw }) => {
+  const source = sourceLabel({ sourceTitle: row.sourceTitle, sourceKey: row.sourceKey, sourceKind: row.sourceKind ?? '' });
   const inactive = row.status !== 'active';
   const before = trimEdge(row.contextBefore, 'start');
   const after = trimEdge(row.contextAfter, 'end');
@@ -45,10 +46,10 @@ export const EvidenceQuote: FC<{ row: IEvidenceRow } & IEvidenceToolsProps> = ({
       <div className={styles.source}>
         {row.legacyDocumentId !== null ? (
           <Link to={`/documents/${row.legacyDocumentId}`} viewTransition className={styles.metaLink}>
-            {row.sourceTitle}
+            {source}
           </Link>
         ) : (
-          <span>{row.sourceTitle}</span>
+          <span>{source}</span>
         )}
         {row.publishedAt && <time dateTime={row.publishedAt}>{formatDate(row.publishedAt)}</time>}
         {row.completeness !== 'full' && <span>{COMPLETENESS_LABELS[row.completeness]}</span>}

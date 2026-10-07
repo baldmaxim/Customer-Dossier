@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { PUBLICATION_ACTION_HINTS, PUBLICATION_ACTION_LABELS, formatDateTime } from '../../lib/labels';
+import { PUBLICATION_ACTION_HINTS, PUBLICATION_ACTION_LABELS, formatDateTime, sourceLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { MQ } from '../../lib/media';
 import { PUBLICATION_ACTION_TONE, toneOf } from '../../lib/statusTone';
@@ -36,6 +36,7 @@ interface IPublicationRow {
   sourceItemId: number;
   sourceTitle: string;
   sourceKey: string;
+  sourceKind?: string;
   runId: number | null;
 }
 
@@ -122,7 +123,7 @@ export const PublicationLog: FC = () => {
             <td>
               <span className="row-link-above">{actionBadge(row.action, true)}</span>
             </td>
-            <td className={styles.sourceCell}>{row.sourceTitle}</td>
+            <td className={styles.sourceCell}>{sourceLabel({ sourceTitle: row.sourceTitle, sourceKey: row.sourceKey, sourceKind: row.sourceKind ?? '' })}</td>
             <td>{actor(row)}</td>
             <td>{row.note ?? '—'}</td>
           </tr>

@@ -45,7 +45,6 @@ const SOURCES = [
 ];
 
 const PIPELINE = {
-  queue: [],
   revisions: [
     { state: 'published', n: 81230 },
     { state: 'in_queue', n: 412 },
@@ -54,8 +53,6 @@ const PIPELINE = {
   ],
   failures: [],
   model: { ok: true, error: null, models: [] },
-  extractions: [],
-  rejectedEvents: [],
   worker: { ingestEnabled: true, pipelineEnabled: true, autoPublish: true, metricsAutoRefresh: false, retryEnabled: true, retryMax: 3 },
 };
 
@@ -64,14 +61,10 @@ const around = (runs: IFakeRoute): IFakeRoute[] => [
   { match: 'GET /api/admin/sources', respond: () => ({ status: 200, body: { items: SOURCES } }) },
   { match: 'GET /api/admin/pipeline', respond: () => ({ status: 200, body: PIPELINE }) },
   {
-    match: 'GET /api/contractors/summary',
+    match: 'GET /api/admin/summary',
     respond: () => ({
       status: 200,
-      body: {
-        byIdentity: [],
-        totals: { companies: 12334, projects: 4071, documents: 98213, pendingMerges: 3, lonelyCompanies: 10 },
-        refresh: { active: null, lastFailure: null, running: false, stale: true, staleReasons: [] },
-      },
+      body: { totals: { companies: 12334, groups: 12, unidentified: 340, projects: 4071, documents: 98213, pendingMerges: 3 } },
     }),
   },
 ];
@@ -99,7 +92,10 @@ describe('«Обработка»: состояния загрузки', () => {
     renderWithProviders(<RunsPage />, '/admin/process');
     expect(await screen.findByText(/Разборов по фильтру нет/)).toBeTruthy();
     // Число и слово — через неразрывный пробел: «98 213» и «текстов» не разъезжаются по строкам.
-    expect((await screen.findByText(/В базе:/)).parentElement?.textContent).toMatch(/12\s334\sкомпании, 4\s071\sобъект, 98\s213\sтекстов/);
+    // Компании — числами вкладок каталога (юрлица, группы, имена без ИНН), тексты — публикации источников.
+    expect((await screen.findByText(/В базе:/)).parentElement?.textContent).toMatch(
+      /12\s334\sкомпании, 12\sгрупп, 340\sимён без ИНН, 4\s071\sобъект, 98\s213\sтекстов/,
+    );
   });
 });
 

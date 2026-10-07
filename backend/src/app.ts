@@ -27,7 +27,6 @@ import { catalogRouter } from './api/companyCatalog.js';
 import { companyManageRouter } from './api/companyManage.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { graphRouter } from './api/graph.routes.js';
-import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
 import { reprocessRouter } from './api/reprocess.routes.js';
 import { revisionsRouter } from './api/revisions.routes.js';
@@ -81,7 +80,6 @@ export const dataRouters = (service: AuthService, passkeys: PasskeyService | nul
   ['/catalog', catalogRouter],
   ['/companies', companiesRouter],
   ['/companies', companyManageRouter],
-  ['/contractors', contractorsRouter],
   ['', entitiesRouter],
   ['/admin', adminRouter],
   ['/admin', llmRouter],

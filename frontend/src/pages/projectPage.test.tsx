@@ -216,13 +216,15 @@ describe('Объект', () => {
     await waitFor(() => expect(api.calls.some(c => c.url.startsWith('/api/graph?projectId=56'))).toBe(true));
   });
 
-  it('публикации об объекте — разделом страницы (общей ленты нет): тема, канал, дата, ссылка на публикацию', async () => {
+  it('публикации об объекте — разделом страницы (общей ленты нет): та же карточка, что у компании, пост — окном', async () => {
     setup('/projects/56');
     const section = (await screen.findByRole('heading', { level: 2, name: 'Публикации об объекте' })).closest('details')!;
     expect(section.open).toBe(true);
-    const link = await within(section).findByRole('link', { name: 'Начато строительство корпуса 2' });
-    expect(link.getAttribute('href')).toBe('/documents/902');
-    expect(within(section).getByText('@stroi_news · 20.09.2026')).toBeTruthy();
+    const card = await within(section).findByRole('button', { name: /^20 сентября, @stroi_news, Начато строительство корпуса 2$/ });
+    // Тема — подпись модели, не заголовок источника (headline@1): пометка та же, что в читалке компании.
+    expect(within(card).getByText(/тема от модели/)).toBeTruthy();
+    fireEvent.click(card);
+    expect(await screen.findByRole('dialog', { name: 'Публикация: @stroi_news' })).toBeTruthy();
   });
 
   it('404 — «Объект не найден», сбой сервера — ошибка словами и «Повторить»', async () => {

@@ -176,18 +176,6 @@ describe('снимок сигналов на срез', () => {
     const delay = (res.body.projectEvents as Array<Record<string, unknown>>).find(e => e.type === 'delay');
     expect(delay).toMatchObject({ overlap: 'no_overlap', sameBuilding: false, namesCompany: false });
   });
-
-  it('список подрядчиков читает снимок: без индекса риска и сортировки по нему', async () => {
-    const res = await api.call('GET', '/api/contractors?role=contractor', undefined);
-    expect(res.status).toBe(200);
-    const items = res.body.items as Array<Record<string, unknown>>;
-    expect(items.map(i => i.companyId)).toEqual([alfa]);
-    expect(items[0]).not.toHaveProperty('riskScore');
-    expect(items[0]).toMatchObject({ projects: 1, publications: expect.any(Number) });
-    expect((await api.call('GET', '/api/contractors?sort=risk', undefined)).status).toBe(400);
-    const all = await api.call('GET', '/api/contractors?includeInsufficient=true&sort=name', undefined);
-    expect((all.body.items as Array<{ companyId: number }>).map(i => i.companyId)).toContain(empty);
-  });
 });
 
 describe('TC-064: сбой пересчёта и детерминизм', () => {

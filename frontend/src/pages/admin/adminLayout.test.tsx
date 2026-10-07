@@ -12,12 +12,9 @@ import { AccountPage } from '../AccountPage';
 import { AdminLayout } from './AdminLayout';
 
 const PIPELINE = {
-  queue: [],
   revisions: [],
   failures: [],
   model: { ok: false, error: 'LM Studio не отвечает', models: [] },
-  extractions: [],
-  rejectedEvents: [],
   worker: { ingestEnabled: true, pipelineEnabled: true, autoPublish: false, metricsAutoRefresh: false, retryEnabled: true, retryMax: 3 },
 };
 

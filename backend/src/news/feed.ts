@@ -46,6 +46,8 @@ export interface INewsItem {
   at: string;
   title: string;
   detail: string | null;
+  /** Суммы по строкам (производство ФССП — долг по документу) числом; текст денег — на экране, суммы не складываются. */
+  amounts?: Array<{ label: string; rub: number | null }>;
   companies: INewsCompany[];
   project: { id: number; name: string } | null;
   /** Основание: публикация (id документа), страница ДОМ.РФ, раздел карточки компании. */
@@ -207,7 +209,6 @@ const COMPANIES_BY_INN_SQL = `
   FROM entity_identifiers ei JOIN companies c ON c.id = ei.company_id AND c.merged_into_id IS NULL
   WHERE ei.identifier_type = 'inn' AND ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.value = ANY($1::text[])`;
 
-const moneyText = (n: number): string => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
 
 /** ЕФРСБ: появление компании или новые сообщения о судебных актах — заголовок и подробности; null — нового нет. */
 export const efrsbItem = (prevPayload: IDatasetPayload, payload: IDatasetPayload): { title: string; detail: string | null } | null => {
@@ -275,14 +276,15 @@ export const recordItems = (
     const before = new Set(fsspProceedings(row.prev).map(p => p.number));
     const fresh = fsspProceedings(row.payload).filter(p => !before.has(p.number));
     if (fresh.length === 0) return [];
-    const debt = fresh.reduce((sum, p) => sum + (p.debt ?? 0), 0);
+    // Долг — по каждому производству отдельно, числом: суммы не складываются (ADR-009), текст денег — на экране.
     return [
       {
         key: `fssp:${row.inn}:${at}`,
         kind: 'fssp',
         at,
         title: `Новые исполнительные производства: ${fresh.length}`,
-        detail: debt > 0 ? `сумма долга по документам ${moneyText(debt)}` : null,
+        detail: fresh.length > NUMBERS_SHOWN ? 'и другие' : null,
+        amounts: fresh.slice(0, NUMBERS_SHOWN).map(p => ({ label: p.number, rub: p.debt ?? null })),
         companies,
         project: null,
         source: { kind: 'fssp', documentId: null, href: checksHref },

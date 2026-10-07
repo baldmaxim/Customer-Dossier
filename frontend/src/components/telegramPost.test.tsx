@@ -124,9 +124,9 @@ describe('Сохранённая публикация поверх страни�
     renderWithProviders(
       <PublicationSourceButton
         source={{
-          evidenceId: 77, quote: 'Начало работ', sourceTitle: 'Стройканал', sourceKey: 'stroykanal', sourceKind: 'telegram',
+          sourceTitle: 'Стройканал', sourceKey: 'stroykanal', sourceKind: 'telegram',
           url: 'https://t.me/stroykanal/44', observedAt: '2026-09-18T07:30:00Z', title: null, revisionId: 9,
-          publishedAt: '2026-09-18T07:00:00Z', stance: 'supports',
+          publishedAt: '2026-09-18T07:00:00Z',
         }}
       />,
     );

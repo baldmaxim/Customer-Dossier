@@ -1,5 +1,5 @@
-// Строка итогов «В базе: N компаний, M объектов, K текстов» и когда посчитаны показатели.
-// Раньше те же числа стояли на «Конвейере» и на «Результате» — по одному разу на каждом.
+// Строка итогов «В базе: N компаний, M групп, K имён без ИНН, объекты, тексты». Компании — те же числа, что вкладки
+// каталога на главной (одно правило, что считается компанией), тексты — публикации, как в списке источников.
 
 import { FC } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -7,8 +7,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ISummaryResponse } from '../../api/types';
 import { formatCountWord } from '../../lib/format';
-import { formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import { Button } from '../ui/Button';
+import { Callout } from '../ui/Callout';
 import { Loading } from '../ui/Loading';
 import { Skeleton } from '../ui/Skeleton';
 import styles from './Runs.module.css';
@@ -16,7 +17,7 @@ import styles from './Runs.module.css';
 export const BaseTotals: FC = () => {
   const summary = useQuery({
     queryKey: ['summary'],
-    queryFn: () => api.get<ISummaryResponse>('/api/contractors/summary'),
+    queryFn: () => api.get<ISummaryResponse>('/api/admin/summary'),
   });
 
   if (summary.isLoading) {
@@ -26,27 +27,37 @@ export const BaseTotals: FC = () => {
       </Loading>
     );
   }
-  if (summary.isError) return <p className={styles.totalsMuted}>Итоги по базе не получены: {describeLoadError(summary.error)}</p>;
+  if (summary.isError) {
+    return (
+      <Callout
+        tone="danger"
+        title="Итоги по базе не получены"
+        action={
+          <Button size="sm" onClick={() => void summary.refetch()}>
+            Повторить
+          </Button>
+        }
+      >
+        {describeLoadError(summary.error)}
+      </Callout>
+    );
+  }
 
   const totals = summary.data?.totals;
-  const refresh = summary.data?.refresh;
   return (
     <div className={styles.totalsBlock}>
       <p className={styles.totals}>
         {totals ? (
           <>
             <span className={styles.totalsLead}>В базе:</span> {formatCountWord(totals.companies, ['компания', 'компании', 'компаний'])},{' '}
+            {formatCountWord(totals.groups, ['группа', 'группы', 'групп'])},{' '}
+            {formatCountWord(totals.unidentified, ['имя без ИНН', 'имени без ИНН', 'имён без ИНН'])},{' '}
             {formatCountWord(totals.projects, ['объект', 'объекта', 'объектов'])},{' '}
             {formatCountWord(totals.documents, ['текст', 'текста', 'текстов'])}.
           </>
         ) : (
           'В базе пока пусто.'
         )}
-      </p>
-      <p className={styles.totalsMuted}>
-        {refresh?.active
-          ? `Показатели компаний посчитаны ${formatDateTime(refresh.active.cutoffAt)}${refresh.stale ? ' — устарели' : ''}.`
-          : 'Показатели компаний ещё не считались.'}
       </p>
     </div>
   );

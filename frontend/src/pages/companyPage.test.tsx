@@ -450,10 +450,14 @@ describe('Карточка компании', () => {
     expect(fact('Чистая прибыль (убыток)').textContent).toMatch(/в 2024 — [−-]4,7\sмлрд\s₽/);
     expect(within(section).getByText('65 чел. в 2025; в 2024 — 31')).toBeTruthy();
     expect(within(section).getByText(/недоимка 99,1 млн ₽ · пени 20,1 млн ₽ · штрафы 0 ₽/)).toBeTruthy();
-    expect(within(section).getAllByText('нет')).toHaveLength(2);
-    // tax-map@2: правонарушения и число юрлиц руководителя — словами ФНС; действующий статус не повторяется.
+    // Долг перед приставами — в блоке ФССП, а не признаком ФНС: остаётся одно «нет» (отчётность сдаётся).
+    expect(within(section).getAllByText('нет')).toHaveLength(1);
+    expect(within(section).queryByText(/приставами/)).toBeNull();
+    // tax-map@2: правонарушения и число юрлиц руководителя — словами ФНС. Кто руководитель и статус — в ЕГРЮЛ,
+    // ФНС их не повторяет.
     expect(within(section).getByText(/^2024 — штрафы 15\s?000\s₽$/)).toBeTruthy();
-    expect(within(section).getByText('ИВАНОВ ИВАН ИВАНОВИЧ, генеральный директор — руководитель в 7 юрлицах, считая эту')).toBeTruthy();
+    expect(within(section).getByText('руководитель — в 7 юрлицах, считая эту')).toBeTruthy();
+    expect(within(section).queryByText(/ИВАНОВ ИВАН/)).toBeNull();
     expect(within(section).queryByText('Статус по ФНС')).toBeNull();
     // Таблица по годам — под раскрытием, со ссылкой на PDF отчёта.
     fireEvent.click(within(section).getByText('Все годы — 2'));

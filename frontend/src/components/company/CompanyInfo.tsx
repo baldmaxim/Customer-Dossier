@@ -15,7 +15,7 @@
 import { FC, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import type { ICompanyResponse } from '../../api/types';
+import type { ICompanyResponse, IFocusView } from '../../api/types';
 import { scrollBehavior } from '../../lib/motion';
 import { CompanyBrief } from '../CompanyBrief';
 import { CompanyPartners } from '../CompanyPartners';
@@ -39,12 +39,14 @@ const LEGAL_IDENTIFIERS = new Set(['inn', 'ogrn', 'ogrnip']);
 export const hasLegalIdentifier = (data: ICompanyResponse): boolean =>
   (data.identifiers ?? []).some(i => LEGAL_IDENTIFIERS.has(i.type) && i.validationStatus === 'checksum_valid');
 
-/** Строки Фокуса, которые шапка карточки уже показала: статус, руководитель, адрес — всегда (шапка берёт их
- * из того же ответа), наименование — если оно заголовок, КПП — если он среди реквизитов. */
-const headerFocusKeys = (data: ICompanyResponse): ReadonlySet<string> => {
-  const keys = new Set(['status', 'heads', 'address']);
+/** Строки Фокуса, которые шапка карточки уже показала: статус, руководитель, адрес и форма собственности — всегда
+ * (шапка берёт их из того же ответа), наименование — если оно заголовок, КПП — если среди реквизитов тот же КПП
+ * (другой — честное расхождение источников, его видно). */
+const headerFocusKeys = (data: ICompanyResponse, focus: IFocusView | undefined): ReadonlySet<string> => {
+  const keys = new Set(['status', 'heads', 'address', 'opf']);
   if (data.egrul?.name) keys.add('name');
-  if ((data.identifiers ?? []).some(i => i.type === 'kpp')) keys.add('kpp');
+  const kpp = focus?.fields.find(f => f.key === 'kpp')?.value;
+  if (kpp && (data.identifiers ?? []).some(i => i.type === 'kpp' && i.value === kpp)) keys.add('kpp');
   return keys;
 };
 
@@ -70,7 +72,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
   const identified = hasLegalIdentifier(data);
   const focus = useCompanyFocus(companyId, identified);
   const headerAddress = focus.data?.summary?.address ?? data.registry?.address ?? null;
-  const focusHidden = useMemo(() => headerFocusKeys(data), [data]);
+  const focusHidden = useMemo(() => headerFocusKeys(data, focus.data), [data, focus.data]);
   const registryOmit = useMemo(() => shownRegistryRows(data, headerAddress), [data, headerAddress]);
   const items = objects.data?.items ?? [];
   const location = useLocation();

@@ -12,6 +12,7 @@
 
 import { query } from '../db/pool.js';
 import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
+import { liveMentionSql } from './legacyMentions.js';
 
 /** Что сказано о компании в этой публикации. Одна строка — одно опубликованное утверждение. */
 export interface IPublicationFact {
@@ -91,7 +92,7 @@ const ITEMS_SQL = `
     SELECT DISTINCT r.source_item_id
     FROM mentions m
     JOIN document_revisions r ON r.legacy_document_id = m.document_id
-    WHERE m.entity_kind = 'company' AND m.entity_id = $1
+    WHERE m.entity_kind = 'company' AND m.entity_id = $1 AND ${liveMentionSql('m')}
   )
   SELECT si.id AS "itemId",
          rev.id AS "revisionId",
@@ -162,7 +163,7 @@ const LEGACY_SQL = `
          r.source_item_id AS "itemId", m.role, m.quote
   FROM mentions m
   JOIN document_revisions r ON r.legacy_document_id = m.document_id
-  WHERE m.entity_kind = 'company' AND m.entity_id = $2::bigint
+  WHERE m.entity_kind = 'company' AND m.entity_id = $2::bigint AND ${liveMentionSql('m')}
     AND r.source_item_id = ANY($1::bigint[])
   ORDER BY r.source_item_id, m.quote, m.id`;
 

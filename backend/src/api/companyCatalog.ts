@@ -25,6 +25,8 @@ import { registerReadCache } from '../utils/readCaches.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
 import { ttlCache } from '../utils/ttlCache.js';
 
+import { liveMentionSql } from './legacyMentions.js';
+
 export const CATALOG_VIEWS = ['legal', 'groups', 'unidentified'] as const;
 export type CatalogView = (typeof CATALOG_VIEWS)[number];
 
@@ -183,7 +185,7 @@ const ROWS_SQL = `
     UNION
     SELECT m.entity_id, r.source_item_id
     FROM mentions m JOIN document_revisions r ON r.legacy_document_id = m.document_id
-    WHERE m.entity_kind = 'company'
+    WHERE m.entity_kind = 'company' AND ${liveMentionSql('m')}
   ),
   fam AS MATERIALIZED (
     SELECT 'c' || id AS head, id AS member FROM base
@@ -339,15 +341,25 @@ const loadCatalogCounts = shareInFlight(
     ),
 );
 
+/** Числа вкладок каталога — их же показывает строка «В базе» админки: одно правило, что такое компания портала. */
+export const catalogCounts = async (): Promise<ICatalogResponse['counts']> => {
+  const counts = await loadCatalogCounts('all');
+  const byView = Object.fromEntries(CATALOG_VIEWS.map(v => [v, counts.find(c => c.view === v)?.n ?? 0])) as Record<CatalogView, number>;
+  byView.legal += counts.find(c => c.view === 'registry_groups')?.n ?? 0;
+  return {
+    ...byView,
+    watched: counts.reduce((sum, c) => sum + c.watched, 0),
+    dismissed: counts.find(c => c.view === 'dismissed')?.n ?? 0,
+  };
+};
+
 export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogResponse> => {
   const sql = ROWS_SQL.replaceAll('%ORDER%', orderBy(params.view, params.sort));
   // Строки и числа вкладок друг от друга не зависят — параллельно (07.10.2026): каждый запрос считает базу заново.
   const [rows, counts] = await Promise.all([
     query<IRowSql>(sql, [params.view, params.watch, params.role === 'any' ? null : params.role, CATALOG_LIMIT]),
-    loadCatalogCounts('all'),
+    catalogCounts(),
   ]);
-  const byView = Object.fromEntries(CATALOG_VIEWS.map(v => [v, counts.find(c => c.view === v)?.n ?? 0])) as Record<CatalogView, number>;
-  byView.legal += counts.find(c => c.view === 'registry_groups')?.n ?? 0;
   return {
     view: params.view,
     items: rows.map(row => {
@@ -375,11 +387,7 @@ export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogRespons
       };
     }),
     total: rows[0]?.total ?? 0,
-    counts: {
-      ...byView,
-      watched: counts.reduce((sum, c) => sum + c.watched, 0),
-      dismissed: counts.find(c => c.view === 'dismissed')?.n ?? 0,
-    },
+    counts,
   };
 };
 

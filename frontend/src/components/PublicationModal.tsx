@@ -4,13 +4,24 @@
 
 import { FC, useState } from 'react';
 
-import type { IStatement } from '../api/types';
 import { sourceLabel } from '../lib/labels';
 import { TelegramPost } from './TelegramPost';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
 
-type PublicationSource = IStatement['quotes'][number];
+/** Что нужно, чтобы показать публикацию: источник цитаты (IStatement.quotes) или строка ленты (IPublicationListItem). */
+export interface IPublicationRef {
+  sourceTitle: string;
+  sourceKey?: string | null;
+  sourceKind?: string | null;
+  revisionId?: number | null;
+  publishedAt: string | null;
+  observedAt?: string;
+  url?: string | null;
+  title?: string | null;
+}
+
+type PublicationSource = IPublicationRef;
 
 const labelOf = (source: PublicationSource): string =>
   sourceLabel({ sourceTitle: source.sourceTitle, sourceKey: source.sourceKey, sourceKind: source.sourceKind ?? '' });
@@ -18,7 +29,7 @@ const labelOf = (source: PublicationSource): string =>
 export const PublicationSourceButton: FC<{ source: PublicationSource }> = ({ source }) => {
   const [open, setOpen] = useState(false);
   const label = labelOf(source);
-  if (source.revisionId === undefined || !source.observedAt) return <span>{label}</span>;
+  if (source.revisionId === undefined || source.revisionId === null || !source.observedAt) return <span>{label}</span>;
   return (
     <>
       <Button variant="link" size="sm" onClick={() => setOpen(true)} aria-label={`${label} — открыть публикацию`}>

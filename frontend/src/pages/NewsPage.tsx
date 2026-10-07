@@ -23,11 +23,15 @@ import { Segmented } from '../components/ui/Segmented';
 import { Stack } from '../components/ui/Stack';
 import { enumParam, useUrlState } from '../hooks/useUrlState';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, NEWS_KIND_LABELS, NEWS_SOURCE_LABELS, formatDate, formatTime } from '../lib/labels';
+import { ASSERTION_ROLE_LABELS, NEWS_KIND_LABELS, NEWS_SOURCE_LABELS, formatDate, formatMoney, formatTime } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import styles from './NewsPage.module.css';
 
 const SCOPES = ['all', 'watched'] as const;
+
+/** «№ 1-ИП — 1,2 млн ₽; № 2-ИП; и другие»: суммы по строкам — тем же formatMoney, что карточка; не складываются. */
+const detailText = (item: INewsItem): string =>
+  [...(item.amounts ?? []).map(a => (a.rub !== null ? `${a.label} — ${formatMoney(a.rub)}` : a.label)), ...(item.detail ? [item.detail] : [])].join('; ');
 const KINDS = ['any', 'new_project', 'deadline_shift', 'court_case', 'fssp', 'bankruptcy'] as const;
 /** Окна ленты — те же, что принимает сервер (NEWS_DAYS), строками для адреса. */
 const DAYS = ['7', '14', '30'] as const;
@@ -70,7 +74,7 @@ const NewsRow: FC<{ item: INewsItem; fresh: boolean }> = ({ item, fresh }) => (
         item.title
       )}
     </p>
-    {item.detail && <p className={styles.detail}>{item.detail}</p>}
+    {(item.amounts?.length || item.detail) && <p className={styles.detail}>{detailText(item)}</p>}
     {item.companies.length > 0 && (
       <p className={styles.companies}>
         {item.companies.slice(0, 4).map((c, i) => (
