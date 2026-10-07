@@ -155,7 +155,7 @@ describe('Карточка компании', () => {
     expect(within(reka).getByText('Квартир').nextElementSibling?.textContent).toBe('472');
     expect(within(reka).getByText('ДОМ.РФ · фото и сведения · на 20.09.2026')).toBeTruthy();
     // Фото — с портала, а не с сайта ДОМ.РФ: браузер читателя к третьим сайтам не ходит.
-    expect(within(reka).getByRole('img', { name: 'Фото: Река' }).getAttribute('src')).toBe('/api/projects/60/photo');
+    expect(within(reka).getByRole('img', { name: 'Фото: Река' }).getAttribute('src')).toBe('/api/projects/60/photo?w=640');
     expect(within(reka).getByRole('link', { name: 'ООО «СЗ Развитие»' }).getAttribute('href')).toBe('/company/70');
     expect(screen.getByText(/Вместе с объектами застройщиков группы: ООО «СЗ Развитие»/)).toBeTruthy();
 

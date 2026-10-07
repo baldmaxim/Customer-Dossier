@@ -19,6 +19,7 @@ import {
 import { loadCompanySummary } from '../dossier/companySummary.js';
 import { loadCaseDossier } from '../dossier/load.js';
 import { loadProjectDossier } from '../dossier/projectDossier.js';
+import { parseThumbWidth, photoThumb } from '../registry/photoThumbs.js';
 import { photoFile, readPhotoMeta } from '../registry/photos.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
@@ -191,12 +192,26 @@ dossierRouter.get('/projects/:id/photo', async (req, res) => {
     res.status(404).json({ error: 'Фото объекта нет' });
     return;
   }
+  // ?w=640 — уменьшенная WebP-копия для карточек в сетке (registry/photoThumbs.ts); без w — снимок как есть.
+  const width = parseThumbWidth(req.query.w);
   const meta = readPhotoMeta(ref);
-  if (meta && req.headers['if-none-match'] === `"${meta.sha256}"`) {
+  const etag = meta ? `"${meta.sha256}${width ? `-w${width}` : ''}"` : null;
+  if (etag && req.headers['if-none-match'] === etag) {
     res.status(304).end();
     return;
   }
   res.setHeader('Cache-Control', 'private, max-age=86400');
+  if (width) {
+    try {
+      const thumb = await photoThumb(file, width);
+      if (etag) res.setHeader('ETag', etag);
+      res.type('image/webp').send(thumb);
+      return;
+    } catch (err) {
+      // Копия не получилась (sharp, файл) — отдаём снимок как есть: карточка без фото хуже тяжёлой.
+      console.warn(`[photo] уменьшенная копия ${ref}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   if (meta) res.setHeader('ETag', `"${meta.sha256}"`);
   res.type('image/jpeg');
   fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);

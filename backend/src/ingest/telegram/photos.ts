@@ -15,10 +15,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import type { Sharp, SharpOptions } from 'sharp';
+import type { SharpOptions } from 'sharp';
 
 import { env } from '../../config/env.js';
 import { NetworkPolicyError, safeFetchBytes, type SafeTransport } from '../../net/safeFetch.js';
+import { loadSharp } from '../../utils/sharp.js';
 import { MAX_POST_IMAGES, TELEGRAM_CDN_POLICY, type ITelegramImage } from '../telegramWeb.js';
 
 /** Длинная сторона копии: пост на экране — до 600 px, на ретине — до 1200 px. */
@@ -33,23 +34,6 @@ export const MAX_ATTEMPTS = 3;
 
 const META_VERSION = 'tg-photo@1';
 const ACCEPTED_FORMATS = new Set(['jpeg', 'png', 'webp']);
-
-type SharpFactory = (input: Buffer, options: SharpOptions) => Sharp;
-let sharpFactory: Promise<SharpFactory> | null = null;
-
-/**
- * sharp — нативная библиотека: грузится при первой картинке, а не при старте API. Не загрузилась (нет сборки
- * под платформу) — падают только картинки, сбор текста и портал работают.
- */
-const loadSharp = (): Promise<SharpFactory> => {
-  sharpFactory ??= import('sharp').then(({ default: sharp }) => {
-    // Один процесс API: сжатие по одной картинке, без кэша libvips — память контейнера ограничена.
-    sharp.cache(false);
-    sharp.concurrency(1);
-    return (input, options) => sharp(input, options);
-  });
-  return sharpFactory;
-};
 
 export interface IPostImageMeta {
   /** Порядок в посте, с нуля. */

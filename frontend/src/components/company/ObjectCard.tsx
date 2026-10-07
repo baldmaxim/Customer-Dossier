@@ -65,7 +65,7 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
     <article className={`${styles.card} row-link`}>
       <div className={styles.media}>
         {o.registry?.hasPhoto ? (
-          <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} fallback={placeholder} />
+          <ObjectPhoto projectId={o.projectId} name={o.name} className={styles.photo} thumb fallback={placeholder} />
         ) : (
           placeholder
         )}
