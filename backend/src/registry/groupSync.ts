@@ -15,7 +15,7 @@
 
 import type { PoolClient } from 'pg';
 
-import { withTransaction } from '../db/pool.js';
+import { query, withTransaction } from '../db/pool.js';
 import { companyTitle, groupLine } from '../ingest/registry/render.js';
 import { confirmedDomRfGroupCompany, memberOfGroup, writeRegistryAssertion } from './publish.js';
 
@@ -37,7 +37,6 @@ interface IDeveloperRow {
   dev_name: string;
   legal_form: string | null;
   group_name: string | null;
-  body: string;
 }
 
 const syncOne = async (client: PoolClient, row: IDeveloperRow): Promise<IGroupSyncResult> => {
@@ -80,9 +79,12 @@ const syncOne = async (client: PoolClient, row: IDeveloperRow): Promise<IGroupSy
   ).rows[0]?.present;
   let linked = 0;
   if (!present && row.group_name) {
+    // Текст редакции — только когда связь пишется: раньше он грузился для каждой страницы застройщика на каждом шаге.
+    const body = (await client.query<{ body: string }>('SELECT body FROM document_revisions WHERE id = $1', [row.revision_id])).rows[0]?.body;
+    if (body === undefined) return { linked: 0, withdrawn: withdrawn.rowCount ?? 0 };
     const written = await writeRegistryAssertion(client, {
       revisionId: Number(row.revision_id),
-      body: row.body,
+      body,
       content: memberOfGroup(companyId, target),
       line: groupLine(companyTitle(row.dev_name, row.legal_form), row.group_name),
     });
@@ -90,6 +92,24 @@ const syncOne = async (client: PoolClient, row: IDeveloperRow): Promise<IGroupSy
   }
   return { linked, withdrawn: withdrawn.rowCount ?? 0 };
 };
+
+/**
+ * Подпись данных, от которых зависит синхронизация (07.10.2026): новый снимок страницы застройщика, решение по
+ * странице группы, слияние или его отмена. Работник ДОМ.РФ синхронизирует только при смене подписи (и не реже
+ * раза в 10 минут — на случай изменения, которого подпись не видит): раньше каждый шаг перечитывал все страницы.
+ */
+export const groupSyncSignature = async (): Promise<string> =>
+  (
+    await query<{ sig: string }>(
+      `SELECT concat_ws('|',
+         (SELECT max(id) FROM registry_records WHERE record_type = 'developer'),
+         (SELECT max(decided_at) FROM domrf_company_links WHERE kind = 'group'),
+         (SELECT count(*) FROM domrf_company_links WHERE kind = 'group' AND state <> 'pending'),
+         (SELECT max(id) FROM domrf_cards),
+         (SELECT max(id) FROM entity_merges),
+         (SELECT max(undone_at) FROM entity_merges)) AS sig`,
+    )
+  )[0]?.sig ?? '';
 
 /** Один проход по всем прочитанным страницам застройщиков; каждая — своей транзакцией. */
 export const syncDomRfGroupRelations = async (): Promise<IGroupSyncResult> => {
@@ -100,12 +120,10 @@ export const syncDomRfGroupRelations = async (): Promise<IGroupSyncResult> => {
                 r.external_ref AS dev_ref, coalesce(c.merged_into_id, c.id) AS company_id, r.revision_id, d.group_ref,
                 r.payload->'identity'->>'name' AS dev_name,
                 r.payload->'identity'->'developer'->>'legalForm' AS legal_form,
-                r.payload->'identity'->>'groupName' AS group_name,
-                rev.body
+                r.payload->'identity'->>'groupName' AS group_name
          FROM registry_records r
          JOIN companies c ON c.id = r.company_id
          JOIN domrf_cards d ON d.kind = 'developer' AND d.external_ref = r.external_ref
-         JOIN document_revisions rev ON rev.id = r.revision_id
          WHERE r.record_type = 'developer' AND r.payload->>'captureMethod' = 'browser_page'
          ORDER BY r.external_ref, r.fetched_at DESC`,
       )
@@ -113,6 +131,8 @@ export const syncDomRfGroupRelations = async (): Promise<IGroupSyncResult> => {
   );
   const total: IGroupSyncResult = { linked: 0, withdrawn: 0 };
   for (const row of rows) {
+    // Страница без группы: syncOne ничего не делает — и транзакцию не открываем.
+    if (!row.group_ref) continue;
     const result = await withTransaction(client => syncOne(client, row));
     total.linked += result.linked;
     total.withdrawn += result.withdrawn;

@@ -33,6 +33,10 @@ const INGEST_TICK_MS = 60_000;
 
 /** Как часто воркер заглядывает в очередь извлечения. */
 const PIPELINE_TICK_MS = 30_000;
+/** Пауза перед следующим проходом, когда прежний забрал полную пачку. */
+const PIPELINE_AGAIN_MS = 1_000;
+/** Сколько действует удачная проверка модели перед проходом. */
+const PROBE_OK_MS = 2 * 60_000;
 
 const startIngestScheduler = (signal: AbortSignal): void => {
   let running = false;
@@ -73,22 +77,35 @@ const startPipelineWorker = (signal: AbortSignal): void => {
   const provider = lmStudioProvider();
   // Печатаем недоступность модели один раз, а не каждые полминуты.
   let reportedSkip: string | null = null;
+  // Удачная проверка модели действует PROBE_OK_MS (07.10.2026): у OpenRouter это три запроса через туннель каждые
+  // 30 с. Неудача не запоминается; упавший или неполный запуск в проходе сбрасывает запомненный успех.
+  let probedOkAt = 0;
+  const probeModel = async (): Promise<{ ok: boolean; error?: string }> => {
+    if (Date.now() - probedOkAt < PROBE_OK_MS) return { ok: true };
+    const probe = await checkLlmConnection(modelProbeTimeoutMs());
+    probedOkAt = probe.ok ? Date.now() : 0;
+    return probe;
+  };
 
   const tick = async (): Promise<void> => {
     // Запуск обрабатывается дольше тика: наложение проходов дало бы двойную нагрузку на GPU.
     if (running || signal.aborted) return;
     running = true;
+    // Полная пачка — в очереди, скорее всего, есть ещё: следующий проход сразу, а не через PIPELINE_TICK_MS.
+    let again = false;
     try {
       const pass = await runReprocessPass(provider, {
         autoPublish: env.REPROCESS_AUTO_PUBLISH,
         enqueueLimit: env.EXTRACT_BATCH_SIZE,
-        probeModel: () => checkLlmConnection(modelProbeTimeoutMs()),
+        probeModel,
         // Полосы разбора: у облака 4 по умолчанию, у LM Studio 1 (REPROCESS_CONCURRENCY).
         concurrency: env.REPROCESS_CONCURRENCY,
         retry: env.REPROCESS_RETRY_ENABLED
           ? { max: env.REPROCESS_RETRY_MAX, backoffMinutes: env.REPROCESS_RETRY_BACKOFF_MIN }
           : null,
       });
+      if (pass.results.some(r => r.error !== null || (r.run !== null && r.run.status !== 'completed'))) probedOkAt = 0;
+      again = pass.skipped === null && pass.results.length >= env.EXTRACT_BATCH_SIZE;
       if (pass.skipped !== null) {
         // Ни постановки, ни вызовов модели, ни тем: редакции ждут, ничего не сгорает.
         if (pass.skipped !== reportedSkip) {
@@ -151,6 +168,7 @@ const startPipelineWorker = (signal: AbortSignal): void => {
     } finally {
       running = false;
     }
+    if (again && !signal.aborted) setTimeout(() => void tick(), PIPELINE_AGAIN_MS);
   };
 
   const timer = setInterval(() => void tick(), PIPELINE_TICK_MS);

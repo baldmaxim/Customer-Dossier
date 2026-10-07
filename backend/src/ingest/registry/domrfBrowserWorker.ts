@@ -50,7 +50,7 @@ import {
   type IDomRfTarget,
 } from './domrfTargets.js';
 import { importRegistryPayload } from './importFile.js';
-import { syncDomRfGroupRelations } from '../../registry/groupSync.js';
+import { groupSyncSignature, syncDomRfGroupRelations } from '../../registry/groupSync.js';
 import { withdrawModelExtractionOnRegistry } from '../../registry/modelArtifacts.js';
 import { PHOTO_MAX_WIDTH, hasPhoto, markNoPhoto, needsPhoto, photosEnabled, readPhotoMeta, savePhoto } from '../../registry/photos.js';
 
@@ -328,6 +328,9 @@ const sourceApproved = (): Promise<boolean> => approvedSource().then(
  */
 const PAGES_EVERY = 4;
 let passNo = 0;
+/** Синхронизация групп без смены данных — не чаще. */
+const GROUP_SYNC_EVERY_MS = 10 * 60_000;
+let groupSync = { signature: '', at: 0 };
 
 /**
  * Один шаг: карточки объектов, страницы застройщиков и групп, серия поисков компаний портала в
@@ -343,10 +346,15 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   if (extraction.evidence + extraction.runs > 0) {
     prefix.push({ what: 'разбор моделью по снимкам реестра', outcome: `снято доказательств ${extraction.evidence}, запусков ${extraction.runs}` });
   }
-  // Связи «застройщик входит в группу» — к компании, подтверждённой для страницы группы (ADR-012 п. 33).
-  const groups = await syncDomRfGroupRelations();
-  if (groups.linked + groups.withdrawn > 0) {
-    prefix.push({ what: 'связи с группами', outcome: `записано ${groups.linked}, снято ${groups.withdrawn}` });
+  // Связи «застройщик входит в группу» — к компании, подтверждённой для страницы группы (ADR-012 п. 33). Только при
+  // смене данных или раз в GROUP_SYNC_EVERY_MS (registry/groupSync.ts, groupSyncSignature).
+  const signature = await groupSyncSignature();
+  if (signature !== groupSync.signature || Date.now() - groupSync.at >= GROUP_SYNC_EVERY_MS) {
+    const groups = await syncDomRfGroupRelations();
+    groupSync = { signature, at: Date.now() };
+    if (groups.linked + groups.withdrawn > 0) {
+      prefix.push({ what: 'связи с группами', outcome: `записано ${groups.linked}, снято ${groups.withdrawn}` });
+    }
   }
   passNo += 1;
   // Каждый второй шаг (кроме шагов страниц застройщиков) — добор фото у снятых раньше объектов, пока такие есть.
