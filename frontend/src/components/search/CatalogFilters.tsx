@@ -1,5 +1,6 @@
-// Фильтры каталога: «только на контроле», роль, порядок. С 600px — одной строкой; на телефоне свёрнуты
-// в строку-сводку («Все роли · по числу объектов»): развёрнутые они занимали полэкрана до первой компании.
+// Фильтры каталога: «только на контроле», роль, порядок. С 600px — одной строкой; на телефоне (и на телефоне
+// боком — sm без MQ.tall) свёрнуты в строку-сводку («Все роли · по числу объектов»): развёрнутые они занимали
+// полэкрана до первой компании.
 //
 // Роль — свойство связи, а не компании: одна фирма бывает заказчиком на одном объекте и подрядчиком на
 // другом. Поэтому фильтр подписан «выступала в роли», и компания честно попадает сразу в несколько фильтров.
@@ -23,6 +24,7 @@ interface ICatalogFiltersProps {
 
 export const CatalogFilters: FC<ICatalogFiltersProps> = ({ params }) => {
   const wide = useMediaQuery(MQ.sm);
+  const tall = useMediaQuery(MQ.tall);
   const roleId = useId();
 
   const controls = (
@@ -44,7 +46,7 @@ export const CatalogFilters: FC<ICatalogFiltersProps> = ({ params }) => {
     </div>
   );
 
-  if (wide) return controls;
+  if (wide && tall) return controls;
 
   return (
     <Disclosure

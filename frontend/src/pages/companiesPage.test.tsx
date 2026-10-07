@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ICatalogRow } from '../api/types';
 import { fakeApi, renderWithProviders, renderWithRouter, type IFakeRoute } from '../test/render';
+import { stubViewport } from '../test/viewport';
 import { CompaniesPage } from './CompaniesPage';
 
 const row = (over: Partial<ICatalogRow> = {}): ICatalogRow => ({
@@ -161,6 +162,16 @@ describe('Главная «Компании»', () => {
     expect(screen.queryByRole('table')).toBeNull();
     expect(within(list).getByText('Москва · ИНН 7707083893 · Действующее · подрядчик')).toBeTruthy();
     const summary = screen.getByText('На контроле · заказчики · по числу объектов');
+    expect((summary.closest('details') as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it('телефон боком: таблица, но фильтры свёрнуты в строку-сводку — высота дороже ширины', async () => {
+    stubViewport(932, 430);
+    fakeApi(routes());
+    renderWithProviders(<CompaniesPage />, '/?role=customer');
+
+    expect(await screen.findByRole('table')).toBeTruthy();
+    const summary = screen.getByText('Заказчики · по числу объектов');
     expect((summary.closest('details') as HTMLDetailsElement).open).toBe(false);
   });
 

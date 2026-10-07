@@ -82,8 +82,9 @@
 }
 
 /* Обе версии в DOM, переключаем атрибутом на <html> — без мигания и без
-   повторной загрузки файла при смене темы. */
-.logoDark {
+   повторной загрузки файла при смене темы. Знак без надписи — только в полосе слева. */
+.logoDark,
+.logoMark {
   display: none;
 }
 
@@ -357,5 +358,112 @@
     height: calc(100dvh - var(--sticky-top));
     padding-top: var(--sp-3);
     padding-bottom: max(var(--sp-3), var(--safe-bottom));
+  }
+}
+
+/* Телефон боком (и любое низкое широкое окно): высоты 360–430px, и липкая шапка
+   отнимала у страницы восьмую часть. Меню — полосой слева, как навигационная рейка Material:
+   ширины в избытке, а сверху страницу больше ничего не закрывает (--sticky-top = safe-top, index.css).
+   Полоса занимает и левый вырез экрана (safe-left): содержимое в ней — правее выреза. */
+@media (min-width: 600px) and (max-height: 500px) {
+  .shell {
+    padding-left: calc(var(--rail-w) + var(--safe-left));
+  }
+
+  .header {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: calc(var(--rail-w) + var(--safe-left));
+    padding: var(--safe-top) 0 var(--safe-bottom) var(--safe-left);
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+  }
+
+  .headerInner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+    height: 100%;
+    max-width: none;
+    padding: var(--sp-2) var(--sp-1);
+    /* 320px в высоту (iPhone SE боком) — пункты не обрезаются, а прокручиваются */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .brand {
+    margin: 0 auto;
+  }
+
+  .logoLight,
+  .logoDark,
+  :global(:root[data-theme='dark']) .logoDark {
+    display: none;
+  }
+
+  .logoMark {
+    display: block;
+    width: 32px;
+    height: 32px;
+  }
+
+  .nav {
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+
+  /* Пункт — иконка над подписью, выбранный — подложкой, как на нижней панели телефона. */
+  .navLink {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px; /* иконка и подпись — один пункт, как на нижней панели */
+    min-height: 52px;
+    padding: var(--sp-1) 2px; /* «Компании» в 12px едва входит в 72px */
+    border-radius: var(--radius);
+    font-size: var(--fs-xs);
+    line-height: var(--lh-tight);
+    text-align: center;
+  }
+
+  .navLink > svg {
+    width: var(--icon-md);
+    height: var(--icon-md);
+  }
+
+  .navLink::after {
+    content: none;
+  }
+
+  .navLink:focus-visible {
+    border-radius: var(--radius);
+  }
+
+  .navLinkActive,
+  .navLinkActive:hover {
+    background: var(--selected-bg);
+    color: var(--accent);
+  }
+
+  .navLabel {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
+  /* Счётчик «Нового» — у иконки, а не третьей строкой под подписью. */
+  .navLabel + span {
+    position: absolute;
+    top: 2px;
+    left: calc(50% + var(--sp-1));
+  }
+
+  .tools {
+    flex-direction: column;
+    margin: auto 0 0;
+  }
+
+  .main {
+    padding-left: var(--gutter);
   }
 }

@@ -1,5 +1,5 @@
-// Оболочка портала: ссылка «К содержанию», шапка с меню (от 600px), main, нижняя панель
-// (телефон), объявление смены страницы для диктора. Страница — children (тесты) или
+// Оболочка портала: ссылка «К содержанию», шапка с меню (от 600px; телефон боком — полосой слева),
+// main, нижняя панель (телефон), объявление смены страницы для диктора. Страница — children (тесты) или
 // дочерний маршрут (<Outlet/> в RouterProvider).
 
 import { FC, ReactNode, useRef } from 'react';
@@ -57,6 +57,8 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
                 мигание, CSS-переключение — нет. */}
             <img className={styles.logoLight} src="/logo-light.svg" alt="Досье Заказчика" />
             <img className={styles.logoDark} src="/logo-dark.svg" alt="" aria-hidden="true" />
+            {/* Знак без надписи — для полосы меню слева (телефон боком): надпись в 72px не входит. */}
+            <img className={styles.logoMark} src="/favicon.svg" alt="" aria-hidden="true" />
           </Link>
 
           <nav className={styles.nav} aria-label="Основная навигация">
@@ -69,7 +71,7 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
                 className={itemClass(styles.navLink ?? '', styles.navLinkActive ?? '', item, pathname)}
               >
                 <Icon name={item.icon} size="sm" />
-                {item.label}
+                <span className={styles.navLabel}>{item.label}</span>
                 {item.counter === 'news' && <NewsCounter />}
               </NavLink>
             ))}

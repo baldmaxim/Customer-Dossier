@@ -253,3 +253,16 @@ td .seedName {
   font-weight: var(--fw-semibold);
   overflow-wrap: break-word;
 }
+
+/* Телефон боком (`(min-width: 600px) and (max-height: 500px)`): над схемой — только сами типы связей. Подпись «Типы связей» остаётся
+   диктору (имя группы — aria-label), на экране она отнимала строку у схемы. */
+@media (min-width: 600px) and (max-height: 500px) {
+  .typesLegend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

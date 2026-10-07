@@ -5,6 +5,8 @@
      md   900px   две колонки, мастер-деталь
      lg  1280px   широкие раскладки
      reader       (min-width: 900px) and (min-height: 600px) — читалка «в один экран»
+     tall         (min-height: 501px); sm без tall — телефон боком, в CSS (min-width: 600px) and (max-height: 500px):
+                  меню полосой слева
    Те же значения — в src/lib/media.ts (MQ) для useMediaQuery. @custom-media без сборщика
    не работает, поэтому числа повторены литералом: меняете здесь — меняйте и там. */
 
@@ -228,6 +230,15 @@
 @media (min-width: 600px) {
   :root {
     --bottom-ui: 0px;
+  }
+}
+
+/* Телефон боком (932×430 и ниже): высота — самое дорогое, ширины в избытке. Меню уходит из шапки
+   в полосу слева (Layout.module.css), сверху страницу ничего не закрывает. */
+@media (min-width: 600px) and (max-height: 500px) {
+  :root {
+    --rail-w: 72px;
+    --sticky-top: var(--safe-top);
   }
 }
 

@@ -50,9 +50,10 @@
   animation: global(sheet-out) var(--dur-exit) var(--ease-in) both;
 }
 
-/* Окно по центру. */
+/* Окно по центру. По бокам — не уже выреза экрана: телефон боком (iPhone) отдаёт safe-left/right ~50px. */
 .dialog[data-variant='modal'] {
-  width: min(var(--dialog-w), calc(100% - 2 * var(--gutter)));
+  --dialog-side: max(var(--gutter), var(--safe-left), var(--safe-right));
+  width: min(var(--dialog-w), calc(100% - 2 * var(--dialog-side)));
   max-width: none;
   max-height: calc(100dvh - 2 * var(--sp-5) - var(--safe-top) - var(--safe-bottom));
   margin: auto;
@@ -66,7 +67,8 @@
 
 @media (min-width: 600px) {
   .dialog[data-variant='auto'] {
-    width: min(var(--dialog-w), calc(100% - 2 * var(--gutter)));
+    --dialog-side: max(var(--gutter), var(--safe-left), var(--safe-right));
+    width: min(var(--dialog-w), calc(100% - 2 * var(--dialog-side)));
     max-height: calc(100dvh - 2 * var(--sp-5) - var(--safe-top) - var(--safe-bottom));
     margin: auto;
     border-width: 1px;
@@ -189,5 +191,26 @@
   .dialog[data-variant='auto'] .footer {
     flex-direction: row;
     align-items: center;
+  }
+}
+
+/* Телефон боком (`(min-width: 600px) and (max-height: 500px)`): окно почти во всю высоту — поля по 24px сверху и снизу отнимали
+   девятую часть экрана, а шапка и кнопки окна — ещё треть. */
+@media (min-width: 600px) and (max-height: 500px) {
+  .dialog[data-variant='modal'],
+  .dialog[data-variant='auto'] {
+    max-height: calc(100dvh - 2 * var(--sp-2) - var(--safe-top) - var(--safe-bottom));
+  }
+
+  .head {
+    padding-top: var(--sp-2);
+  }
+
+  .body {
+    padding-block: var(--sp-3);
+  }
+
+  .footer {
+    padding-block: var(--sp-2);
   }
 }
