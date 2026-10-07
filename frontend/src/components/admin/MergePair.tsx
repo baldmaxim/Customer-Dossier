@@ -9,6 +9,7 @@ import { api } from '../../api/client';
 import type { IMergePreview, IPendingMerge } from '../../api/types';
 import { newKey } from '../../lib/idempotency';
 import { MERGE_REASON_LABELS, MODEL_VERDICT_LABELS, formatPercent } from '../../lib/labels';
+import { MODEL_HINT_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -17,7 +18,7 @@ import { Icon } from '../ui/Icon';
 import { Stack } from '../ui/Stack';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import { MergePreview, mergeFailureText } from './MergePreview';
 import styles from './Merge.module.css';
 
@@ -93,7 +94,7 @@ export const MergePair: FC<IMergePairProps> = ({ pair, open, onToggle }) => {
         </Cluster>
         {pair.modelVerdict && (
           <p className={styles.modelVerdict}>
-            <Badge tone={pair.modelVerdict === 'unsure' ? 'neutral' : 'info'}>{MODEL_VERDICT_LABELS[pair.modelVerdict] ?? pair.modelVerdict}</Badge>{' '}
+            <Badge tone={toneOf(MODEL_HINT_TONE, pair.modelVerdict)}>{MODEL_VERDICT_LABELS[pair.modelVerdict] ?? pair.modelVerdict}</Badge>{' '}
             {pair.modelReason}
             {pair.decisionNote && <span className={styles.modelNote}> Не применено: {pair.decisionNote}</span>}
           </p>

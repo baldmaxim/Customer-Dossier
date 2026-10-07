@@ -6,7 +6,7 @@ import { FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { IAmbiguityCandidate, IAmbiguityDetail } from '../../api/types';
-import { ENTITY_TYPE_LABELS, PROJECT_LEVEL_LABELS, formatIdentifier } from '../../lib/labels';
+import { ENTITY_TYPE_LABELS, NO_IDENTIFIERS_TEXT, PROJECT_LEVEL_LABELS, formatIdentifier } from '../../lib/labels';
 import { Button } from '../ui/Button';
 import type { IAmbiguityChoice } from '../AmbiguityDetail';
 import styles from './Ambiguity.module.css';
@@ -40,7 +40,7 @@ export const AmbiguityCandidates: FC<IAmbiguityCandidatesProps> = ({ entityKind,
           </Link>
           <span className={styles.muted}>{facts}</span>
           <span className={styles.muted}>
-            {c.identifiers.length > 0 ? c.identifiers.map(formatIdentifier).join(', ') : 'реквизитов нет'}
+            {c.identifiers.length > 0 ? c.identifiers.map(formatIdentifier).join(', ') : NO_IDENTIFIERS_TEXT}
             {c.mergedIntoId !== null ? ' · объединена с другой карточкой' : ''}
           </span>
           {c.choice.conflicts.map(x => (

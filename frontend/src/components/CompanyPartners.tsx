@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 
 import type { IPartnerLink } from '../api/types';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, PARTNER_KIND_HINTS, PARTNER_KIND_LABELS } from '../lib/labels';
+import { PARTNER_KIND_HINTS, PARTNER_KIND_LABELS, roleLabel } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import { useCompanyPartners } from './company/useCompanyQueries';
 import { EvidenceButton } from './EvidenceButton';
@@ -33,8 +33,8 @@ const LINKS_SHOWN = 4;
 const KIND_ORDER: Record<string, number> = { contract: 0, corporate: 1 };
 
 export const partnerLinkText = (link: IPartnerLink): string => {
-  const role = link.role ? (ASSERTION_ROLE_LABELS[link.role] ?? link.role) : null;
-  const own = link.ownRole ? (ASSERTION_ROLE_LABELS[link.ownRole] ?? link.ownRole) : null;
+  const role = link.role ? (roleLabel(link.role)) : null;
+  const own = link.ownRole ? (roleLabel(link.ownRole)) : null;
   return role ?? own ?? 'вид связи не назван';
 };
 

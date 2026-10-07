@@ -10,7 +10,7 @@ import { useCan } from '../../hooks/useAuth';
 import { useDebounced } from '../../hooks/useDebounced';
 import { enumParam, stringParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS } from '../../lib/labels';
+import { roleLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { SiteCandidates, SiteControls, searchLine } from '../companySite/SiteCandidates';
 import { COMPANY_SITES_KEY, useSiteActions } from '../companySite/useSiteActions';
@@ -35,7 +35,7 @@ const HINT =
   'Модель ищет официальный сайт компании в интернете — заказчиков и застройщиков первыми. Адрес предлагается, только если поиск действительно нашёл страницы этого сайта. Портал открывает главную и страницы «Контакты / О компании» и смотрит, написан ли там ИНН компании. Решаете вы: «Это сайт компании» или «Не он».';
 
 const metaOf = (row: ICompanySitesRow, mode: ICompanySitesList['mode']): string => {
-  const roles = row.roles.map(role => ASSERTION_ROLE_LABELS[role] ?? role).join(', ');
+  const roles = row.roles.map(roleLabel).join(', ');
   const search = searchLine(row.search, mode);
   return roles ? `${roles} · ${search}` : search;
 };

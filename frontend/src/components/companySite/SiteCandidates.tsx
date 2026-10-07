@@ -14,8 +14,10 @@ import {
   SITE_FOUND_VIA_LABELS,
   SITE_SEARCH_MODE_LABELS,
   SITE_SEARCH_OUTCOME_LABELS,
+  actorLabel,
   formatDateTime,
 } from '../../lib/labels';
+import { DECISION_STATE_TONE, SITE_CHECK_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ButtonLink } from '../ui/ButtonLink';
@@ -31,7 +33,7 @@ export const SiteSignals: FC<{ candidate: ISiteCandidate }> = ({ candidate: c })
   const badges: ReactNode[] = [];
   if (c.checkStatus !== 'ok') {
     badges.push(
-      <Badge key="status" tone={c.checkStatus === 'redirect_other_host' ? 'warning' : 'neutral'} hint={c.checkError ?? undefined}>
+      <Badge key="status" tone={toneOf(SITE_CHECK_TONE, c.checkStatus)} hint={c.checkError ?? undefined}>
         {SITE_CHECK_STATUS_LABELS[c.checkStatus]}
       </Badge>,
     );
@@ -94,7 +96,7 @@ export const SiteCandidates: FC<ISiteCandidatesProps> = ({ candidates, canDecide
           <SiteLink candidate={c} />
           {/* Под заголовком «Сайт компании» ярлык «сайт компании» у подтверждённого — повтор. */}
           {c.state !== 'pending' && !compact && (
-            <Badge tone={c.state === 'confirmed' ? 'success' : 'neutral'}>{SITE_CANDIDATE_STATE_LABELS[c.state]}</Badge>
+            <Badge tone={toneOf(DECISION_STATE_TONE, c.state)}>{SITE_CANDIDATE_STATE_LABELS[c.state]}</Badge>
           )}
           {(!compact || c.state === 'pending') && <SiteSignals candidate={c} />}
           {compact && canDecide && <Decision candidate={c} busy={busy} onConfirm={() => onConfirm(c)} onReject={() => onReject(c)} />}
@@ -103,7 +105,7 @@ export const SiteCandidates: FC<ISiteCandidatesProps> = ({ candidates, canDecide
           <p className={styles.muted}>
             {SITE_FOUND_VIA_LABELS[c.foundVia]}
             {c.pageTitle || c.title ? ` · «${c.pageTitle ?? c.title}»` : ''}
-            {c.decidedBy && c.state !== 'pending' ? ` · решение: ${c.decidedBy}, ${formatDateTime(c.decidedAt)}` : ''}
+            {c.decidedBy && c.state !== 'pending' ? ` · решение: ${actorLabel(c.decidedBy)}, ${formatDateTime(c.decidedAt)}` : ''}
             {c.decisionNote ? ` · ${c.decisionNote}` : ''}
           </p>
         )}

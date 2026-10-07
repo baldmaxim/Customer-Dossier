@@ -30,6 +30,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
   usage: { responses: 1, tokensIn: 3100, tokensOut: 420, latencyMs: 41000 },
   policy: { allowed: true, reason: null },
   candidateSet: null,
+  outcome: { state: 'not_relevant', detail: null },
   identity: { historical: false, candidateBuildVersion: 'candidate-build@4', candidateBuildCurrent: true, provider: 'openrouter' },
   lineage: { previous: [], retries: [] },
   inFlight: false,
@@ -109,10 +110,12 @@ describe('Разбор текста', () => {
   });
 
   it('неудачный разбор: причина словами, отдельно от итога', async () => {
-    render(detail({ status: 'failed', relevant: null, error: 'модель не ответила за 120 с', finishedAt: null }));
+    render(detail({ status: 'failed', relevant: null, error: 'модель не ответила за 120 с', finishedAt: null, outcome: { state: 'failed', detail: 'retrying' } }));
     expect(await screen.findByText('Что пошло не так')).toBeTruthy();
     expect(screen.getByText('модель не ответила за 120 с')).toBeTruthy();
-    expect(screen.getByText(/Разбор не удался\. Если повтор включён, портал повторит его сам/)).toBeTruthy();
+    // Фраза — пояснением того же словаря, что ярлык (ITEM_STATE_HINTS); ярлык — словами плитки «будет повтор».
+    expect(screen.getByText(/Разбор прервался ошибкой .*если повтор включён, портал повторит его сам\./)).toBeTruthy();
+    expect(screen.getAllByText('разбор не удался, будет повтор').length).toBeGreaterThan(0);
   });
 
   it('несуществующий разбор — «не найден», а не «загрузка» навсегда', async () => {

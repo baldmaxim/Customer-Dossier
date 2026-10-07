@@ -15,8 +15,9 @@ import { Link } from 'react-router-dom';
 import type { IPartnerLink, IStatement } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, ATTRIBUTION_LABELS, REVIEW_QUEUE_KIND_LABELS } from '../../lib/labels';
+import { ATTRIBUTION_LABELS, REVIEW_QUEUE_KIND_LABELS, roleLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import { ATTRIBUTION_TONE, toneOf } from '../../lib/statusTone';
 import { partnerLinkText } from '../CompanyPartners';
 import { EvidenceButton } from '../EvidenceButton';
 import { LoadingSkeleton } from '../LoadingSkeleton';
@@ -32,12 +33,6 @@ import styles from './CompanyDetails.module.css';
 
 /** Атрибуция, которую не нужно повторять у каждой строки: группа и так подписана «по сообщениям источников». */
 const DEFAULT_ATTRIBUTION = 'source_reported';
-
-/** Тон ярлыка решения оператора: спорное — предупреждение, остальное — нейтрально. */
-const ATTRIBUTION_TONE: Record<string, 'success' | 'warning' | 'neutral'> = {
-  analyst_reviewed: 'success',
-  analyst_disputed: 'warning',
-};
 
 /** Фраза без вводных слов «В публикации сообщается: …» — кто стоит за ней, говорит ярлык и подпись группы. */
 const bodyOf = (statement: IStatement): string => {
@@ -87,7 +82,7 @@ const StatementRows: FC<{ items: IStatement[] }> = ({ items }) => (
           <p className={styles.rowTitle}>{bodyOf(s)}</p>
           {s.attribution !== DEFAULT_ATTRIBUTION && (
             <p className={styles.rowMeta}>
-              <Badge tone={ATTRIBUTION_TONE[s.attribution] ?? 'neutral'}>{ATTRIBUTION_LABELS[s.attribution] ?? 'решение оператора'}</Badge>
+              <Badge tone={toneOf(ATTRIBUTION_TONE, s.attribution)}>{ATTRIBUTION_LABELS[s.attribution] ?? 'решение оператора'}</Badge>
             </p>
           )}
         </div>
@@ -164,7 +159,7 @@ export const CompanyRelations: FC<{ companyId: number }> = ({ companyId }) => {
         {participations.length > 0 ? (
           <ul className={styles.rows}>
             {participations.map(o => {
-              const roles = o.roles.map(r => `${ASSERTION_ROLE_LABELS[r.role] ?? 'роль не названа'}${r.isCurrent ? '' : ' (в прошлом)'}`).join(', ');
+              const roles = o.roles.map(r => `${roleLabel(r.role)}${r.isCurrent ? '' : ' (в прошлом)'}`).join(', ');
               const assertionIds = o.roles.flatMap(r => r.assertionIds ?? []);
               return (
                 <li key={o.projectId} className={styles.row}>
@@ -226,7 +221,7 @@ export const CompanyRelations: FC<{ companyId: number }> = ({ companyId }) => {
                   <Link to={`/company/${c.companyId}`} viewTransition>
                     {c.companyName}
                   </Link>{' '}
-                  ({ASSERTION_ROLE_LABELS[c.roleOther ?? ''] ?? 'роль не названа'}) —{' '}
+                  ({roleLabel(c.roleOther)}) —{' '}
                   <Link to={`/projects/${c.projectId}`} viewTransition>
                     {c.projectName}
                   </Link>

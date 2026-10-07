@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, api } from '../../api/client';
-import { actionError } from '../../components/admin/actionError';
+import { actionError } from '../../lib/actionError';
 import { MergePreview } from '../../components/admin/MergePreview';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';

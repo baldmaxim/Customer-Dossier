@@ -163,3 +163,34 @@ export const modelTone = (ok: boolean): StatusTone => (ok ? 'success' : 'warning
 
 /** Фоновое задание (сбор, разбор, перенос в карточки) включено или нет. Выключено — решение, не поломка. */
 export const switchTone = (on: boolean): StatusTone => (on ? 'success' : 'neutral');
+
+/**
+ * Решение оператора по кандидату или совпадению (ДОМ.РФ, сайты компаний): подтверждено — успех, ждёт и отклонено —
+ * нейтрально (не поломка), заменено другим — предупреждение. Одно правило для всех очередей решений.
+ */
+export const DECISION_STATE_TONE: Record<string, StatusTone> = {
+  pending: 'neutral',
+  confirmed: 'success',
+  rejected: 'neutral',
+  replaced: 'warning',
+};
+
+/** Подсказка модели — не решение и не статус: «скорее он» выделен, остальное спокойно (ДОМ.РФ, пары дублей). */
+export const MODEL_HINT_TONE: Record<string, StatusTone> = {
+  match: 'info',
+  same: 'info',
+  no_match: 'neutral',
+  different: 'neutral',
+  unsure: 'neutral',
+};
+
+/** Кто стоит за сведением: проверено оператором — успех, спорно — предупреждение, остальное — нейтрально. */
+export const ATTRIBUTION_TONE: Record<string, StatusTone> = {
+  analyst_reviewed: 'success',
+  analyst_disputed: 'warning',
+};
+
+/** Проверка страницы кандидата в сайты: увод на другой хост — предупреждение, остальное — нейтрально. */
+export const SITE_CHECK_TONE: Record<string, StatusTone> = {
+  redirect_other_host: 'warning',
+};

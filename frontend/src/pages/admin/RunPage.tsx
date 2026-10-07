@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { ApiError, api } from '../../api/client';
 import type { IRevision, IRunDetail, ISourceRow } from '../../api/types';
 import { RunCandidates } from '../../components/admin/RunCandidates';
-import { runOutcome } from '../../components/admin/runOutcome';
+import { outcomeOf, outcomeSentence } from '../../components/admin/runOutcome';
 import { RunOutcomeBadge } from '../../components/admin/RunOutcomeBadge';
 import { runDuration } from '../../components/admin/RunsList';
 import { RunTechDetails } from '../../components/admin/RunTechDetails';
@@ -29,7 +29,6 @@ import { Stack } from '../../components/ui/Stack';
 import { formatDuration } from '../../lib/format';
 import { formatDateTime, sourceLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
-import { outcomeSentence } from './runSentence';
 import styles from './RunPage.module.css';
 
 const EYEBROW = 'Админка · Обработка';
@@ -101,7 +100,7 @@ export const RunPage: FC = () => {
   const r = run.data;
   const source = sources.data?.items.find(s => s.id === r.source.id);
   const name = source ? sourceLabel({ sourceTitle: source.title, sourceKey: source.key, sourceKind: source.kind }) : r.source.key;
-  const outcome = runOutcome(r);
+  const outcome = outcomeOf(r);
   const pendingLatest = r.latestRevision !== null && r.latestRevision.no > r.revision.no;
   const title = `Разбор от ${formatDateTime(r.createdAt)}`;
   const current = r.publication.activeSetId === null ? 'none' : r.publication.activeRunId === r.id ? 'this' : 'other';
@@ -119,7 +118,7 @@ export const RunPage: FC = () => {
             {runDuration(r) !== null && <span>длился {formatDuration(runDuration(r))}</span>}
           </Cluster>
         }
-        lead={outcomeSentence(outcome, r.candidateSet?.status ?? null)}
+        lead={outcomeSentence(outcome)}
       />
 
       {r.error && (outcome.state === 'failed' || outcome.state === 'partial') && (

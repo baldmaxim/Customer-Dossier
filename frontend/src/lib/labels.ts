@@ -34,7 +34,6 @@ import type {
   DomRfHintVerdict,
   DomRfCompanyLinkState,
   DomRfFoundBy,
-  Role,
   SiteCandidateState,
   SiteCheckStatus,
   SiteFoundVia,
@@ -116,6 +115,9 @@ export const ASSERTION_ROLE_LABELS: Record<string, string> = {
   brand_of: 'бренд компании',
 };
 
+/** Роль словами — одна подпись на весь портал; незнакомая серверу словарю роль — общим словом, а не машинным ключом. */
+export const roleLabel = (role: string | null | undefined): string => (role ? (ASSERTION_ROLE_LABELS[role] ?? 'другая роль') : 'роль не названа');
+
 export const POLARITY_LABELS: Record<string, string> = {
   positive: 'утверждается',
   negative: 'отрицается',
@@ -172,19 +174,6 @@ export const AMOUNT_PURPOSE_LABELS: Record<string, string> = {
 };
 
 /**
- * Те же слова, что в ASSERTION_ROLE_LABELS, но строго по типу `Role` (роль из списка объектов).
- * Раньше здесь было «Заказчик» с заглавной, и одна строка сводки писала роль то так, то этак.
- */
-export const ROLE_LABELS: Record<Role, string> = {
-  customer: PARTICIPANT_ROLE_WORDS.customer,
-  general_contractor: PARTICIPANT_ROLE_WORDS.general_contractor,
-  contractor: PARTICIPANT_ROLE_WORDS.contractor,
-  designer: PARTICIPANT_ROLE_WORDS.designer,
-  investor: PARTICIPANT_ROLE_WORDS.investor,
-  operator: PARTICIPANT_ROLE_WORDS.operator,
-};
-
-/**
  * Стадия объекта — одни слова для списка объектов (`projects.stage`) и для состояния по дате
  * события (CONTEXT_STATE_LABELS): раньше один и тот же ввод в эксплуатацию был «Сдан» в одном
  * месте и «введён» в другом. Со строчной буквы — как роли, рядом с которыми стоит ярлык.
@@ -197,11 +186,6 @@ const PROJECT_STAGE_WORDS = {
   commissioned: 'сдан',
   cancelled: 'отменён',
 } as const;
-
-export const STAGE_LABELS: Record<string, string> = {
-  ...PROJECT_STAGE_WORDS,
-  unknown: 'стадия неизвестна',
-};
 
 export const EVENT_LABELS: Record<string, string> = {
   construction_start: 'Начало строительства',
@@ -234,6 +218,13 @@ export const SOURCE_KIND_LABELS: Record<string, string> = {
   manual: 'ручная вставка',
 };
 
+/** Источники одного вида списком — вкладка, заголовок и подпись списка «Источников» одними словами. */
+export const SOURCE_KIND_LIST_LABELS: Record<string, string> = {
+  telegram: 'Telegram-каналы',
+  website: 'Сайты',
+  manual: 'Вручную',
+};
+
 // Форматтеры дат — один раз на модуль (07.10.2026): toLocale*String строит новый Intl.DateTimeFormat на каждый
 // вызов, а даты печатаются сотнями (строки каталога, ленты, события). Параметры и локаль — те же, что были у
 // toLocale*String: при заданных полях даты или времени строка выходит та же. Часовой пояс — пояс браузера.
@@ -248,6 +239,17 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
 });
+
+const SHORT_DATE_TIME_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const SHORT_DATE_TIME_YEAR_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+/** «30.09, 11:58»; не в текущем году — «30.09.25, 11:58» (строка источника, где места мало). */
+export const formatShortDateTime = (iso: string | null | undefined, now: Date = new Date()): string => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return (date.getFullYear() === now.getFullYear() ? SHORT_DATE_TIME_FORMAT : SHORT_DATE_TIME_YEAR_FORMAT).format(date);
+};
 
 export const formatDate = (iso: string | null): string => {
   if (!iso) return '';
@@ -372,14 +374,6 @@ export const FAMILY_ORIGIN_LABELS: Record<'established' | 'named' | 'unknown', s
   unknown: 'первоисточник неизвестен',
 };
 
-/** Роль компании в делах (signals courtRoles): истец/заявитель/кредитор — одна группа, ответчик/должник — другая. */
-export const COURT_ROLE_GROUP_LABELS: Record<'plaintiff' | 'defendant' | 'other' | 'unknown', string> = {
-  plaintiff: 'истец, заявитель или кредитор',
-  defendant: 'ответчик или должник',
-  other: 'другая роль',
-  unknown: 'роль не названа',
-};
-
 /** Вид компании (этап 04). */
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
   legal_entity: 'юрлицо',
@@ -404,6 +398,19 @@ export const IDENTIFIER_TYPE_LABELS: Record<string, string> = {
 export const formatIdentifier = ({ type, value }: { type: string; value: string }): string => {
   const bare = type.includes(':') ? type.slice(type.lastIndexOf(':') + 1) : type;
   return `${IDENTIFIER_TYPE_LABELS[bare] ?? IDENTIFIER_TYPE_LABELS.other} ${value}`;
+};
+
+/** Реквизитов нет — одной фразой во всех списках (раньше «без ИНН и ОГРН», «реквизитов нет» и «—»). */
+export const NO_IDENTIFIERS_TEXT = 'реквизитов нет';
+
+/** Реквизит строки списка: ИНН, иначе ОГРН — тем же formatIdentifier, что и остальные подписи реквизитов. */
+export const primaryIdentifierText = (r: { inn?: string | null; ogrn?: string | null }): string | null =>
+  r.inn ? formatIdentifier({ type: 'inn', value: r.inn }) : r.ogrn ? formatIdentifier({ type: 'ogrn', value: r.ogrn }) : null;
+
+/** Реквизит из строки поиска («inn 7707083893») словами. */
+export const identifierStringText = (raw: string): string => {
+  const [type, ...rest] = raw.split(' ');
+  return formatIdentifier({ type: type || 'other', value: rest.join(' ') });
 };
 
 export const RELATION_LABELS: Record<string, { outgoing: string; incoming: string }> = {
@@ -1176,11 +1183,6 @@ export const PASSKEY_DEVICE_LABELS: Record<string, string> = {
 };
 
 /** Кто действовал, если не пользователь портала. */
-export const AUTH_ACTOR_LABELS: Record<string, string> = {
-  cli: 'консоль сервера',
-  anonymous: '—',
-  operator: 'локальный оператор',
-};
 
 /** Вердикт модели по паре «возможный дубль» (entity-match@1, 02.10.2026). */
 export const MODEL_VERDICT_LABELS: Record<string, string> = {
@@ -1194,10 +1196,22 @@ export const MERGE_REASON_LABELS: Record<string, string> = {
   sound_key: 'звучит одинаково',
 };
 
-/** Кто принял решение: модель подписывается своим именем («model:…»), правило сбора — «auto». */
+/** Служебные авторы действий словами; вошедший пользователь — своим логином. */
+const ACTOR_WORDS: Record<string, string> = {
+  auto: 'автоматически',
+  scheduler: 'по расписанию',
+  cli: 'консоль сервера',
+  'cli-probe': 'консоль сервера',
+  operator: 'локальный оператор',
+  anonymous: '—',
+};
+
+/**
+ * Кто действовал — одна подпись на весь портал (07.10.2026: раньше шесть вариантов — «оператор» и «локальный
+ * оператор», «из консоли» и «консоль сервера», а где-то сырое значение). Модель подписывается своим именем («model:…»).
+ */
 export const actorLabel = (actor: string | null | undefined): string => {
   if (!actor) return '—';
   if (actor.startsWith('model:')) return `модель (${actor.slice('model:'.length)})`;
-  if (actor === 'auto') return 'автоматически';
-  return actor;
+  return ACTOR_WORDS[actor] ?? actor;
 };

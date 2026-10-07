@@ -70,7 +70,12 @@ export const ModelPage: FC = () => {
   }
 
   const { provider, model, routeProviders, key, connection } = settings.data;
-  const refresh = (): void => void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+  // Состояние модели видят два места — эта страница и строка над разделами (['pipeline']): сбрасываются вместе,
+  // иначе после сохранения ключа строка ещё писала бы «Модель не отвечает».
+  const refresh = (): void => {
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+  };
 
   return (
     <Stack gap={4}>
@@ -98,7 +103,7 @@ export const ModelPage: FC = () => {
                 value: (
                   <Stack gap={1}>
                     <span>
-                      <Badge tone={modelTone(connection.ok)}>{connection.ok ? 'отвечает' : 'не отвечает'}</Badge>
+                      <Badge tone={modelTone(connection.ok)}>{connection.ok ? 'Модель отвечает' : 'Модель не отвечает'}</Badge>
                     </span>
                     {!connection.ok && connection.error && <span className={styles.muted}>{connection.error}</span>}
                   </Stack>

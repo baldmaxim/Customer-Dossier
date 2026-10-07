@@ -9,11 +9,11 @@ import {
   HIDDEN_PERMISSIONS,
   LOGIN_FAILURE_LABELS,
   LOGIN_REFUSAL_LABELS,
-  ROLE_LABELS,
-  STAGE_LABELS,
   formatMoney,
   formatPercent,
   visiblePermissions,
+  roleLabel,
+  actorLabel,
 } from './labels';
 
 /** Intl ставит неразрывные пробелы; для сравнения достаточно обычных. */
@@ -63,8 +63,19 @@ describe('словари', () => {
     expect([...HIDDEN_PERMISSIONS].every(p => p.startsWith('dossier.'))).toBe(true);
   });
 
-  it('роль и стадия объекта названы одинаково во всех словарях', () => {
-    for (const [role, word] of Object.entries(ROLE_LABELS)) expect(ASSERTION_ROLE_LABELS[role]).toBe(word);
-    for (const [state, word] of Object.entries(CONTEXT_STATE_LABELS)) expect(STAGE_LABELS[state]).toBe(word);
+  it('роль — одной подписью на весь портал: словарь, незнакомая — «другая роль», без роли — «роль не названа»', () => {
+    expect(roleLabel('general_contractor')).toBe(ASSERTION_ROLE_LABELS.general_contractor);
+    expect(roleLabel('something_new')).toBe('другая роль');
+    expect(roleLabel(null)).toBe('роль не названа');
+    expect(CONTEXT_STATE_LABELS.construction).toBe('строится');
+  });
+
+  it('кто действовал — одной подписью: служебные авторы словами, модель — своим именем, логин — как есть', () => {
+    expect(actorLabel('cli')).toBe('консоль сервера');
+    expect(actorLabel('cli-probe')).toBe('консоль сервера');
+    expect(actorLabel('scheduler')).toBe('по расписанию');
+    expect(actorLabel('operator')).toBe('локальный оператор');
+    expect(actorLabel('model:qwen3')).toBe('модель (qwen3)');
+    expect(actorLabel('ivanov')).toBe('ivanov');
   });
 });

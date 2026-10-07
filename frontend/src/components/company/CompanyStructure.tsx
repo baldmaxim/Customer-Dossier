@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 
 import type { ICompanyObjectsResponse, IEventStats, IPublicationStats } from '../../api/types';
 import { formatCountWord } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, COMPLETENESS_LABELS, EVENT_LABELS, FAMILY_ORIGIN_LABELS } from '../../lib/labels';
+import { COMPLETENESS_LABELS, EVENT_LABELS, FAMILY_ORIGIN_LABELS, roleLabel } from '../../lib/labels';
 import { BarList, type IBarListItem } from '../charts/BarList';
 import { StackedBar, type IStackSegment } from '../charts/StackedBar';
 import { Heading } from '../ui/Heading';
@@ -46,7 +46,7 @@ const byCount = (items: IBarListItem[]): IBarListItem[] => [...items].sort((a, b
 
 /** Роли на своих объектах: знаменатель — свои объекты (одна компания бывает в двух ролях); объекты СЗ группы — их роли. */
 const rolesBlock = ({ objects }: IInputs): IBlock | null => {
-  const items = byCount((objects?.roles ?? []).map(r => ({ key: r.role, label: ASSERTION_ROLE_LABELS[r.role] ?? 'роль не названа', value: r.count })));
+  const items = byCount((objects?.roles ?? []).map(r => ({ key: r.role, label: roleLabel(r.role), value: r.count })));
   if (!objects || items.length === 0) return null;
   const own = objects.coverage.truncated ? null : objects.items.filter(o => !o.via).length;
   return {

@@ -15,7 +15,7 @@ import { Link } from 'react-router-dom';
 
 import type { ICompanyObject } from '../../api/types';
 import { formatCountWord } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../../lib/labels';
+import { PROJECT_LEVEL_LABELS, formatDate, roleLabel } from '../../lib/labels';
 import { completionText, objectStatusText, registryFacts } from '../../lib/registrySummary';
 import { Badge } from '../ui/Badge';
 import { Heading } from '../ui/Heading';
@@ -82,7 +82,7 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
         {o.roles.length === 0 && <Badge>{o.basis === 'event' ? 'упомянут в событиях, роль не названа' : 'роль не названа'}</Badge>}
         {o.roles.map(r => (
           <Badge key={r.role} tone="accent">
-            {ASSERTION_ROLE_LABELS[r.role] ?? r.role}
+            {roleLabel(r.role)}
             {r.isCurrent ? '' : ' (в прошлом)'}
           </Badge>
         ))}

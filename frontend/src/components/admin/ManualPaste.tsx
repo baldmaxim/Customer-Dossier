@@ -20,7 +20,7 @@ import { Stack } from '../ui/Stack';
 import { TextInput } from '../ui/TextInput';
 import { Textarea } from '../ui/Textarea';
 import { useToast } from '../ui/toast';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import sources from './Sources.module.css';
 
 /** Короче этого сервер текст не сохранит — кнопка не зовёт его зря. */

@@ -14,7 +14,7 @@ import { Field } from '../../ui/Field';
 import { Stack } from '../../ui/Stack';
 import { TextInput } from '../../ui/TextInput';
 import { Callout } from '../../ui/Callout';
-import { actionError } from '../actionError';
+import { actionError } from '../../../lib/actionError';
 import formStyles from '../Forms.module.css';
 import { IssuedPassword } from './IssuedPassword';
 import styles from './Users.module.css';

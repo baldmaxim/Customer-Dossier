@@ -16,7 +16,7 @@ import { checkParserApiKey, PARSER_API_SERVICES } from '../parserApi/client.js';
 import { DATASET_SERVICE, isParserApiDataset, PARSER_API_DATASETS, type ParserApiDataset } from '../parserApi/datasets.js';
 import { loadCompanyChecks } from '../parserApi/checks.js';
 import { loadCompanyFinance } from '../parserApi/finance.js';
-import { loadParserApiStates, parserApiConnection, parserApiCoverage } from '../parserApi/read.js';
+import { currentParserApiConnection, loadParserApiStates, parserApiCoverage } from '../parserApi/read.js';
 import { refreshParserApiDatasets, type ParserApiRefreshResult, type ParserApiStopReason } from '../parserApi/refresh.js';
 import { pausedServices } from '../parserApi/servicePauses.js';
 import { pgParserApiStore } from '../parserApi/store.js';
@@ -155,7 +155,7 @@ parserApiRouter.get('/admin/parser-api', async (_req, res) => {
   const [usage, coverage, connection, recent] = await Promise.all([
     pgParserApiStore.usage(),
     parserApiCoverage(getPool()),
-    parserApiConnection(getPool(), key.source !== 'none', key.source === 'admin' ? key.updatedAt : null),
+    currentParserApiConnection(getPool()),
     query(
       `SELECT requested_at AS "requestedAt", method, inn, page, http_status AS "httpStatus", api_code AS "apiCode",
               outcome, billable, error, actor

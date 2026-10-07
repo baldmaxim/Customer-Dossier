@@ -84,6 +84,13 @@ const FILTER_SQL: Record<DomRfTargetFilter, string> = {
   captured: `NOT ${PENDING_SQL}`,
 };
 
+/** Числа карточек — теми же условиями, что фильтры списка «Карточки» (сводка страницы ДОМ.РФ не считает по-своему). */
+export const DOMRF_TARGET_COUNTS_SQL = `
+  SELECT count(*) FILTER (WHERE ${FILTER_SQL.waiting})::int AS waiting,
+         count(*) FILTER (WHERE ${FILTER_SQL.error})::int AS errors,
+         count(*)::int AS total
+  FROM domrf_targets t`;
+
 /** «Ждут» — в порядке, в котором их возьмёт работник (claimDomRfTarget); ошибки и прочитанные — свежие первыми. */
 const ORDER_SQL: Record<DomRfTargetFilter, string> = {
   all: `${PENDING_SQL} DESC, t.requested_at DESC, t.id DESC`,

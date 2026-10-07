@@ -100,18 +100,18 @@ describe('«Обработка»: состояния загрузки', () => {
 });
 
 describe('«Обработка»: список разборов', () => {
-  it('итог — одним словом из статуса, признака «о стройке», судьбы найденного и допуска', async () => {
+  it('итог — словом из итога сервера (decideRunOutcome): те же слова, что у плиток, «попытки исчерпаны» — как плитка', async () => {
     fakeApi(
       around({
         match: 'GET /api/reprocess/runs',
         respond: () =>
           page([
-            run(10, { status: 'completed', relevant: true, candidateSet: { id: 1, status: 'published' } }),
-            run(11, { status: 'completed', relevant: false }),
-            run(12, { status: 'completed', relevant: true, candidateSet: { id: 2, status: 'rejected_stale' } }),
-            run(13, { status: 'queued' }),
-            run(14, { status: 'failed' }),
-            run(15, { status: 'queued', policy: { allowed: false, reason: 'выключен' } }),
+            run(10, { status: 'completed', outcome: { state: 'in_cards', detail: null } }),
+            run(11, { status: 'completed', outcome: { state: 'not_relevant', detail: null } }),
+            run(12, { status: 'completed', outcome: { state: 'built_not_in_cards', detail: 'rejected_stale' } }),
+            run(13, { status: 'queued', outcome: { state: 'queued', detail: null } }),
+            run(14, { status: 'failed', outcome: { state: 'failed', detail: 'exhausted' } }),
+            run(15, { status: 'queued', outcome: { state: 'no_policy', detail: null } }),
           ]),
       }),
     );
@@ -122,7 +122,7 @@ describe('«Обработка»: список разборов', () => {
       'не о стройке',
       'не перенесён: текст изменился',
       'в очереди на разбор',
-      'разбор не удался',
+      'разбор не удался, попытки исчерпаны',
       'источник выключен',
     ]) {
       expect(table.getByText(word)).toBeTruthy();

@@ -16,8 +16,9 @@ import { Link } from 'react-router-dom';
 import type { CatalogView, ICatalogRow } from '../../api/types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { formatCount, formatCountWord } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, formatDate } from '../../lib/labels';
+import { formatDate, formatIdentifier, primaryIdentifierText, roleLabel } from '../../lib/labels';
 import { MQ } from '../../lib/media';
+import { RoleBadges } from '../RoleBadges';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -31,7 +32,6 @@ const MEMBER_FORMS = ['юрлицо', 'юрлица', 'юрлиц'] as const;
 /** Ярлыков ролей в строке — не больше: остальные «+N», их названия — диктору. */
 const ROLE_BADGES = 2;
 
-const roleLabel = (role: string): string => ASSERTION_ROLE_LABELS[role] ?? role;
 const rolesText = (roles: string[]): string => roles.map(roleLabel).join(', ');
 
 /** «Действующее (с 01.02.2020)» → ярлык «Действующее» и «с 01.02.2020» мелко: длинный статус не режется многоточием. */
@@ -51,33 +51,21 @@ const StatusCell: FC<{ status: string | null }> = ({ status }) => {
   );
 };
 
-const RoleBadges: FC<{ roles: string[] }> = ({ roles }) => {
-  if (roles.length === 0) return <span className={styles.muted}>—</span>;
-  const rest = roles.slice(ROLE_BADGES);
-  return (
+const CatalogRoles: FC<{ roles: string[] }> = ({ roles }) =>
+  roles.length === 0 ? (
+    <span className={styles.muted}>—</span>
+  ) : (
     <span className={styles.roleBadges}>
-      {roles.slice(0, ROLE_BADGES).map(r => (
-        <Badge key={r} tone="accent">
-          {roleLabel(r)}
-        </Badge>
-      ))}
-      {rest.length > 0 && (
-        <Badge tone="accent">
-          <span aria-hidden="true">+{rest.length}</span>
-          <span className="visually-hidden">ещё: {rolesText(rest)}</span>
-        </Badge>
-      )}
+      <RoleBadges roles={roles.map(role => ({ role }))} max={ROLE_BADGES} />
     </span>
   );
-};
 
 /** Название строки: по ЕГРЮЛ, если есть; у заведённой по ИНН без ответа Фокуса — временное «ИНН …». */
 export const catalogTitle = (row: ICatalogRow): string => row.egrulName ?? row.name;
 
 const rowKey = (row: ICatalogRow): string => (row.kind === 'company' ? `c${row.companyId}` : `g${row.groupRef}`);
 
-const identifierText = (row: Pick<ICatalogRow, 'inn' | 'ogrn'>): string | null =>
-  row.inn ? `ИНН ${row.inn}` : row.ogrn ? `ОГРН ${row.ogrn}` : null;
+const identifierText = (row: Pick<ICatalogRow, 'inn' | 'ogrn'>): string | null => primaryIdentifierText(row);
 
 /** Пояснение под названием: имя в публикациях, куда входит, на контроле ли, ждёт ли наименования. */
 const nameNote = (row: ICatalogRow): string | null => {
@@ -174,7 +162,7 @@ const CatalogRowsView: FC<ICatalogRowsProps> = ({ view, rows }) => {
                           <Link to={`/company/${m.companyId}`} viewTransition>
                             {m.name}
                           </Link>
-                          {m.inn && <span className={styles.muted}> · ИНН {m.inn}</span>}
+                          {m.inn && <span className={styles.muted}> · {formatIdentifier({ type: 'inn', value: m.inn })}</span>}
                         </li>
                       ))}
                     </ul>
@@ -235,7 +223,7 @@ const CatalogRowsView: FC<ICatalogRowsProps> = ({ view, rows }) => {
                     </td>
                   )}
                   <td>
-                    <RoleBadges roles={row.roles} />
+                    <CatalogRoles roles={row.roles} />
                   </td>
                   <td className="num">{formatCount(row.objects)}</td>
                   <td className="num">{formatCount(row.publications)}</td>

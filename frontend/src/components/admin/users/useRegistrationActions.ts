@@ -9,7 +9,7 @@ import type { IUserRow, UserRole } from '../../../api/types';
 import { USER_ROLE_LABELS } from '../../../lib/labels';
 import { useConfirm } from '../../ui/confirm';
 import { useToast } from '../../ui/toast';
-import { actionError } from '../actionError';
+import { actionError } from '../../../lib/actionError';
 
 type Decision = 'approve' | 'reject';
 

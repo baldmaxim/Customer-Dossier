@@ -9,7 +9,7 @@ import { FC } from 'react';
 import type { ICompanyObject } from '../../api/types';
 import { stringParam, enumParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS } from '../../lib/labels';
+import { roleLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { LoadingSkeleton } from '../LoadingSkeleton';
 import { Button } from '../ui/Button';
@@ -85,7 +85,7 @@ export const CompanyObjects: FC<{ companyId: number }> = ({ companyId }) => {
             {roles.length > 1 && (
               <Segmented
                 label="Роль компании"
-                items={[{ value: '', label: 'Все роли' }, ...roles.map(r => ({ value: r, label: ASSERTION_ROLE_LABELS[r] ?? r }))]}
+                items={[{ value: '', label: 'Все роли' }, ...roles.map(r => ({ value: r, label: roleLabel(r) }))]}
                 value={roles.includes(role) ? role : ''}
                 onChange={setRole}
               />

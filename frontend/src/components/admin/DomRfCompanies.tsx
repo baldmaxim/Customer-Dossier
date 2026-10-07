@@ -12,7 +12,7 @@ import { useCan } from '../../hooks/useAuth';
 import { useDebounced } from '../../hooks/useDebounced';
 import { enumParam, stringParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, DOMRF_FOUND_BY_LABELS, formatDateTime } from '../../lib/labels';
+import { DOMRF_FOUND_BY_LABELS, formatDateTime, roleLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Button } from '../ui/Button';
 import { ButtonLink } from '../ui/ButtonLink';
@@ -29,7 +29,7 @@ import { Segmented } from '../ui/Segmented';
 import { Stack } from '../ui/Stack';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../ui/toast';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import { DomRfCompanyLinks } from './DomRfCompanyLinks';
 import { DOMRF_SUMMARY_KEY } from './domRfSummary';
 import styles from './Found.module.css';
@@ -59,7 +59,7 @@ const HINT =
   'Каждую компанию портала браузер ищет в едином реестре застройщиков ДОМ.РФ — заказчиков и застройщиков первыми: по ИНН, если он есть, иначе по названию. Из выдачи по названию предлагаются только застройщики и группы, совпавшие с названием, — выберите своего. Подтверждённый уходит в чтение, его объекты появятся во вкладке «Объекты».';
 
 const searchMeta = (row: IDomRfCompanyRow): string => {
-  const roles = row.roles.map(role => ASSERTION_ROLE_LABELS[role] ?? role).join(', ');
+  const roles = row.roles.map(roleLabel).join(', ');
   const search = ((): string => {
     if (row.lastError) return `поиск не удался: ${row.lastError}`;
     if (!row.searchedAt) return 'ещё не искали — в очереди';

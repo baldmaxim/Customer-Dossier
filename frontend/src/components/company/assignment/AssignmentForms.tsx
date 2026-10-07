@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../../api/client';
 import type { IAssignmentView } from '../../../api/types';
+import { actionError } from '../../../lib/actionError';
 import { identifierOfQuery } from '../../../lib/taxId';
 import { Button } from '../../ui/Button';
 import { Disclosure } from '../../ui/Disclosure';
@@ -60,7 +61,7 @@ export const DismissForm: FC<{ companyId: number }> = ({ companyId }) => {
       void client.invalidateQueries({ queryKey: ['catalog'] });
       toast.show({ tone: 'success', text: 'Отмечено: не компания. Имя ушло из «Без ИНН».' });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
   const submit = (e: FormEvent): void => {
     e.preventDefault();

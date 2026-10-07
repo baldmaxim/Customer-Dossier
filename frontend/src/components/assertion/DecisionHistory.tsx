@@ -1,7 +1,7 @@
 import { FC } from 'react';
 
 import type { IReviewRow } from '../../api/types';
-import { ASSERTION_STATUS_LABELS, REVIEW_SCOPE_LABELS, formatDateTime } from '../../lib/labels';
+import { ASSERTION_STATUS_LABELS, REVIEW_SCOPE_LABELS, actorLabel, formatDateTime } from '../../lib/labels';
 import { ASSERTION_STATUS_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { Heading } from '../ui/Heading';
@@ -22,7 +22,7 @@ export const DecisionHistory: FC<{ reviews: IReviewRow[] }> = ({ reviews }) => (
             <div className={styles.meta}>
               <Badge tone={toneOf(ASSERTION_STATUS_TONE, r.decision)}>{ASSERTION_STATUS_LABELS[r.decision]}</Badge>
               <span>{REVIEW_SCOPE_LABELS[r.scope] ?? ''}</span>
-              <span>{r.reviewer}</span>
+              <span>{actorLabel(r.reviewer)}</span>
               <time dateTime={r.decidedAt} className="nowrap">
                 {formatDateTime(r.decidedAt)}
               </time>

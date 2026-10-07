@@ -7,7 +7,7 @@ import { api } from '../../api/client';
 import type { ISiteCandidate, SiteSearchMode } from '../../api/types';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../ui/toast';
-import { actionError } from '../admin/actionError';
+import { actionError } from '../../lib/actionError';
 
 export const COMPANY_SITES_KEY = ['company-sites'] as const;
 

@@ -1,5 +1,5 @@
 import type { IAssertion } from '../api/types';
-import { ASSERTION_ROLE_LABELS, EVENT_LABELS, PROCEDURAL_ROLE_LABELS } from './labels';
+import { EVENT_LABELS, PROCEDURAL_ROLE_LABELS, roleLabel } from './labels';
 
 /** Короткая человекочитаемая формулировка утверждения — без додумывания смысла. */
 export const describeAssertion = (a: IAssertion): string => {
@@ -7,7 +7,7 @@ export const describeAssertion = (a: IAssertion): string => {
   const object = a.objectProjectName ?? a.objectCompanyName ?? a.objectText;
   const scope = [a.scopeBuilding, a.workPackage ?? a.workPackageLabel].filter(Boolean).join(', ');
   const scopeText = scope ? ` (${scope})` : '';
-  const role = a.role ? (ASSERTION_ROLE_LABELS[a.role] ?? 'роль не названа') : 'роль не названа';
+  const role = a.role ? (roleLabel(a.role)) : 'роль не названа';
   const not = a.polarity === 'negative' ? 'не ' : '';
 
   switch (a.predicate) {

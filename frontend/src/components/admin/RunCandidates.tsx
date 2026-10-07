@@ -5,7 +5,7 @@
 import { FC } from 'react';
 
 import type { IRunDetail } from '../../api/types';
-import { AMBIGUITY_STATUS_LABELS, ASSERTION_ROLE_LABELS, CANDIDATE_VERDICT_LABELS, PREDICATE_LABELS } from '../../lib/labels';
+import { AMBIGUITY_STATUS_LABELS, CANDIDATE_VERDICT_LABELS, PREDICATE_LABELS, roleLabel } from '../../lib/labels';
 import { CANDIDATE_VERDICT_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { ButtonLink } from '../ui/ButtonLink';
@@ -32,7 +32,7 @@ export const RunCandidates: FC<IRunCandidatesProps> = ({ candidates, ambiguities
             <Cluster gap={2}>
               <span className={styles.kind}>
                 <Term value={c.predicate} labels={PREDICATE_LABELS} />
-                {c.role ? ` · ${ASSERTION_ROLE_LABELS[c.role] ?? c.role}` : ''}
+                {c.role ? ` · ${roleLabel(c.role)}` : ''}
               </span>
               <Badge tone={toneOf(CANDIDATE_VERDICT_TONE, c.verdict)}>{CANDIDATE_VERDICT_LABELS[c.verdict] ?? c.verdict}</Badge>
             </Cluster>

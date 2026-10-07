@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ICompanyResponse, ICompanyWatch } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
+import { actionError } from '../../lib/actionError';
 import { formatDate } from '../../lib/labels';
 import { Button } from '../ui/Button';
 import { useToast } from '../ui/toast';
@@ -33,7 +34,7 @@ export const WatchToggle: FC<IWatchToggleProps> = ({ companyId, watch }) => {
       void client.invalidateQueries({ queryKey: ['catalog'] });
       toast.show({ tone: 'success', text: result.watch ? 'Компания на контроле.' : 'Компания снята с контроля.' });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   const hint = watch ? `Поставил ${watch.addedBy}, ${formatDate(watch.addedAt)}` : 'Портал будет спрашивать о компании первым';

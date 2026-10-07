@@ -25,6 +25,7 @@ import { TabPanel } from '../../components/ui/TabPanel';
 import { Tabs } from '../../components/ui/Tabs';
 import { enumParam, useUrlPatch, useUrlState } from '../../hooks/useUrlState';
 import { describeLoadError } from '../../lib/loadError';
+import { SOURCE_KIND_LIST_LABELS } from '../../lib/labels';
 
 type Tab = ISourceRow['kind'] | 'services';
 
@@ -34,19 +35,13 @@ const DEFAULT_TAB: Tab = 'telegram';
 
 // Коротко: на 360px три вкладки с числами должны помещаться в строку без прокрутки.
 const TAB_TITLES: Record<Tab, string> = {
-  telegram: 'Telegram',
-  website: 'Сайты',
-  manual: 'Вручную',
+  telegram: SOURCE_KIND_LIST_LABELS.telegram!,
+  website: SOURCE_KIND_LIST_LABELS.website!,
+  manual: SOURCE_KIND_LIST_LABELS.manual!,
   services: 'Сервисы',
 };
 
 /** Имя списка для диктора — полным словом. */
-const LIST_LABELS: Record<ISourceRow['kind'], string> = {
-  telegram: 'Telegram-каналы',
-  website: 'Сайты',
-  manual: 'Способы ручной передачи',
-};
-
 export const SourcesPage: FC = () => {
   const idBase = useId();
   const [tab] = useUrlState('tab', enumParam(TABS, DEFAULT_TAB), { history: 'push' });
@@ -94,7 +89,7 @@ export const SourcesPage: FC = () => {
             {describeLoadError(sourcesQuery.error)}
           </Callout>
         ) : (
-          <SourcesPanel kind={tab} sources={sources} actions={actions} label={LIST_LABELS[tab]} />
+          <SourcesPanel kind={tab} sources={sources} actions={actions} label={SOURCE_KIND_LIST_LABELS[tab] ?? tab} />
         )}
       </TabPanel>
       <SourceDetailsDialog

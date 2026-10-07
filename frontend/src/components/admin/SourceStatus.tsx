@@ -5,11 +5,9 @@
 import { FC } from 'react';
 
 import type { ISourceRow } from '../../api/types';
-import { SOURCE_HEALTH_STATE_LABELS } from '../../lib/labels';
-import { SOURCE_HEALTH_STATE_TONE, toneOf, type StatusTone } from '../../lib/statusTone';
+import type { StatusTone } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
-import { historyNote, sourceStatsLine, sourceStatsTitle } from './sourceFacts';
-import { isSourceEnabled } from './useSourceActions';
+import { historyNote, sourceStateView, sourceStatsLine, sourceStatsTitle } from './sourceFacts';
 import styles from './Sources.module.css';
 
 /** Причина видна в строке только у сбоя: «ещё не собирался» и «собрана не вся история» ярлык говорит сам. */
@@ -19,19 +17,17 @@ const REASON_CLASS: Partial<Record<StatusTone, string>> = {
 };
 
 export const SourceStatus: FC<{ source: ISourceRow }> = ({ source }) => {
-  const enabled = isSourceEnabled(source);
-  const state = source.healthState?.state ?? 'never_run';
-  const tone = enabled ? toneOf(SOURCE_HEALTH_STATE_TONE, state) : 'neutral';
-  const reasonClass = REASON_CLASS[tone];
-  const reason = enabled && reasonClass && source.healthState?.reason ? source.healthState.reason : null;
+  const view = sourceStateView(source);
+  const reasonClass = REASON_CLASS[view.tone];
+  const reason = reasonClass ? view.reason : null;
   const note = reason ? null : historyNote(source);
   const stats = sourceStatsLine(source);
 
   return (
     <div className={styles.status}>
       <div className={styles.statusHead}>
-        <Badge tone={tone} className={styles.badge}>
-          {enabled ? (SOURCE_HEALTH_STATE_LABELS[state] ?? state) : 'выключен'}
+        <Badge tone={view.tone} className={styles.badge}>
+          {view.label}
         </Badge>
         {note && (
           <span className={styles.note} title={note}>

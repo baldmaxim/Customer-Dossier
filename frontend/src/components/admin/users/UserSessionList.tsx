@@ -17,7 +17,7 @@ import { useConfirm } from '../../ui/confirm';
 import { EmptyState } from '../../ui/EmptyState';
 import { Loading } from '../../ui/Loading';
 import { Stack } from '../../ui/Stack';
-import { actionError } from '../actionError';
+import { actionError } from '../../../lib/actionError';
 import { describeAgent } from './describeAgent';
 import styles from './Users.module.css';
 

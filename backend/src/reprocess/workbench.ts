@@ -14,6 +14,7 @@ import { withTransaction, getPool, type DbExecutor } from '../db/pool.js';
 import { evaluateSourcePolicy, type PermissionStatus } from '../ingest/policy.js';
 import { runComplete } from './publish.js';
 import { CANDIDATE_BUILD_VERSION, isHistoricalIdentity, type IModelProvider } from './provider.js';
+import { decideRunOutcome, type IRunOutcome } from './itemOutcome.js';
 import { STATE_RUN_STATUSES, revisionStatesSql, type RunListState } from './revisionStates.js';
 import { enqueueRun, retryRun, type EnqueueResult } from './runs.js';
 
@@ -74,6 +75,7 @@ interface IRunListRow {
   usage_unknown: number;
   candidate_set_id: number | null;
   candidate_set_status: string | null;
+  failures: number;
 }
 
 export interface IRunListItem {
@@ -101,6 +103,8 @@ export interface IRunListItem {
   usage: { responses: number; tokensIn: number | null; tokensOut: number | null; latencyMs: number | null };
   policy: { allowed: boolean; reason: string | null };
   candidateSet: { id: number; status: string } | null;
+  /** Итог словом — серверным правилом (itemOutcome.ts::decideRunOutcome), одним для списка и страницы разбора. */
+  outcome: IRunOutcome;
 }
 
 export interface IRunPage {
@@ -121,7 +125,8 @@ const RUN_SELECT = `
          (SELECT count(*)::int FROM extraction_chunks c WHERE c.run_id = er.id AND c.status = 'ok') AS chunks_ok,
          (SELECT count(*)::int FROM extraction_chunks c WHERE c.run_id = er.id AND c.status = 'failed') AS chunks_failed,
          u.responses, u.tokens_in, u.tokens_out, u.latency_ms, u.usage_unknown,
-         cs.id AS candidate_set_id, cs.status AS candidate_set_status
+         cs.id AS candidate_set_id, cs.status AS candidate_set_status,
+         (SELECT count(*)::int FROM extraction_runs x WHERE x.revision_id = er.revision_id AND x.status IN ('failed', 'partial')) AS failures
   FROM extraction_runs er
   JOIN document_revisions r ON r.id = er.revision_id
   JOIN source_items si ON si.id = r.source_item_id
@@ -161,6 +166,10 @@ const filterSql = (f: IRunFilter): { where: string; params: unknown[] } => {
 
 const toListItem = (r: IRunListRow): IRunListItem => {
   const unknown = r.usage_unknown > 0 || r.responses === 0;
+  const policy = evaluateSourcePolicy(
+    { key: r.source_key, accessStatus: r.access_status, aiProcessingStatus: r.ai_processing_status, policyExpiresAt: r.policy_expires_at },
+    'ai_processing',
+  );
   return {
     id: Number(r.id),
     revisionId: Number(r.revision_id),
@@ -187,11 +196,16 @@ const toListItem = (r: IRunListRow): IRunListItem => {
       tokensOut: unknown ? null : r.tokens_out,
       latencyMs: unknown ? null : r.latency_ms,
     },
-    policy: evaluateSourcePolicy(
-      { key: r.source_key, accessStatus: r.access_status, aiProcessingStatus: r.ai_processing_status, policyExpiresAt: r.policy_expires_at },
-      'ai_processing',
-    ),
+    policy,
     candidateSet: r.candidate_set_id === null ? null : { id: Number(r.candidate_set_id), status: r.candidate_set_status ?? 'unknown' },
+    outcome: decideRunOutcome({
+      status: r.status,
+      relevant: r.relevant,
+      setStatus: r.candidate_set_id === null ? null : (r.candidate_set_status ?? 'unknown'),
+      policyAllowed: policy.allowed,
+      failures: r.failures ?? 0,
+      retryMax: env.REPROCESS_RETRY_MAX,
+    }),
   };
 };
 

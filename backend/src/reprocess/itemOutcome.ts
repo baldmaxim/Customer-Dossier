@@ -43,3 +43,41 @@ export const decideItemState = (input: IItemStateInput): ItemState => {
   if (input.run.status === 'cancelled') return 'cancelled';
   return 'failed';
 };
+
+export interface IRunOutcome {
+  state: ItemState;
+  /**
+   * Уточнение: почему разобранное не перенесено (статус набора), или что с повтором упавшего разбора — exhausted
+   * (попытки исчерпаны: тот же признак, что плитка «Обработки» failed_exhausted) или retrying.
+   */
+  detail: string | null;
+}
+
+/**
+ * Итог одного запуска разбора одним словом — для строки «Обработки» и страницы разбора. Раньше то же правило жило
+ * копией на клиенте, а плитка «попытки исчерпаны» открывала строки «разбор не удался» без признака исчерпания.
+ * Порядок проверок тот же, что у decideItemState: перенесённое в карточки старше выключенного источника.
+ */
+export const decideRunOutcome = (run: {
+  status: string;
+  relevant: boolean | null;
+  setStatus: string | null;
+  policyAllowed: boolean;
+  /** Сколько раз разбор этой редакции падал (failed/partial) и потолок повторов REPROCESS_RETRY_MAX. */
+  failures: number;
+  retryMax: number;
+}): IRunOutcome => {
+  if (run.status === 'completed') {
+    if (run.relevant === false) return { state: 'not_relevant', detail: null };
+    if (run.setStatus === 'published') return { state: 'in_cards', detail: null };
+    if (!run.policyAllowed) return { state: 'no_policy', detail: null };
+    return { state: 'built_not_in_cards', detail: run.setStatus && run.setStatus !== 'built' ? run.setStatus : null };
+  }
+  // Выключенный источник: поставленный разбор не выполнится, пока его не включат.
+  if (!run.policyAllowed && (run.status === 'queued' || run.status === 'running')) return { state: 'no_policy', detail: null };
+  if (run.status === 'queued') return { state: 'queued', detail: null };
+  if (run.status === 'running') return { state: 'running', detail: null };
+  if (run.status === 'cancelled') return { state: 'cancelled', detail: null };
+  const retry = run.failures >= run.retryMax ? 'exhausted' : 'retrying';
+  return { state: run.status === 'partial' ? 'partial' : 'failed', detail: retry };
+};

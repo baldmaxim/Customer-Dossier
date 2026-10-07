@@ -6,7 +6,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { ICompanySearchItem, IProjectSearchItem } from '../api/types';
 import { formatCount } from '../lib/format';
-import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, PROJECT_LEVEL_LABELS } from '../lib/labels';
+import { ENTITY_TYPE_LABELS, NO_IDENTIFIERS_TEXT, PROJECT_LEVEL_LABELS, identifierStringText } from '../lib/labels';
 import { shortenLegalForm } from '../lib/legalForm';
 
 export interface IEntityRef {
@@ -23,11 +23,8 @@ export interface IEntityOption {
   meta: string;
 }
 
-/** «inn 7701045732» → «ИНН 7701045732». */
-export const identifierText = (raw: string): string => {
-  const [type, ...rest] = raw.split(' ');
-  return `${IDENTIFIER_TYPE_LABELS[type ?? ''] ?? 'реквизит'} ${rest.join(' ')}`;
-};
+/** «inn 7701045732» → «ИНН 7701045732» — общей подписью реквизитов (labels.ts). */
+export const identifierText = identifierStringText;
 
 export const companyOption = (c: ICompanySearchItem): IEntityOption => ({
   entity: { kind: 'company', id: c.id, name: c.name },
@@ -35,7 +32,7 @@ export const companyOption = (c: ICompanySearchItem): IEntityOption => ({
   meta: [
     c.entityType && c.entityType !== 'unknown' ? ENTITY_TYPE_LABELS[c.entityType] : null,
     c.city,
-    c.identifiers && c.identifiers.length > 0 ? c.identifiers.map(identifierText).join(', ') : 'без ИНН и ОГРН',
+    c.identifiers && c.identifiers.length > 0 ? c.identifiers.map(identifierText).join(', ') : NO_IDENTIFIERS_TEXT,
     c.projects !== null && c.projects !== undefined ? `объектов: ${formatCount(c.projects)}` : null,
     c.matchedAlias ? `найдено по написанию «${c.matchedAlias}»` : null,
     c.homonyms ? `одноимённых: ${formatCount(c.homonyms)} — сверьте ИНН` : null,

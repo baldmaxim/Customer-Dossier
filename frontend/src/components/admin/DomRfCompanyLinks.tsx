@@ -7,8 +7,9 @@
 
 import { FC, FormEvent, ReactNode, useState } from 'react';
 
-import type { DomRfHintVerdict, IDomRfCompanyLink, IDomRfCompanyRow, IDomRfLinkHint } from '../../api/types';
+import type { IDomRfCompanyLink, IDomRfCompanyRow, IDomRfLinkHint } from '../../api/types';
 import { DOMRF_CARD_KIND_LABELS, DOMRF_COMPANY_LINK_STATE_LABELS, DOMRF_HINT_VERDICT_LABELS } from '../../lib/labels';
+import { DECISION_STATE_TONE, MODEL_HINT_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
 import { Cluster } from '../ui/Cluster';
@@ -29,17 +30,12 @@ interface IDomRfCompanyLinksProps {
   onSearchAgain: () => void;
 }
 
-const STATE_TONE = { pending: 'neutral', confirmed: 'success', rejected: 'neutral' } as const;
-
-// «Скорее он» выделен, остальное — спокойным: подсказка не статус и не поломка.
-const HINT_TONE: Record<DomRfHintVerdict, 'info' | 'neutral'> = { match: 'info', no_match: 'neutral', unsure: 'neutral' };
-
 const LinkHint: FC<{ hint: IDomRfLinkHint | null }> = ({ hint }) => {
   if (!hint) return null;
   if (!hint.verdict) return <p className={styles.muted}>Подсказки модели нет: ответ пришёл не по форме.</p>;
   return (
     <p className={styles.muted}>
-      <Badge tone={HINT_TONE[hint.verdict]}>Модель: {DOMRF_HINT_VERDICT_LABELS[hint.verdict]}</Badge> {hint.reason}
+      <Badge tone={toneOf(MODEL_HINT_TONE, hint.verdict)}>Модель: {DOMRF_HINT_VERDICT_LABELS[hint.verdict]}</Badge> {hint.reason}
     </p>
   );
 };
@@ -59,7 +55,7 @@ export const DomRfCompanyLinks: FC<IDomRfCompanyLinksProps> = ({ company, canDec
 
   const decided = (link: IDomRfCompanyLink): ReactNode => (
     <>
-      <Badge tone={STATE_TONE[link.state]}>{DOMRF_COMPANY_LINK_STATE_LABELS[link.state]}</Badge>
+      <Badge tone={toneOf(DECISION_STATE_TONE, link.state)}>{DOMRF_COMPANY_LINK_STATE_LABELS[link.state]}</Badge>
       {link.decisionNote && <span className={styles.muted}>{link.decisionNote}</span>}
       {canDecide && link.state === 'confirmed' && several && (
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => onConfirm(link)}>

@@ -50,7 +50,8 @@ describe('вкладка «Модель»', () => {
     expect(await screen.findByText('OpenRouter — модель в облаке')).not.toBeNull();
     expect(screen.getByText('qwen/qwen3-30b-a3b-instruct-2507')).not.toBeNull();
     expect(screen.getByText('самый дешёвый подходящий')).not.toBeNull();
-    expect(screen.getByText('не отвечает')).not.toBeNull();
+    // Те же слова, что строка состояния над разделами («Модель не отвечает»).
+    expect(screen.getByText('Модель не отвечает')).not.toBeNull();
     expect(screen.getByText('не задан')).not.toBeNull();
     expect(screen.getByText(/Без ключа разбор ждёт/)).not.toBeNull();
     // Имена переменных окружения — не в тексте экрана, а в пояснении.

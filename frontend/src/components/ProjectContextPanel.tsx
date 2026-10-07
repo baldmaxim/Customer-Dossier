@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import type { IProjectContext } from '../api/types';
-import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, EVENT_LABELS, MODALITY_LABELS, OVERLAP_LABELS, REVIEW_LEVEL_LABELS, formatDate } from '../lib/labels';
+import { CONTEXT_STATE_LABELS, EVENT_LABELS, MODALITY_LABELS, OVERLAP_LABELS, REVIEW_LEVEL_LABELS, formatDate, roleLabel } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import { formatPeriod } from '../lib/period';
 import { Button } from './ui/Button';
@@ -64,7 +64,7 @@ export const ProjectContextPanel: FC<IProjectContextPanelProps> = ({ companyId, 
             {ctx.participations.map(p => (
               <li key={p.assertionId}>
                 {p.polarity === 'negative' ? 'не ' : ''}
-                {ASSERTION_ROLE_LABELS[p.role ?? ''] ?? 'роль не названа'}
+                {roleLabel(p.role)}
                 {p.building && `, ${p.building}`}
                 {p.workPackage && `, ${p.workPackage}`} — {periodText(p.validFrom, p.validTo, p.periodPrecision)}
                 <span className={styles.meta}>

@@ -22,7 +22,7 @@ import { Loading } from '../ui/Loading';
 import { Stack } from '../ui/Stack';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import styles from './Merge.module.css';
 
 export const MergeHistory: FC = () => {

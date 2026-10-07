@@ -23,7 +23,7 @@ import { Segmented } from '../components/ui/Segmented';
 import { Stack } from '../components/ui/Stack';
 import { enumParam, useUrlState } from '../hooks/useUrlState';
 import { formatCount } from '../lib/format';
-import { ASSERTION_ROLE_LABELS, NEWS_KIND_LABELS, NEWS_SOURCE_LABELS, formatDate, formatMoney, formatTime } from '../lib/labels';
+import { NEWS_KIND_LABELS, NEWS_SOURCE_LABELS, formatDate, formatMoney, formatTime, roleLabel } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import styles from './NewsPage.module.css';
 
@@ -83,7 +83,7 @@ const NewsRow: FC<{ item: INewsItem; fresh: boolean }> = ({ item, fresh }) => (
             <Link to={`/company/${c.id}`} viewTransition>
               {c.name}
             </Link>
-            {c.role ? ` — ${ASSERTION_ROLE_LABELS[c.role] ?? c.role}` : ''}
+            {c.role ? ` — ${roleLabel(c.role)}` : ''}
           </Fragment>
         ))}
         {item.companies.length > 4 ? ` и ещё ${formatCount(item.companies.length - 4)}` : ''}

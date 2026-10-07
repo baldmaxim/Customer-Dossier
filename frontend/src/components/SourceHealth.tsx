@@ -11,10 +11,10 @@ import {
   COVERAGE_STOP_LABELS,
   RUN_OUTCOME_LABELS,
   SOURCE_HEALTH_LABELS,
-  SOURCE_HEALTH_STATE_LABELS,
   formatDateTime,
 } from '../lib/labels';
-import { SOURCE_HEALTH_STATE_TONE, SOURCE_HEALTH_TONE, toneOf } from '../lib/statusTone';
+import { SOURCE_HEALTH_TONE, toneOf } from '../lib/statusTone';
+import { sourceStateView } from './admin/sourceFacts';
 import { Badge } from './ui/Badge';
 import { Cluster } from './ui/Cluster';
 import { DescriptionList, type IDescriptionItem } from './ui/DescriptionList';
@@ -41,7 +41,8 @@ const lastPass = (s: ISourceRow): string | null => {
 
 /** Состояние источника подробно: что с ним, где остановился сбор, когда была попытка. */
 export const SourceHealthCell: FC<{ source: ISourceRow }> = ({ source }) => {
-  const health = source.health ?? 'unknown';
+  // Состояние — тем же представлением, что строка таблицы (sourceStateView): выключенный — «выключен», не поломка.
+  const view = sourceStateView(source);
   const stop = typeof source.lastCoverage?.stopReason === 'string' ? source.lastCoverage.stopReason : null;
   const state = source.healthState;
   const pass = lastPass(source);
@@ -54,11 +55,9 @@ export const SourceHealthCell: FC<{ source: ISourceRow }> = ({ source }) => {
             value: (
               <Stack gap={1}>
                 <span>
-                  <Badge tone={toneOf(SOURCE_HEALTH_STATE_TONE, state.state)}>
-                    {SOURCE_HEALTH_STATE_LABELS[state.state] ?? state.state}
-                  </Badge>
+                  <Badge tone={view.tone}>{view.label}</Badge>
                 </span>
-                <span>{state.reason}</span>
+                {view.reason && <span>{view.reason}</span>}
                 {state.coverage.gaps.map(gap => (
                   <span key={gap} className={styles.muted}>
                     пропуск в постах: {gap}
@@ -71,17 +70,6 @@ export const SourceHealthCell: FC<{ source: ISourceRow }> = ({ source }) => {
           { label: 'История источника', value: `полнота неизвестна · разбор ${state.aiAllowed ? 'включён' : 'выключен'}` },
         ]
       : []),
-    {
-      label: 'Сборщик',
-      value: (
-        <Stack gap={1}>
-          <span>
-            <Badge tone={toneOf(SOURCE_HEALTH_TONE, health)}>{SOURCE_HEALTH_LABELS[health] ?? health}</Badge>
-          </span>
-          {source.healthReason && <span>{source.healthReason}</span>}
-        </Stack>
-      ),
-    },
     ...(pass ? [{ label: 'Последний проход', value: pass }] : []),
     ...(!source.lastOutcome && source.lastError ? [{ label: 'Ошибка', value: source.lastError }] : []),
     ...(stop ? [{ label: 'Где остановился сбор', value: COVERAGE_STOP_LABELS[stop] ?? stop }] : []),

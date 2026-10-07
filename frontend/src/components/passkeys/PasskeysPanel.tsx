@@ -9,7 +9,7 @@ import { api } from '../../api/client';
 import type { IPasskeyRow } from '../../api/types';
 import { describeLoadError } from '../../lib/loadError';
 import { passkeysSupported } from '../../lib/passkey';
-import { actionError } from '../admin/actionError';
+import { actionError } from '../../lib/actionError';
 import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
 import { useConfirm } from '../ui/confirm';

@@ -1,20 +1,16 @@
 import { FC } from 'react';
 
 import type { IRunListItem } from '../../api/types';
-import { ITEM_STATE_HINTS, ITEM_STATE_LABELS } from '../../lib/labels';
-import { ITEM_STATE_TONE, toneOf } from '../../lib/statusTone';
+import { ITEM_STATE_HINTS } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
-import { runOutcome } from './runOutcome';
+import { outcomeOf, outcomeText, outcomeTone } from './runOutcome';
 
-/** Итог разбора ярлыком: одно слово, тон — из общего словаря, пояснение — в подписи словаря. */
-export const RunOutcomeBadge: FC<{ run: Pick<IRunListItem, 'status' | 'relevant' | 'candidateSet' | 'policy'>; withHint?: boolean }> = ({
-  run,
-  withHint = false,
-}) => {
-  const { state, detail } = runOutcome(run);
+/** Итог разбора ярлыком — итогом сервера (те же слова и тон, что у плиток «Обработки»), пояснение — словарём. */
+export const RunOutcomeBadge: FC<{ run: Pick<IRunListItem, 'status' | 'outcome'>; withHint?: boolean }> = ({ run, withHint = false }) => {
+  const outcome = outcomeOf(run);
   return (
-    <Badge tone={toneOf(ITEM_STATE_TONE, state)} hint={withHint ? ITEM_STATE_HINTS[state] : undefined}>
-      {detail ?? ITEM_STATE_LABELS[state] ?? state}
+    <Badge tone={outcomeTone(outcome)} hint={withHint ? ITEM_STATE_HINTS[outcome.state] : undefined}>
+      {outcomeText(outcome)}
     </Badge>
   );
 };

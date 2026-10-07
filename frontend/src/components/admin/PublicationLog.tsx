@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { PUBLICATION_ACTION_HINTS, PUBLICATION_ACTION_LABELS, formatDateTime, sourceLabel } from '../../lib/labels';
+import { PUBLICATION_ACTION_HINTS, PUBLICATION_ACTION_LABELS, actorLabel, formatDateTime, sourceLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { MQ } from '../../lib/media';
 import { PUBLICATION_ACTION_TONE, toneOf } from '../../lib/statusTone';
@@ -39,11 +39,6 @@ interface IPublicationRow {
   sourceKind?: string;
   runId: number | null;
 }
-
-const ACTOR_LABELS: Record<string, string> = {
-  auto: 'автоматически',
-  operator: 'оператор',
-};
 
 /**
  * Исход переноса ярлыком. Пояснение — подсказкой только в таблице: на телефоне ярлык с подсказкой
@@ -76,7 +71,7 @@ export const PublicationLog: FC = () => {
     return <EmptyState size="sm">В карточки пока ничего не переносилось. Туда попадает только полностью разобранный текст.</EmptyState>;
   }
 
-  const actor = (row: IPublicationRow): string => ACTOR_LABELS[row.actor] ?? row.actor;
+  const actor = (row: IPublicationRow): string => actorLabel(row.actor);
 
   if (!wide) {
     return (

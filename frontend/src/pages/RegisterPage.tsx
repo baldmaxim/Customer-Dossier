@@ -7,7 +7,7 @@ import { FC, FormEvent, RefObject, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
 import { api, ApiError } from '../api/client';
-import { actionError } from '../components/admin/actionError';
+import { actionError } from '../lib/actionError';
 import { Button } from '../components/ui/Button';
 import { Callout } from '../components/ui/Callout';
 import { Field } from '../components/ui/Field';

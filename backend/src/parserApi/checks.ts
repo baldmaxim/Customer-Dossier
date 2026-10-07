@@ -13,7 +13,7 @@ import type { IDatasetBlock } from './finance.js';
 import { mapBankruptcy, type IBankruptcyView } from './map/bankruptcy.js';
 import { mapCourts, type ICourtsView } from './map/courts.js';
 import { mapFssp, type IFsspView } from './map/fssp.js';
-import { latestParserApiRecord, loadCaseClaims, loadParserApiStates, type IParserApiDatasetState } from './read.js';
+import { currentParserApiConnection, latestParserApiRecord, loadCaseClaims, loadParserApiStates, type IParserApiDatasetState } from './read.js';
 import { companyInn } from './targets.js';
 
 export interface ICompanyChecks {
@@ -21,6 +21,8 @@ export interface ICompanyChecks {
   problem: 'no_inn' | 'several_inns' | null;
   configured: boolean;
   scheduled: boolean;
+  /** Подключение сервиса — то же состояние, что ярлык в «Сервисах» (currentParserApiConnection). */
+  connection: { state: string; at: string | null };
   courts: IDatasetBlock<ICourtsView> | null;
   /** Карточки дел (суммы исков) спрашиваются прямо сейчас — экран обновится сам. */
   claimsFetching: boolean;
@@ -30,7 +32,7 @@ export interface ICompanyChecks {
 
 export const loadCompanyChecks = async (db: DbExecutor, companyId: number): Promise<ICompanyChecks> => {
   const target = await companyInn(db, companyId);
-  const base = { configured: parserApiKey() !== null, scheduled: env.PARSER_API_ENABLED };
+  const base = { configured: parserApiKey() !== null, scheduled: env.PARSER_API_ENABLED, connection: await currentParserApiConnection(db) };
   if (!target.ok) return { ...base, inn: null, problem: target.problem, courts: null, claimsFetching: false, fssp: null, bankruptcy: null };
 
   const [states, courts, fssp, bankruptcy] = await Promise.all([

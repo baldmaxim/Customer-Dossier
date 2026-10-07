@@ -14,7 +14,7 @@ import { Hint } from '../ui/Hint';
 import { TextInput } from '../ui/TextInput';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import { channelKey } from './channelKey';
 import styles from './Sources.module.css';
 

@@ -5,6 +5,7 @@
 // «сведения от» — время первого получения этого же ответа: повтор без изменений даты сведений не обновляет.
 
 import type { DbExecutor } from '../db/pool.js';
+import { parserApiKeyStatus } from '../settings/parserApiKey.js';
 import { PARSER_API_DATASETS, type DatasetOutcome, type IDatasetPayload, type ParserApiDataset } from './datasets.js';
 import { mapCaseCard, type ICaseClaim } from './map/caseCard.js';
 
@@ -109,6 +110,16 @@ export const parserApiConnection = async (
   ).rows[0];
   if (!row) return { state: 'unverified', at: null };
   return { state: row.outcome === 'ok' ? 'connected' : row.outcome, at: iso(row.requested_at) };
+};
+
+/**
+ * Подключение по ключу, который сейчас в памяти процесса, — одно состояние для «Сервисов» и кнопок «Обновить» на
+ * карточке (07.10.2026: карточка решала по «ключ задан», и при отклонённом ключе или закрытом адресе админка была
+ * красной, а карточка предлагала обновить).
+ */
+export const currentParserApiConnection = (db: DbExecutor): Promise<{ state: ParserApiConnectionState; at: string | null }> => {
+  const key = parserApiKeyStatus();
+  return parserApiConnection(db, key.source !== 'none', key.source === 'admin' ? key.updatedAt : null);
 };
 
 export interface IParserApiCoverage {

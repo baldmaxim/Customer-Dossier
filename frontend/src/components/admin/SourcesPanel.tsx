@@ -12,6 +12,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { flagParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
 import { MQ } from '../../lib/media';
+import { SOURCE_KIND_LIST_LABELS } from '../../lib/labels';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { Hint } from '../ui/Hint';
@@ -26,12 +27,6 @@ import { isSourceBroken, isSourceEnabled, type ISourceActions } from './useSourc
 import styles from './Sources.module.css';
 
 type Kind = ISourceRow['kind'];
-
-const LIST_TITLES: Record<Kind, string> = {
-  telegram: 'Каналы',
-  website: 'Сайты',
-  manual: 'Способы ручной передачи',
-};
 
 const EMPTY: Record<Kind, string> = {
   telegram: 'Каналов пока нет — добавьте первый.',
@@ -99,7 +94,7 @@ export const SourcesPanel: FC<ISourcesPanelProps> = ({ kind, sources, actions, l
 
       {/* Таблице нужна поверхность; карточки — сами поверхности, рамка вокруг них — лишняя. */}
       <Section
-        title={LIST_TITLES[kind]}
+        title={SOURCE_KIND_LIST_LABELS[kind] ?? kind}
         note={note}
         actions={kind === 'manual' ? undefined : <SourceAdd kind={kind} />}
         variant={wide ? 'card' : 'plain'}

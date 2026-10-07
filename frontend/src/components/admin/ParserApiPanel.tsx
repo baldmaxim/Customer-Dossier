@@ -31,6 +31,7 @@ import {
   PARSER_API_KEY_SOURCE_HINTS,
   PARSER_API_METHOD_LABELS,
   PARSER_API_OUTCOME_LABELS,
+  actorLabel,
   formatDateTime,
 } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -45,12 +46,6 @@ const savedText = ({ check }: IServiceKeySaved): string =>
     ? `Ключ сохранён. Проверка без расхода тарифа ответила: ${check.error}. Подтвердит первый запрос.`
     : 'Ключ сохранён. Подтвердит первый запрос — проверка без расхода тарифа ключ не отвергла.';
 
-const actorText = (actor: string): string => {
-  if (actor === 'scheduler') return 'по расписанию';
-  if (actor === 'cli' || actor === 'cli-probe') return 'из консоли';
-  return actor;
-};
-
 const RequestLine: FC<{ row: IParserApiRequestRow }> = ({ row }) => (
   <li className={styles.request}>
     <span>
@@ -59,7 +54,7 @@ const RequestLine: FC<{ row: IParserApiRequestRow }> = ({ row }) => (
       {row.page !== null && row.page > 1 ? ` · стр. ${row.page}` : ''} · {PARSER_API_OUTCOME_LABELS[row.outcome]}
       {row.billable ? ' (списан с тарифа)' : ''}
       {row.outcome !== 'ok' && row.outcome !== 'pending' && row.httpStatus !== null ? ` (HTTP ${row.httpStatus}${row.apiCode ? `, код ${row.apiCode}` : ''})` : ''} ·{' '}
-      {actorText(row.actor)}
+      {actorLabel(row.actor)}
     </span>
     {row.error && <span className={styles.muted}>{row.error}</span>}
   </li>

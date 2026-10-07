@@ -13,7 +13,7 @@ import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../ui/toast';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import { DOMRF_SUMMARY_KEY } from './domRfSummary';
 
 const SENT = 'названия компаний портала, их объекты и найденные записи реестра';

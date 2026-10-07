@@ -328,7 +328,9 @@ describe('Админка: источники — плотный вид', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Инфраструктура России' });
     expect(within(dialog).getByText('Telegram-канал · t.me/infra_russia')).toBeTruthy();
     expect(within(dialog).getByText('сбор работает с ошибками')).toBeTruthy();
-    expect(within(dialog).getByText('t.me/s/infra_russia отвечает 403')).toBeTruthy();
+    // Состояние — одно, как в строке таблицы (healthState сервера); второго ярлыка старого поля health нет.
+    expect(within(dialog).getByText('канал стал закрытым: страница t.me/s/ не открывается без входа')).toBeTruthy();
+    expect(within(dialog).queryByText('t.me/s/infra_russia отвечает 403')).toBeNull();
     expect(within(dialog).getByRole('link', { name: 'Разборы' }).getAttribute('href')).toBe('/admin/process?source=4');
     // 2210 публикаций — удалять нечего предлагать.
     expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();

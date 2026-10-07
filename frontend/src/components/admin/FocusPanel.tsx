@@ -30,6 +30,7 @@ import {
   FOCUS_REQUEST_OUTCOME_LABELS,
   LLM_KEY_PROBLEM_LABELS,
   LLM_KEY_SOURCE_LABELS,
+  actorLabel,
   formatDateTime,
 } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -43,18 +44,11 @@ const savedText = ({ check }: IFocusKeySaved): string =>
     ? 'Ключ сохранён, Контур.Фокус его принял.'
     : `Ключ сохранён, но проверить его в Фокусе не удалось: ${check.error ?? 'причина неизвестна'}.`;
 
-/** Кто спросил: логин, расписание или консоль сервера. */
-const actorText = (actor: string): string => {
-  if (actor === 'scheduler') return 'по расписанию';
-  if (actor === 'cli' || actor === 'cli-probe') return 'из консоли';
-  return actor;
-};
-
 const RequestLine: FC<{ row: IFocusRequestRow }> = ({ row }) => (
   <li className={styles.request}>
     <span>
       {formatDateTime(row.requestedAt)} · {FOCUS_METHOD_LABELS[row.method]} · {FOCUS_REQUEST_OUTCOME_LABELS[row.outcome]}
-      {row.outcome !== 'ok' && row.httpStatus !== null ? ` (HTTP ${row.httpStatus})` : ''} · {actorText(row.actor)}
+      {row.outcome !== 'ok' && row.httpStatus !== null ? ` (HTTP ${row.httpStatus})` : ''} · {actorLabel(row.actor)}
     </span>
     {row.error && <span className={styles.muted}>{row.error}</span>}
   </li>

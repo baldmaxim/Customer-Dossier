@@ -4,7 +4,7 @@
 import { FC, useState } from 'react';
 
 import type { IUserRow } from '../../../api/types';
-import { AUTH_ACTOR_LABELS, formatDateTime } from '../../../lib/labels';
+import { actorLabel, formatDateTime } from '../../../lib/labels';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Callout } from '../../ui/Callout';
@@ -18,7 +18,7 @@ import styles from './Users.module.css';
 
 const origin = (user: IUserRow): string => {
   if (user.createdBy === user.login) return 'по заявке с экрана входа';
-  return `завёл: ${AUTH_ACTOR_LABELS[user.createdBy] ?? user.createdBy}`;
+  return `завёл: ${actorLabel(user.createdBy)}`;
 };
 
 export const UserAccess: FC<{ user: IUserRow; self: boolean }> = ({ user, self }) => {

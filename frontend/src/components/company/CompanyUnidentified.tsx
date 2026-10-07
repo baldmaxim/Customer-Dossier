@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { IAssignmentView, ICompanyResponse } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
+import { actionError } from '../../lib/actionError';
 import { formatCount } from '../../lib/format';
 import { formatDate } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -65,7 +66,7 @@ export const CompanyUnidentified: FC<{ companyId: number; data: ICompanyResponse
       const found = result.result.found ?? 0;
       toast.show({ tone: found > 0 ? 'success' : 'warning', text: found > 0 ? `Подсказок Контур.Фокуса: ${formatCount(found)}.` : 'Контур.Фокус ничего похожего не нашёл.' });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   const restore = useMutation({
@@ -75,7 +76,7 @@ export const CompanyUnidentified: FC<{ companyId: number; data: ICompanyResponse
       void client.invalidateQueries({ queryKey: ['catalog'] });
       toast.show({ tone: 'success', text: 'Имя вернулось в «Без ИНН».' });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   const renderMerge = (targetId: number) => (

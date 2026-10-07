@@ -15,7 +15,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { IFocusRefreshed, IFocusView } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
-import { FOCUS_TARGET_PROBLEM_LABELS, formatDate } from '../../lib/labels';
+import { actionError } from '../../lib/actionError';
+import { FOCUS_TARGET_PROBLEM_LABELS, formatDate, formatIdentifier } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { LoadingSkeleton } from '../LoadingSkeleton';
 import { RegistryChanges } from '../RegistryChanges';
@@ -30,8 +31,7 @@ import { companyFocusKey, useCompanyFocus } from './useCompanyQueries';
 import registry from '../RegistryPanel.module.css';
 import styles from './Company.module.css';
 
-const identifierText = (view: IFocusView): string =>
-  view.identifier ? `${view.identifier.type === 'inn' ? 'ИНН' : 'ОГРН'} ${view.identifier.value}` : '';
+const identifierText = (view: IFocusView): string => (view.identifier ? formatIdentifier(view.identifier) : '');
 
 const refreshedText = (result: IFocusRefreshed): string => {
   if (result.outcome === 'not_found') return 'Контур.Фокус не знает компанию с этим реквизитом.';
@@ -65,9 +65,12 @@ export const CompanyFocus: FC<ICompanyFocusProps> = ({ companyId, hideKeys, layo
     mutationFn: () => api.post<IFocusRefreshed>(`/api/companies/${companyId}/focus/refresh`),
     onSuccess: result => {
       client.setQueryData(companyFocusKey(companyId), result.view);
+      // Наименование по ЕГРЮЛ — и заголовок карточки (['company', id]), и строка каталога: обновляются вместе с разделом.
+      void client.invalidateQueries({ queryKey: ['company', companyId], exact: true });
+      void client.invalidateQueries({ queryKey: ['catalog'] });
       toast.show({ tone: result.outcome === 'found' ? 'success' : 'warning', text: refreshedText(result) });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   if (query.isLoading) return <LoadingSkeleton label="Загружаю сведения ЕГРЮЛ…" lines={3} height="32px" />;

@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { enumParam, useUrlState } from '../../hooks/useUrlState';
 import { formatCount } from '../../lib/format';
 import { PARSER_API_CONNECTION_LABELS } from '../../lib/labels';
+import { parserApiConnectionState } from '../../lib/parserApiConnection';
 import { Disclosure } from '../ui/Disclosure';
 import { HeadingLevelContext } from '../ui/headingLevel';
 import { Stack } from '../ui/Stack';
@@ -65,7 +66,7 @@ export const ServicesPanel: FC = () => {
   const focusMeta = !focus ? '' : focus.key.source === 'none' ? 'ключ не задан' : `запросов за сутки: ${formatCount(focus.usedLastDay)} из ${formatCount(focus.dailyLimit)}`;
   const parserApiMeta = !parserApi
     ? ''
-    : PARSER_API_CONNECTION_LABELS[parserApi.connection?.state ?? (parserApi.key.source === 'none' ? 'none' : 'unverified')];
+    : PARSER_API_CONNECTION_LABELS[parserApiConnectionState(parserApi)];
   const sitesMeta = !sites ? '' : `${sites.mode === 'on' ? '' : 'поиск выключен, '}ждут решения: ${formatCount(sites.totals.withPending)}`;
 
   return (

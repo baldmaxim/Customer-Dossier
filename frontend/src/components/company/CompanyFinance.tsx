@@ -18,8 +18,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { FinanceLine, IFinanceView, IParserApiDatasetState, IParserApiRefreshResponse, IPbPerson, ITaxView } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
+import { actionError } from '../../lib/actionError';
 import { formatCount } from '../../lib/format';
-import { FINANCE_LINE_LABELS, formatDate, formatMoney } from '../../lib/labels';
+import { FINANCE_LINE_LABELS, formatDate, formatMoney, PARSER_API_CONNECTION_LABELS } from '../../lib/labels';
+import { parserApiUsable } from '../../lib/parserApiConnection';
 import { describeLoadError } from '../../lib/loadError';
 import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
@@ -230,7 +232,7 @@ export const CompanyFinance: FC<{ companyId: number }> = ({ companyId }) => {
       void client.invalidateQueries({ queryKey: companyFinanceKey(companyId) });
     },
     onError: (err: Error) => {
-      toast.show({ tone: 'danger', text: err.message });
+      toast.show({ tone: 'danger', text: actionError(err) });
       void client.invalidateQueries({ queryKey: companyFinanceKey(companyId) });
     },
   });
@@ -251,11 +253,15 @@ export const CompanyFinance: FC<{ companyId: number }> = ({ companyId }) => {
   const hasData = data.finance.view !== null || data.tax.view !== null;
   if (!data.configured && !hasData) return null;
 
+  // Кнопка — по тому же состоянию подключения, что ярлык в «Сервисах»: при отвергнутом ключе — причина, а не «Обновить».
+  const usable = parserApiUsable(data.connection?.state, data.configured);
   const refreshButton =
-    canRefresh && data.configured ? (
+    canRefresh && usable ? (
       <Button size="sm" icon="refresh" loading={refresh.isPending} onClick={() => refresh.mutate()}>
         {hasData ? 'Обновить' : 'Запросить'}
       </Button>
+    ) : canRefresh && data.configured && data.connection ? (
+      <span className={styles.meta}>parser-api.com: {PARSER_API_CONNECTION_LABELS[data.connection.state]}</span>
     ) : null;
 
   return (

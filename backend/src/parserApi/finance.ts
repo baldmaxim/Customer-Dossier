@@ -9,7 +9,7 @@ import { env } from '../config/env.js';
 import { parserApiKey } from '../settings/parserApiKey.js';
 import { mapFinance, type IFinanceView } from './map/finance.js';
 import { mapTax, type ITaxView } from './map/tax.js';
-import { latestParserApiRecord, loadParserApiStates, type IParserApiDatasetState } from './read.js';
+import { currentParserApiConnection, latestParserApiRecord, loadParserApiStates, type IParserApiDatasetState } from './read.js';
 import { companyInn } from './targets.js';
 
 export interface IDatasetBlock<TView> {
@@ -24,13 +24,15 @@ export interface ICompanyFinance {
   /** Ключ parser-api.com задан: «Обновить» может спросить сервис. */
   configured: boolean;
   scheduled: boolean;
+  /** Подключение сервиса — то же состояние, что ярлык в «Сервисах» (currentParserApiConnection). */
+  connection: { state: string; at: string | null };
   finance: IDatasetBlock<IFinanceView> | null;
   tax: IDatasetBlock<ITaxView> | null;
 }
 
 export const loadCompanyFinance = async (db: DbExecutor, companyId: number): Promise<ICompanyFinance> => {
   const target = await companyInn(db, companyId);
-  const base = { configured: parserApiKey() !== null, scheduled: env.PARSER_API_ENABLED };
+  const base = { configured: parserApiKey() !== null, scheduled: env.PARSER_API_ENABLED, connection: await currentParserApiConnection(db) };
   if (!target.ok) return { ...base, inn: null, problem: target.problem, finance: null, tax: null };
 
   const [states, finance, tax] = await Promise.all([

@@ -28,7 +28,7 @@ import { domRfHintCounts, domRfHintPermission } from '../ingest/registry/domrfHi
 import { SourcePolicyValidationError, setSourceAiProcessing } from '../ingest/sources.js';
 import { env } from '../config/env.js';
 import { query } from '../db/pool.js';
-import { DomRfTargetError } from '../ingest/registry/domrfTargets.js';
+import { DOMRF_TARGET_COUNTS_SQL, DomRfTargetError } from '../ingest/registry/domrfTargets.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { actorOf } from './auth.js';
 
@@ -219,16 +219,15 @@ domrfRouter.get('/domrf-summary', async (_req, res) => {
   const [companies, objects, cards, permission, hints] = await Promise.all([
     domRfCompanyTotals(),
     query<{ pending: number }>(`SELECT count(*)::int AS pending FROM domrf_candidates WHERE state = 'pending'`),
-    query<{ waiting: number; total: number }>(
-      `SELECT count(*) FILTER (WHERE captured_at IS NULL OR captured_at < requested_at)::int AS waiting, count(*)::int AS total FROM domrf_targets`,
-    ),
+    // «Ждут» — тем же правилом, что фильтр «ждут» списка карточек (без ошибки), ошибки — отдельно.
+    query<{ waiting: number; errors: number; total: number }>(DOMRF_TARGET_COUNTS_SQL),
     domRfHintPermission(),
     domRfHintCounts(),
   ]);
   res.json({
     companies,
     objects: { pending: objects[0]?.pending ?? 0 },
-    cards: { waiting: cards[0]?.waiting ?? 0, total: cards[0]?.total ?? 0 },
+    cards: { waiting: cards[0]?.waiting ?? 0, errors: cards[0]?.errors ?? 0, total: cards[0]?.total ?? 0 },
     hints: {
       // Подсказки идут заданием разбора: без него их не составит никто, при любом допуске.
       running: env.DOMRF_HINT_ENABLED && env.PIPELINE_ENABLED,

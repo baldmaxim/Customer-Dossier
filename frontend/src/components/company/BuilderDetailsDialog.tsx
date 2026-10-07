@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 
 import type { IBuilderObject, ICompanyBuilder } from '../../api/types';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, BUILDER_MATCH_LABELS, formatDate } from '../../lib/labels';
+import { BUILDER_MATCH_LABELS, formatDate, roleLabel } from '../../lib/labels';
 import { identifierOfQuery } from '../../lib/taxId';
 import { Badge } from '../ui/Badge';
 import { ButtonLink } from '../ui/ButtonLink';
@@ -51,7 +51,7 @@ export const BuilderDetailsDialog: FC<IBuilderDetailsDialogProps> = ({ builder: 
   const identifier = !b.company && b.inn ? identifierOfQuery(b.inn) : null;
   const facts: IDescriptionItem[] = [
     { label: 'ИНН', value: b.inn ? <CopyValue value={b.inn} label="ИНН" /> : 'не указан' },
-    { label: 'Роль', value: b.roles.map(role => ASSERTION_ROLE_LABELS[role] ?? role).join(', ') },
+    { label: 'Роль', value: b.roles.map(role => roleLabel(role)).join(', ') },
   ];
   if (b.company) facts.push({ label: 'В портале', value: b.match ? BUILDER_MATCH_LABELS[b.match] ?? 'названа в публикации' : 'названа в публикации' });
   if (b.registryNames.length > 0 && b.registryNames[0] !== b.company?.name) facts.push({ label: 'В ДОМ.РФ', value: b.registryNames.join(', ') });
@@ -83,7 +83,7 @@ export const BuilderDetailsDialog: FC<IBuilderDetailsDialogProps> = ({ builder: 
               <Link className={styles.objectLink} to={`/projects/${o.projectId}`} viewTransition>
                 «{o.name}»
               </Link>
-              {manyRoles && <Badge>{ASSERTION_ROLE_LABELS[o.role] ?? o.role}</Badge>}
+              {manyRoles && <Badge>{roleLabel(o.role)}</Badge>}
               {!o.isCurrent && <span className={styles.past}>в прошлом</span>}
             </div>
             {sourceLines(o).map(line => (

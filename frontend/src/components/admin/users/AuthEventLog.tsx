@@ -7,7 +7,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../../../api/client';
 import type { IAuthEventRow } from '../../../api/types';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
-import { AUTH_ACTOR_LABELS, AUTH_EVENT_LABELS, formatDateTime } from '../../../lib/labels';
+import { AUTH_EVENT_LABELS, actorLabel, formatDateTime } from '../../../lib/labels';
 import { describeLoadError } from '../../../lib/loadError';
 import { MQ } from '../../../lib/media';
 import { Button } from '../../ui/Button';
@@ -51,7 +51,7 @@ export const AuthEventLog: FC<{ userId?: number }> = ({ userId }) => {
   if (items.length === 0) return <EmptyState size="sm">Событий пока нет.</EmptyState>;
 
   const what = (e: IAuthEventRow): string => AUTH_EVENT_LABELS[e.event] ?? 'другое событие';
-  const actor = (e: IAuthEventRow): string => AUTH_ACTOR_LABELS[e.actor] ?? e.actor;
+  const actor = (e: IAuthEventRow): string => actorLabel(e.actor);
 
   return (
     <Stack gap={3}>

@@ -1,12 +1,3 @@
-export type Role =
-  | 'customer'
-  | 'general_contractor'
-  | 'contractor'
-  | 'designer'
-  | 'investor'
-  | 'operator';
-
-
 export interface ICompanySearchItem {
   id: number;
   name: string;
@@ -1247,6 +1238,11 @@ export interface IRunListItem {
   usage: { responses: number; tokensIn: number | null; tokensOut: number | null; latencyMs: number | null };
   policy: { allowed: boolean; reason: string | null };
   candidateSet: { id: number; status: string } | null;
+  /**
+   * Итог словом — серверным правилом (reprocess/itemOutcome.ts::decideRunOutcome). detail — статус набора у
+   * разобранного, но не перенесённого, или exhausted/retrying у упавшего (как плитки «Обработки»).
+   */
+  outcome?: { state: ItemState; detail: string | null };
 }
 
 export interface IRunPage {
@@ -1724,6 +1720,8 @@ export interface ICompanyFinanceResponse {
   problem: 'no_inn' | 'several_inns' | null;
   configured: boolean;
   scheduled: boolean;
+  /** Подключение parser-api.com — то же состояние, что ярлык в «Сервисах»; у старого сервера поля нет. */
+  connection?: { state: ParserApiConnectionState; at: string | null };
   finance: IParserApiBlock<IFinanceView> | null;
   tax: IParserApiBlock<ITaxView> | null;
 }
@@ -1892,6 +1890,8 @@ export interface ICompanyChecksResponse {
   problem: 'no_inn' | 'several_inns' | null;
   configured: boolean;
   scheduled: boolean;
+  /** Подключение parser-api.com — то же состояние, что ярлык в «Сервисах»; у старого сервера поля нет. */
+  connection?: { state: ParserApiConnectionState; at: string | null };
   courts: IParserApiBlock<ICourtsView> | null;
   /** Карточки дел (суммы исков) запрашиваются сейчас; у старого сервера поля нет. */
   claimsFetching?: boolean;
@@ -2075,7 +2075,8 @@ export type DomRfCompanyFilter = 'pending' | 'notFound' | 'confirmed' | 'several
 export interface IDomRfSummary {
   companies: IDomRfCompanies['totals'];
   objects: { pending: number };
-  cards: { waiting: number; total: number };
+  /** Теми же условиями, что фильтры «Карточек»: ждут (без ошибки), с ошибкой, всего. */
+  cards: { waiting: number; errors?: number; total: number };
   hints: {
     /** Задание разбора и флаг подсказок включены: без них подсказок нет при любом допуске. */
     running: boolean;

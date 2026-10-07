@@ -16,7 +16,7 @@ import type { ISiteProbeReport, ISourceRow } from '../../api/types';
 import { sourceLabel } from '../../lib/labels';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../ui/toast';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 
 /** Включён — значит собирается и разбирается: оба допуска действуют, опрос не на паузе. */
 export const isSourceEnabled = (s: ISourceRow): boolean =>

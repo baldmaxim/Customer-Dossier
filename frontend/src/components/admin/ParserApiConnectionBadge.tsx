@@ -6,11 +6,12 @@ import { FC } from 'react';
 
 import type { IParserApiSettings } from '../../api/types';
 import { formatDateTime, PARSER_API_CONNECTION_LABELS } from '../../lib/labels';
+import { parserApiConnectionState } from '../../lib/parserApiConnection';
 import { PARSER_API_CONNECTION_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 
 export const ParserApiConnectionBadge: FC<{ settings: IParserApiSettings }> = ({ settings }) => {
-  const state = settings.connection?.state ?? (settings.key.source === 'none' ? 'none' : 'unverified');
+  const state = parserApiConnectionState(settings);
   const at = settings.connection?.at ?? null;
   return (
     <Badge tone={toneOf(PARSER_API_CONNECTION_TONE, state)} hint={at ? `последний ответ сервиса — ${formatDateTime(at)}` : undefined}>

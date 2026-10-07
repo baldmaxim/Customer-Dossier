@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import type { AmbiguityDecisionKind, IAmbiguityDetail } from '../api/types';
 import { newKey } from '../lib/idempotency';
-import { AMBIGUITY_DECISION_LABELS, AMBIGUITY_STATUS_LABELS, formatDateTime } from '../lib/labels';
+import { AMBIGUITY_DECISION_LABELS, AMBIGUITY_STATUS_LABELS, actorLabel, formatDateTime } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
 import { formatCountWord } from '../lib/format';
 import { AMBIGUITY_STATUS_TONE, toneOf } from '../lib/statusTone';
@@ -154,7 +154,7 @@ export const AmbiguityDetail: FC<{ ambiguityId: number }> = ({ ambiguityId }) =>
             {d.decisions.map(x => (
               <li key={x.id}>
                 {AMBIGUITY_DECISION_LABELS[x.decision] ?? x.decision}
-                {x.entityId !== null ? `: ${nameOf(x.entityId) ?? 'вариант, которого больше нет в списке'}` : ''} · {x.actor} ·{' '}
+                {x.entityId !== null ? `: ${nameOf(x.entityId) ?? 'вариант, которого больше нет в списке'}` : ''} · {actorLabel(x.actor)} ·{' '}
                 {formatDateTime(x.decidedAt)}
                 <span className={styles.muted}>{x.reason}</span>
               </li>

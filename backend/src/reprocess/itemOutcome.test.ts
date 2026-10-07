@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { decideItemState } from './itemOutcome.js';
+import { decideItemState, decideRunOutcome } from './itemOutcome.js';
 
 const base = { policyAllowed: true, run: null, activeSetId: null, assertions: 0 };
 
@@ -31,5 +31,22 @@ describe('decideItemState', () => {
     expect(decideItemState({ ...base, run: { status: 'cancelled', relevant: null } })).toBe('cancelled');
     // Разобрано полностью, но в карточки ещё не перенесено.
     expect(decideItemState({ ...base, run: { status: 'completed', relevant: true } })).toBe('built_not_in_cards');
+  });
+});
+
+describe('decideRunOutcome — итог одного запуска (строка «Обработки», страница разбора)', () => {
+  const base = { status: 'completed', relevant: true, setStatus: null, policyAllowed: true, failures: 0, retryMax: 3 };
+
+  it('перенесённое в карточки старше выключенного источника; не перенесённое — со статусом набора', () => {
+    expect(decideRunOutcome({ ...base, setStatus: 'published', policyAllowed: false })).toEqual({ state: 'in_cards', detail: null });
+    expect(decideRunOutcome({ ...base, relevant: false })).toEqual({ state: 'not_relevant', detail: null });
+    expect(decideRunOutcome({ ...base, setStatus: 'rejected_stale' })).toEqual({ state: 'built_not_in_cards', detail: 'rejected_stale' });
+    expect(decideRunOutcome({ ...base, setStatus: 'built' })).toEqual({ state: 'built_not_in_cards', detail: null });
+  });
+
+  it('упавший — «попытки исчерпаны» по тому же порогу, что плитка failed_exhausted', () => {
+    expect(decideRunOutcome({ ...base, status: 'failed', relevant: null, failures: 3 })).toEqual({ state: 'failed', detail: 'exhausted' });
+    expect(decideRunOutcome({ ...base, status: 'partial', relevant: null, failures: 1 })).toEqual({ state: 'partial', detail: 'retrying' });
+    expect(decideRunOutcome({ ...base, status: 'queued', relevant: null, policyAllowed: false })).toEqual({ state: 'no_policy', detail: null });
   });
 });

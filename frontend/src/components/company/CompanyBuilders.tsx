@@ -13,7 +13,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import type { ICompanyBuilder } from '../../api/types';
 import { formatCount, pluralize } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS } from '../../lib/labels';
+import { roleLabel } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -54,7 +54,7 @@ const BuilderRow: FC<IBuilderRowProps> = ({ builder: b, index, onDetails }) => {
           )}
           {b.roles.map(role => (
             <Badge key={role} tone="accent">
-              {ASSERTION_ROLE_LABELS[role] ?? role}
+              {roleLabel(role)}
             </Badge>
           ))}
           {b.inGroup && <Badge>своя группа</Badge>}

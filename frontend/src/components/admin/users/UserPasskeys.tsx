@@ -15,7 +15,7 @@ import { useConfirm } from '../../ui/confirm';
 import { EmptyState } from '../../ui/EmptyState';
 import { Loading } from '../../ui/Loading';
 import { Stack } from '../../ui/Stack';
-import { actionError } from '../actionError';
+import { actionError } from '../../../lib/actionError';
 
 export const UserPasskeys: FC<{ user: IUserRow }> = ({ user }) => {
   const queryClient = useQueryClient();

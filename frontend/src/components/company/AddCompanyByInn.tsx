@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { ICompanyRegistered } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
+import { actionError } from '../../lib/actionError';
 import { REGISTER_FOCUS_LABELS } from '../../lib/labels';
 import { identifierOfQuery, type IQueryIdentifier } from '../../lib/taxId';
 import { Button } from '../ui/Button';
@@ -42,7 +43,7 @@ export const AddCompanyByInn: FC<IAddCompanyByInnProps> = ({ identifier }) => {
       toast.show({ tone: ok ? 'success' : 'warning', text: focusText(result) });
       navigate(`/company/${result.companyId}`, { viewTransition: true });
     },
-    onError: (err: Error) => toast.show({ tone: 'danger', text: err.message }),
+    onError: (err: Error) => toast.show({ tone: 'danger', text: actionError(err) }),
   });
 
   if (!identifier.checksumOk) {

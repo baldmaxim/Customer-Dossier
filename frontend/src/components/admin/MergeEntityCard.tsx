@@ -1,7 +1,7 @@
 import { FC } from 'react';
 
 import type { IMergeEntitySummary, IMergePreview } from '../../api/types';
-import { ENTITY_TYPE_LABELS, PROJECT_LEVEL_LABELS, formatIdentifier } from '../../lib/labels';
+import { ENTITY_TYPE_LABELS, NO_IDENTIFIERS_TEXT, PROJECT_LEVEL_LABELS, formatIdentifier } from '../../lib/labels';
 import styles from './Merge.module.css';
 
 interface IMergeEntityCardProps {
@@ -25,7 +25,7 @@ export const MergeEntityCard: FC<IMergeEntityCardProps> = ({ role, entity, kind 
       <span className={styles.entityName}>{entity.name}</span>
       <span className={styles.muted}>{facts}</span>
       <span className={styles.muted}>
-        {entity.identifiers.length > 0 ? entity.identifiers.map(formatIdentifier).join(', ') : 'реквизитов нет'}
+        {entity.identifiers.length > 0 ? entity.identifiers.map(formatIdentifier).join(', ') : NO_IDENTIFIERS_TEXT}
       </span>
       {entity.aliases.length > 0 && <span className={styles.muted}>также: {entity.aliases.join(', ')}</span>}
     </div>

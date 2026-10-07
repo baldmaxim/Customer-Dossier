@@ -8,11 +8,12 @@ import { FC, ReactNode, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { DomRfCandidateState, IDomRfCandidate, IDomRfCandidates, IDomRfCandidateSource } from '../../api/types';
+import type { IDomRfCandidate, IDomRfCandidates, IDomRfCandidateSource } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCountWord } from '../../lib/format';
-import { actorLabel, formatDateTime, DOMRF_CANDIDATE_STATE_LABELS, DOMRF_CARD_KIND_LABELS } from '../../lib/labels';
+import { actorLabel, formatDateTime, formatIdentifier, DOMRF_CANDIDATE_STATE_LABELS, DOMRF_CARD_KIND_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import { DECISION_STATE_TONE, toneOf } from '../../lib/statusTone';
 import { Badge } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
 import { ButtonLink } from '../ui/ButtonLink';
@@ -30,7 +31,7 @@ import { Segmented } from '../ui/Segmented';
 import { Stack } from '../ui/Stack';
 import { useToast } from '../ui/toast';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
-import { actionError } from './actionError';
+import { actionError } from '../../lib/actionError';
 import { DomRfReplaceForm } from './DomRfReplaceForm';
 import { DOMRF_SUMMARY_KEY } from './domRfSummary';
 
@@ -38,13 +39,6 @@ type View = 'pending' | 'decided';
 
 const HINT =
   'Объекты со страниц застройщика и группы компаний, на которые ссылаются уже собранные карточки ДОМ.РФ. Портал их сам не собирает: подтвердите — карточка встанет в сбор; не тот объект — отклоните или замените правильной ссылкой.';
-
-const STATE_TONE: Record<DomRfCandidateState, 'neutral' | 'success' | 'warning'> = {
-  pending: 'neutral',
-  confirmed: 'success',
-  rejected: 'neutral',
-  replaced: 'warning',
-};
 
 const sourceKey = (kind: string, ref: string): string => `${kind}:${ref}`;
 
@@ -172,7 +166,7 @@ export const DomRfCandidates: FC = () => {
         view === 'pending' && canDecide ? (
           <Checkbox label={<VisuallyHidden>Выбрать №{item.externalRef}</VisuallyHidden>} checked={selected.has(item.id)} onChange={on => toggle(item.id, on)} />
         ) : (
-          <Badge tone={STATE_TONE[item.state]}>{DOMRF_CANDIDATE_STATE_LABELS[item.state]}</Badge>
+          <Badge tone={toneOf(DECISION_STATE_TONE, item.state)}>{DOMRF_CANDIDATE_STATE_LABELS[item.state]}</Badge>
         )
       }
       actions={actionsFor(item)}
@@ -249,7 +243,7 @@ export const DomRfCandidates: FC = () => {
             >
               <Stack gap={2}>
                 <Cluster gap={2} align="center">
-                  {source?.inn && <span>ИНН {source.inn}</span>}
+                  {source?.inn && <span>{formatIdentifier({ type: 'inn', value: source.inn })}</span>}
                   {source?.companyId ? (
                     <ButtonLink to={`/company/${source.companyId}`} variant="link" size="sm">
                       Компания в портале: {source.companyName ?? `№${source.companyId}`}

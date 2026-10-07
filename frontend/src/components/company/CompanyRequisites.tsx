@@ -18,7 +18,8 @@
 import { FC, ReactNode } from 'react';
 
 import type { ICompanyResponse, IFocusView } from '../../api/types';
-import { ASSERTION_ROLE_LABELS, ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, formatDate } from '../../lib/labels';
+import { ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, formatDate } from '../../lib/labels';
+import { RoleBadges } from '../RoleBadges';
 import { Badge } from '../ui/Badge';
 import { CopyValue } from '../ui/CopyValue';
 import styles from './Company.module.css';
@@ -44,8 +45,6 @@ export interface IObjectRoleCount {
   role: string;
   count: number;
 }
-
-const roleLabel = ({ role, count }: IObjectRoleCount): string => `${ASSERTION_ROLE_LABELS[role] ?? role} · ${count}`;
 
 const Requisites: FC<{ rows: IRequisite[]; className?: string }> = ({ rows, className }) => (
   <dl className={className}>
@@ -96,12 +95,10 @@ export const CompanyRequisites: FC<ICompanyRequisitesProps> = ({ data, focus = n
   if (egrul?.address) wide.push({ key: 'egrul-address', label: 'Юридический адрес', value: egrul.address });
   else if (data.registry?.address) wide.push({ key: 'address', label: 'Адрес в реестре', value: data.registry.address });
   const checkedAt = focus?.check?.checkedAt ?? focus?.fetchedAt ?? null;
-  const shownRoles = roles.slice(0, ROLE_BADGES);
-  const restRoles = roles.slice(ROLE_BADGES);
 
   return (
     <div className={styles.reqBlock} role="group" aria-label="Реквизиты">
-      {(egrul?.status || shownRoles.length > 0) && (
+      {(egrul?.status || roles.length > 0) && (
         // Ярлыки без подсказок-кнопок: в шапке кнопки — только копирование реквизитов. Что за роли — сказано
         // подписью списка (роль на своих объектах, по публикациям и реестру; объекты СЗ группы не входят).
         <ul className={styles.reqBadges} aria-label="Статус и роли на своих объектах">
@@ -113,19 +110,7 @@ export const CompanyRequisites: FC<ICompanyRequisitesProps> = ({ data, focus = n
               </Badge>
             </li>
           )}
-          {shownRoles.map(r => (
-            <li key={r.role}>
-              <Badge tone="accent">{roleLabel(r)}</Badge>
-            </li>
-          ))}
-          {restRoles.length > 0 && (
-            <li>
-              <Badge tone="accent">
-                <span aria-hidden="true">+{restRoles.length}</span>
-                <span className="visually-hidden">ещё: {restRoles.map(roleLabel).join(', ')}</span>
-              </Badge>
-            </li>
-          )}
+          <RoleBadges roles={roles} max={ROLE_BADGES} item="li" />
         </ul>
       )}
       <Requisites rows={short} className={styles.requisites} />

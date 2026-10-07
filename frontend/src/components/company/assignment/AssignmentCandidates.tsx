@@ -11,13 +11,12 @@ import { Link } from 'react-router-dom';
 
 import type { IEgrulCandidate, IPortalCandidate } from '../../../api/types';
 import { useCan } from '../../../hooks/useAuth';
-import { ENTITY_TYPE_LABELS, MODEL_VERDICT_HINTS } from '../../../lib/labels';
+import { ENTITY_TYPE_LABELS, MODEL_VERDICT_HINTS, primaryIdentifierText } from '../../../lib/labels';
 import { Button } from '../../ui/Button';
 import { Section } from '../../ui/Section';
 import styles from './Assignment.module.css';
 
-const identifierText = (c: { inn: string | null; ogrn: string | null }): string | null =>
-  c.inn ? `ИНН ${c.inn}` : c.ogrn ? `ОГРН ${c.ogrn}` : null;
+const identifierText = (c: { inn: string | null; ogrn: string | null }): string | null => primaryIdentifierText(c);
 
 interface IRowProps {
   title: ReactNode;
