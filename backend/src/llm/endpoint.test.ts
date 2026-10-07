@@ -6,7 +6,7 @@ import { parseEnv } from '../config/env.js';
 import { OPENROUTER_BASE_URL } from '../config/llm.js';
 import { EnvValueError } from '../config/parse.js';
 import { buildFingerprint, lmStudioProvider, type IChunkerParams } from '../reprocess/provider.js';
-import { extractHeadline, llmTimeoutMs, retryPolicyVersion, setAdminLlmApiKey } from './client.js';
+import { extractHeadline, extractSemantic, llmTimeoutMs, retryPolicyVersion, setAdminLlmApiKey } from './client.js';
 import { checkOpenRouter, checkOpenRouterKey, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
 
 const SECRET = 'sk-or-v1-test-secret-value';
@@ -201,7 +201,7 @@ describe('запрос к модели', () => {
     const failed = await extractHeadline({ body: 'Текст новости о стройке.', publishedAt: null });
     expect(failed).toMatchObject({ ok: false, failure: 'schema_error' });
     expect(local).toHaveLength(1);
-    expect(retryPolicyVersion()).toBe('retry@1:llm_error×3(2s,8s);invalid_json→1×temp0,70%');
+    expect(retryPolicyVersion()).toBe('retry@2:llm_error×3(2s,8s),timeout×2;invalid_json→1×temp0,70%,extract@3→0');
     expect(llmTimeoutMs()).toBe(120_000);
   });
 
@@ -218,6 +218,33 @@ describe('запрос к модели', () => {
     expect(result.ok && result.truncatedInput).toBeFalsy();
     expect(calls).toHaveLength(2);
     expect(calls[1]?.body.temperature).toBe(0.1);
+  });
+
+  it('retry@2: таймаут — две попытки, а не три: каждая ждёт предел вызова целиком', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls += 1;
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    });
+    const pending = extractHeadline({ body: 'Текст новости о стройке.', publishedAt: null });
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await pending;
+    expect(result).toMatchObject({ ok: false, failure: 'llm_error', timedOut: true });
+    expect(calls).toBe(2);
+  });
+
+  it('retry@2: extract@3 после невалидного JSON не повторяет на урезанном тексте, тема — повторяет', async () => {
+    const semantic = capture([ok('{"не json')]);
+    const failed = await extractSemantic({ body: 'Текст новости о стройке.', publishedAt: null });
+    expect(failed).toMatchObject({ ok: false, failure: 'invalid_json' });
+    expect(semantic).toHaveLength(1);
+
+    const headline = capture([ok('{"не json'), ok('{"topic":"Стройка школы"}')]);
+    const result = await extractHeadline({ body: 'Текст новости о стройке.', publishedAt: null });
+    expect(result.ok && result.truncatedInput).toBe(true);
+    expect(headline).toHaveLength(2);
+    expect(headline[1]?.body.temperature).toBe(0);
   });
 });
 

@@ -46,10 +46,8 @@ export const startMetricsScheduler = (signal: AbortSignal): void => {
       // Снимок сигналов (этап 07): ошибка не стирает прежний снимок, а помечается в журнале пересчётов.
       const signals = await refreshSignals({ requestedBy: 'scheduler' });
       if (signals.outcome === 'failed') console.error(`[signals] пересчёт #${signals.refreshId} не удался: ${signals.error}`);
-      const ms = await refreshCompanyMetrics();
-      if (ms !== null && ms > 5000) {
-        console.warn(`[metrics] пересчёт занял ${ms} мс — критерий приёмки M4 не выполняется`);
-      }
+      // Legacy company_metrics по расписанию не пересчитывается (07.10.2026): её читает только deprecated
+      // /legacy-risk, а REFRESH обходит все компании. Вручную — `npm run metrics:refresh` или админка.
     } catch (err) {
       console.error(`[metrics] ${err instanceof Error ? err.message : String(err)}`);
     }

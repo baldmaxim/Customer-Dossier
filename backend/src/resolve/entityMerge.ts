@@ -20,7 +20,6 @@ import type { PoolClient } from 'pg';
 import { withTransaction } from '../db/pool.js';
 import type { IAssertionContent, Modality } from '../assertions/model.js';
 import { refreshAssertionState, upsertAssertion } from '../assertions/repository.js';
-import { refreshCompanyMetrics } from '../metrics/refresh.js';
 import { findIdentifierConflicts, loadIdentifiers } from './identifiers.js';
 import { citiesKnownAndEqual } from './project.js';
 
@@ -1125,17 +1124,10 @@ export const applyEntityMerge = async (input: IMergeApplyInput): Promise<IMergeA
     return { mergeId, replayed: false, counts, targetVersion };
   });
 
-  if (!result.replayed) await refreshMetricsQuietly();
+  // Legacy company_metrics после слияния не пересчитывается (07.10.2026): её читает только deprecated
+  // /legacy-risk, а полный REFRESH на каждое слияние держал ответ (модель сливает пачками). Вручную —
+  // `npm run metrics:refresh` или админка.
   return result;
-};
-
-const refreshMetricsQuietly = async (): Promise<void> => {
-  // Метрики — производные legacy-таблиц; сбой пересчёта не отменяет слияние.
-  try {
-    await refreshCompanyMetrics();
-  } catch (err) {
-    console.warn(`[merge] пересчёт метрик не выполнен: ${err instanceof Error ? err.message : String(err)}`);
-  }
 };
 
 // ---------------------------------------------------------------------------
@@ -1262,6 +1254,5 @@ export const undoEntityMerge = async (input: IUndoInput): Promise<IUndoResult> =
     if (input.beforeCommit) await input.beforeCommit();
     return { mergeId: merge.id, replayed: false, restoredMoves: moves.length };
   });
-  if (!result.replayed) await refreshMetricsQuietly();
   return result;
 };

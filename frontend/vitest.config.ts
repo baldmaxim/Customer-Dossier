@@ -18,6 +18,9 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
+    // По умолчанию vitest берёт «ядра − 1» воркеров (7) и на машине разработчика падает по памяти; три — 31 с
+    // вместо 78 у одного при пике ~1 ГБ (07.10.2026).
+    maxWorkers: 3,
     // Глобальные стили отдаются тестам как есть (?raw): themeColor.test.ts сверяет theme-color
     // с токеном --chrome, useTheme.test.tsx — правило смены темы без переходов (styles/motion.css).
     // Модули компонентов по-прежнему не обрабатываются.

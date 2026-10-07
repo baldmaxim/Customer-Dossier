@@ -60,7 +60,7 @@ describe('execution-identity@1', () => {
         systemMessageHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         userTemplateHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         schemaVersion: 'extract@3',
-        retryPolicy: expect.stringMatching(/^retry@1/),
+        retryPolicy: expect.stringMatching(/^retry@2/),
         candidateBuildVersion: CANDIDATE_BUILD_VERSION,
       }),
     );
@@ -95,20 +95,27 @@ describe('execution-identity@1', () => {
 });
 
 describe('повторы внутри клиента модели', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it('T11-04: перед повтором допуск отозван — повторный запрос не отправляется', async () => {
+    vi.useFakeTimers();
     const calls: string[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
       calls.push(init.body);
-      return new Response(JSON.stringify({ choices: [{ message: { content: '{"не json' } }] }), { status: 200 });
+      // Сбой сервера модели — повтор через 2 с. Невалидный JSON extract@3 больше не повторяет (retry@2).
+      return new Response('upstream error', { status: 502 });
     });
     let attempts = 0;
     const beforeAttempt = async () => {
       attempts += 1;
       if (attempts > 1) throw new PolicyRevokedError(7, 'ИИ-обработка отозвана');
     };
-    await expect(extractSemantic({ body: 'Текст новости о стройке.', publishedAt: null, beforeAttempt })).rejects.toBeInstanceOf(PolicyRevokedError);
+    const rejected = expect(extractSemantic({ body: 'Текст новости о стройке.', publishedAt: null, beforeAttempt })).rejects.toBeInstanceOf(PolicyRevokedError);
+    await vi.advanceTimersByTimeAsync(2000);
+    await rejected;
     expect(calls).toHaveLength(1);
   });
 

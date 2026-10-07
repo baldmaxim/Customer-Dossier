@@ -49,7 +49,15 @@ export type ILlmResult<T = IExtraction> =
       /** Только у спецификации с веб-поиском: страницы, которые поиск отдал модели. */
       citations?: ILlmCitation[];
     }
-  | { ok: false; failure: LlmFailure; message: string; usage: ILlmUsage; rawResponse: string | null };
+  | {
+      ok: false;
+      failure: LlmFailure;
+      message: string;
+      usage: ILlmUsage;
+      rawResponse: string | null;
+      /** Вызов не уложился в llmTimeoutMs(): повтор после этого — не больше одного (retryPolicyVersion). */
+      timedOut?: boolean;
+    };
 
 interface IUrlCitationAnnotation {
   type?: string;
@@ -104,6 +112,11 @@ export interface IExtractSpec<T> {
    * запусков разбора (reprocess/provider.ts) тело запроса не входит, у прежних спецификаций поля нет.
    */
   plugins?: () => unknown[];
+  /**
+   * Повтор на урезанном на 30 % тексте после невалидного JSON (по умолчанию — есть). extract@3 его не берёт:
+   * ответ на урезанном тексте не описывает чанк (reprocess/extractOutcome.ts), и вызов был бы пустой тратой.
+   */
+  shortenedRetry?: boolean;
 }
 
 export const LEGACY_SPEC: IExtractSpec<IExtraction> = {
@@ -120,6 +133,7 @@ export const SEMANTIC_SPEC: IExtractSpec<ISemanticExtraction> = {
   validator: semanticExtractionSchema,
   system: buildSemanticSystemMessage,
   user: buildSemanticUserMessage,
+  shortenedRetry: false,
 };
 
 /**
@@ -197,8 +211,12 @@ export interface IExtractOptions {
   promptVariant?: string | null;
 }
 
-/** Политика повторов ниже — часть идентичности исполнения запуска (reprocess/provider.ts). */
-export const RETRY_POLICY_VERSION = 'retry@1:llm_error×3(2s,8s);invalid_json→1×temp0,70%';
+/**
+ * Политика повторов ниже — часть идентичности исполнения запуска (reprocess/provider.ts).
+ * retry@2 (07.10.2026): таймаут — не больше двух попыток (третья ждала бы ещё 120 с, у облака 300 с);
+ * extract@3 после невалидного JSON не повторяет на урезанном тексте — такой ответ всё равно не засчитывается.
+ */
+export const RETRY_POLICY_VERSION = 'retry@2:llm_error×3(2s,8s),timeout×2;invalid_json→1×temp0,70%,extract@3→0';
 
 /**
  * OpenRouter: хостинг иногда отдаёт JSON без обязательных полей, хотя строгую схему заявляет (28 из 289
@@ -252,7 +270,9 @@ const callOnce = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Pro
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, failure: 'llm_error', message, usage: emptyUsage(), rawResponse: null };
+    // AbortSignal.timeout отклоняет fetch с TimeoutError; внешняя отмена — AbortError, это не таймаут.
+    const timedOut = (err as { name?: unknown } | null)?.name === 'TimeoutError';
+    return { ok: false, failure: 'llm_error', message, usage: emptyUsage(), rawResponse: null, ...(timedOut ? { timedOut } : {}) };
   }
 
   if (!response.ok) {
@@ -321,26 +341,33 @@ const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(r
 /** Паузы между попытками при сетевых сбоях. */
 const BACKOFF_MS = [2000, 8000, 30_000];
 
+/** Таймаутов на один вызов: второй подряд — уже не случайный сбой связи, дальше решает повтор запуска. */
+const MAX_TIMEOUT_ATTEMPTS = 2;
+
 /**
  * Извлечение с ретраями.
  *
  * Сетевые сбои и 5xx — три попытки с backoff: LM Studio мог перезагружать модель.
+ * Таймаут — не больше двух попыток: каждая ждёт llmTimeoutMs() целиком.
  * Невалидный JSON — ровно один повтор при temperature 0 и урезанном на 30 %
  * тексте: обычная причина — обрыв генерации на лимите токенов, и повтор с той
- * же длиной даст тот же обрыв. OpenRouter: ответ не по схеме — один повтор
- * тем же текстом при temperature 0 (retryPolicyVersion).
+ * же длиной даст тот же обрыв (кроме спецификаций с shortenedRetry: false).
+ * OpenRouter: ответ не по схеме — один повтор тем же текстом при temperature 0
+ * (retryPolicyVersion).
  */
 export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpec<T>): Promise<ILlmResult<T>> => {
   let last: ILlmResult<T> | null = null;
+  let timeouts = 0;
 
   for (let attempt = 0; attempt < BACKOFF_MS.length; attempt += 1) {
     if (options.beforeAttempt) await options.beforeAttempt();
     const result = await callOnce(options, spec);
-    if (result.ok || result.failure !== 'llm_error') {
-      last = result;
-      break;
-    }
     last = result;
+    if (result.ok || result.failure !== 'llm_error') break;
+    if (result.timedOut) {
+      timeouts += 1;
+      if (timeouts >= MAX_TIMEOUT_ATTEMPTS) break;
+    }
     if (attempt < BACKOFF_MS.length - 1) {
       await sleep(BACKOFF_MS[attempt] ?? 2000);
     }
@@ -354,7 +381,7 @@ export const extractWith = async <T>(options: IExtractOptions, spec: IExtractSpe
     if (options.beforeAttempt) await options.beforeAttempt();
     return callOnce({ ...options, temperature: 0 }, spec);
   }
-  if (last.failure !== 'invalid_json') return last;
+  if (last.failure !== 'invalid_json' || spec.shortenedRetry === false) return last;
 
   const shortened = options.body.slice(0, Math.floor(options.body.length * 0.7));
   console.warn('[llm] невалидный JSON, повтор при temperature=0 и укороченном тексте');

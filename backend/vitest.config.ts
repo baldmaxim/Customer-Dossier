@@ -9,5 +9,8 @@ export default defineConfig({
     exclude: ['src/**/*.int.test.ts', 'node_modules/**', 'dist/**'],
     setupFiles: ['src/__tests__/setup.ts'],
     globals: false,
+    // По умолчанию vitest берёт «ядра − 1» воркеров (7) и на машине разработчика падает по памяти; три — 25 с
+    // вместо 68 у одного при пике ~1 ГБ (07.10.2026). Изоляцию файлов не выключаем: тесты меняют env и ключ модели.
+    maxWorkers: 3,
   },
 });
