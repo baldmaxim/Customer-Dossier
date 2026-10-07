@@ -14,6 +14,7 @@
 import type { PoolClient } from 'pg';
 
 import type { DbExecutor } from '../db/pool.js';
+import { lockCanonWrites } from '../resolve/canonLock.js';
 import { addIdentifier, classifyTaxId, type ITypedIdentifier } from '../resolve/identifiers.js';
 import { suggestionView, type ISuggestionView } from '../focus/suggest.js';
 
@@ -197,6 +198,8 @@ export const identifyCompany = async (client: PoolClient, input: { companyId: nu
   const typed = classifyTaxId(input.raw);
   if (!typed || !LEGAL_TYPES.includes(typed.identifierType)) return { ok: false, reason: 'bad_format' };
   if (typed.validationStatus !== 'checksum_valid') return { ok: false, reason: 'bad_checksum' };
+  // Сначала общая блокировка канона (resolve/canonLock.ts), потом реквизита — тот же порядок, что у всех путей.
+  await lockCanonWrites(client);
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`company-identifier:${typed.identifierType}:${typed.value}`]);
   const company = (
     await client.query<{ id: number }>('SELECT id FROM companies WHERE id = $1 AND merged_into_id IS NULL FOR UPDATE', [input.companyId])

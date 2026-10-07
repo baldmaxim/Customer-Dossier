@@ -17,6 +17,7 @@
 //    в resolution_ambiguities с якорем-редакцией.
 
 import type { DbExecutor } from '../db/pool.js';
+import { lockCanonWrites } from './canonLock.js';
 import { analystMapping } from './ambiguities.js';
 import { addIdentifier, classifyTaxId, findCompanyByIdentifier } from './identifiers.js';
 import {
@@ -384,6 +385,8 @@ export const resolveCompany = async (
   exec: DbExecutor,
   input: IResolveInput,
 ): Promise<IResolveResult | null> => {
+  // Вызывающий берёт её первой командой транзакции; здесь — подстраховка для нового пути (resolve/canonLock.ts).
+  await lockCanonWrites(exec);
   const normalized = normalizeName(input.surface, 'company');
   if (isJunkName(normalized)) return null;
 

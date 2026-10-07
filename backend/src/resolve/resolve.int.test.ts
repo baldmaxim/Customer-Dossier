@@ -100,3 +100,17 @@ describe('resolveProject — география (R02)', () => {
     expect(again?.projectId).toBe(moscow.rows[0]?.id);
   });
 });
+
+describe('параллельные «найти или завести» (resolve/canonLock.ts, 07.10.2026)', () => {
+  // Так сходятся реестр ДОМ.РФ (работник в своём контейнере), полосы разбора и заведение по ИНН: у каждого своя
+  // транзакция, а ключ имени без уникального индекса. Общая блокировка канона — одна карточка на имя.
+  it('четыре транзакции одновременно заводят одно новое имя — одна компания и один объект', async () => {
+    const companies = await Promise.all(Array.from({ length: 4 }, () => company('Гонкострой Демо')));
+    expect(companies.every(c => c !== null)).toBe(true);
+    expect(new Set(companies.map(c => c!.companyId)).size).toBe(1);
+
+    const projects = await Promise.all(Array.from({ length: 4 }, () => project('ЖК Гонка Демо', 'Казань')));
+    expect(projects.every(p => p !== null)).toBe(true);
+    expect(new Set(projects.map(p => p!.projectId)).size).toBe(1);
+  });
+});

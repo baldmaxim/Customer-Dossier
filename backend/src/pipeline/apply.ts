@@ -13,6 +13,7 @@ import { resolveCompany } from '../resolve/company.js';
 import { resolveProject } from '../resolve/project.js';
 import { CONFIDENCE_THRESHOLDS, type IVerificationResult } from './verify.js';
 import { NON_PARTICIPANT_ROLES } from '../llm/schema.js';
+import { lockCanonWrites } from '../resolve/canonLock.js';
 import { assertCanonWriteAllowed } from './guard.js';
 
 export interface IApplyInput {
@@ -88,6 +89,8 @@ export const applyExtraction = async (
   input: IApplyInput,
 ): Promise<IApplyStats> => {
   assertCanonWriteAllowed();
+  // Тот же порядок, что у всех путей записи канона (resolve/canonLock.ts), хотя путь и выключен.
+  await lockCanonWrites(client);
   const stats = emptyStats();
   const { verified, documentId, extractionId, publishedAt } = input;
 

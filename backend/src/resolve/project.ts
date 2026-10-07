@@ -10,6 +10,7 @@
 //     со ссылкой на родителя, одноимённые очереди разных ЖК не склеиваются.
 
 import type { DbExecutor } from '../db/pool.js';
+import { lockCanonWrites } from './canonLock.js';
 import { analystMapping } from './ambiguities.js';
 import { recordAmbiguity } from './company.js';
 import { parseProjectPath, type ProjectLevel } from './hierarchy.js';
@@ -415,6 +416,8 @@ export const resolveProject = async (
   exec: DbExecutor,
   input: IResolveProjectInput,
 ): Promise<IResolveProjectResult | null> => {
+  // Вызывающий берёт её первой командой транзакции; здесь — подстраховка для нового пути (resolve/canonLock.ts).
+  await lockCanonWrites(exec);
   const path = parseProjectPath(input.surface);
   const normalized = normalizeName(path.complex, 'project');
   if (isJunkName(normalized)) return null;

@@ -19,6 +19,7 @@ import type { IAssertionContent } from '../assertions/model.js';
 import { locateQuote, sliceByCodePoints } from '../assertions/span.js';
 import type { IRegistryRecord } from '../ingest/registry/map.js';
 import { companyTitle, developerLine, groupLine, requisitesLine } from '../ingest/registry/render.js';
+import { lockCanonWrites } from '../resolve/canonLock.js';
 import { resolveCompany } from '../resolve/company.js';
 import { addIdentifier, classifyTaxId } from '../resolve/identifiers.js';
 import { resolveProject } from '../resolve/project.js';
@@ -153,6 +154,9 @@ export const domRfGroupRefOf = async (client: PoolClient, record: IRegistryRecor
  * редакции и снимка: канон не должен ссылаться на редакцию, которой нет.
  */
 export const publishRegistryRecord = async (client: PoolClient, input: IRegistryPublishInput): Promise<IRegistryPublishOutcome> => {
+  // Застройщик, объект и группа заводятся тем же резолвером, что и публикация разбора, — под той же блокировкой,
+  // первой командой транзакции (resolve/canonLock.ts): иначе одновременная публикация разбора заводит дубль.
+  await lockCanonWrites(client);
   const { record, body, revisionId } = input;
   const out: IRegistryPublishOutcome = { projectId: null, companyId: null, groupCompanyId: null, assertions: 0, skipped: [] };
 

@@ -17,6 +17,7 @@ import { getPool, withTransaction, type DbExecutor } from '../db/pool.js';
 import { eventQuoteDiscriminator } from '../assertions/model.js';
 import { addEvidence, refreshAssertionState, upsertAssertion } from '../assertions/repository.js';
 import { sliceByCodePoints } from '../assertions/span.js';
+import { lockCanonWrites } from '../resolve/canonLock.js';
 import { resolveCompany } from '../resolve/company.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { resolveProject, type ProjectKind, type ProjectStage } from '../resolve/project.js';
@@ -407,10 +408,10 @@ const PUBLISHABLE_STATUSES = new Set(['built', 'superseded', 'rejected_policy', 
 
 export const publishCandidateSet = async (input: IPublishInput): Promise<IPublishResult> =>
   withTransaction(async client => {
-    // Публикации — строго по одной (07.10.2026): разбор идёт несколькими полосами (REPROCESS_CONCURRENCY), а
-    // резолвер внутри публикации ищет компанию по ключу имени без уникального индекса — два набора с одним
-    // новым именем одновременно завели бы две компании. Блокировка до конца транзакции, на все процессы.
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['reprocess:publish']);
+    // Публикации — строго по одной и не одновременно с реестром ДОМ.РФ и заведением по ИНН (resolve/canonLock.ts):
+    // разбор идёт несколькими полосами (REPROCESS_CONCURRENCY), а резолвер ищет компанию по ключу имени без
+    // уникального индекса — два набора с одним новым именем одновременно завели бы две компании.
+    await lockCanonWrites(client);
     const set = await loadSet(client, input.setId, true);
     if (!set) throw new NotPublishableError(`набор #${input.setId} не найден`);
 

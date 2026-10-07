@@ -11,6 +11,7 @@
 
 import type { PoolClient } from 'pg';
 
+import { lockCanonWrites } from '../resolve/canonLock.js';
 import { addIdentifier, classifyTaxId, findCompanyByIdentifier, type ITypedIdentifier } from '../resolve/identifiers.js';
 import { NORMALIZER_VERSION, normalizeName } from '../resolve/normalize.js';
 import type { IFocusIdentifier } from '../focus/client.js';
@@ -43,6 +44,8 @@ export const registerCompany = async (client: PoolClient, input: { raw: string; 
   if (!parsed.ok) return parsed;
   const { identifier } = parsed;
   const focusTarget = focusTargetOf(identifier);
+  // Сначала общая блокировка канона (resolve/canonLock.ts), потом реквизита — тот же порядок, что у всех путей.
+  await lockCanonWrites(client);
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`company-identifier:${identifier.identifierType}:${identifier.value}`]);
 
   const existing = await findCompanyByIdentifier(client, identifier);
