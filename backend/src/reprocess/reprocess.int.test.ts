@@ -16,6 +16,7 @@ import { runsToRetry } from './cli-commands.js';
 import { lmStudioProvider, type IChunkerParams, type IModelProvider } from './provider.js';
 import { RUN_LIST_STATES, revisionStatesSql } from './revisionStates.js';
 import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunResult } from './runs.js';
+import { runReprocessPass } from './worker.js';
 import { company, event, extraction, fakeProvider, INN_A, INN_B, link, ok, project } from './__fixtures__/extraction.js';
 
 const CHUNKER: IChunkerParams = { chunkSize: 4000, maxChunks: 6, overlap: 50 };
@@ -1117,5 +1118,60 @@ describe('этап 15B: запуски, отмена, повтор и публи
       expect((await list(`state=${state}&limit=1`)).total, state).toBe(counts.get(state) ?? 0);
     }
     expect((await api.call('GET', '/api/reprocess/runs?state=waiting', undefined)).status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('полосы разбора (REPROCESS_CONCURRENCY, 07.10.2026)', () => {
+  it('три полосы ждут модель одновременно; четыре текста с одной новой компанией — одна компания и один объект', async () => {
+    const Q = '«Демо-Полоса» — подрядчик ЖК «Луг-Демо»';
+    const answer = extraction({
+      companies: [company('Демо-Полоса', Q)],
+      projects: [project('Луг-Демо', Q)],
+      links: [link('Демо-Полоса', 'Луг-Демо', 'contractor')],
+    });
+    let inFlight = 0;
+    let peak = 0;
+    const provider = fakeProvider(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await sleep(60);
+      inFlight -= 1;
+      return ok(answer);
+    }, 'model-lanes');
+    for (let i = 0; i < 4; i += 1) {
+      const item = await store(sourceMain, `Полоса ${i}: ${Q}. Работы идут.`, `synthetic_reprocess/lanes-${i}`);
+      await enqueue(item.revisionId, provider);
+    }
+
+    const pass = await runReprocessPass(provider, { concurrency: 3, autoPublish: true, maxRuns: 10 });
+    expect(pass.results).toHaveLength(4);
+    expect(pass.results.map(r => r.run?.status)).toEqual(['completed', 'completed', 'completed', 'completed']);
+    expect(pass.results.map(r => r.publish?.outcome)).toEqual(['published', 'published', 'published', 'published']);
+    expect(peak).toBe(3);
+
+    // Резолвер ищет компанию по ключу имени без уникального индекса: публикации идут по одной (блокировка в publish.ts).
+    expect((await pool().query(`SELECT 1 FROM companies WHERE name = 'Демо-Полоса' AND merged_into_id IS NULL`)).rowCount).toBe(1);
+    expect((await pool().query(`SELECT 1 FROM projects WHERE name = 'Луг-Демо' AND merged_into_id IS NULL`)).rowCount).toBe(1);
+  });
+
+  it('без concurrency — одна полоса, как раньше', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const provider = fakeProvider(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await sleep(20);
+      inFlight -= 1;
+      return ok(extraction({ doc_relevant: false }));
+    }, 'model-one-lane');
+    for (let i = 0; i < 2; i += 1) {
+      const item = await store(sourceMain, `Одна полоса ${i}. ${'Новости стройки и реконструкции. '.repeat(3)}`, `synthetic_reprocess/one-lane-${i}`);
+      await enqueue(item.revisionId, provider);
+    }
+    const pass = await runReprocessPass(provider, { maxRuns: 10 });
+    expect(pass.results).toHaveLength(2);
+    expect(peak).toBe(1);
   });
 });

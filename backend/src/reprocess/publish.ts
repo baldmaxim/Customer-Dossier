@@ -407,6 +407,10 @@ const PUBLISHABLE_STATUSES = new Set(['built', 'superseded', 'rejected_policy', 
 
 export const publishCandidateSet = async (input: IPublishInput): Promise<IPublishResult> =>
   withTransaction(async client => {
+    // Публикации — строго по одной (07.10.2026): разбор идёт несколькими полосами (REPROCESS_CONCURRENCY), а
+    // резолвер внутри публикации ищет компанию по ключу имени без уникального индекса — два набора с одним
+    // новым именем одновременно завели бы две компании. Блокировка до конца транзакции, на все процессы.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['reprocess:publish']);
     const set = await loadSet(client, input.setId, true);
     if (!set) throw new NotPublishableError(`набор #${input.setId} не найден`);
 

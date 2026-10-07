@@ -86,7 +86,7 @@ Exit 0 — только `MATCH` (при `--compare`) или manifest без пр
 Дамп базы не переносит `.env`: флаги берутся из окружения процесса. В manifest пишутся только значения
 `CONFIG_KEYS` (фоновые флаги, `REVISION_WRITE_ENABLED`, `GRAPH_EXPORT_ENABLED`, `MERGE_APPLY_ENABLED`,
 `REPROCESS_AUTO_PUBLISH`, `EXTRACT_SCHEMA_VERSION`, `PROMPT_VERSION`, `LLM_PROVIDER`, `LMSTUDIO_MODEL`, `EXTRACT_CHUNK_*`,
-`EXTRACT_CONCURRENCY`, `HOST`, `PORT`, `SESSION_*`). `CONFIG_DENYLIST` (`DATABASE_URL`, `TEST_DATABASE_URL`,
+`EXTRACT_CONCURRENCY`, `REPROCESS_CONCURRENCY`, `HOST`, `PORT`, `SESSION_*`). `CONFIG_DENYLIST` (`DATABASE_URL`, `TEST_DATABASE_URL`,
 `OPERATOR_TOKEN` (ключ больше не читается, но остаётся в запрете), `TG_BOT_TOKEN`, `TG_BOT_ALLOWED_USER_IDS`, `LMSTUDIO_BASE_URL`, `LLM_API_KEY`, `DATABASE_SSL_CA_PATH`) не пишется
 ни значением, ни хешем. `LLM_PROVIDER` в manifest появился 30.09.2026: сверка с baseline, снятым раньше,
 покажет `LLM_PROVIDER: нет → lmstudio` — это не расхождение базы. Наличие токена оператора и `.env` на машине восстановления проверяет пользователь

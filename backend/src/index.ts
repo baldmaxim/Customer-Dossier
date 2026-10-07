@@ -83,6 +83,8 @@ const startPipelineWorker = (signal: AbortSignal): void => {
         autoPublish: env.REPROCESS_AUTO_PUBLISH,
         enqueueLimit: env.EXTRACT_BATCH_SIZE,
         probeModel: () => checkLlmConnection(modelProbeTimeoutMs()),
+        // Полосы разбора: у облака 4 по умолчанию, у LM Studio 1 (REPROCESS_CONCURRENCY).
+        concurrency: env.REPROCESS_CONCURRENCY,
         retry: env.REPROCESS_RETRY_ENABLED
           ? { max: env.REPROCESS_RETRY_MAX, backoffMinutes: env.REPROCESS_RETRY_BACKOFF_MIN }
           : null,

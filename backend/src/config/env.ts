@@ -23,6 +23,15 @@ const parseSchemaVersion = (raw: string | undefined): 'extract@2' | 'extract@3' 
   return value;
 };
 
+/** Одновременных запусков разбора — не больше 8: дальше упираемся в пул базы (10) и лимиты хостинга. */
+export const MAX_REPROCESS_CONCURRENCY = 8;
+
+const parseReprocessConcurrency = (raw: string | undefined, fallback: number): number => {
+  const n = parsePositiveInt('REPROCESS_CONCURRENCY', raw, fallback);
+  if (n > MAX_REPROCESS_CONCURRENCY) throw new EnvValueError(`REPROCESS_CONCURRENCY: не больше ${MAX_REPROCESS_CONCURRENCY}`);
+  return n;
+};
+
 const optional = (source: EnvSource, name: string, fallback: string): string => {
   const value = source[name];
   return value === undefined || value.trim() === '' ? fallback : value;
@@ -87,6 +96,11 @@ export const parseEnv = (source: EnvSource) => {
     // OpenRouter — 4096: на длинных текстах Qwen3-30B не укладывался в 2048, JSON обрывался, и повтор на
     // урезанном тексте давал неполный разбор. Памяти видеокарты у облака это не стоит, выход — копейки.
     EXTRACT_MAX_TOKENS: parsePositiveInt('EXTRACT_MAX_TOKENS', source.EXTRACT_MAX_TOKENS, llmProvider === 'openrouter' ? 4096 : 2048),
+    // Сколько запусков разбора нового конвейера идут одновременно (07.10.2026). LM Studio — 1: два запроса
+    // делят VRAM (см. EXTRACT_CONCURRENCY выше). OpenRouter — 4: модель в облаке, разбор упирался в ожидание
+    // ответа по одному чанку за раз. Число вызовов на текст и отпечаток запуска не меняются, публикация в
+    // карточки — по одной (publish.ts). Откат — REPROCESS_CONCURRENCY=1.
+    REPROCESS_CONCURRENCY: parseReprocessConcurrency(source.REPROCESS_CONCURRENCY, llmProvider === 'openrouter' ? 4 : 1),
 
     // Тема публикации локальной моделью (headline@1). Отдельный короткий вызов после разбора:
     // у telegram-постов заголовка нет, и лента показывала «без заголовка» подряд.

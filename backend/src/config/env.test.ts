@@ -62,6 +62,17 @@ describe('parseEnv — фоновые задания и сеть (TC-001, TC-010
     expect(parseEnv({ ...base, REPROCESS_RETRY_ENABLED: 'false' }).REPROCESS_RETRY_ENABLED).toBe(false);
   });
 
+  // 07.10.2026: у облака разбор ждал ответ по одному чанку за раз; у LM Studio два запроса делят VRAM.
+  it('полосы разбора: LM Studio — 1, OpenRouter — 4, явное значение главнее, больше 8 — ошибка', () => {
+    expect(parseEnv(base).REPROCESS_CONCURRENCY).toBe(1);
+    const cloud = { ...base, LLM_PROVIDER: 'openrouter', LLM_API_KEY: 'sk-or-v1-test', LMSTUDIO_BASE_URL: '' };
+    expect(parseEnv(cloud).REPROCESS_CONCURRENCY).toBe(4);
+    expect(parseEnv({ ...cloud, REPROCESS_CONCURRENCY: '1' }).REPROCESS_CONCURRENCY).toBe(1);
+    expect(parseEnv({ ...base, REPROCESS_CONCURRENCY: '8' }).REPROCESS_CONCURRENCY).toBe(8);
+    expect(() => parseEnv({ ...base, REPROCESS_CONCURRENCY: '9' })).toThrow(EnvValueError);
+    expect(() => parseEnv({ ...base, REPROCESS_CONCURRENCY: '0' })).toThrow(EnvValueError);
+  });
+
   it('каждый флаг остаётся рубильником: =false выключает', () => {
     const env = parseEnv({
       ...base,

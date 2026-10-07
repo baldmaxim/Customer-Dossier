@@ -19,7 +19,7 @@ import { getPool } from '../db/pool.js';
 import { modelTextPolicySql } from '../ingest/policy.js';
 import { NotPublishableError, PublicationConflictError, publishCandidateSet, type IPublishResult } from './publish.js';
 import type { IModelProvider } from './provider.js';
-import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunResult } from './runs.js';
+import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunClaim, type IRunResult } from './runs.js';
 
 export const enqueueNewRevisions = async (provider: IModelProvider, limit: number): Promise<number> => {
   const rows = (
@@ -130,10 +130,54 @@ export interface IPassOptions {
   probeModel?: () => Promise<{ ok: boolean; error?: string }>;
   /** null — без автоповтора (разовый прогон оператора). */
   retry?: IRetryPolicy | null;
+  /**
+   * Сколько запусков разбираются одновременно (REPROCESS_CONCURRENCY): каждая полоса сама берёт запуск из очереди
+   * (SKIP LOCKED, аренда, fencing) и ждёт модель независимо от соседей. Публикация в карточки — по одной
+   * (publish.ts, блокировка в базе). Не передано — 1, как раньше.
+   */
+  concurrency?: number;
 }
 
 /** Сколько повторов за проход: они не должны вытеснять свежие редакции из той же пачки. */
 export const RETRY_BATCH = 5;
+
+/** Один захваченный запуск: разбор, затем (при автопубликации) публикация набора. */
+const executeClaim = async (provider: IModelProvider, claim: IRunClaim, autoPublish: boolean): Promise<IPassResult> => {
+  try {
+    const run = await processRun(provider, claim);
+    let publish: IPublishResult | null = null;
+    let publishRefusal: string | null = null;
+    if (autoPublish && run.candidateSetId !== null) {
+      // Автопубликация без allowStale: устаревший разбор остаётся кандидатом.
+      const version = (
+        await getPool().query<{ version: number }>(
+          `SELECT coalesce((SELECT p.version FROM item_publications p
+                            JOIN candidate_sets cs ON cs.source_item_id = p.source_item_id
+                            WHERE cs.id = $1), 0) AS version`,
+          [run.candidateSetId],
+        )
+      ).rows[0]!.version;
+      try {
+        publish = await publishCandidateSet({ setId: run.candidateSetId, expectedVersion: version, actor: 'auto' });
+      } catch (err) {
+        // Отказ публикации — исход набора, а не падение запуска. Раньше он летел
+        // в общий catch, и успешный разбор попадал в лог как «запуск прерван».
+        if (err instanceof NotPublishableError || err instanceof PublicationConflictError) {
+          publishRefusal = err.message;
+          console.warn(`[reprocess] запуск ${claim.runId}: набор не опубликован — ${err.message}`);
+        } else {
+          throw err;
+        }
+      }
+    }
+    return { run, error: null, publish, publishRefusal };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Потерянный lease — не ошибка данных: запуск продолжит другой worker.
+    if (!(err instanceof StaleLeaseError)) console.error(`[reprocess] запуск ${claim.runId}: ${message}`);
+    return { run: null, error: message, publish: null, publishRefusal: null };
+  }
+};
 
 export const runReprocessPass = async (
   provider: IModelProvider,
@@ -155,44 +199,18 @@ export const runReprocessPass = async (
 
   const results: IPassResult[] = [];
   const maxRuns = options.maxRuns ?? env.EXTRACT_BATCH_SIZE;
-  for (let i = 0; i < maxRuns; i += 1) {
-    // Только запуски идентичности модели этого исполнителя: чужую конфигурацию не исполняем и не переписываем.
-    const claim = await claimNextRun(owner, { provider });
-    if (!claim) break;
-    try {
-      const run = await processRun(provider, claim);
-      let publish: IPublishResult | null = null;
-      let publishRefusal: string | null = null;
-      if (options.autoPublish && run.candidateSetId !== null) {
-        // Автопубликация без allowStale: устаревший разбор остаётся кандидатом.
-        const version = (
-          await getPool().query<{ version: number }>(
-            `SELECT coalesce((SELECT p.version FROM item_publications p
-                              JOIN candidate_sets cs ON cs.source_item_id = p.source_item_id
-                              WHERE cs.id = $1), 0) AS version`,
-            [run.candidateSetId],
-          )
-        ).rows[0]!.version;
-        try {
-          publish = await publishCandidateSet({ setId: run.candidateSetId, expectedVersion: version, actor: 'auto' });
-        } catch (err) {
-          // Отказ публикации — исход набора, а не падение запуска. Раньше он летел
-          // в общий catch, и успешный разбор попадал в лог как «запуск прерван».
-          if (err instanceof NotPublishableError || err instanceof PublicationConflictError) {
-            publishRefusal = err.message;
-            console.warn(`[reprocess] запуск ${claim.runId}: набор не опубликован — ${err.message}`);
-          } else {
-            throw err;
-          }
-        }
-      }
-      results.push({ run, error: null, publish, publishRefusal });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // Потерянный lease — не ошибка данных: запуск продолжит другой worker.
-      if (!(err instanceof StaleLeaseError)) console.error(`[reprocess] запуск ${claim.runId}: ${message}`);
-      results.push({ run: null, error: message, publish: null, publishRefusal: null });
+  const lanes = Math.max(1, Math.min(options.concurrency ?? 1, maxRuns));
+  let taken = 0;
+  // Полоса берёт запуски, пока не исчерпан общий предел прохода или очередь; модель ждёт каждая сама.
+  const lane = async (): Promise<void> => {
+    while (taken < maxRuns) {
+      taken += 1;
+      // Только запуски идентичности модели этого исполнителя: чужую конфигурацию не исполняем и не переписываем.
+      const claim = await claimNextRun(owner, { provider });
+      if (!claim) return;
+      results.push(await executeClaim(provider, claim, options.autoPublish === true));
     }
-  }
+  };
+  await Promise.all(Array.from({ length: lanes }, lane));
   return { results, skipped: null, retried };
 };
