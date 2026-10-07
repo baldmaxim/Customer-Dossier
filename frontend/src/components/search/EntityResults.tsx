@@ -2,7 +2,7 @@
 // с 600px — таблицы, на телефоне — карточки. Фильтры каталога при поиске не сбрасываются:
 // они в адресе и вернутся, когда запрос очистят.
 
-import { FC } from 'react';
+import { FC, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
@@ -26,7 +26,7 @@ interface IEntityResultsProps {
   onClear: () => void;
 }
 
-export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
+const EntityResultsView: FC<IEntityResultsProps> = ({ query, onClear }) => {
   const wide = useMediaQuery(MQ.sm);
   const companies = useQuery({
     queryKey: ['search', 'companies', query],
@@ -91,3 +91,7 @@ export const EntityResults: FC<IEntityResultsProps> = ({ query, onClear }) => {
     </Stack>
   );
 };
+
+// memo (07.10.2026): пока набирают запрос, страница перерисовывается на каждую букву, а результаты меняются только
+// с адресом (query) — после задержки поиска. onClear у CompaniesPage — useCallback.
+export const EntityResults = memo(EntityResultsView);

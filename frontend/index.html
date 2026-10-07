@@ -17,8 +17,16 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png" />
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Шрифт — системный стек (см. --font в src/index.css). Внешних запросов
-         за шрифтами нет: портал работает офлайн и не сообщает о себе третьим сайтам. -->
+    <!-- Шрифт — Inter из бандла (src/styles/fonts.css), внешних запросов нет. Кириллица нужна на любой странице:
+         preload, а не ожидание разбора CSS (07.10.2026). Vite подставляет тот же файл assets/, что и url() в
+         fonts.css; crossorigin обязателен — иначе предзагрузка не совпадёт и шрифт скачается дважды. -->
+    <link
+      rel="preload"
+      href="/node_modules/@fontsource-variable/inter/files/inter-cyrillic-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
 
     <!-- apple-mobile-web-app-capable устарел, но iOS до 17 читает только его. -->
     <meta name="mobile-web-app-capable" content="yes" />

@@ -2,11 +2,11 @@
 // реквизит, а не публикации: юрлицо видно и тогда, когда о нём ещё не писали. Вид и фильтры — в адресе,
 // до 200 строк, под списком — честно, сколько показано из скольких.
 
-import { FC, ReactNode } from 'react';
+import { FC, ReactNode, memo } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICatalogResponse } from '../../api/types';
+import type { ICatalogResponse, ICatalogRow } from '../../api/types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { formatCount, formatCountWord } from '../../lib/format';
 import { describeLoadError } from '../../lib/loadError';
@@ -24,13 +24,16 @@ import styles from './Search.module.css';
 
 const ROW_FORMS = ['строка', 'строки', 'строк'] as const;
 
+/** Пустой список одним объектом: новый `[]` на каждый рендер сбивал бы memo у CatalogRows. */
+const NO_ROWS: ICatalogRow[] = [];
+
 const EMPTY_TEXT: Record<string, string> = {
   legal: 'Компаний с ИНН по этому фильтру нет. Завести компанию можно поиском: наберите её ИНН.',
   groups: 'Групп компаний по этому фильтру нет.',
   unidentified: 'Имён без ИНН по этому фильтру нет.',
 };
 
-export const CompanyCatalog: FC = () => {
+const CompanyCatalogView: FC = () => {
   const params = useCatalogParams();
   const wide = useMediaQuery(MQ.sm);
   const { view, watch, role, sort } = params;
@@ -48,7 +51,7 @@ export const CompanyCatalog: FC = () => {
     ...v,
     label: counts ? `${v.label} · ${formatCount(counts[v.value])}` : v.label,
   }));
-  const rows = catalog.data?.view === view ? catalog.data.items : [];
+  const rows = catalog.data?.view === view ? catalog.data.items : NO_ROWS;
   const total = catalog.data?.total ?? 0;
   const filtered = watchActive || role !== 'any';
 
@@ -111,3 +114,7 @@ export const CompanyCatalog: FC = () => {
     </Stack>
   );
 };
+
+// memo (07.10.2026): поле поиска живёт в CompaniesPage, и каждая буква перерисовывала страницу вместе с 200 строками
+// каталога. Пропсов нет — родитель каталог больше не перерисовывает; адрес и ответ API доходят через хуки, как прежде.
+export const CompanyCatalog = memo(CompanyCatalogView);

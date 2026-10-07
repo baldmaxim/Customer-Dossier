@@ -16,13 +16,10 @@ export default defineConfig({
       registerType: 'prompt',
       // Манифест лежит в public/ и уже подключён в index.html.
       manifest: false,
-      includeAssets: [
-        'favicon.svg',
-        'favicon-32.png',
-        'apple-touch-icon.png',
-        'logo-light.svg',
-        'logo-dark.svg',
-      ],
+      // includeAssets не задаём (07.10.2026): иконки и логотипы из public/ (svg, png) и так попадают в предкэш по
+      // globPatterns, а includeAssets добавлял их второй раз — пять записей предкэша дублями.
+      // Чанк админки (adminPages) из предкэша не исключаем: в нём и «Профиль» читателя, а после выкладки старый
+      // service worker (обновление — по 'prompt') отдаёт прежние чанки только из предкэша — с сервера их уже нет.
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',

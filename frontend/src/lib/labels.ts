@@ -234,11 +234,26 @@ export const SOURCE_KIND_LABELS: Record<string, string> = {
   manual: 'ручная вставка',
 };
 
+// Форматтеры дат — один раз на модуль (07.10.2026): toLocale*String строит новый Intl.DateTimeFormat на каждый
+// вызов, а даты печатаются сотнями (строки каталога, ленты, события). Параметры и локаль — те же, что были у
+// toLocale*String: при заданных полях даты или времени строка выходит та же. Часовой пояс — пояс браузера.
+const DATE_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const POST_DATE_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+const POST_DATE_YEAR_FORMAT = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+const TIME_FORMAT = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 export const formatDate = (iso: string | null): string => {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return DATE_FORMAT.format(date);
 };
 
 /**
@@ -249,18 +264,14 @@ export const formatPostDate = (iso: string | null, now: Date = new Date()): stri
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-  });
+  return (date.getFullYear() === now.getFullYear() ? POST_DATE_FORMAT : POST_DATE_YEAR_FORMAT).format(date);
 };
 
 export const formatTime = (iso: string | null): string => {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return TIME_FORMAT.format(date);
 };
 
 /**
@@ -284,13 +295,7 @@ export const formatDateTime = (iso: string | null): string => {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return DATE_TIME_FORMAT.format(date);
 };
 
 // ─── Деньги и доли ──────────────────────────────────────────────────────────

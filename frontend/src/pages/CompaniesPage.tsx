@@ -5,7 +5,7 @@
 // публикаций нет (решение владельца 02.10.2026): публикации — на вкладках компании и объекта.
 // Всё состояние экрана — в адресе (q, view, watch, role, sort): «Назад» из карточки возвращает туда же.
 
-import { FC, useEffect, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useRef, useState } from 'react';
 
 import { CompanyCatalog } from '../components/search/CompanyCatalog';
 import { EntityResults } from '../components/search/EntityResults';
@@ -38,11 +38,12 @@ export const CompaniesPage: FC = () => {
     setInput(q);
   }, [q]);
 
-  const clearSearch = (): void => {
+  // Стабильная ссылка — иначе memo у EntityResults не срабатывает и результаты перерисовываются на каждую букву.
+  const clearSearch = useCallback((): void => {
     setInput('');
     sent.current = '';
     patch({ q: null });
-  };
+  }, [patch]);
 
   const query = q.trim();
   const searching = query.length >= 2;

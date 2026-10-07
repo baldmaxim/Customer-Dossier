@@ -10,7 +10,7 @@
 // (ликвидация — факт реестра, а не вердикт, ADR-009), «с даты» — мелко под ним; роли — ярлыками (две и «+N»),
 // город — первым в пояснении, дата последней публикации — колонкой во всех видах (05.10.2026).
 
-import { FC, Fragment, ReactNode, useState } from 'react';
+import { FC, Fragment, ReactNode, memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { CatalogView, ICatalogRow } from '../../api/types';
@@ -124,7 +124,7 @@ interface ICatalogRowsProps {
   rows: ICatalogRow[];
 }
 
-export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
+const CatalogRowsView: FC<ICatalogRowsProps> = ({ view, rows }) => {
   const wide = useMediaQuery(MQ.sm);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (key: string): void =>
@@ -261,3 +261,7 @@ export const CatalogRows: FC<ICatalogRowsProps> = ({ view, rows }) => {
     </Card>
   );
 };
+
+// memo (07.10.2026): строки (до 200) не перерисовываются, пока не сменились вид или ответ API — rows приходит
+// из react-query той же ссылкой, а флаги загрузки и ширина экрана у каталога меняются чаще.
+export const CatalogRows = memo(CatalogRowsView);
