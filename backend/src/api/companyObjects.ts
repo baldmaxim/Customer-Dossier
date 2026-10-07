@@ -6,13 +6,12 @@
 // группу» (registry/publish.ts). Карточка группы показывает объекты своих СЗ с пометкой «через …»:
 // это роль участника группы, а не самой группы, и роль группе не приписывается.
 //
-// Сводка ДОМ.РФ — поля последнего снимка объекта по подписи; это сведения сайта на дату, а не
-// проверенный факт (атрибуция — на экране). Состояние по событиям — запасной путь без реестра.
+// Сводка ДОМ.РФ — свод по домам объекта (registry/houses.ts: у ЖК десятки домов, у каждого свой статус и срок;
+// раньше бралась страница, изменившаяся последней). Это сведения сайта на дату, а не проверенный факт (атрибуция —
+// на экране). Состояние по событиям — запасной путь без реестра.
 
-import { query } from '../db/pool.js';
-import type { IRegistryPayload } from '../registry/changes.js';
-import { labelsOf, slimRegistryPayloadSql } from '../registry/payloadSql.js';
-import { hasPhoto } from '../registry/photos.js';
+import { getPool, query } from '../db/pool.js';
+import { housesByProject, loadHouses, summarizeObject, type IObjectRegistrySummary } from '../registry/houses.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
 
 /** Объектов на вкладке: карточка, а не каталог; что не вошло — честно числом. */
@@ -24,26 +23,8 @@ export interface ICompanyObjectRole {
   origin: string;
 }
 
-export interface ICompanyObjectRegistry {
-  externalRef: string;
-  sourceTitle: string;
-  asOf: string | null;
-  fetchedAt: string;
-  address: string | null;
-  status: string | null;
-  completion: string | null;
-  keys: string | null;
-  apartments: string | null;
-  pricePerSqm: string | null;
-  propertyClass: string | null;
-  floors: string | null;
-  sold: string | null;
-  contractor: string | null;
-  developer: string | null;
-  group: string | null;
-  /** Главное фото снято (ADR-012 п. 35): отдаётся GET /api/projects/:id/photo. */
-  hasPhoto: boolean;
-}
+/** Свод ДОМ.РФ по домам объекта (registry/houses.ts). */
+export type ICompanyObjectRegistry = IObjectRegistrySummary;
 
 export interface ICompanyObject {
   projectId: number;
@@ -101,33 +82,6 @@ const LINKS_SQL = `
   ) link
   JOIN projects p ON p.id = link.project_id AND p.merged_into_id IS NULL`;
 
-/** Подписи снимка ДОМ.РФ, которые читает сводка объекта (по приоритету); по ним же SQL отбирает поля. */
-const SUMMARY_LABELS = {
-  status: ['Статус строительства'],
-  completion: ['Сдача дома', 'Срок сдачи'],
-  keys: ['Выдача ключей'],
-  apartments: ['Количество квартир'],
-  pricePerSqm: ['Средняя цена за 1 м²', 'Средняя цена за м2'],
-  propertyClass: ['Класс недвижимости'],
-  floors: ['Количество этажей'],
-  sold: ['Распроданность квартир', 'Продано квартир'],
-  contractor: ['Генподрядчики', 'Генподрядчик'],
-  developer: ['Застройщик'],
-  group: ['Группа компаний'],
-} as const;
-
-/** Последний снимок объекта: сначала id (DISTINCT ON считает выражения по каждой строке), потом поля только по нему. */
-const REGISTRY_SQL = `
-  WITH latest AS (
-    SELECT DISTINCT ON (r.project_id) r.id
-    FROM registry_records r
-    WHERE r.record_type = 'object' AND r.project_id = ANY($1::bigint[])
-    ORDER BY r.project_id, r.fetched_at DESC
-  )
-  SELECT r.project_id AS "projectId", r.external_ref AS "externalRef", r.as_of AS "asOf",
-         r.fetched_at AS "fetchedAt", ${slimRegistryPayloadSql('r.payload', '$2')} AS payload, s.title AS "sourceTitle"
-  FROM latest l JOIN registry_records r ON r.id = l.id JOIN sources s ON s.id = r.source_id`;
-
 /** Состояние по событиям — всего объекта (без корпуса). */
 const STATE_SQL = `
   SELECT project_id AS "projectId", state, valid_from AS "validFrom"
@@ -145,40 +99,6 @@ interface ILinkRow {
   city: string | null;
   level: string | null;
 }
-
-/** Первое непустое поле снимка с одной из подписей: у API и у страницы сайта подписи разные. */
-const field = (payload: IRegistryPayload, ...labels: string[]): string | null => {
-  for (const label of labels) {
-    const found = payload.fields.find(f => f.label === label && f.value.trim() !== '');
-    if (found) return found.value;
-  }
-  return null;
-};
-
-export const registrySummary = (
-  row: { externalRef: string; sourceTitle: string; asOf: string | null; fetchedAt: Date | string; payload: IRegistryPayload },
-): ICompanyObjectRegistry => {
-  const { payload } = row;
-  return {
-    externalRef: row.externalRef,
-    sourceTitle: row.sourceTitle,
-    asOf: row.asOf,
-    fetchedAt: row.fetchedAt instanceof Date ? row.fetchedAt.toISOString() : row.fetchedAt,
-    address: payload.identity.address,
-    status: field(payload, ...SUMMARY_LABELS.status),
-    completion: field(payload, ...SUMMARY_LABELS.completion),
-    keys: field(payload, ...SUMMARY_LABELS.keys),
-    apartments: field(payload, ...SUMMARY_LABELS.apartments),
-    pricePerSqm: field(payload, ...SUMMARY_LABELS.pricePerSqm),
-    propertyClass: field(payload, ...SUMMARY_LABELS.propertyClass),
-    floors: field(payload, ...SUMMARY_LABELS.floors),
-    sold: field(payload, ...SUMMARY_LABELS.sold),
-    contractor: field(payload, ...SUMMARY_LABELS.contractor),
-    developer: payload.identity.developer?.name ?? field(payload, ...SUMMARY_LABELS.developer),
-    group: payload.identity.groupName ?? field(payload, ...SUMMARY_LABELS.group),
-    hasPhoto: hasPhoto(row.externalRef),
-  };
-};
 
 /**
  * Порядок: свои роли раньше ролей участников группы, объекты с ролью раньше «только в событиях»,
@@ -242,16 +162,13 @@ export const loadCompanyObjects = shareInFlight(async (companyId: number): Promi
   const ids = [...byProject.keys()];
   if (ids.length > 0) {
     // Сводка ДОМ.РФ и состояние по событиям друг от друга не зависят — параллельно.
-    const [registry, states] = await Promise.all([
-      query<{ projectId: number; externalRef: string; asOf: string | null; fetchedAt: Date; payload: IRegistryPayload; sourceTitle: string }>(
-        REGISTRY_SQL,
-        [ids, labelsOf(SUMMARY_LABELS)],
-      ),
+    const [houses, states] = await Promise.all([
+      loadHouses(getPool(), { projectIds: ids }, 'latest'),
       query<{ projectId: number; state: string; validFrom: string | null }>(STATE_SQL, [ids]),
     ]);
-    for (const row of registry) {
-      const object = byProject.get(row.projectId);
-      if (object) object.registry = registrySummary(row);
+    for (const [projectId, own] of housesByProject(houses)) {
+      const object = byProject.get(projectId);
+      if (object) object.registry = summarizeObject(own);
     }
     for (const row of states) {
       const object = byProject.get(row.projectId);

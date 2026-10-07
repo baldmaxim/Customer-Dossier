@@ -13,6 +13,16 @@ import styles from '../ProjectPage.module.css';
 
 type HeaderState = 'loading' | 'error' | 'missing' | 'ready';
 
+/**
+ * Где объект — одним источником: адрес ДОМ.РФ (общий у домов), иначе город из публикаций — с подписью, откуда он;
+ * раньше шапка писала «город в публикациях не указан», когда город пришёл из реестра.
+ */
+const placeText = (d: IProjectDossier): string => {
+  if (d.registry?.summary.address) return d.registry.summary.address;
+  if (d.project.city) return `${d.project.city}${d.registry ? '' : ' (по публикациям)'}`;
+  return d.registry ? 'адрес у каждого дома — в паспорте' : 'город в публикациях не указан';
+};
+
 const levelText = (level: string, label: string | null): string => `${PROJECT_LEVEL_LABELS[level] ?? 'объект'}${label ? ` ${label}` : ''}`;
 
 export const ProjectHeader: FC<{ dossier: IProjectDossier | undefined; state: HeaderState }> = ({ dossier, state }) => {
@@ -45,7 +55,7 @@ export const ProjectHeader: FC<{ dossier: IProjectDossier | undefined; state: He
       title={p.name}
       meta={
         <div className={styles.headerMeta}>
-          <span>{p.city ?? 'город в публикациях не указан'}</span>
+          <span>{placeText(dossier)}</span>
           {p.children.length > 0 && (
             <span>
               Очереди и корпуса:{' '}

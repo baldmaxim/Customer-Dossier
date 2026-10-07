@@ -1,12 +1,16 @@
 // Досье объекта (этап 08A): иерархия, состояние с датой, участники в выбранный период с ролью и работами,
 // документированные договоры отдельно от совместного участия, события объекта. Только чтение.
+//
+// Участники — из card_participations_v (07.10.2026): тот же источник ролей, что у карточки компании, ярлыков ролей,
+// «Кто строит» и «Нового». Раньше страница объекта брала только утверждения, и роль из прежней обработки была на
+// карточке компании, но не среди участников объекта. Фраза и цитаты — из утверждения, если оно есть.
 
 import type { DbExecutor } from '../db/pool.js';
 import { overlap, type Overlap } from '../signals/intervals.js';
 import { loadProjectFacts, type IFact } from './facts.js';
 import { loadProjectState } from './load.js';
-import { loadProjectRegistry, loadRegistryLookalikes, type IRegistryLookalike, type IRegistryView } from '../registry/read.js';
-import { dateText, eventText, factStatement, roleText, type IStatement } from './statements.js';
+import { loadProjectRegistry, loadRegistryLookalikes, type IProjectRegistry, type IRegistryLookalike } from '../registry/read.js';
+import { dateText, eventText, factStatement, plainStatement, roleText, type IStatement } from './statements.js';
 
 export interface IProjectDossier {
   project: {
@@ -42,13 +46,34 @@ export interface IProjectDossier {
   coParticipationNote: string;
   events: IStatement[];
   cases: Array<{ id: number; title: string; status: string }>;
-  /** Снимок реестра на дату (этап 20B). null — объект в реестре не собран. */
-  registry: IRegistryView | null;
+  /** Сведения ДОМ.РФ по домам объекта (этап 20B, по домам — 07.10.2026): свод и каждый дом. null — не собран. */
+  registry: IProjectRegistry | null;
   /** Своего снимка нет — похожие объекты со сведениями реестра (подсказка, не подстановка). */
   registryLookalikes: IRegistryLookalike[];
 }
 
 const FACT = new Set(['reported_fact', 'unknown']);
+
+interface IParticipationRow {
+  companyId: number;
+  companyName: string;
+  role: string;
+  assertionId: number | null;
+  building: string | null;
+  workPackage: string | null;
+  validFrom: string | null;
+  validTo: string | null;
+  periodPrecision: string;
+}
+
+/** Участия объекта — card_participations_v, как у карточки компании (опубликованное, реестр, прежняя обработка). */
+const PARTICIPATIONS_SQL = `
+  SELECT pp.company_id AS "companyId", c.name AS "companyName", pp.role, pp.assertion_id AS "assertionId",
+         pp.scope_building AS building, pp.work_package AS "workPackage", pp.valid_from::text AS "validFrom",
+         pp.valid_to::text AS "validTo", pp.period_precision AS "periodPrecision"
+  FROM card_participations_v pp JOIN companies c ON c.id = pp.company_id AND c.merged_into_id IS NULL
+  WHERE pp.project_id = $1
+  ORDER BY c.name, pp.role, pp.assertion_id NULLS LAST`;
 
 export const loadProjectDossier = async (
   exec: DbExecutor,
@@ -91,7 +116,11 @@ export const loadProjectDossier = async (
   const window = { validFrom: period.from ?? '0001-01-01', validTo: period.to ?? '9999-12-31' };
   const participation = facts.filter(f => f.predicate === 'participates_in_project' && f.objectProjectId === projectId && f.subjectCompanyId !== null);
   const counted = (f: IFact): boolean => f.polarity === 'positive' && FACT.has(f.modality) && f.status !== 'rejected';
-  const registry = await loadProjectRegistry(exec, projectId);
+  const factById = new Map(facts.map(f => [f.assertionId, f]));
+  const [registry, participations] = await Promise.all([
+    loadProjectRegistry(exec, projectId),
+    exec.query<IParticipationRow>(PARTICIPATIONS_SQL, [projectId]).then(r => r.rows),
+  ]);
 
   return {
     project: {
@@ -107,23 +136,33 @@ export const loadProjectDossier = async (
     },
     period,
     state: { current: await loadProjectState(exec, projectId), history },
-    participants: participation.filter(counted).map(f => ({
-      companyId: f.subjectCompanyId!,
-      companyName: f.subjectCompanyName ?? `#${f.subjectCompanyId}`,
-      role: f.role,
-      building: f.scopeBuilding,
-      workPackage: f.workPackage ?? f.workPackageLabel,
-      validFrom: f.validFrom,
-      validTo: f.validTo,
-      periodPrecision: f.periodPrecision,
-      // Период участия против выбранного периода: пересечение, нет, или неизвестно (дат участия нет).
-      inPeriod: hasPeriod ? overlap(f, window) : 'no_period_selected',
-      statement: factStatement(
-        'participant',
-        f,
-        `${f.subjectCompanyName} — ${roleText(f.role)}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}${f.workPackage ?? f.workPackageLabel ? `; работы: ${f.workPackage ?? f.workPackageLabel}` : ''}${f.validFrom ? `; с ${dateText(f.validFrom, f.periodPrecision)}` : '; период не указан'}`,
-      ),
-    })),
+    participants: participations.map(row => {
+      const f = row.assertionId !== null ? factById.get(row.assertionId) : undefined;
+      const validFrom = f?.validFrom ?? row.validFrom;
+      const validTo = f?.validTo ?? row.validTo;
+      const building = f?.scopeBuilding ?? row.building;
+      const workPackage = f ? (f.workPackage ?? f.workPackageLabel) : row.workPackage;
+      return {
+        companyId: row.companyId,
+        companyName: row.companyName,
+        role: row.role,
+        building,
+        workPackage,
+        validFrom,
+        validTo,
+        periodPrecision: f?.periodPrecision ?? row.periodPrecision,
+        // Период участия против выбранного периода: пересечение, нет, или неизвестно (дат участия нет).
+        inPeriod: hasPeriod ? overlap({ validFrom, validTo }, window) : 'no_period_selected',
+        statement: f
+          ? factStatement(
+              'participant',
+              f,
+              `${f.subjectCompanyName} — ${roleText(f.role)}${f.scopeBuilding ? `, ${f.scopeBuilding}` : ''}${f.workPackage ?? f.workPackageLabel ? `; работы: ${f.workPackage ?? f.workPackageLabel}` : ''}${f.validFrom ? `; с ${dateText(f.validFrom, f.periodPrecision)}` : '; период не указан'}`,
+            )
+          : // Роль из прежней обработки (утверждения нет): цитаты и периода у неё нет — так и сказано.
+            plainStatement('participant', 'source_reported', `По прежней обработке публикаций: ${row.companyName} — ${roleText(row.role)}; период не указан.`),
+      };
+    }),
     notCounted: participation
       .filter(f => !counted(f))
       .map(f =>

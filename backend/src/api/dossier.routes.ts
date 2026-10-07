@@ -19,6 +19,7 @@ import {
 import { loadCompanySummary } from '../dossier/companySummary.js';
 import { loadCaseDossier } from '../dossier/load.js';
 import { loadProjectDossier } from '../dossier/projectDossier.js';
+import { housesByProject, loadHouses, photoHouse } from '../registry/houses.js';
 import { parseThumbWidth, photoThumb } from '../registry/photoThumbs.js';
 import { photoFile, readPhotoMeta } from '../registry/photos.js';
 import { normalizeName } from '../resolve/normalize.js';
@@ -181,12 +182,9 @@ dossierRouter.get('/projects/:id/photo', async (req, res) => {
     res.status(400).json({ error: 'Некорректный id' });
     return;
   }
-  const ref = (
-    await query<{ external_ref: string }>(
-      `SELECT external_ref FROM registry_records WHERE project_id = $1 AND record_type = 'object' ORDER BY fetched_at DESC LIMIT 1`,
-      [id],
-    )
-  )[0]?.external_ref;
+  // Дом с фото — тем же правилом, что свод объекта (registry/houses.ts::photoHouse): карточка в сетке и паспорт
+  // показывают одно фото, а не страницу дома, изменившуюся последней.
+  const ref = photoHouse(housesByProject(await loadHouses(getPool(), { projectIds: [id] }, 'latest')).get(id) ?? [])?.externalRef;
   const file = ref ? photoFile(ref) : null;
   if (!ref || !file) {
     res.status(404).json({ error: 'Фото объекта нет' });

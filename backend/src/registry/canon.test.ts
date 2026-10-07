@@ -30,6 +30,12 @@ describe('разница снимков реестра (T20B-01)', () => {
     expect(diffPayloads(before, after)).toEqual([{ label: 'Срок сдачи', from: '30.09.2028', to: '31.03.2029' }]);
   });
 
+  it('тот же квартал другим форматом — не изменение (одно правило с «Сроками и продажами» и «Новым»)', () => {
+    const before = payload({}, [{ label: 'Сдача дома', value: '31.03.2028' }]);
+    const after = payload({}, [{ label: 'Сдача дома', value: 'I кв. 2028' }]);
+    expect(diffPayloads(before, after)).toEqual([]);
+  });
+
   it('появление поля — изменение: стадия банкротства возникла, её не было', () => {
     const before = payload({}, []);
     const after = payload({}, [{ label: 'Стадия банкротства застройщика', value: 'наблюдение' }]);

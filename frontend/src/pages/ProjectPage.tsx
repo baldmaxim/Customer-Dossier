@@ -99,8 +99,9 @@ export const ProjectPage: FC = () => {
           {d.registry ? <ProjectPassport registry={d.registry} projectId={d.project.id} name={d.project.name} /> : <ProjectRegistryMissing dossier={d} />}
         </div>
         <div className={styles.layoutMain}>
-          {/* Статус со стройки в паспорте уже есть: строка состояния по событиям — только когда ей есть что сказать. */}
-          {(!d.registry || d.state.current.length > 0) && <ProjectStateLine state={d.state} />}
+          {/* Статус объекта — одно правило с карточкой во вкладке «Объекты» (lib/registrySummary.ts): сведения ДОМ.РФ, а
+              без них — состояние по событиям. При паспорте события состояния — в «Истории состояния», не второй строкой статуса. */}
+          {!d.registry && <ProjectStateLine state={d.state} />}
           <ProjectParticipants dossier={d} period={period} onPeriodChange={changePeriod} busy={query.isFetching && query.isPlaceholderData} />
           <ProjectSections dossier={d} />
         </div>

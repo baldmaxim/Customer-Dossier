@@ -270,24 +270,29 @@ export const objectRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/** Сводка ДОМ.РФ объекта: поля сайта на дату. */
+/** Свод ДОМ.РФ объекта по домам (сервер, registry/houses.ts): один строящийся дом. */
 export const objectRegistry = (over: Record<string, unknown> = {}) => ({
-  externalRef: '71431',
   sourceTitle: 'наш.дом.рф',
-  asOf: null,
-  fetchedAt: '2026-09-20T09:00:00.000Z',
-  address: 'Москва город, Мосфильмовская ул., д. 70',
+  houses: 1,
+  delivered: 0,
+  inProgress: 1,
   status: 'Строится',
-  completion: 'IV кв. 2027',
+  completion: { from: 'IV кв. 2027', to: 'IV кв. 2027' },
   keys: null,
-  apartments: '472',
-  pricePerSqm: '933 425 ₽',
   propertyClass: 'Бизнес',
   floors: '24',
-  sold: null,
-  contractor: null,
   developer: 'ООО «СЗ Развитие»',
   group: 'Донстрой',
+  address: 'Москва город, Мосфильмовская ул., д. 70',
+  apartments: 472,
+  apartmentsCounted: 1,
+  soldShare: null,
+  pricePerSqm: { min: 933_425, max: 933_425 },
+  contractors: [],
+  asOf: '2026-09-20',
+  fetchedAt: '2026-09-20T09:00:00.000Z',
+  photoRef: null,
+  hasPhoto: false,
   ...over,
 });
 

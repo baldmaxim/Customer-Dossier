@@ -61,27 +61,62 @@ const dossier = (inPeriod: 'overlaps' | 'no_overlap' | 'no_period_selected' = 'n
   coParticipationNote: 'Совместное участие на объекте не означает договора между компаниями.',
   events: [],
   cases: [],
+  // Один дом: свод по домам (сервер, registry/houses.ts) и сведения самого дома.
   registry: {
-    source: { key: 'r', title: 'Демо-реестр' },
-    externalRef: '62087',
-    asOf: '2026-09-21',
-    fetchedAt: '2026-09-21T10:00:00.000Z',
-    fields: [
-      { label: 'Статус строительства', value: 'Строится' },
-      { label: 'Сдача дома', value: 'IV квартал 2026' },
-      { label: 'Количество квартир', value: '1024' },
-      { label: 'Класс недвижимости', value: 'Комфорт' },
-      { label: 'Генподрядчики', value: 'ООО «Бета-Демо»' },
+    summary: {
+      sourceTitle: 'Демо-реестр',
+      houses: 1,
+      delivered: 0,
+      inProgress: 1,
+      status: 'Строится',
+      completion: { from: 'IV квартал 2026', to: 'IV квартал 2026' },
+      keys: null,
+      propertyClass: 'Комфорт',
+      floors: null,
+      developer: 'Общество с ограниченной ответственностью «СЗ Демо»',
+      group: 'ГК Демо',
+      address: 'Санкт-Петербург, участок 12',
+      apartments: 1024,
+      apartmentsCounted: 1,
+      soldShare: null,
+      pricePerSqm: null,
+      contractors: [{ name: 'ООО «Бета-Демо»', inn: null }],
+      asOf: '2026-09-21',
+      fetchedAt: '2026-09-21T10:00:00.000Z',
+      photoRef: '62087',
+      hasPhoto: true,
+    },
+    houses: [
+      {
+        source: { key: 'r', title: 'Демо-реестр' },
+        externalRef: '62087',
+        asOf: '2026-09-21',
+        fetchedAt: '2026-09-21T10:00:00.000Z',
+        fields: [
+          { label: 'Статус строительства', value: 'Строится' },
+          { label: 'Сдача дома', value: 'IV квартал 2026' },
+          { label: 'Количество квартир', value: '1024' },
+          { label: 'Класс недвижимости', value: 'Комфорт' },
+          { label: 'Генподрядчики', value: 'ООО «Бета-Демо»' },
+        ],
+        developer: { name: 'Общество с ограниченной ответственностью «СЗ Демо»', legalForm: 'ООО', inn: '7704412966', ogrn: null },
+        groupName: 'ГК Демо',
+        address: 'Санкт-Петербург, участок 12',
+        changes: [],
+        coverage: { loaded: 1, truncated: false },
+        attribution: 'Проектная декларация застройщика — это заявление застройщика, а не проверенный факт.',
+        hasPhoto: true,
+        developerCompany: { id: 9, name: 'СЗ Демо' },
+        groupCompany: { id: 10, name: 'ГК Демо' },
+        name: 'Корпус 12',
+        status: 'Строится',
+        completion: 'IV квартал 2026',
+        delivered: false,
+      },
     ],
-    developer: { name: 'Общество с ограниченной ответственностью «СЗ Демо»', legalForm: 'ООО', inn: '7704412966', ogrn: null },
-    groupName: 'ГК Демо',
-    address: 'Санкт-Петербург, участок 12',
-    changes: [],
-    coverage: { loaded: 1, truncated: false },
-    attribution: 'Проектная декларация застройщика — это заявление застройщика, а не проверенный факт.',
-    hasPhoto: true,
     developerCompany: { id: 9, name: 'СЗ Демо' },
     groupCompany: { id: 10, name: 'ГК Демо' },
+    attribution: 'Проектная декларация застройщика — это заявление застройщика, а не проверенный факт.',
   },
 });
 
@@ -122,7 +157,9 @@ describe('Объект', () => {
     expect(screen.getByText(/^корпус 12 · входит в\s*$/, { selector: 'p' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'очередь 1' }).getAttribute('href')).toBe('/projects/57');
     expect(screen.getByRole('button', { name: 'Схема связей' }).getAttribute('aria-haspopup')).toBe('dialog');
-    expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
+    // Место — адрес ДОМ.РФ, а не «город в публикациях не указан»; статус — в паспорте, строки состояния по событиям нет.
+    expect(screen.getByText('Санкт-Петербург, участок 12', { selector: 'span' })).toBeTruthy();
+    expect(screen.queryByText('Состояние (по дате события)')).toBeNull();
   });
 
   it('паспорт ДОМ.РФ первым: главные числа, застройщик и группа — ссылками, дата и атрибуция; остальное — раскрытием', async () => {
@@ -156,7 +193,9 @@ describe('Объект', () => {
     expect(within(note).getByRole('link', { name: 'ЖК Демо-2' }).getAttribute('href')).toBe('/projects/60');
     expect(within(note).getByRole('link', { name: '«Проверка» → «Дубли»' }).getAttribute('href')).toBe('/admin/review?tab=duplicates');
     expect(screen.queryByRole('heading', { name: 'Паспорт объекта' })).toBeNull();
+    // Без ДОМ.РФ статус — по событиям публикаций, а город подписан: он из публикаций.
     expect(screen.getByText('строится с 01.08.2026')).toBeTruthy();
+    expect(screen.getByText('Санкт-Петербург (по публикациям)')).toBeTruthy();
   });
 
   it('на широком экране — таблица: строка ведёт на компанию, «Откуда известно» — окном', async () => {
@@ -204,6 +243,7 @@ describe('Объект', () => {
     const { api } = setup('/projects/56');
     await screen.findByRole('table');
     expect(screen.getByRole('heading', { level: 2, name: 'Договоры по сообщениям источников' }).closest('details')?.open).toBe(true);
+    // «История состояния» — видна и с паспортом ДОМ.РФ (строки состояния по событиям при нём нет), свёрнута.
     for (const name of ['События объекта', 'История состояния']) {
       expect(screen.getByRole('heading', { level: 2, name }).closest('details')?.open).toBe(false);
     }

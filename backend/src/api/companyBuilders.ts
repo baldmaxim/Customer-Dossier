@@ -1,7 +1,7 @@
 // «Кто строит для компании» (этап 24D): генподрядчики и подрядчики на объектах, где компания — заказчик,
 // застройщик или инвестор (сама или через СЗ своей группы).
 //
-// Два источника, и оба подписаны: строка «Генподрядчики» последнего снимка ДОМ.РФ (сведения сайта на дату,
+// Два источника, и оба подписаны: строка «Генподрядчики» последних снимков домов ДОМ.РФ (сведения сайта на дату,
 // с ИНН) и роли генподрядчика/подрядчика из опубликованных разборов публикаций (card_participations_v).
 // Генподрядчик из ДОМ.РФ находится среди юрлиц портала по ИНН с верной контрольной суммой; без ИНН — по
 // точному нормализованному названию и только если такое юрлицо одно («совпало по названию»). Ничего не
@@ -9,7 +9,6 @@
 
 import { query } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
-import { parseRegistryContractors } from '../registry/contractors.js';
 import { loadCompanyObjects, loadGroupMembers, type ICompanyObject } from './companyObjects.js';
 
 /** Роли «стороны заказчика»: на таких объектах компания нанимает строителей, а не строит сама. */
@@ -249,8 +248,9 @@ export const loadCompanyBuilders = async (companyId: number): Promise<ICompanyBu
   );
   const groupIds = new Set([companyId, ...members.map(m => m.companyId)]);
 
+  // Генподрядчики всех домов объекта (registry/houses.ts: свод по домам, а не страница, изменившаяся последней).
   const parsed = customerSide.flatMap(o =>
-    parseRegistryContractors(o.registry?.contractor).map(c => ({
+    (o.registry?.contractors ?? []).map(c => ({
       projectId: o.projectId,
       ...c,
       asOf: o.registry?.asOf ?? o.registry?.fetchedAt ?? null,
@@ -289,7 +289,7 @@ export const loadCompanyBuilders = async (companyId: number): Promise<ICompanyBu
     objects: {
       customerSide: customerSide.length,
       withRegistry: customerSide.filter(o => o.registry).length,
-      withRegistryContractor: customerSide.filter(o => parseRegistryContractors(o.registry?.contractor).length > 0).length,
+      withRegistryContractor: customerSide.filter(o => (o.registry?.contractors.length ?? 0) > 0).length,
       truncated: objects.coverage.truncated,
     },
   };

@@ -15,7 +15,7 @@
 
 import { FC } from 'react';
 
-import type { ICompanyObject, ICompanyResponse, ISignalAggregate } from '../api/types';
+import type { ICompanyObject, ISignalAggregate } from '../api/types';
 import { formatCount } from '../lib/format';
 import { formatDate, formatMoney } from '../lib/labels';
 import { Sparkline } from './charts/Sparkline';
@@ -37,8 +37,6 @@ interface ICompanyBriefProps {
   objectsTotal: number;
   /** Список объектов пришёл: до этого «—», а не «0». */
   objectsKnown: boolean;
-  /** Ответ карточки (из кэша): реестр и его объекты. */
-  company?: ICompanyResponse;
 }
 
 /** Города своих объектов (объекты СЗ группы — не её): «Казань, Москва и ещё 2». */
@@ -71,7 +69,7 @@ const namesText = (names: string[]): string | null => {
 const known = (label: string, aggregate: ISignalAggregate | undefined): string | null =>
   aggregate?.status === 'ok' ? `${label} — ${formatCount(aggregate.value)}` : null;
 
-export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objectsTotal, objectsKnown, company }) => {
+export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objectsTotal, objectsKnown }) => {
   const query = useCompanySignals(companyId);
   const events = useCompanyEvents(companyId);
   const builders = useCompanyBuilders(companyId);
@@ -93,7 +91,6 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const media = signals?.media;
   const experience = signals?.experience;
   const latest = media?.latestPublishedAt;
-  const registry = company?.registry ?? null;
   const cases = media?.legalCasesCount;
   // Мини-график — последние 12 месяцев ряда signals@3 (24 столбика в 72px сливаются); старый снимок — без него.
   const byMonth = media?.publicationsByMonth;
@@ -194,15 +191,6 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
             }
             to={{ search: '?tab=details&dtab=numbers' }}
             linkText="Дела подробно"
-          />
-        )}
-        {registry && (
-          <BriefTile
-            label="Реестр"
-            value={formatCount((company?.registryProjects ?? []).length)}
-            detail={joinDetail(['объектов в реестре', registry.asOf ? `на ${formatDate(registry.asOf)}` : null])}
-            to={{ search: '', hash: 'company-registry' }}
-            linkText="Сведения реестра"
           />
         )}
       </dl>

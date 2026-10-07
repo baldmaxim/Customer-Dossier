@@ -198,9 +198,9 @@ export interface IRegistryView {
   changes: IRegistryChangeEntry[];
   coverage: { loaded: number; truncated: boolean };
   attribution: string;
-  /** Главное фото объекта снято (только у снимка объекта). */
+  /** Главное фото дома снято (только у снимка объекта). */
   hasPhoto?: boolean;
-  /** Карточки портала застройщика и его группы (только у снимка объекта). */
+  /** Карточки портала застройщика дома и его группы (только у снимка объекта). */
   developerCompany?: { id: number; name: string } | null;
   groupCompany?: { id: number; name: string } | null;
 }
@@ -213,26 +213,52 @@ export interface IRegistryLookalike {
   reason: 'merge_queue' | 'name';
 }
 
-/** Сводка последнего снимка ДОМ.РФ по объекту — поля сайта на дату, не проверенный факт. */
+/**
+ * Свод ДОМ.РФ по домам объекта (backend registry/houses.ts::summarizeObject) — сведения сайта на дату, не проверенный
+ * факт. Одно правило для карточки объекта, паспорта и «Кто строит»: у ЖК десятки домов, у каждого свой статус и срок.
+ */
 export interface ICompanyObjectRegistry {
-  externalRef: string;
   sourceTitle: string;
-  asOf: string | null;
-  fetchedAt: string;
-  address: string | null;
+  houses: number;
+  delivered: number;
+  inProgress: number;
+  /** Статус, общий у всех домов (подпись сайта); разные — null («сдано N из M»). */
   status: string | null;
-  completion: string | null;
+  /** Срок сдачи строящихся домов (сданы все — всех): самый ранний и самый поздний, строками сайта. */
+  completion: { from: string; to: string } | null;
   keys: string | null;
-  apartments: string | null;
-  pricePerSqm: string | null;
   propertyClass: string | null;
   floors: string | null;
-  sold: string | null;
-  contractor: string | null;
   developer: string | null;
   group: string | null;
-  /** Главное фото снято: GET /api/projects/:id/photo. Старый сервер поля не присылает. */
-  hasPhoto?: boolean;
+  address: string | null;
+  apartments: number | null;
+  apartmentsCounted: number;
+  soldShare: number | null;
+  pricePerSqm: { min: number; max: number } | null;
+  contractors: Array<{ name: string; inn: string | null }>;
+  asOf: string;
+  fetchedAt: string;
+  photoRef: string | null;
+  hasPhoto: boolean;
+}
+
+/** Дом объекта на странице объекта: сведения последнего снимка и своя история изменений. */
+export interface IProjectRegistryHouse extends IRegistryView {
+  name: string;
+  status: string | null;
+  completion: string | null;
+  delivered: boolean;
+}
+
+/** Сведения ДОМ.РФ объекта: свод по домам и каждый дом (строящиеся по сроку, затем сданные). */
+export interface IProjectRegistry {
+  summary: ICompanyObjectRegistry;
+  houses: IProjectRegistryHouse[];
+  /** Застройщик и группа — если у всех домов одна карточка застройщика. */
+  developerCompany: { id: number; name: string } | null;
+  groupCompany: { id: number; name: string } | null;
+  attribution: string;
 }
 
 /** Объект на вкладке «Объекты» карточки компании (02.10.2026). */
@@ -291,21 +317,12 @@ export interface ICompanyBuildersResponse {
   objects: { customerSide: number; withRegistry: number; withRegistryContractor: number; truncated: boolean };
 }
 
-export interface IRegistryProjectRow {
-  projectId: number;
-  name: string;
-  city: string | null;
-  asOf: string | null;
-  fetchedAt: string;
-}
-
 export interface ICompanyResponse {
   company: ICompany;
   aliases: Array<{ alias: string; hits: number }>;
   identifiers?: ICompanyIdentifier[];
   relations?: ICompanyRelation[];
   registry?: IRegistryView | null;
-  registryProjects?: IRegistryProjectRow[];
   /** «На контроле»; null — не стоит. */
   watch?: ICompanyWatch | null;
   /** Наименование по ЕГРЮЛ; null — реквизита или ответа Фокуса нет. */
@@ -1128,7 +1145,7 @@ export interface IProjectDossier {
   coParticipationNote: string;
   events: IStatement[];
   cases: Array<{ id: number; title: string; status: string }>;
-  registry: IRegistryView | null;
+  registry: IProjectRegistry | null;
   /** Своего снимка нет — похожие объекты со сведениями реестра. Старый сервер поля не присылает. */
   registryLookalikes?: IRegistryLookalike[];
 }
@@ -2032,6 +2049,9 @@ export interface ICompanyDelivery {
   sales: { apartments: number; share: number | null; counted: number; price: { min: number; max: number; counted: number } | null };
   dynamics: { houses: number; sold: number; fromDate: string; toDate: string } | null;
   unparsed: { completion: number; apartments: number };
+  /** Статусы домов словами сайта и сроки строящихся по годам (у прежнего сервера полей нет). */
+  statuses?: Array<{ label: string; count: number }>;
+  completionByYear?: Array<{ year: number; count: number }>;
   list: IDeliveryHouse[];
   truncated: boolean;
 }

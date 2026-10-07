@@ -19,15 +19,17 @@ import type { IDatasetPayload } from '../parserApi/datasets.js';
 import { mapCourts } from '../parserApi/map/courts.js';
 import { efrsbMessageList, mapBankruptcy } from '../parserApi/map/bankruptcy.js';
 import { fsspProceedings } from '../parserApi/map/fssp.js';
-import { completionKey, parseCompletion } from '../registry/values.js';
+import { CUSTOMER_SIDE_ROLES } from '../api/companyBuilders.js';
+import { HOUSE_LABELS } from '../registry/houses.js';
+import { completionChange } from '../registry/values.js';
 
 export const NEWS_VERSION = 'news@1';
 export const NEWS_KINDS = ['new_project', 'deadline_shift', 'court_case', 'fssp', 'bankruptcy'] as const;
 export type NewsKind = (typeof NEWS_KINDS)[number];
 export type NewsScope = 'all' | 'watched';
 
-/** Сторона заказчика: к ней генподрядчик и приходит. */
-const CUSTOMER_SIDE = new Set(['customer', 'developer', 'investor']);
+/** Сторона заказчика (к ней генподрядчик и приходит) — то же множество ролей, что у «Кто строит» и «Сроков и продаж». */
+const CUSTOMER_SIDE = CUSTOMER_SIDE_ROLES;
 /** Новых объектов в окне — не больше: лента, а не каталог. */
 const PROJECTS_LIMIT = 500;
 /** Номеров дел/производств в подробностях одной новости. */
@@ -119,6 +121,9 @@ interface IShiftRow {
   fetchedAt: Date;
   completion: string;
   prev: string;
+  /** Застройщик дома по снимку (registry_records.company_id) — как в «Сроках и продажах». */
+  developerId: number | null;
+  developerName: string | null;
 }
 
 // Снимки окна и по одному последнему до окна на дом (07.10.2026): lag по ним даёт тот же prev, что по всей истории,
@@ -139,17 +144,22 @@ const SHIFTS_SQL = `
     ) b
   ),
   snaps AS (
-    SELECT r.id, r.source_id, r.external_ref, r.project_id, r.fetched_at, r.payload->'identity'->>'name' AS name,
+    SELECT r.id, r.source_id, r.external_ref, r.project_id, r.company_id, r.fetched_at, r.payload->'identity'->>'name' AS name,
+           -- Подпись срока — по приоритету общей таблицы (registry/houses.ts::HOUSE_LABELS.completion), как у карточки.
            (SELECT f->>'value' FROM jsonb_array_elements(r.payload->'fields') f
-             WHERE f->>'label' IN ('Сдача дома', 'Срок сдачи') AND coalesce(f->>'value', '') <> '' LIMIT 1) AS completion
+             WHERE f->>'label' = ANY($2::text[]) AND coalesce(f->>'value', '') <> ''
+             ORDER BY array_position($2::text[], f->>'label') LIMIT 1) AS completion
     FROM registry_records r JOIN picked USING (id)
   ),
   ordered AS (
     SELECT *, lag(completion) OVER (PARTITION BY source_id, external_ref ORDER BY fetched_at, id) AS prev FROM snaps
   )
   SELECT o.external_ref AS "externalRef", o.project_id AS "projectId", p.name AS "projectName", o.name,
-         o.fetched_at AS "fetchedAt", o.completion, o.prev
-  FROM ordered o LEFT JOIN projects p ON p.id = o.project_id
+         o.fetched_at AS "fetchedAt", o.completion, o.prev, dev.id AS "developerId", dev.name AS "developerName"
+  FROM ordered o
+  LEFT JOIN projects p ON p.id = o.project_id
+  LEFT JOIN companies dev0 ON dev0.id = o.company_id
+  LEFT JOIN companies dev ON dev.id = coalesce(dev0.merged_into_id, dev0.id)
   WHERE o.fetched_at >= $1 AND o.prev IS NOT NULL AND o.completion IS NOT NULL AND o.prev <> o.completion`;
 
 const DEVELOPERS_SQL = `
@@ -164,13 +174,17 @@ export const shiftItems = (
   scope: NewsScope,
 ): INewsItem[] =>
   rows.flatMap((row): INewsItem[] => {
-    const a = parseCompletion(row.prev);
-    const b = parseCompletion(row.completion);
-    if (a && b && completionKey(a) === completionKey(b)) return [];
-    const companies = row.projectId !== null ? (developers.get(row.projectId) ?? []) : [];
+    // Тот же квартал другим форматом — не перенос: одно правило с «Сроками и продажами» (values.ts::completionChange).
+    const change = completionChange(row.prev, row.completion);
+    if (!change) return [];
+    // Компании дома — как в «Сроках и продажах»: сторона заказчика на объекте и застройщик самого дома по снимку.
+    const companies = [...(row.projectId !== null ? (developers.get(row.projectId) ?? []) : [])];
+    if (row.developerId !== null && row.developerName && !companies.some(c => c.id === row.developerId)) {
+      companies.push({ id: row.developerId, name: row.developerName, role: 'developer' });
+    }
     const isWatched = companies.some(c => watched.has(c.id));
     if (scope === 'watched' && !isWatched) return [];
-    const direction = a && b ? (completionKey(b) > completionKey(a) ? 'позже' : 'раньше') : null;
+    const direction = change.direction === 'later' ? 'позже' : change.direction === 'earlier' ? 'раньше' : null;
     return [
       {
         key: `shift:${row.externalRef}:${iso(row.fetchedAt)}`,
@@ -309,7 +323,7 @@ export const loadNews = async (db: DbExecutor, options: { since: Date; scope: Ne
   );
   const [projects, shifts, pairs] = await Promise.all([
     db.query<IProjectRow>(NEW_PROJECTS_SQL, [since, PROJECTS_LIMIT]),
-    db.query<IShiftRow>(SHIFTS_SQL, [since]),
+    db.query<IShiftRow>(SHIFTS_SQL, [since, [...HOUSE_LABELS.completion]]),
     db.query<IRecordPairRow>(RECORD_PAIRS_SQL, [since]),
   ]);
 

@@ -3,12 +3,19 @@
 // Карточка показывает последний снимок и то, что изменилось по сравнению с
 // предыдущими. Атрибуция обязательна: это сведения реестра на дату, а не
 // проверенный факт — сроки в проектной декларации ставит сам застройщик.
+//
+// Объект портала — по домам (07.10.2026): у ЖК десятки домов реестра, и «последний снимок объекта» был страницей
+// дома, изменившейся последней, а «изменения» сравнивали соседние дома. Теперь у объекта свод по домам
+// (registry/houses.ts::summarizeObject — тот же, что у карточки на вкладке «Объекты») и сведения каждого дома с его
+// собственной историей.
 
 import type { DbExecutor } from '../db/pool.js';
 import { diffPayloads, type IRegistryFieldChange, type IRegistryPayload } from './changes.js';
+import { houseFacts, summarizeObject, toHouseSnapshot, type IHouse, type IObjectRegistrySummary } from './houses.js';
 import { hasPhoto } from './photos.js';
+import { completionKey, parseCompletion } from './values.js';
 
-/** Сколько снимков читаем для истории изменений: карточка, а не архив. */
+/** Сколько снимков дома читаем для истории изменений: карточка, а не архив. */
 export const REGISTRY_HISTORY_LIMIT = 10;
 
 export interface IRegistryChangeEntry {
@@ -83,29 +90,26 @@ const SELECT = `
   FROM registry_records r JOIN sources s ON s.id = r.source_id
 `;
 
-/**
- * Застройщик последнего снимка объекта и его группа — карточками портала. Застройщик — компания, к
- * которой снимок привязан публикацией (registry_records.company_id); группа — по связи «входит в
- * группу» из реестра или из наборов конвейера. Слитая карточка — её действующая.
- */
-const loadRegistryCompanies = async (
-  exec: DbExecutor,
-  projectId: number,
-): Promise<{ developerCompany: { id: number; name: string } | null; groupCompany: { id: number; name: string } | null }> => {
-  const developer = (
-    await exec.query<{ id: number; name: string }>(
-      `SELECT c.id, c.name
-       FROM registry_records r
-       JOIN companies c0 ON c0.id = r.company_id
-       JOIN companies c ON c.id = coalesce(c0.merged_into_id, c0.id)
-       WHERE r.project_id = $1 AND r.record_type = 'object' AND r.company_id IS NOT NULL
-       ORDER BY r.fetched_at DESC LIMIT 1`,
-      [projectId],
+type ICompanyRef = { id: number; name: string };
+
+/** Карточки портала по id снимков (registry_records.company_id); слитая карточка — её действующая. */
+const loadCompanyRefs = async (exec: DbExecutor, ids: readonly number[]): Promise<Map<number, ICompanyRef>> => {
+  if (ids.length === 0) return new Map();
+  const rows = (
+    await exec.query<{ sourceId: number; id: number; name: string }>(
+      `SELECT c0.id AS "sourceId", c.id, c.name
+       FROM companies c0 JOIN companies c ON c.id = coalesce(c0.merged_into_id, c0.id)
+       WHERE c0.id = ANY($1::bigint[])`,
+      [[...ids]],
     )
-  ).rows[0] ?? null;
-  if (!developer) return { developerCompany: null, groupCompany: null };
-  const group = (
-    await exec.query<{ id: number; name: string }>(
+  ).rows;
+  return new Map(rows.map(r => [r.sourceId, { id: r.id, name: r.name }]));
+};
+
+/** Группа застройщика — по связи «входит в группу» из реестра или из наборов конвейера. */
+const loadGroupCompany = async (exec: DbExecutor, developerId: number): Promise<ICompanyRef | null> =>
+  (
+    await exec.query<ICompanyRef>(
       `SELECT c.id, c.name
        FROM assertions a
        JOIN companies c ON c.id = a.object_company_id AND c.merged_into_id IS NULL
@@ -113,23 +117,96 @@ const loadRegistryCompanies = async (
          AND a.status <> 'rejected' AND a.polarity = 'positive'
          AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
        ORDER BY (a.origin = 'registry') DESC, a.id DESC LIMIT 1`,
-      [developer.id],
+      [developerId],
     )
   ).rows[0] ?? null;
-  return { developerCompany: developer, groupCompany: group };
+
+/** Дом объекта на странице объекта: сведения последнего снимка, своя история и карточка его застройщика. */
+export interface IProjectRegistryHouse extends IRegistryView {
+  name: string;
+  status: string | null;
+  completion: string | null;
+  delivered: boolean;
+}
+
+export interface IProjectRegistry {
+  /** Свод по домам — тот же, что у карточки объекта на вкладке «Объекты» компании. */
+  summary: IObjectRegistrySummary;
+  /** Дома: строящиеся по сроку сдачи, затем сданные. */
+  houses: IProjectRegistryHouse[];
+  /** Застройщик и группа — если у всех домов одна карточка застройщика. */
+  developerCompany: ICompanyRef | null;
+  groupCompany: ICompanyRef | null;
+  attribution: string;
+}
+
+interface IHouseRow extends IRow {
+  source_id: number;
+  company_id: number | null;
+}
+
+/** Дом без распознанного срока — после домов со сроком. */
+const completionRank = (completion: string | null): number => {
+  const parsed = parseCompletion(completion);
+  return parsed ? completionKey(parsed) : Number.MAX_SAFE_INTEGER;
 };
 
-/** Снимки реестра по объекту. null — объект в реестре не собран. */
-export const loadProjectRegistry = async (exec: DbExecutor, projectId: number): Promise<IRegistryView | null> => {
+/** Снимки реестра по объекту — по домам. null — объект в реестре не собран. */
+export const loadProjectRegistry = async (exec: DbExecutor, projectId: number): Promise<IProjectRegistry | null> => {
   const rows = (
-    await exec.query<IRow>(`${SELECT} WHERE r.project_id = $1 AND r.record_type = 'object' ORDER BY r.fetched_at DESC LIMIT $2`, [
-      projectId,
-      REGISTRY_HISTORY_LIMIT,
-    ])
+    await exec.query<IHouseRow>(
+      `SELECT r.source_id, r.external_ref, r.as_of, r.fetched_at, r.payload, r.company_id, s.key AS source_key, s.title AS source_title
+       FROM (
+         SELECT r.*, row_number() OVER (PARTITION BY r.source_id, r.external_ref ORDER BY r.fetched_at DESC, r.id DESC) AS n
+         FROM registry_records r WHERE r.project_id = $1 AND r.record_type = 'object'
+       ) r JOIN sources s ON s.id = r.source_id
+       WHERE r.n <= $2
+       ORDER BY r.source_id, r.external_ref, r.fetched_at DESC, r.id DESC`,
+      [projectId, REGISTRY_HISTORY_LIMIT],
+    )
   ).rows;
   if (rows.length === 0) return null;
-  const view = build(rows);
-  return { ...view, hasPhoto: hasPhoto(view.externalRef), ...(await loadRegistryCompanies(exec, projectId)) };
+
+  const byHouse = new Map<string, IHouseRow[]>();
+  for (const row of rows) {
+    const key = `${row.source_id}:${row.external_ref}`;
+    byHouse.set(key, [...(byHouse.get(key) ?? []), row]);
+  }
+  const companies = await loadCompanyRefs(exec, [...new Set(rows.flatMap(r => (r.company_id !== null ? [r.company_id] : [])))]);
+
+  const houses: IHouse[] = [];
+  const views: IProjectRegistryHouse[] = [];
+  for (const [key, desc] of byHouse) {
+    const latest = desc[0]!;
+    const snapshots = [...desc].reverse().map(r =>
+      toHouseSnapshot({ fetchedAt: r.fetched_at, asOf: r.as_of, projectId, companyId: r.company_id, externalRef: r.external_ref, payload: r.payload }),
+    );
+    houses.push({ key, sourceId: latest.source_id, sourceTitle: latest.source_title, externalRef: latest.external_ref, projectName: null, snapshots });
+    const facts = houseFacts(snapshots[snapshots.length - 1]!.values);
+    const developerRow = desc.find(r => r.company_id !== null);
+    views.push({
+      ...build(desc),
+      name: latest.payload.identity?.name ?? latest.external_ref,
+      status: facts.status,
+      completion: facts.completion,
+      delivered: facts.delivered,
+      hasPhoto: hasPhoto(latest.external_ref),
+      developerCompany: developerRow ? (companies.get(developerRow.company_id!) ?? null) : null,
+      groupCompany: null,
+    });
+  }
+  views.sort((a, b) => Number(a.delivered) - Number(b.delivered) || completionRank(a.completion) - completionRank(b.completion) || a.name.localeCompare(b.name, 'ru'));
+
+  const developers = new Map(views.flatMap(v => (v.developerCompany ? [[v.developerCompany.id, v.developerCompany] as const] : [])));
+  const developerCompany = developers.size === 1 && views.every(v => v.developerCompany) ? [...developers.values()][0]! : null;
+  const groupCompany = developerCompany ? await loadGroupCompany(exec, developerCompany.id) : null;
+  return {
+    summary: summarizeObject(houses)!,
+    houses: views.map(v => ({ ...v, groupCompany: v.developerCompany && developerCompany && v.developerCompany.id === developerCompany.id ? groupCompany : null })),
+    developerCompany,
+    groupCompany,
+    attribution: views[0]!.attribution,
+  };
 };
 
 /** Снимки реестра по компании: её собственная карточка застройщика. */
@@ -142,27 +219,6 @@ export const loadCompanyRegistry = async (exec: DbExecutor, companyId: number): 
   ).rows;
   return rows.length === 0 ? null : build(rows);
 };
-
-/** Объекты компании по данным реестра: последний снимок каждого объекта. */
-export interface IRegistryProjectRow {
-  projectId: number;
-  name: string;
-  city: string | null;
-  asOf: string | null;
-  fetchedAt: string;
-}
-
-export const loadCompanyRegistryProjects = async (exec: DbExecutor, companyId: number, limit = 50): Promise<IRegistryProjectRow[]> =>
-  (
-    await exec.query<{ project_id: number; name: string; city: string | null; as_of: string | null; fetched_at: Date }>(
-      `SELECT DISTINCT ON (r.project_id) r.project_id, p.name, p.city, r.as_of, r.fetched_at
-       FROM registry_records r JOIN projects p ON p.id = r.project_id
-       WHERE r.company_id = $1 AND r.record_type = 'object' AND r.project_id IS NOT NULL AND p.merged_into_id IS NULL
-       ORDER BY r.project_id, r.fetched_at DESC
-       LIMIT $2`,
-      [companyId, limit],
-    )
-  ).rows.map(r => ({ projectId: r.project_id, name: r.name, city: r.city, asOf: r.as_of, fetchedAt: r.fetched_at.toISOString() }));
 
 /** Объект со сведениями реестра, который может быть тем же, что и объект без них. */
 export interface IRegistryLookalike {

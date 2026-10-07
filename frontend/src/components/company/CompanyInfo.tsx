@@ -1,8 +1,8 @@
 // Вкладка «Сведения» — первая в карточке (ADR-016): портал строится от компании. Главное о юрлице —
 // уже в шапке (статус, руководитель, адрес, реквизиты); здесь сначала итоги плитками во всю ширину
 // (объекты, события, публикации, связи, суды — ведут на свои вкладки), под ними слева — кто строит для
-// компании (генподрядчики её объектов, 24D), финансы и налоги (ГИР БО и ФНС, 24B), суды, ФССП и банкротство (24C), сроки и продажи по домам ДОМ.РФ (24E), объекты по
-// данным ДОМ.РФ с записью застройщика, публикации и события по месяцам и разбивки (роли, события, тексты),
+// компании (генподрядчики её объектов, 24D), финансы и налоги (ГИР БО и ФНС, 24B), суды, ФССП и банкротство (24C), сроки и продажи по домам ДОМ.РФ (24E),
+// запись застройщика в реестре, публикации и события по месяцам и разбивки (роли, события, тексты),
 // справа — остальное ЕГРЮЛ, сайт компании (25A) и
 // «С кем связана» (05.10.2026: раньше длинные списки ЕГРЮЛ и реестра шли первыми, а итоги — последними).
 //
@@ -26,7 +26,7 @@ import { CompanyChecks } from './CompanyChecks';
 import { CompanyDelivery } from './CompanyDelivery';
 import { CompanyFinance } from './CompanyFinance';
 import { CompanyFocus } from './CompanyFocus';
-import { CompanyPortfolio } from './CompanyPortfolio';
+import { CompanyDeveloperRecord } from './CompanyDeveloperRecord';
 import { CompanySite } from './CompanySite';
 import { CompanySources } from './CompanySources';
 import { CompanyStructure } from './CompanyStructure';
@@ -78,7 +78,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
   const location = useLocation();
   const target = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
 
-  // Плитка «Реестр» ведёт якорем сюда же: довести взгляд до раздела.
+  // Плитки ведут якорем сюда же (#company-delivery, #company-checks…): довести взгляд до раздела.
   useEffect(() => {
     if (!target) return;
     document.getElementById(target)?.scrollIntoView?.({ behavior: scrollBehavior(), block: 'start' });
@@ -91,7 +91,6 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
         objects={items}
         objectsTotal={objects.data?.coverage.total ?? items.length}
         objectsKnown={objects.isSuccess}
-        company={data}
       />
       <div className={styles.overview}>
         <div className={styles.overviewMain}>
@@ -99,7 +98,7 @@ export const CompanyInfo: FC<{ companyId: number; data: ICompanyResponse }> = ({
           <CompanyFinance companyId={companyId} />
           <CompanyChecks companyId={companyId} />
           <CompanyDelivery companyId={companyId} />
-          <CompanyPortfolio companyId={companyId} data={data} registryOmit={registryOmit} />
+          <CompanyDeveloperRecord data={data} registryOmit={registryOmit} />
           <CompanyActivity companyId={companyId} />
           <CompanyStructure companyId={companyId} />
         </div>

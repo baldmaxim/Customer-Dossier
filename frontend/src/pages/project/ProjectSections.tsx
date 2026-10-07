@@ -37,7 +37,8 @@ export const ProjectSections: FC<{ dossier: IProjectDossier }> = ({ dossier: d }
     <SectionDisclosure summary="События объекта" meta={countText(d.events.length)} defaultOpen={openIf(d.events.length)}>
       <StatementList items={d.events} empty="Событий объекта в собранных публикациях не найдено." />
     </SectionDisclosure>
-    {d.state.history.length > 1 && (
+    {/* С паспортом ДОМ.РФ строки состояния по событиям нет — история видна и с одной записью. */}
+    {d.state.history.length > (d.registry ? 0 : 1) && (
       <SectionDisclosure summary="История состояния" meta={countText(d.state.history.length)}>
         <ProjectStateHistory history={d.state.history} />
       </SectionDisclosure>

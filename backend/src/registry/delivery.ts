@@ -9,14 +9,17 @@
 // Слова — фактами реестра: «срок сдачи по декларации прошёл, статус — строится», а не «просрочка» и не «риск»
 // (ADR-009). Незнакомый формат строки — «не распознано», а не догадка (registry/values.ts). Только чтение; сводка
 // «Как дела у …» (25C) берёт этот же загрузчик.
+//
+// Дома, подписи полей и разбор сведений дома — общие с карточкой объекта (registry/houses.ts), перенос срока — одно
+// правило с «Новым» и историей паспорта (values.ts::completionChange). С 07.10.2026 блок заменяет и прежний «Объекты по
+// данным ДОМ.РФ» (свод на клиенте по одному снимку на объект): статусы и сроки по годам — здесь же.
 
 import type { DbExecutor } from '../db/pool.js';
 import { domRfObjectUrl } from '../ingest/registry/domrfCards.js';
 import { CUSTOMER_SIDE_ROLES } from '../api/companyBuilders.js';
 import { loadCompanyObjects, loadGroupMembers } from '../api/companyObjects.js';
-import type { IRegistryPayload } from './changes.js';
-import { labelsOf, slimRegistryPayloadSql } from './payloadSql.js';
-import { completionEnd, completionKey, parseCompletion, parseCount, parsePercent, parseRubles, parseSoldCount, type ICompletion } from './values.js';
+import { houseFacts, latestSnapshot, loadHouses } from './houses.js';
+import { completionChange, completionEnd, completionKey, parseCompletion, parseSoldCount, type ICompletion } from './values.js';
 
 export const DELIVERY_VERSION = 'delivery@1';
 /** Окно «сдано за последнее время», месяцев. */
@@ -38,6 +41,8 @@ export interface IHouseSnapshot {
 }
 
 export interface IHouseInput {
+  /** Ключ дома (источник + номер записи); без ключа — номер записи. */
+  key?: string;
   externalRef: string;
   name: string;
   projectId: number | null;
@@ -89,18 +94,38 @@ export interface ICompanyDelivery {
   /** Продажи между первым и последним снимком дома (≥ 30 дней). */
   dynamics: { houses: number; sold: number; fromDate: string; toDate: string } | null;
   unparsed: { completion: number; apartments: number };
+  /** Статусы домов словами сайта, по числу домов. */
+  statuses: Array<{ label: string; count: number }>;
+  /** Срок сдачи строящихся домов по годам (распознанные). */
+  completionByYear: Array<{ year: number; count: number }>;
   list: IDeliveryHouse[];
   truncated: boolean;
 }
 
 const day = (iso: string): string => iso.slice(0, 10);
 const daysBetween = (a: string, b: string): number => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
-const DELIVERED = /сдан|введ[её]н/i;
+/** Снимок для «Сроков и продаж» → поля дома по таблице подписей (houses.ts::houseFacts). */
+const factsOf = (s: IHouseSnapshot) =>
+  houseFacts({
+    status: s.status,
+    completion: s.completion,
+    apartments: s.apartments,
+    soldPercent: s.soldPercent,
+    soldCount: s.soldCount,
+    price: s.price,
+    keys: null,
+    propertyClass: null,
+    floors: null,
+    contractor: null,
+    developer: null,
+    group: null,
+  });
 
-const shareOf = (s: IHouseSnapshot): number | null => {
-  const counted = parseSoldCount(s.soldCount);
-  if (counted) return counted.sold / counted.total;
-  return parsePercent(s.soldPercent);
+/** Значения по числу вхождений: больше — раньше, при равенстве — по значению. */
+const countBy = <T extends string | number>(values: readonly T[]): Array<[T, number]> => {
+  const counts = new Map<T, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'ru'));
 };
 
 /** Чистая функция: дома с рядами снимков → сводка сроков и продаж. now — дата расчёта окна «за 24 месяца». */
@@ -125,19 +150,10 @@ export const summarizeDelivery = (houses: readonly IHouseInput[], now: Date): IC
     for (let i = 1; i < house.snapshots.length; i += 1) {
       const before = house.snapshots[i - 1]!.completion;
       const after = house.snapshots[i]!.completion;
-      if (!before || !after || before === after) continue;
-      const a = parseCompletion(before);
-      const b = parseCompletion(after);
-      // «31.03.2028» → «I кв. 2028» — тот же срок другим форматом (API и страница пишут по-разному), не перенос.
-      if (a && b && completionKey(a) === completionKey(b)) continue;
-      shifts.push({
-        externalRef: house.externalRef,
-        name: house.name,
-        from: before,
-        to: after,
-        at: day(house.snapshots[i]!.fetchedAt),
-        direction: a && b ? (completionKey(b) > completionKey(a) ? 'later' : completionKey(b) < completionKey(a) ? 'earlier' : 'unknown') : 'unknown',
-      });
+      // «31.03.2028» → «I кв. 2028» — тот же срок другим форматом, не перенос (одно правило с «Новым»).
+      const change = completionChange(before, after);
+      if (!change) continue;
+      shifts.push({ externalRef: house.externalRef, name: house.name, from: before!, to: after!, at: day(house.snapshots[i]!.fetchedAt), direction: change.direction });
     }
 
     const firstSold = parseSoldCount(first.soldCount);
@@ -150,10 +166,11 @@ export const summarizeDelivery = (houses: readonly IHouseInput[], now: Date): IC
     }
 
     const date = day(latest.asOf ?? latest.fetchedAt);
-    const delivered = latest.status !== null && DELIVERED.test(latest.status);
+    const facts = factsOf(latest);
+    const delivered = facts.delivered;
     const parsed = parseCompletion(latest.completion);
     if (latest.completion && !parsed) unparsedCompletion += 1;
-    const apartments = parseCount(latest.apartments) ?? parseSoldCount(latest.soldCount)?.total ?? null;
+    const apartments = facts.apartments;
     if (latest.apartments && apartments === null) unparsedApartments += 1;
     list.push({
       externalRef: house.externalRef,
@@ -166,8 +183,8 @@ export const summarizeDelivery = (houses: readonly IHouseInput[], now: Date): IC
       completionParsed: parsed,
       pastDue: !delivered && parsed !== null && completionEnd(parsed) < date,
       apartments,
-      soldShare: shareOf(latest),
-      price: parseRubles(latest.price),
+      soldShare: facts.soldShare,
+      price: facts.price,
       date,
       url: domRfObjectUrl(house.externalRef),
     });
@@ -205,37 +222,14 @@ export const summarizeDelivery = (houses: readonly IHouseInput[], now: Date): IC
     },
     dynamics: dynamicsHouses > 0 && dynamicsFrom && dynamicsTo ? { houses: dynamicsHouses, sold: dynamicsSold, fromDate: dynamicsFrom, toDate: dynamicsTo } : null,
     unparsed: { completion: unparsedCompletion, apartments: unparsedApartments },
+    statuses: countBy(list.map(h => h.status?.trim() || 'статус не указан')).map(([label, count]) => ({ label, count })),
+    completionByYear: countBy(inProgress.flatMap(h => (h.completionParsed ? [h.completionParsed.year] : [])))
+      .map(([year, count]) => ({ year, count }))
+      .sort((a, b) => a.year - b.year),
     list: ordered.slice(0, HOUSES_LIMIT),
     truncated: ordered.length > HOUSES_LIMIT,
   };
 };
-
-const field = (payload: IRegistryPayload, ...labels: string[]): string | null => {
-  for (const label of labels) {
-    const found = payload.fields.find(f => f.label === label && f.value.trim() !== '');
-    if (found) return found.value;
-  }
-  return null;
-};
-
-/** Подписи снимка, которые читает сводка сроков и продаж (по приоритету); по ним же SQL отбирает поля. */
-const DELIVERY_LABELS = {
-  status: ['Статус строительства'],
-  completion: ['Сдача дома', 'Срок сдачи'],
-  apartments: ['Количество квартир'],
-  soldPercent: ['Продано квартир', 'Распроданность квартир'],
-  soldCount: ['Продано квартир, количество'],
-  price: ['Средняя цена за 1 м²', 'Средняя цена за м2'],
-} as const;
-
-/** Вся история снимков домов — но из каждого только identity и подписи DELIVERY_LABELS. */
-const HOUSES_SQL = `
-  SELECT r.external_ref AS "externalRef", r.project_id AS "projectId", p.name AS "projectName",
-         r.fetched_at AS "fetchedAt", r.as_of AS "asOf", ${slimRegistryPayloadSql('r.payload', '$3')} AS payload
-  FROM registry_records r
-  LEFT JOIN projects p ON p.id = r.project_id
-  WHERE r.record_type = 'object' AND (r.project_id = ANY($1::bigint[]) OR r.company_id = ANY($2::bigint[]))
-  ORDER BY r.source_id, r.external_ref, r.fetched_at, r.id`;
 
 /** Дома компании: объекты, где она или СЗ её группы — заказчик, застройщик или инвестор, и дома, чей застройщик — она. */
 export const loadCompanyDelivery = async (db: DbExecutor, companyId: number, now: Date = new Date()): Promise<ICompanyDelivery> => {
@@ -244,34 +238,28 @@ export const loadCompanyDelivery = async (db: DbExecutor, companyId: number, now
     .filter(o => o.basis === 'participation' && o.roles.some(r => CUSTOMER_SIDE_ROLES.has(r.role)))
     .map(o => o.projectId);
   const companyIds = [companyId, ...members.map(m => m.companyId)];
-  const rows = (
-    await db.query<{ externalRef: string; projectId: number | null; projectName: string | null; fetchedAt: Date; asOf: string | Date | null; payload: IRegistryPayload }>(
-      HOUSES_SQL,
-      [projectIds, companyIds, labelsOf(DELIVERY_LABELS)],
-    )
-  ).rows;
-
-  const houses = new Map<string, IHouseInput>();
-  for (const row of rows) {
-    const house = houses.get(row.externalRef) ?? {
-      externalRef: row.externalRef,
-      name: row.payload.identity?.name ?? row.externalRef,
-      projectId: row.projectId,
-      projectName: row.projectName,
-      snapshots: [],
-    };
-    houses.set(row.externalRef, house);
-    const asOf = row.asOf instanceof Date ? row.asOf.toISOString().slice(0, 10) : row.asOf;
-    house.snapshots.push({
-      fetchedAt: row.fetchedAt.toISOString(),
-      asOf,
-      status: field(row.payload, ...DELIVERY_LABELS.status),
-      completion: field(row.payload, ...DELIVERY_LABELS.completion),
-      apartments: field(row.payload, ...DELIVERY_LABELS.apartments),
-      soldPercent: field(row.payload, ...DELIVERY_LABELS.soldPercent),
-      soldCount: field(row.payload, ...DELIVERY_LABELS.soldCount),
-      price: field(row.payload, ...DELIVERY_LABELS.price),
-    });
-  }
-  return summarizeDelivery([...houses.values()], now);
+  const houses = await loadHouses(db, { projectIds, companyIds }, 'history');
+  return summarizeDelivery(
+    houses.map(h => {
+      const latest = latestSnapshot(h);
+      return {
+        key: h.key,
+        externalRef: h.externalRef,
+        name: latest.name,
+        projectId: latest.projectId,
+        projectName: h.projectName,
+        snapshots: h.snapshots.map(snap => ({
+          fetchedAt: snap.fetchedAt,
+          asOf: snap.asOf,
+          status: snap.values.status,
+          completion: snap.values.completion,
+          apartments: snap.values.apartments,
+          soldPercent: snap.values.soldPercent,
+          soldCount: snap.values.soldCount,
+          price: snap.values.price,
+        })),
+      };
+    }),
+    now,
+  );
 };

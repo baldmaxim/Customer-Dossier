@@ -1,9 +1,8 @@
 // Разбор строк ДОМ.РФ в числа на сервере (этап 24E): «472», «45 %», «120 квартир из 472», «933 425 ₽», «IV кв. 2027».
 //
-// Та же грамматика, что у экрана (frontend/src/lib/registryValues.ts): сроки и продажи по домам считаются на сервере,
-// потому что их читает и сводка «Как дела у …» (этап 25C). Правка формата — в обоих местах вместе с тестами.
-// Правило одно: незнакомый формат — null, а не догадка; в сумму такое значение не входит, экран говорит
-// «не распознано: N».
+// Единственный разбор строк ДОМ.РФ (07.10.2026: копия на экране, frontend/src/lib/registryValues.ts, удалена — свод
+// объекта, сроки и продажи считаются на сервере, registry/houses.ts и registry/delivery.ts). Правило одно: незнакомый
+// формат — null, а не догадка; в сумму такое значение не входит, экран говорит «не распознано: N».
 
 /** Пробелы-разделители разрядов: обычный, неразрывный, узкий неразрывный. */
 const SPACES = /[\s  ]+/g;
@@ -80,3 +79,17 @@ export const completionEnd = (c: ICompletion): string => {
 
 /** Сравнимый ключ срока: год × 4 + квартал (год без квартала — как IV квартал). */
 export const completionKey = (c: ICompletion): number => c.year * 4 + (c.quarter ?? 4);
+
+/**
+ * Сменился ли срок сдачи между двумя строками снимка — одно правило для «Сроков и продаж», «Нового» и истории изменений
+ * паспорта. Нет одной из строк, тот же текст или тот же квартал другим форматом («31.03.2028» → «I кв. 2028»: API и
+ * страница пишут по-разному) — не перенос (null). Направление — по ключу срока; не распознана строка — unknown.
+ */
+export const completionChange = (before: string | null | undefined, after: string | null | undefined): { direction: 'later' | 'earlier' | 'unknown' } | null => {
+  if (!before || !after || before === after) return null;
+  const a = parseCompletion(before);
+  const b = parseCompletion(after);
+  if (a && b && completionKey(a) === completionKey(b)) return null;
+  if (!a || !b) return { direction: 'unknown' };
+  return { direction: completionKey(b) > completionKey(a) ? 'later' : 'earlier' };
+};

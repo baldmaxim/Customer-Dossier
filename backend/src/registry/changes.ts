@@ -6,7 +6,13 @@
 //
 // Что сравнивается: поля снимка по подписи и географические/идентификационные
 // значения. Появление и исчезновение поля — тоже изменение: реестр перестал
-// сообщать срок сдачи — это новость, а не отсутствие новости.
+// сообщать срок сдачи — это новость, а не отсутствие новости. Срок сдачи того же
+// квартала другим форматом («31.03.2028» → «I кв. 2028») — не изменение: одно правило
+// с «Сроками и продажами» и «Новым» (values.ts::completionChange). Сравниваются снимки
+// одного дома (registry/read.ts): разница соседних домов ЖК изменением не является.
+
+import { HOUSE_LABELS } from './houses.js';
+import { completionChange } from './values.js';
 
 export interface IRegistryPayloadField {
   label: string;
@@ -54,6 +60,8 @@ const fieldMap = (payload: IRegistryPayload): Map<string, string> => {
   return map;
 };
 
+const COMPLETION_LABELS: ReadonlySet<string> = new Set(HOUSE_LABELS.completion);
+
 /** Изменения от предыдущего снимка к текущему, в порядке появления полей в текущем. */
 export const diffPayloads = (previous: IRegistryPayload, current: IRegistryPayload): IRegistryFieldChange[] => {
   const before = fieldMap(previous);
@@ -62,7 +70,7 @@ export const diffPayloads = (previous: IRegistryPayload, current: IRegistryPaylo
   for (const [label, value] of after) {
     const old = before.get(label);
     if (old === undefined) changes.push({ label, from: null, to: value });
-    else if (old !== value) changes.push({ label, from: old, to: value });
+    else if (old !== value && !(COMPLETION_LABELS.has(label) && completionChange(old, value) === null)) changes.push({ label, from: old, to: value });
   }
   for (const [label, value] of before) {
     if (!after.has(label)) changes.push({ label, from: value, to: null });

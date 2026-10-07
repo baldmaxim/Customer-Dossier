@@ -5,6 +5,9 @@
 // переносы срока между снимками и продажи. Слова — фактами реестра («срок по декларации прошёл, статус — строится»),
 // не «просрочка» и не оценка (ADR-009). Ряд снимков копится с начала наблюдения — экран называет его дату и говорит,
 // когда сравнивать ещё не с чем. Домов нет — блока нет.
+//
+// С 07.10.2026 это единственный блок ДОМ.РФ-итогов на «Сведениях»: статусы домов и сроки сдачи по годам — полосами
+// здесь же (прежний «Объекты по данным ДОМ.РФ» считал то же на клиенте по одному снимку на объект и расходился).
 
 import { FC, ReactNode } from 'react';
 
@@ -12,12 +15,15 @@ import type { IDeliveryHouse } from '../../api/types';
 import { formatCount, formatCountWord } from '../../lib/format';
 import { APARTMENT_FORMS, HOUSE_DATIVE_FORMS, HOUSE_FORMS, SHIFT_DIRECTION_LABELS, formatDate, formatMoney, formatPercent } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
+import { BarList } from '../charts/BarList';
 import { Button } from '../ui/Button';
 import { Callout } from '../ui/Callout';
 import { DescriptionList } from '../ui/DescriptionList';
 import { Disclosure } from '../ui/Disclosure';
+import { Heading } from '../ui/Heading';
 import { Section } from '../ui/Section';
 import { useCompanyDelivery } from './useCompanyQueries';
+import companyStyles from './Company.module.css';
 import styles from './CompanyFinance.module.css';
 
 export const DELIVERY_SECTION_ID = 'company-delivery';
@@ -96,6 +102,31 @@ export const CompanyDelivery: FC<{ companyId: number }> = ({ companyId }) => {
     <Section id={DELIVERY_SECTION_ID} title="Сроки и продажи — ДОМ.РФ" note={`${houses(d.houses)} в реестре`}>
       {d.observedSince && <p className={styles.meta}>наблюдаем с {formatDate(d.observedSince)}</p>}
       <DescriptionList items={items} layout="auto" />
+      {((d.statuses?.length ?? 0) > 0 || (d.completionByYear?.length ?? 0) > 0) && (
+        // Номинальные категории — одним цветом, число всегда текстом (ADR-009: статус — подпись, а не хорошо/плохо).
+        <div className={companyStyles.structure}>
+          {(d.statuses?.length ?? 0) > 0 && (
+            <div className={companyStyles.structureBlock}>
+              <Heading className={companyStyles.structureTitle}>Статус домов</Heading>
+              <BarList label="Статус домов" items={d.statuses!.map(st => ({ key: st.label, label: st.label, value: st.count }))} total={d.houses} />
+            </div>
+          )}
+          {(d.completionByYear?.length ?? 0) > 0 && (
+            <div className={companyStyles.structureBlock}>
+              <Heading className={companyStyles.structureTitle}>
+                Сдача строящихся по годам
+                {d.unparsed.completion > 0 && <span className={companyStyles.structureCaption}>срок не распознан — {formatCount(d.unparsed.completion)}</span>}
+              </Heading>
+              <BarList
+                label="Сдача строящихся по годам"
+                items={d.completionByYear!.map(y => ({ key: String(y.year), label: String(y.year), value: y.count }))}
+                total={d.inProgress.count}
+                limit={8}
+              />
+            </div>
+          )}
+        </div>
+      )}
       {d.pastDue.length > 0 && (
         <>
           <h3 className={styles.subhead}>Срок сдачи по декларации прошёл</h3>

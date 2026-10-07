@@ -15,7 +15,7 @@ import { loadCompanyDelivery } from '../registry/delivery.js';
 import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
-import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
+import { loadCompanyRegistry } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
 
@@ -162,7 +162,7 @@ companiesRouter.get('/:id', async (req, res) => {
 
   // Части карточки друг от друга не зависят — параллельно (07.10.2026): с ответа на этот запрос
   // экран начинает грузить остальные блоки.
-  const [aliases, identifiers, relations, registry, registryProjects, { watch, egrul }] = await Promise.all([
+  const [aliases, identifiers, relations, registry, { watch, egrul }] = await Promise.all([
     query<{ alias: string; hits: number }>(
       `SELECT alias, hits FROM entity_aliases
        WHERE entity_kind = 'company' AND entity_id = $1
@@ -186,13 +186,12 @@ companiesRouter.get('/:id', async (req, res) => {
        ORDER BY r.id`,
       [id],
     ),
-    // Реестр: карточка застройщика и его объекты по снимкам (этап 20B).
+    // Реестр: карточка застройщика (этап 20B). Его объекты — во вкладке «Объекты» и в «Сроках и продажах» по домам.
     loadCompanyRegistry(getPool(), id),
-    loadCompanyRegistryProjects(getPool(), id),
     // ADR-016: «На контроле» и наименование со статусом по ЕГРЮЛ (заголовок карточки); null — нет.
     loadCardExtras(getPool(), id),
   ]);
-  res.json({ company, aliases, identifiers, relations, registry, registryProjects, watch, egrul });
+  res.json({ company, aliases, identifiers, relations, registry, watch, egrul });
 });
 
 /**

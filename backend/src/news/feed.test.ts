@@ -29,7 +29,7 @@ describe('новые объекты (T24F-01)', () => {
 });
 
 describe('переносы срока (T24F-02)', () => {
-  const base = { externalRef: '62087', projectId: 5, projectName: 'Река', name: 'Дом 1', fetchedAt: created };
+  const base = { externalRef: '62087', projectId: 5, projectName: 'Река', name: 'Дом 1', fetchedAt: created, developerId: null, developerName: null };
   const developers = new Map([[5, [{ id: 10, name: 'Девелопер', role: 'developer' }]]]);
 
   it('срок сменился — новость со стороной сдвига и ссылкой на страницу ДОМ.РФ', () => {
@@ -41,6 +41,16 @@ describe('переносы срока (T24F-02)', () => {
   it('тот же квартал другим форматом — не новость; «на контроле» без отмеченной компании — не новость', () => {
     expect(shiftItems([{ ...base, prev: '31.03.2028', completion: 'I кв. 2028' }], developers, new Set(), 'all')).toEqual([]);
     expect(shiftItems([{ ...base, prev: 'III кв. 2027', completion: 'I кв. 2028' }], developers, new Set(), 'watched')).toEqual([]);
+  });
+
+  it('застройщик дома по снимку — среди компаний новости, как в «Сроках и продажах»: «на контроле» видит перенос', () => {
+    const [item] = shiftItems(
+      [{ ...base, projectId: null, projectName: null, prev: 'III кв. 2027', completion: 'I кв. 2028', developerId: 20, developerName: 'СЗ Река' }],
+      developers,
+      new Set([20]),
+      'watched',
+    );
+    expect(item).toMatchObject({ watched: true, companies: [{ id: 20, name: 'СЗ Река', role: 'developer' }] });
   });
 });
 

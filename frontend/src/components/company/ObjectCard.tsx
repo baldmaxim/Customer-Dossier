@@ -3,7 +3,8 @@
 // источник сведений внизу. Вся карточка — ссылка на страницу объекта (row-link); ссылка на СЗ
 // поднята над ней (row-link-above) и остаётся отдельной целью.
 //
-// Сведения ДОМ.РФ — текст сайта на дату, а не проверенный факт: внизу всегда «ДОМ.РФ · на дату». Фото —
+// Сведения ДОМ.РФ — свод по домам объекта (сервер, registry/houses.ts; подписи — lib/registrySummary.ts, те же, что у
+// паспорта): текст сайта на дату, а не проверенный факт, внизу всегда «ДОМ.РФ · на дату». Фото —
 // сверху полосой 2:1 во всю ширину карточки; пока его нет — заглушка того же размера (подпись «фото и
 // сведения» — внизу). Статус и срок сдачи — ярлыками поверх полосы (05.10.2026: отдельной строкой они
 // удлиняли каждую карточку, а заглушка стояла пустой). Адрес — одной строкой с полным текстом в подсказке.
@@ -13,47 +14,25 @@ import { FC } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ICompanyObject } from '../../api/types';
-import { contractorNames } from '../../lib/contractors';
-import { ASSERTION_ROLE_LABELS, CONTEXT_STATE_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../../lib/labels';
+import { formatCountWord } from '../../lib/format';
+import { ASSERTION_ROLE_LABELS, PROJECT_LEVEL_LABELS, formatDate } from '../../lib/labels';
+import { completionText, objectStatusText, registryFacts } from '../../lib/registrySummary';
 import { Badge } from '../ui/Badge';
 import { Heading } from '../ui/Heading';
 import { Icon } from '../ui/Icon';
 import { ObjectPhoto } from './ObjectPhoto';
 import styles from './ObjectCard.module.css';
 
-/** Три числа карточки — по порядку важности, только те, что реестр сообщил. */
-const factsOf = (o: ICompanyObject): Array<{ label: string; value: string }> => {
-  const r = o.registry;
-  if (!r) return [];
-  return [
-    { label: 'Квартир', value: r.apartments },
-    { label: 'Цена м²', value: r.pricePerSqm },
-    { label: 'Продано', value: r.sold },
-    { label: 'Класс', value: r.propertyClass },
-    { label: 'Этажей', value: r.floors },
-  ]
-    .filter((f): f is { label: string; value: string } => Boolean(f.value))
-    .slice(0, 3);
-};
-
-/** С заглавной, как статус на сайте ДОМ.РФ: «Строится» рядом со «строится» читалось как два разных. */
-const capitalized = (text: string): string => text.charAt(0).toLocaleUpperCase('ru') + text.slice(1);
-
-/** Статус словами: с сайта ДОМ.РФ как есть, иначе состояние по событиям публикаций. */
-const statusOf = (o: ICompanyObject): string | null => {
-  if (o.registry?.status) return o.registry.status;
-  const label = o.state ? CONTEXT_STATE_LABELS[o.state.state] : undefined;
-  return label ? capitalized(label) : null;
-};
+const HOUSES = ['дом', 'дома', 'домов'] as const;
 
 export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
-  const status = statusOf(o);
-  const completion = o.registry?.completion ?? null;
-  const facts = factsOf(o);
+  const status = objectStatusText(o);
+  const completion = o.registry ? completionText(o.registry) : null;
+  const facts = o.registry ? registryFacts(o.registry).slice(0, 3) : [];
   const place = o.registry?.address ?? o.city;
   const level = o.level && o.level !== 'complex' ? PROJECT_LEVEL_LABELS[o.level] : null;
   const placeText = `${level ? `${level} · ` : ''}${place ?? 'адрес не указан'}`;
-  const contractor = contractorNames(o.registry?.contractor);
+  const contractor = o.registry && o.registry.contractors.length > 0 ? o.registry.contractors.map(c => c.name).join(', ') : null;
   // Фото ещё нет (сбор ДОМ.РФ до объекта не дошёл, галереи нет) — заглушка того же размера: ряды ровные.
   const placeholder = (
     <div className={`${styles.photo} ${styles.placeholder}`} aria-hidden="true">
@@ -119,7 +98,7 @@ export const ObjectCard: FC<{ object: ICompanyObject }> = ({ object: o }) => {
       <p className={styles.source}>
         <Icon name={o.registry ? 'building' : 'document'} size="sm" />
         {o.registry
-          ? `ДОМ.РФ${o.registry.hasPhoto ? ' · фото и сведения' : ''} · на ${formatDate(o.registry.asOf ?? o.registry.fetchedAt)}`
+          ? `ДОМ.РФ${o.registry.houses > 1 ? ` · ${formatCountWord(o.registry.houses, HOUSES)}` : ''}${o.registry.hasPhoto ? ' · фото и сведения' : ''} · на ${formatDate(o.registry.asOf)}`
           : 'только из публикаций'}
       </p>
     </article>

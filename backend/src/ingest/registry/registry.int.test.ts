@@ -196,7 +196,8 @@ describe('реестр: снимок, повтор без изменений, и
     // DATE приходит строкой: сутки не уезжают по часовому поясу машины.
     expect((await records(s.id))[0]!.as_of).toBe('2026-09-21');
     const view = await loadProjectRegistry(getPool(), (await pool().query<{ project_id: number }>('SELECT project_id FROM registry_records WHERE source_id = $1', [s.id])).rows[0]!.project_id);
-    expect(view!.asOf).toBe('2026-09-21');
+    expect(view!.houses[0]!.asOf).toBe('2026-09-21');
+    expect(view!.summary.asOf).toBe('2026-09-21');
     expect(view!.attribution).toContain('проектная декларация застройщика');
   });
 });

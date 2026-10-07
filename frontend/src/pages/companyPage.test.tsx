@@ -137,7 +137,7 @@ describe('Карточка компании', () => {
               name: 'Река',
               roles: [{ role: 'developer', isCurrent: true, origin: 'registry' }],
               via: { companyId: 70, name: 'ООО «СЗ Развитие»' },
-              registry: objectRegistry({ hasPhoto: true }),
+              registry: objectRegistry({ hasPhoto: true, photoRef: '71431' }),
               state: null,
             }),
             objectRow(),
@@ -280,16 +280,12 @@ describe('Карточка компании', () => {
     expect(screen.queryByRole('heading', { name: 'Роли, события и тексты' })).toBeNull();
   });
 
-  it('плитка реестра — только у карточки с реестром и ведёт к его разделу', async () => {
+  it('запись застройщика в реестре — разделом «Сведений»; плитки «Реестр» нет (она обрезала число объектов на 50)', async () => {
     fakeApi(companyRoutes({ withRegistry: true }));
     renderCard();
 
     const brief = (await screen.findByRole('heading', { name: 'Коротко о компании' })).closest('section')!;
-    const tile = (await within(brief).findByText('Реестр')).closest('div')!;
-    expect(within(tile).getByText('объектов в реестре · на 20.09.2026')).toBeTruthy();
-    // Реестр застройщика — на той же вкладке «Сведения»: плитка ведёт якорем к разделу.
-    expect(within(tile).getByRole('link', { name: 'Сведения реестра' }).getAttribute('href')).toBe('/company/7#company-registry');
-    // Объектов со сведениями ДОМ.РФ нет — раздел о записи застройщика; якорь плитки — у него.
+    expect(within(brief).queryByText('Реестр')).toBeNull();
     const registry = screen.getByRole('heading', { name: 'Застройщик в реестре ДОМ.РФ' }).closest('section')!;
     expect(registry.id).toBe('company-registry');
     expect(within(registry).getByText(/Запись застройщика: Единый реестр, № 123/)).toBeTruthy();
@@ -304,30 +300,31 @@ describe('Карточка компании', () => {
     expect(within(sources).getByText(/По сведениям проектной декларации: Единый реестр, запись 123/)).toBeTruthy();
   });
 
-  it('объекты по данным ДОМ.РФ: числа со знаменателем, статусы и сроки полосами, неразобранное — словами', async () => {
+  it('итоги ДОМ.РФ — один блок «Сроки и продажи»: статусы домов и сдача по годам полосами, портфеля по объектам нет', async () => {
     fakeApi(
-      replace('GET /api/companies/7/objects', () => ({
+      replace('GET /api/companies/7/delivery', () => ({
         status: 200,
-        body: objectsBody([
-          objectRow({ projectId: 60, name: 'Река', registry: objectRegistry({ sold: '50 %' }) }),
-          objectRow({ projectId: 61, name: 'Парк', registry: objectRegistry({ apartments: '128', sold: '25 %', pricePerSqm: '410 000 ₽', completion: 'Сдан', status: 'Сдан' }) }),
-          objectRow(),
-        ]),
+        body: deliveryBody({
+          houses: 3,
+          inProgress: { count: 2, apartments: 800 },
+          unparsed: { completion: 1, apartments: 0 },
+          statuses: [
+            { label: 'Строится', count: 2 },
+            { label: 'Сдан', count: 1 },
+          ],
+          completionByYear: [{ year: 2027, count: 1 }],
+          list: [deliveryHouse('1'), deliveryHouse('2'), deliveryHouse('3', { status: 'Сдан', delivered: true })],
+        }),
       })),
     );
     renderCard();
 
-    const section = (await screen.findByRole('heading', { name: 'Объекты по данным ДОМ.РФ' })).closest('section')!;
-    expect(within(section).getByText('2 из 3 объектов · на 20.09.2026')).toBeTruthy();
-    expect(within(section).getByText('Квартир').nextElementSibling?.textContent).toBe('600');
-    expect(within(section).getAllByText('по 2 объектам из 2')).toHaveLength(2);
-    expect(within(section).getByText('Цена за м²').nextElementSibling?.textContent?.replace(/\s+/g, ' ')).toBe('410 000 ₽ — 933 425 ₽');
-    // (472 × 0,5 + 128 × 0,25) / 600 = 0,447 → 45 %.
-    expect(within(section).getByText('Продано квартир').nextElementSibling?.textContent?.replace(/\s+/g, ' ')).toBe('45 %');
-    const statuses = within(section).getByRole('list', { name: 'Статус строительства' });
-    expect(within(statuses).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Сдан1', 'Строится1']);
+    const section = (await screen.findByRole('heading', { name: 'Сроки и продажи — ДОМ.РФ' })).closest('section')!;
+    const statuses = within(section).getByRole('list', { name: 'Статус домов' });
+    expect(within(statuses).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Строится2', 'Сдан1']);
+    expect(within(section).getByRole('list', { name: 'Сдача строящихся по годам' })).toBeTruthy();
     expect(within(section).getByText(/срок не распознан — 1/)).toBeTruthy();
-    expect(within(section).getByRole('link', { name: 'Все объекты — 3' }).getAttribute('href')).toBe('/company/7?tab=objects');
+    expect(screen.queryByRole('heading', { name: 'Объекты по данным ДОМ.РФ' })).toBeNull();
   });
 
   it('кто строит для компании: строка — имя, роль, число объектов; подробности окном; без карточки — «Добавить компанию», не уход на поиск; плитка сводки', async () => {
