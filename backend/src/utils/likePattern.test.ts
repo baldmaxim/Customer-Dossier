@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { likePattern } from '../utils/likePattern.js';
+import { likePattern } from './likePattern.js';
 
-describe('likePattern — поиск по публикациям', () => {
+describe('likePattern — поиск подстрокой', () => {
   it('ищет подстроку в любом месте текста', () => {
     expect(likePattern('А101')).toBe('%А101%');
   });

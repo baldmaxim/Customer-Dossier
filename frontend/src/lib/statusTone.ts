@@ -114,7 +114,7 @@ export const REVISION_STATE_TONE: Record<string, StatusTone> = {
   unknown: 'neutral',
 };
 
-/** Итог по тексту (`/api/items/:id/extraction`, колонка «Итог» в «Обработке»). */
+/** Итог по тексту (колонка «Итог» в «Обработке»). */
 export const ITEM_STATE_TONE: Record<ItemState, StatusTone> = {
   in_cards: 'success',
   nothing_found: 'neutral',

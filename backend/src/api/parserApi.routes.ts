@@ -60,22 +60,6 @@ const INN_PROBLEMS = {
   several_inns: 'У компании несколько разных ИНН — сначала нужно разобраться, какой её',
 } as const;
 
-parserApiRouter.get('/companies/:id/parser-api', async (req, res) => {
-  const id = parseId(req.params.id);
-  if (id === null) {
-    sendError(res, 400, 'Некорректный id', 'bad_id');
-    return;
-  }
-  const target = await companyInn(getPool(), id);
-  res.json({
-    configured: parserApiKey() !== null,
-    scheduled: env.PARSER_API_ENABLED,
-    inn: target.ok ? target.inn : null,
-    problem: target.ok ? null : target.problem,
-    datasets: target.ok ? await loadParserApiStates(getPool(), target.inn) : [],
-  });
-});
-
 /** Финансы и налоги компании (этап 24B): карты снимков ГИР БО и «Прозрачного бизнеса», только чтение. */
 parserApiRouter.get('/companies/:id/finance', async (req, res) => {
   const id = parseId(req.params.id);

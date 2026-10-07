@@ -4,7 +4,6 @@
 import { describe, it, expect } from 'vitest';
 
 import { decideRevision, type ILatestState } from './decide.js';
-import { diffLines } from './diff.js';
 import { canonicalRevisionText, canonicalizeUrl, itemIdentity, revisionHash } from './identity.js';
 
 describe('canonicalizeUrl (TC-017)', () => {
@@ -136,42 +135,5 @@ describe('decideRevision', () => {
       true,
     );
     expect(decision).toMatchObject({ outcome: 'stale', createsRevision: false, movesLatest: false, chronology: 'source_modified_at' });
-  });
-});
-
-describe('diffLines', () => {
-  it('показывает удалённые и добавленные строки', () => {
-    const result = diffLines('a\nb\nc', 'a\nB\nc');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.inserted).toBe(1);
-    expect(result.deleted).toBe(1);
-    expect(result.ops).toEqual([
-      { op: 'equal', lines: ['a'] },
-      { op: 'delete', lines: ['b'] },
-      { op: 'insert', lines: ['B'] },
-      { op: 'equal', lines: ['c'] },
-    ]);
-  });
-
-  it('длинные неизменные участки сворачиваются', () => {
-    const base = Array.from({ length: 50 }, (_, i) => `строка ${i}`);
-    const changed = [...base];
-    changed[25] = 'правка';
-    const result = diffLines(base.join('\n'), changed.join('\n'), { maxLines: 100, maxChars: 10_000, context: 2 });
-    expect(result.ok && result.ops.some(op => op.op === 'skip')).toBe(true);
-  });
-
-  it('HTML в тексте — просто строки, ничего не интерпретируется', () => {
-    const result = diffLines('<script>alert(1)</script>', '<img src=x onerror=alert(1)>');
-    expect(result.ok && result.ops.map(o => o.op)).toEqual(['delete', 'insert']);
-  });
-
-  it('слишком большой текст — отказ с причиной, а не зависание', () => {
-    const big = Array.from({ length: 30 }, () => 'x').join('\n');
-    expect(diffLines(big, big, { maxLines: 10, maxChars: 1000, context: 1 })).toEqual({
-      ok: false,
-      reason: 'больше 10 строк',
-    });
   });
 });

@@ -145,7 +145,7 @@ describe('серверный режим: вход по логину и паро�
   });
 
   it('без сессии данные не выдаются, неизвестный адрес — тоже 401, а не 404', async () => {
-    for (const path of ['/api/companies?q=ab', '/api/companies/1', '/api/feed', '/api/graph', '/api/users', '/api/no-such-route']) {
+    for (const path of ['/api/companies?q=ab', '/api/companies/1', '/api/news', '/api/graph', '/api/users', '/api/no-such-route']) {
       const res = await request('GET', path);
       expect(res.status, path).toBe(401);
     }

@@ -146,7 +146,7 @@ describe('таблица прав маршрутов', () => {
   it('parser-api.com: ключ — только администратор, «Обновить» — оператор, состояние читает любой вошедший (этап 24A)', () => {
     for (const role of ROLES) expect(ROLE_PERMISSIONS[role].includes('parserapi.manage'), role).toBe(role === 'admin');
     expect(permissionFor('GET', '/admin/parser-api')).toBe('admin.view');
-    expect(permissionFor('GET', '/companies/5/parser-api')).toBe('portal.read');
+    expect(permissionFor('GET', '/companies/5/registry-checks')).toBe('portal.read');
     expect(permissionFor('POST', '/companies/5/parser-api/refresh')).toBe('sources.manage');
   });
 

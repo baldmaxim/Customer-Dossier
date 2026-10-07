@@ -253,9 +253,19 @@ describe('TC-055 / TC-056: разные дела и стадии одного д
     }));
 
     const omega = await companyId('Демо-Омега');
-    const res = await api.call('GET', `/api/companies/${omega}/legal-cases`, undefined);
-    expect(res.status).toBe(200);
-    const cases = res.body.cases as Array<{ caseKey: string; stages: Array<Record<string, unknown>> }>;
+    // Стадии одного дела — по номеру: вид legal_case_events_v (маршрут /legal-cases снят 07.10.2026 — экрана у него не было).
+    const rows = (
+      await pool().query<{ caseKey: string; eventStage: string | null; eventOutcome: string | null; valueType: string | null; valueNumeric: string | null }>(
+        `SELECT case_key AS "caseKey", event_stage AS "eventStage", event_outcome AS "eventOutcome",
+                value_type AS "valueType", value_numeric::text AS "valueNumeric"
+         FROM legal_case_events_v WHERE subject_company_id = $1 OR counterparty_company_id = $1
+         ORDER BY case_key, valid_from NULLS FIRST, assertion_id`,
+        [omega],
+      )
+    ).rows;
+    const byKey = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of rows) byKey.set(row.caseKey, [...(byKey.get(row.caseKey) ?? []), row]);
+    const cases = [...byKey.entries()].map(([caseKey, stages]) => ({ caseKey, stages }));
     expect(cases.filter(c => c.caseKey.startsWith('assertion:'))).toHaveLength(2);
     const numbered = cases.find(c => c.caseKey === 'case:А40-777/2026');
     expect(numbered?.stages.map(s => s.eventStage).sort()).toEqual(['appeal_filed', 'claim_filed', 'decision']);
@@ -286,14 +296,26 @@ describe('TC-057: состояние объекта в действительн�
     }));
 
     const id = await projectId('Заря-Демо');
-    const res = await api.call('GET', `/api/projects/${id}/state-history`, undefined);
-    expect(res.status).toBe(200);
-    const history = res.body.history as Array<{ state: string; validFrom: string; periodPrecision: string }>;
+    // История и текущее состояние — виды project_state_history_v / project_current_state_v (маршрут /state-history снят
+    // 07.10.2026; страница объекта читает их через досье).
+    const history = (
+      await pool().query<{ state: string; validFrom: string; periodPrecision: string }>(
+        `SELECT state, valid_from::text AS "validFrom", period_precision AS "periodPrecision"
+         FROM project_state_history_v WHERE project_id = $1 ORDER BY coalesce(scope_building, ''), valid_from, recorded_at`,
+        [id],
+      )
+    ).rows;
     expect(history.map(h => [h.state, h.validFrom, h.periodPrecision])).toEqual([
       ['suspended', '2026-03-01', 'month'],
       ['construction', '2026-07-01', 'month'],
     ]);
-    expect(res.body.current).toEqual([expect.objectContaining({ state: 'construction', validFrom: '2026-07-01' })]);
+    const current = (
+      await pool().query<{ state: string; validFrom: string }>(
+        `SELECT state, valid_from::text AS "validFrom" FROM project_current_state_v WHERE project_id = $1`,
+        [id],
+      )
+    ).rows;
+    expect(current).toEqual([expect.objectContaining({ state: 'construction', validFrom: '2026-07-01' })]);
 
     const undatedEvent = await pool().query<{ occurred_on: string | null }>(
       `SELECT v.occurred_on FROM card_events_v v WHERE v.project_id = $1 AND v.type = 'suspension' AND v.occurred_on IS NULL`,

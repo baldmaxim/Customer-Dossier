@@ -6,7 +6,6 @@ export type Role =
   | 'investor'
   | 'operator';
 
-export type Sentiment = 'positive' | 'neutral' | 'negative';
 
 export interface ICompanySearchItem {
   id: number;
@@ -362,7 +361,7 @@ export interface ISourceItem {
   topicVersion: string | null;
 }
 
-/** Состояние текста для страницы документа: почему из него взято именно столько. */
+/** Состояние текста публикации словами (reprocess/itemOutcome.ts на сервере): почему из него взято именно столько. */
 export type ItemState =
   | 'in_cards'
   | 'nothing_found'
@@ -375,39 +374,6 @@ export type ItemState =
   | 'cancelled'
   | 'no_policy'
   | 'no_run';
-
-export interface IItemAssertion {
-  id: number;
-  predicate: string;
-  role: string | null;
-  eventType: string | null;
-  polarity: string;
-  modality: string;
-  status: string;
-  validFrom: string | null;
-  periodPrecision: string;
-  parties: Array<{ kind: 'company' | 'project'; id: number; name: string; side: string }>;
-  quotes: Array<{ quote: string; spanStart: number; spanEnd: number; stance: string }>;
-}
-
-export interface IItemOutcome {
-  state: ItemState;
-  policy: { allowed: boolean; reason: string | null };
-  run: {
-    id: number;
-    status: string;
-    error: string | null;
-    finishedAt: string | null;
-    coveredChars: number | null;
-    totalChars: number | null;
-    relevant: boolean | null;
-    revisionNo: number;
-  } | null;
-  activeSetId: number | null;
-  assertions: IItemAssertion[];
-  companies: Array<{ id: number; name: string }>;
-  projects: Array<{ id: number; name: string }>;
-}
 
 export interface IRevisionMeta {
   id: number;
@@ -443,16 +409,6 @@ export interface IRevision extends Omit<IRevisionMeta, 'bodyLength' | 'observati
   body: string;
   /** Картинки публикации; null — не записано (пост собран до 06.10.2026, не Telegram, сбор фото выключен). */
   images?: { items: IPostImage[]; missing: number } | null;
-}
-
-export type DiffOp =
-  | { op: 'equal' | 'delete' | 'insert'; lines: string[] }
-  | { op: 'skip'; count: number };
-
-export interface IDiffResponse {
-  from: number;
-  to: number;
-  diff: { ok: true; ops: DiffOp[]; inserted: number; deleted: number } | { ok: false; reason: string };
 }
 
 export type AssertionStatus = 'candidate' | 'text_grounded' | 'reviewed_supported' | 'disputed' | 'rejected';
@@ -533,21 +489,6 @@ export interface IReviewRow {
   assertionVersion: number;
   provenanceGap: boolean;
   decidedAt: string;
-}
-
-export interface IMention {
-  id: number;
-  documentId: number;
-  surfaceForm: string;
-  role: Role | null;
-  quote: string;
-  quoteVerified: boolean;
-  sentiment: Sentiment;
-  confidence: number;
-  publishedAt: string;
-  url: string | null;
-  sourceTitle: string;
-  sourceKind: string;
 }
 
 export interface IEventRow {

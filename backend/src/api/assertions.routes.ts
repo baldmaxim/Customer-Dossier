@@ -54,47 +54,6 @@ const ASSERTION_FROM = `
   LEFT JOIN projects xp ON xp.id = a.context_project_id
 `;
 
-const listSchema = z.object({
-  status: z.enum(ASSERTION_STATUSES).optional(),
-  needsRevalidation: z.enum(['true', 'false']).optional(),
-  predicate: z.enum(PREDICATES).optional(),
-  companyId: z.coerce.number().int().positive().optional(),
-  projectId: z.coerce.number().int().positive().optional(),
-  // Keyset: утверждения с id меньше указанного.
-  before: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-});
-
-assertionsRouter.get('/assertions', async (req, res) => {
-  const parsed = listSchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Некорректные параметры' });
-    return;
-  }
-  const f = parsed.data;
-  const items = await query(
-    `SELECT ${ASSERTION_COLUMNS} ${ASSERTION_FROM}
-     WHERE ($1::assertion_status IS NULL OR a.status = $1::assertion_status)
-       AND ($2::boolean IS NULL OR a.needs_revalidation = $2::boolean)
-       AND ($3::text IS NULL OR a.predicate = $3::text)
-       AND ($4::bigint IS NULL OR $4::bigint IN (a.subject_company_id, a.object_company_id, a.counterparty_company_id))
-       AND ($5::bigint IS NULL OR $5::bigint IN (a.subject_project_id, a.object_project_id, a.context_project_id))
-       AND ($6::bigint IS NULL OR a.id < $6::bigint)
-     ORDER BY a.id DESC
-     LIMIT $7`,
-    [
-      f.status ?? null,
-      f.needsRevalidation === undefined ? null : f.needsRevalidation === 'true',
-      f.predicate ?? null,
-      f.companyId ?? null,
-      f.projectId ?? null,
-      f.before ?? null,
-      f.limit,
-    ],
-  );
-  res.json({ items });
-});
-
 // Очередь проверки по приоритету (этап 06): идентичность, конфликт ролей и периодов, исправление, оспаривание.
 const queueSchema = z.object({
   kind: z.enum(['identity', 'polarity_conflict', 'role_period_conflict', 'correction', 'dispute']).optional(),
@@ -116,55 +75,6 @@ assertionsRouter.get('/review-queue', async (req, res) => {
     [parsed.data.kind ?? null, parsed.data.limit],
   );
   res.json({ items });
-});
-
-// История состояния объекта в действительном времени и текущее состояние по корпусам.
-assertionsRouter.get('/projects/:id/state-history', async (req, res) => {
-  const id = idOf(req.params.id);
-  if (id === null) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-  const history = await query(
-    `SELECT scope_building AS "scopeBuilding", state, valid_from::text AS "validFrom", valid_to::text AS "validTo",
-            period_precision AS "periodPrecision", assertion_id AS "assertionId", recorded_at AS "recordedAt"
-     FROM project_state_history_v WHERE project_id = $1
-     ORDER BY coalesce(scope_building, ''), valid_from, recorded_at`,
-    [id],
-  );
-  const current = await query(
-    `SELECT scope_building AS "scopeBuilding", state, valid_from::text AS "validFrom", period_precision AS "periodPrecision",
-            assertion_id AS "assertionId"
-     FROM project_current_state_v WHERE project_id = $1`,
-    [id],
-  );
-  res.json({ history, current });
-});
-
-// Судебные и банкротные события компании: стадии одного дела сгруппированы по номеру.
-assertionsRouter.get('/companies/:id/legal-cases', async (req, res) => {
-  const id = idOf(req.params.id);
-  if (id === null) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-  const rows = await query<{ caseKey: string }>(
-    `SELECT case_key AS "caseKey", assertion_id AS "assertionId", event_type AS "eventType",
-            subject_company_id AS "subjectCompanyId", procedural_role AS "proceduralRole",
-            counterparty_company_id AS "counterpartyCompanyId", counterparty_role AS "counterpartyRole",
-            case_number AS "caseNumber", event_stage AS "eventStage", event_outcome AS "eventOutcome",
-            valid_from::text AS "validFrom", period_precision AS "periodPrecision",
-            value_type AS "valueType", value_numeric::text AS "valueNumeric", value_currency AS "valueCurrency",
-            tax_basis AS "taxBasis", modality, status
-     FROM legal_case_events_v
-     WHERE subject_company_id = $1 OR counterparty_company_id = $1
-     ORDER BY case_key, valid_from NULLS FIRST, assertion_id
-     LIMIT 500`,
-    [id],
-  );
-  const cases = new Map<string, typeof rows>();
-  for (const row of rows) cases.set(row.caseKey, [...(cases.get(row.caseKey) ?? []), row]);
-  res.json({ cases: [...cases.entries()].map(([caseKey, stages]) => ({ caseKey, stages })) });
 });
 
 assertionsRouter.get('/assertions/:id', async (req, res) => {

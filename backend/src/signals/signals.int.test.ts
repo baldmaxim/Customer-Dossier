@@ -120,9 +120,6 @@ describe('снимок сигналов на срез', () => {
 
     const card = await api.call('GET', `/api/companies/${alfa}`, undefined);
     expect(card.body).not.toHaveProperty('risk');
-    const legacy = await api.call('GET', `/api/companies/${alfa}/legacy-risk`, undefined);
-    expect(legacy.headers.deprecation).toBe('true');
-    expect(legacy.body.deprecated).toBe(true);
   });
 
   it('TC-060 / TC-062: событие без даты не в окне; пять перепечаток — пять публикаций, одна семья, одно событие', async () => {

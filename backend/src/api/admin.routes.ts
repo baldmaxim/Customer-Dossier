@@ -151,64 +151,6 @@ adminRouter.get('/sources', async (_req, res) => {
 });
 
 /**
- * Здоровье источника: запуски, публикации, редакции, полнота текущих версий.
- * Нулевое число публикаций — не «источник пуст», а повод смотреть запуски и допуск.
- */
-adminRouter.get('/sources/:id/health', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  if (!Number.isFinite(id)) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-  const source = await query<ISourceAdminRow>(
-    `SELECT id, key, status, fail_streak AS "failStreak", last_ok_at AS "lastOkAt",
-            health, health_reason AS "healthReason", last_attempt_at AS "lastAttemptAt", parser_version AS "parserVersion",
-            access_status AS "accessStatus", ai_processing_status AS "aiProcessingStatus",
-            policy_expires_at AS "policyExpiresAt"
-     FROM sources WHERE id = $1`,
-    [id],
-  );
-  const row = source[0];
-  if (!row) {
-    res.status(404).json({ error: 'Источник не найден' });
-    return;
-  }
-  const runs = await query(
-    `SELECT started_at AS "startedAt", finished_at AS "finishedAt", status, items_seen AS "itemsSeen",
-            items_new AS "itemsNew", http_status AS "httpStatus", error, layout_stats AS "layoutStats",
-            outcome, items_found AS "found", items_saved AS "saved", items_changed AS "changed",
-            items_skipped AS "skipped", items_failed AS "failed", pages_fetched AS "pages", coverage,
-            parser_version AS "parserVersion", duration_ms AS "durationMs", retry_after_at AS "retryAfterAt"
-     FROM source_runs WHERE source_id = $1 ORDER BY started_at DESC LIMIT 10`,
-    [id],
-  );
-  const items = await query(
-    `SELECT count(*)::int AS items,
-            count(*) FILTER (WHERE i.state = 'deleted_observed')::int AS "deletedObserved",
-            count(*) FILTER (WHERE i.history_before_import = 'unknown')::int AS "historyUnknown",
-            count(*) FILTER (WHERE (SELECT count(*) FROM document_revisions r WHERE r.source_item_id = i.id) > 1)::int
-              AS "withSeveralRevisions",
-            max(i.last_observed_at) AS "lastObservedAt"
-     FROM source_items i WHERE i.source_id = $1`,
-    [id],
-  );
-  const completeness = await query(
-    `SELECT lr.completeness, count(*)::int AS n
-     FROM source_items i JOIN document_revisions lr ON lr.id = i.latest_revision_id
-     WHERE i.source_id = $1 GROUP BY lr.completeness ORDER BY n DESC`,
-    [id],
-  );
-  res.json({
-    source: row,
-    collectBlockedReason: evaluateSourcePolicy(row, 'collect').reason,
-    aiBlockedReason: evaluateSourcePolicy(row, 'ai_processing').reason,
-    runs,
-    items: items[0] ?? null,
-    latestCompleteness: completeness,
-  });
-});
-
-/**
  * Проба уже допущенного сайта: одна страница, до трёх записей, без записи в базу,
  * без включения опроса и без изменения допуска. Живой сетевой запрос — только по действию оператора.
  */

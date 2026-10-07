@@ -18,57 +18,11 @@ import { loadCompanyPublications } from './companyPublications.js';
 import { loadCompanyRegistry, loadCompanyRegistryProjects } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
-import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
 
 export const companiesRouter = asyncRouter();
 
-interface ICompanyRisk {
-  companyId: number;
-  name: string;
-  city: string | null;
-  projectsTotal: number;
-  activeProjects: number;
-  doneProjects: number;
-  projectsAsGc: number;
-  projectsAsContractor: number;
-  projectsAsCustomer: number;
-  avgDelayDays: number | null;
-  delayedProjects: number;
-  delayShare: number | null;
-  mentions90d: number;
-  negative90d: number;
-  negativeShare90d: number | null;
-  lastMentionAt: string | null;
-  hardEvents12m: number;
-  replacedCount: number;
-  riskScore: number;
-  riskLight: 'grey' | 'green' | 'yellow' | 'red';
-}
-
 /** Событий в карточке — не больше; общее число отдаётся отдельно (total). */
 const EVENTS_LIMIT = 100;
-
-const RISK_COLUMNS = `
-  company_id            AS "companyId",
-  name, city,
-  projects_total        AS "projectsTotal",
-  active_projects       AS "activeProjects",
-  done_projects         AS "doneProjects",
-  projects_as_gc        AS "projectsAsGc",
-  projects_as_contractor AS "projectsAsContractor",
-  projects_as_customer  AS "projectsAsCustomer",
-  avg_delay_days        AS "avgDelayDays",
-  delayed_projects      AS "delayedProjects",
-  delay_share           AS "delayShare",
-  mentions_90d          AS "mentions90d",
-  negative_90d          AS "negative90d",
-  negative_share_90d    AS "negativeShare90d",
-  last_mention_at       AS "lastMentionAt",
-  hard_events_12m       AS "hardEvents12m",
-  replaced_count        AS "replacedCount",
-  risk_score            AS "riskScore",
-  risk_light            AS "riskLight"
-`;
 
 const searchSchema = z.object({
   q: z.string().min(2).max(200),
@@ -285,21 +239,6 @@ companiesRouter.get('/:id/context', async (req, res) => {
 });
 
 /**
- * Устаревший индекс риска (миграция 007). Некалиброван, смешивает тональность, задержки объектов и суды;
- * новой карточкой и сортировкой не используется. Оставлен только для сравнения при откате.
- */
-companiesRouter.get('/:id/legacy-risk', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  if (!Number.isFinite(id)) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-  const risk = await queryOne<ICompanyRisk>(`SELECT ${RISK_COLUMNS} FROM company_risk WHERE company_id = $1`, [id]);
-  res.setHeader('Deprecation', 'true');
-  res.json({ deprecated: true, note: 'legacy-индекс этапа 007, не оценка надёжности; не смешивать с сигналами signals@1', risk });
-});
-
-/**
  * Объекты, связанные с компанией участием или событием. Событие без утверждения
  * об участии показывает объект в карточке, но не создаёт компании роль.
  */
@@ -378,51 +317,6 @@ companiesRouter.get('/:id/builders', async (req, res) => {
     return;
   }
   res.json(await loadCompanyBuilders(id));
-});
-
-const feedSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(30),
-  /** Keyset-пагинация: курсор вида "<iso>|<id>". */
-  cursor: z.string().max(80).optional(),
-  sentiment: z.enum(['positive', 'neutral', 'negative']).optional(),
-});
-
-/**
- * Лента упоминаний. Keyset, а не OFFSET: лента постоянно пополняется сверху,
- * и OFFSET на второй странице показал бы уже виденное.
- */
-companiesRouter.get('/:id/mentions', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  const parsed = feedSchema.safeParse(req.query);
-  if (!Number.isFinite(id) || !parsed.success) {
-    res.status(400).json({ error: 'Некорректные параметры' });
-    return;
-  }
-
-  const { limit, cursor, sentiment } = parsed.data;
-  const [cursorAt, cursorId] = parseKeysetCursor(cursor);
-
-  const rows = await query<{ publishedAt: Date; id: number }>(
-    `SELECT m.id, m.surface_form AS "surfaceForm", m.role, m.quote,
-            m.quote_verified AS "quoteVerified", m.sentiment, m.confidence,
-            m.published_at   AS "publishedAt", m.document_id AS "documentId",
-            d.url, d.body, s.title AS "sourceTitle", s.kind AS "sourceKind"
-     FROM mentions m
-     JOIN raw_documents d ON d.id = m.document_id
-     JOIN sources s       ON s.id = d.source_id
-     WHERE m.entity_kind = 'company' AND m.entity_id = $1
-       AND ($3::timestamptz IS NULL OR (m.published_at, m.id) < ($3::timestamptz, $4::bigint))
-       AND ($5::text IS NULL OR m.sentiment = $5::sentiment)
-     ORDER BY m.published_at DESC, m.id DESC
-     LIMIT $2`,
-    [id, limit, cursorAt, cursorId, sentiment ?? null],
-  );
-
-  const last = rows[rows.length - 1];
-  res.json({
-    items: rows,
-    nextCursor: rows.length === limit && last ? keysetCursor(last.publishedAt, last.id) : null,
-  });
 });
 
 const publicationsSchema = z.object({
