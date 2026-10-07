@@ -1,21 +1,16 @@
-// «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений» (объекты · генподрядчики · события · публикации ·
-// связи · суды · реестр). У каждой плитки — разбивка мелко и ссылка туда, где число расписано; заголовок
-// полосы — только для диктора: плитки сами себя называют. Роли — ярлыками в шапке и полосами в «Ролях,
-// событиях и текстах», а не третьей строкой здесь (05.10.2026).
+// «Коротко о компании»: полоса плиток-итогов во всю ширину «Сведений» (объекты · генподрядчики · выручка · стройка ·
+// арбитраж · ФССП · события · публикации · связи). У каждой плитки — разбивка мелко и ссылка туда, где число расписано;
+// заголовок полосы — только для диктора: плитки сами себя называют.
 //
-// Здесь нет ни одного нового числа: всё берётся из расчёта показателей, уже загруженных
-// объектов, событий и реестра — те же числа стоят в «Подробно → Показатели» с правилом и
-// знаменателем. Итоговой оценки, балла и светофора нет и не будет (ADR-009) — сводка
-// отвечает «что известно», а не «хорошая ли это компания»; плитки одного нейтрального тона.
-//
-// Показатели могут быть не посчитаны, устареть или не загрузиться. Тогда сводка говорит это
-// словами и показывает то, что видно без них, а не подставляет ноль вместо неизвестного.
-// Числа правил signals@2 (связи, суды) в старом снимке отсутствуют — их плиток тогда нет.
-// Когда посчитаны и что это не оценка — в «Источниках и датах» внизу вкладки (CompanySources).
+// Число плитки — то же, что у списка, куда она ведёт (07.10.2026, «одно сведение — один источник»): объекты — вкладка
+// «Объекты», события — «Подробно → События» (итоги в том же ответе), публикации — лента (publication-stats), связи —
+// «С кем связана» (те же контрагенты и их число). Раньше события, публикации, связи и суды брались из снимка
+// показателей на дату расчёта и не сходились со списками; плитка «Суды» по публикациям дублировала «Арбитраж» (КАД) —
+// снята, судебные события из постов остаются в «Событиях». Итоговой оценки, балла и светофора нет (ADR-009).
 
 import { FC } from 'react';
 
-import type { ICompanyObject, ISignalAggregate } from '../api/types';
+import type { ICompanyObject } from '../api/types';
 import { formatCount } from '../lib/format';
 import { formatDate, formatMoney } from '../lib/labels';
 import { Sparkline } from './charts/Sparkline';
@@ -24,8 +19,8 @@ import { BUILDERS_SECTION_ID } from './company/CompanyBuilders';
 import { CHECKS_SECTION_ID } from './company/CompanyChecks';
 import { DELIVERY_SECTION_ID } from './company/CompanyDelivery';
 import { FINANCE_SECTION_ID } from './company/CompanyFinance';
-import { useCompanyBuilders, useCompanyChecks, useCompanyDelivery, useCompanyEvents, useCompanyFinance, useCompanySignals } from './company/useCompanyQueries';
-import { Button } from './ui/Button';
+import { PARTNERS_LIMIT } from './CompanyPartners';
+import { useCompanyBuilders, useCompanyChecks, useCompanyDelivery, useCompanyEvents, useCompanyFinance, useCompanyPartners, useCompanyPublicationStats } from './company/useCompanyQueries';
 import { Heading } from './ui/Heading';
 import styles from './CompanyBrief.module.css';
 
@@ -46,10 +41,6 @@ const citiesText = (objects: ICompanyObject[]): string | null => {
   return cities.length > 2 ? `${cities.slice(0, 2).join(', ')} и ещё ${cities.length - 2}` : cities.join(', ');
 };
 
-/** Число показателя: посчитано — числом, нет данных или нет показателя — «—». */
-const aggregateText = (aggregate: ISignalAggregate | undefined): string =>
-  aggregate?.status === 'ok' ? formatCount(aggregate.value) : '—';
-
 /**
  * «за 90 дней — 4 · последняя 30.09.2026»: только известные части. Пробелы у тире —
  * неразрывные: узкая плитка переносит «ответчик — 3» целиком, а не оставляет «— 3» на
@@ -66,12 +57,13 @@ const namesText = (names: string[]): string | null => {
   return names.length > 2 ? `${names.slice(0, 2).join(', ')} и ещё ${names.length - 2}` : names.join(', ');
 };
 
-const known = (label: string, aggregate: ISignalAggregate | undefined): string | null =>
-  aggregate?.status === 'ok' ? `${label} — ${formatCount(aggregate.value)}` : null;
+/** «за 90 дней — 4»: известное число с подписью. */
+const known = (label: string, value: number | null | undefined): string | null => (value !== null && value !== undefined ? `${label} — ${formatCount(value)}` : null);
 
 export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objectsTotal, objectsKnown }) => {
-  const query = useCompanySignals(companyId);
   const events = useCompanyEvents(companyId);
+  const publications = useCompanyPublicationStats(companyId);
+  const partners = useCompanyPartners(companyId, PARTNERS_LIMIT);
   const builders = useCompanyBuilders(companyId);
   // Последний год отчётности ГИР БО (24B); старый сервер маршрута не знает — плитки нет.
   const finance = useCompanyFinance(companyId);
@@ -85,16 +77,13 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
   const houses = (delivery.data?.houses ?? 0) > 0 ? delivery.data! : null;
   // Старый сервер маршрута не знает: без objects плитки нет, а не падение сводки.
   const generals = (builders.data?.items ?? []).filter(b => b.roles.includes('general_contractor'));
-  const signals = query.data?.signals ?? null;
-  const refresh = query.data?.refresh;
 
-  const media = signals?.media;
-  const experience = signals?.experience;
-  const latest = media?.latestPublishedAt;
-  const cases = media?.legalCasesCount;
-  // Мини-график — последние 12 месяцев ряда signals@3 (24 столбика в 72px сливаются); старый снимок — без него.
-  const byMonth = media?.publicationsByMonth;
-  const spark = byMonth?.status === 'ok' ? <Sparkline values={byMonth.buckets.slice(-12).map(b => b.value)} partialLast={byMonth.partialLast} /> : undefined;
+  // Старый сервер маршрута итогов не знает (ответ без total) — плитка говорит «—», а не падает.
+  const pubs = typeof publications.data?.total === 'number' ? publications.data : undefined;
+  const eventStats = events.data?.stats;
+  const links = partners.data?.counts;
+  // Мини-график — последние 12 месяцев ряда (24 столбика в 72px сливаются).
+  const spark = pubs?.byMonth?.status === 'ok' ? <Sparkline values={pubs.byMonth.buckets.slice(-12).map(b => b.value)} partialLast={pubs.byMonth.partialLast} /> : undefined;
 
   return (
     <section className={styles.brief}>
@@ -159,50 +148,28 @@ export const CompanyBrief: FC<ICompanyBriefProps> = ({ companyId, objects, objec
         <BriefTile
           label="События"
           value={events.isSuccess ? formatCount(events.data.total ?? events.data.items.length) : '—'}
-          detail={joinDetail([known('с датой за 12 мес.', media?.eventsDated12m)])}
+          detail={joinDetail([known('с датой за 12 мес.', eventStats?.dated12m)])}
           to={{ search: '?tab=details' }}
           linkText="Все события"
         />
         <BriefTile
           label="Публикации"
-          value={aggregateText(media?.publications)}
+          value={pubs ? formatCount(pubs.total) : '—'}
           chart={spark}
-          detail={joinDetail([known('за 90 дней', media?.publications90d), latest?.value ? `последняя ${formatDate(latest.value)}` : null])}
+          detail={joinDetail([known('за 90 дней', pubs?.last90), pubs?.latestAt ? `последняя ${formatDate(pubs.latestAt)}` : null])}
           to={{ search: '?tab=publications' }}
           linkText="Все публикации"
         />
-        {experience?.counterparties && (
+        {links && (
           <BriefTile
             label="Связи"
-            value={aggregateText(experience.counterparties)}
-            detail={joinDetail([known('договоров', experience.contractsCount), known('корпоративных', experience.corporateCount)])}
+            value={formatCount(links.companies)}
+            detail={joinDetail([known('договоров', links.contracts), known('корпоративных', links.corporate)])}
             to={{ search: '?tab=details&dtab=links' }}
             linkText="Все связи"
           />
         )}
-        {media && cases && (
-          <BriefTile
-            label="Суды"
-            value={aggregateText(cases)}
-            detail={
-              cases.status === 'ok' && (cases.value ?? 0) > 0
-                ? joinDetail([`истец — ${formatCount(media.courtRoles.plaintiff)}`, `ответчик — ${formatCount(media.courtRoles.defendant)}`])
-                : null
-            }
-            to={{ search: '?tab=details&dtab=numbers' }}
-            linkText="Дела подробно"
-          />
-        )}
       </dl>
-      {refresh?.active && <p className={styles.briefNote}>показатели на {formatDate(refresh.active.cutoffAt)}</p>}
-      {query.isError && (
-        <p className={styles.note}>
-          Показатели не загрузились — числа публикаций не показаны.{' '}
-          <Button variant="link" size="sm" onClick={() => void query.refetch()}>
-            Повторить
-          </Button>
-        </p>
-      )}
     </section>
   );
 };

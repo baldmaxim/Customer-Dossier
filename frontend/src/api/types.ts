@@ -27,6 +27,9 @@ export interface ICompanySearchItem {
   memberOf?: string | null;
   members?: number;
   exact?: boolean;
+  /** Наименование и статус по ЕГРЮЛ — тем же правилом, что заголовок карточки и строка каталога. */
+  egrulName?: string | null;
+  egrulStatus?: string | null;
 }
 
 export interface ICompany {
@@ -268,7 +271,8 @@ export interface ICompanyObject {
   city: string | null;
   level: string | null;
   basis: 'participation' | 'event';
-  roles: Array<{ role: string; isCurrent: boolean; origin: string }>;
+  /** assertionIds — утверждения-основания роли («Откуда известно»); у прежней обработки и у старого сервера их нет. */
+  roles: Array<{ role: string; isCurrent: boolean; origin: string; assertionIds?: number[] }>;
   /** Объект застройщика из группы компании: роль у него, а не у самой компании. */
   via: { companyId: number; name: string } | null;
   registry: ICompanyObjectRegistry | null;
@@ -277,6 +281,8 @@ export interface ICompanyObject {
 
 export interface ICompanyObjectsResponse {
   items: ICompanyObject[];
+  /** Роли самой компании на её объектах по всему списку (ярлыки шапки и полосы «Роли»); у старого сервера нет. */
+  roles?: Array<{ role: string; count: number }>;
   members: Array<{ companyId: number; name: string }>;
   coverage: { loaded: number; total: number; truncated: boolean };
 }
@@ -329,21 +335,6 @@ export interface ICompanyResponse {
   egrul?: ICompanyEgrul | null;
   /** Приходит вместо остального, если компания слита в другую. */
   mergedInto?: number;
-}
-
-export interface IProjectRow {
-  id: number;
-  name: string;
-  kind: string;
-  stage: string;
-  city: string | null;
-  plannedCompletion: string | null;
-  actualCompletion: string | null;
-  role: Role | null;
-  confidence: number | null;
-  isCurrent: boolean | null;
-  basis: 'participation' | 'event';
-  counterparties: Array<{ id: number; name: string; role: Role }> | null;
 }
 
 export type TextCompleteness = 'full' | 'excerpt' | 'caption_only' | 'failed' | 'unknown';
@@ -689,9 +680,10 @@ export interface ICompensatingPlan {
   steps: string[];
 }
 
-// ─── Сигналы компании (этап 07, signals@2) ────────────────────────────────
+// ─── Числа с правилом и ряды по месяцам (форма этапа 07; карточка с 07.10.2026 читает живые итоги) ───────
 
 export type ReviewLevel = 'reviewed' | 'text_grounded' | 'legacy_unreviewed' | 'disputed' | 'rejected';
+
 
 export interface ISignalAggregate {
   value: number | null;
@@ -713,134 +705,6 @@ export interface ISignalMonthlySeries extends ISignalAggregate {
   partialLast: boolean;
 }
 
-/** Дата из выборки (signals@2): неизвестна — insufficient_data, а не сегодняшняя. */
-export interface ISignalDate {
-  value: string | null;
-  status: 'ok' | 'insufficient_data';
-  rule: string;
-  sourceItemId: number | null;
-}
-
-export interface ISignalEvent {
-  assertionId: number;
-  type: string;
-  companyRole: 'subject' | 'counterparty';
-  proceduralRole: string | null;
-  caseNumber: string | null;
-  stage: string | null;
-  outcome: string | null;
-  validFrom: string | null;
-  validTo: string | null;
-  periodPrecision: string;
-  dateStatus: 'in_window' | 'boundary' | 'before_window' | 'future' | 'undated';
-  review: ReviewLevel;
-  needsRevalidation: boolean;
-  modality: string;
-  value: { amount: string; currency: string | null; purpose: string | null } | null;
-  publications: number;
-  families: number;
-}
-
-export interface ISignalParticipation {
-  assertionId: number;
-  projectId: number;
-  role: string;
-  building: string | null;
-  workPackage: string | null;
-  workPackageLabel: string | null;
-  validFrom: string | null;
-  validTo: string | null;
-  periodPrecision: string;
-  review: ReviewLevel;
-  needsRevalidation: boolean;
-}
-
-export interface ICompanySignals {
-  rulesVersion: string;
-  cutoff: string;
-  companyId: number;
-  identity: {
-    status: 'identified' | 'identifier_unverified' | 'name_only' | 'ambiguous';
-    entityType: string | null;
-    identifiers: Record<string, number>;
-    aliases: number;
-    openAmbiguities: number;
-    pendingMerges: number;
-    coverage: {
-      publications: ISignalAggregate;
-      sources: number;
-      completeness: Record<string, number>;
-      legacyUnimported: { participations: number; events: number };
-      note: string;
-    };
-  };
-  experience: {
-    projects: ISignalAggregate;
-    byRole: Record<string, ISignalAggregate>;
-    byWorkPackage: Record<string, ISignalAggregate>;
-    reviewed: ISignalAggregate;
-    /* signals@2. В снимках, считанных прежними правилами, этих чисел нет — отсюда `?`. */
-    contractsCount?: ISignalAggregate;
-    corporateCount?: ISignalAggregate;
-    counterparties?: ISignalAggregate;
-    participations: ISignalParticipation[];
-    notCounted: Array<{ assertionId: number; projectId: number | null; role: string | null; modality: string; polarity: string; review: ReviewLevel }>;
-    contracts: Array<{
-      assertionId: number;
-      side: 'client' | 'performer';
-      role: string | null;
-      counterpartCompanyId: number | null;
-      projectId: number | null;
-      modality: string;
-      polarity: string;
-      value: { amount: string; currency: string | null; purpose: string | null } | null;
-      review: ReviewLevel;
-    }>;
-    note: string;
-  };
-  media: {
-    publications: ISignalAggregate;
-    publications90d: ISignalAggregate;
-    publicationsUndated: ISignalAggregate;
-    firstPublishedAt?: ISignalDate;
-    latestPublishedAt?: ISignalDate;
-    observations: number;
-    families: ISignalAggregate;
-    familiesByOrigin: { established: ISignalAggregate; named: ISignalAggregate; unknown: ISignalAggregate };
-    events: ISignalEvent[];
-    eventsDated12m: ISignalAggregate;
-    eventsBoundary12m: ISignalAggregate;
-    eventsUndated: ISignalAggregate;
-    eventsUndatedPublished90d: ISignalAggregate;
-    eventsFuture: ISignalAggregate;
-    eventsByReview: Record<ReviewLevel, number>;
-    eventsByType?: Record<string, ISignalAggregate>;
-    legalCasesCount?: ISignalAggregate;
-    /* signals@3: в снимках прежних правил рядов нет — отсюда `?`. */
-    publicationsByMonth?: ISignalMonthlySeries;
-    eventsByMonth?: ISignalMonthlySeries;
-    reviewedShare: ISignalAggregate;
-    legalCases: Array<{
-      caseKey: string;
-      caseNumber: string | null;
-      companyProceduralRole: string | null;
-      stages: Array<{ assertionId: number; stage: string | null; outcome: string | null; validFrom: string | null; review: ReviewLevel }>;
-    }>;
-    courtRoles: { plaintiff: number; defendant: number; other: number; unknown: number };
-    notCounted: Array<{ assertionId: number; type: string | null; reason: string }>;
-    note: string;
-  };
-}
-
-export interface ISignalRefreshState {
-  active: { id: number; rulesVersion: string; cutoffAt: string; finishedAt: string } | null;
-  lastFailure: { id: number; error: string | null; finishedAt: string } | null;
-  running: boolean;
-  stale: boolean;
-  staleReasons: string[];
-}
-
-/** Сводка по базе для главной и для ступени «Результат». */
 /** Строка «В базе» (GET /api/admin/summary): компании — числами вкладок каталога, тексты — публикации источников. */
 export interface ISummaryResponse {
   totals: {
@@ -866,6 +730,9 @@ export interface IPublicationFact {
   projectName: string | null;
   otherCompanyId: number | null;
   otherCompanyName: string | null;
+  /** Сведение о другом юрлице семьи (СЗ группы), а не о самой компании. */
+  viaCompanyId?: number | null;
+  viaCompanyName?: string | null;
   amount: string | null;
   currency: string | null;
   valueType: string | null;
@@ -911,6 +778,33 @@ export interface IPartnerRow {
   links: IPartnerLink[];
 }
 
+/** Контрагенты (GET /companies/:id/partners): первые limit и числа по полному набору — одно правило для плитки «Связи». */
+export interface IPartnersResponse {
+  items: IPartnerRow[];
+  counts?: { companies: number; contracts: number; corporate: number };
+}
+
+/** Итоги ленты публикаций (GET /companies/:id/publication-stats) — тот же набор, что лента и каталог. */
+export interface IPublicationStats {
+  total: number;
+  undated: number;
+  last90: number;
+  latestAt: string | null;
+  sources: number;
+  completeness: Record<string, number>;
+  families: { total: number; established: number; named: number; unknown: number };
+  byMonth: ISignalMonthlySeries;
+}
+
+/** Итоги списка событий компании (в ответе GET /companies/:id/events) — тот же набор, что список. */
+export interface IEventStats {
+  total: number;
+  dated12m: number;
+  undated: number;
+  byType: Array<{ type: string; count: number }>;
+  byMonth: ISignalMonthlySeries;
+}
+
 /** Состояние конвейера: где последние редакции, причины падений, модель и фоновые задания. */
 export interface IPipelineOverview {
   /** Где сейчас последние редакции: почему текст не в карточках (этап 22). */
@@ -927,12 +821,6 @@ export interface IPipelineOverview {
     retryEnabled: boolean;
     retryMax: number;
   };
-}
-
-export interface ISignalsResponse {
-  status: 'ok' | 'not_computed' | 'not_in_snapshot';
-  refresh: ISignalRefreshState;
-  signals: ICompanySignals | null;
 }
 
 export interface IProjectContext {

@@ -39,6 +39,13 @@ export const PublicationFacts: FC<IPublicationFactsProps> = ({ title, facts, mor
       <ul className={styles.list}>
         {facts.map(fact => (
           <li key={fact.key} className={styles.fact}>
+            {/* Лента компании — по семье: сведение о СЗ группы подписано его именем, а не выдаётся за сведение о компании. */}
+            {fact.via && (
+              <>
+                <RefLink value={fact.via} to={`/company/${fact.via.id}`} />
+                <span aria-hidden="true">: </span>
+              </>
+            )}
             {fact.negated && <span className={styles.negated}>отрицается: </span>}
             <span className={styles.label}>{fact.label}</span>
             {fact.other && (

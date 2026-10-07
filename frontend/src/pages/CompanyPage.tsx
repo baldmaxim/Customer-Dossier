@@ -17,7 +17,7 @@ import { CompanyObjects } from '../components/company/CompanyObjects';
 import { CompanySiteProjects } from '../components/company/CompanySiteProjects';
 import { CompanyInfo, hasLegalIdentifier } from '../components/company/CompanyInfo';
 import { CompanyPublications } from '../components/company/CompanyPublications';
-import { CompanyRequisites, objectRoleCounts } from '../components/company/CompanyRequisites';
+import { CompanyRequisites } from '../components/company/CompanyRequisites';
 import { CompanyUnidentified } from '../components/company/CompanyUnidentified';
 import { CompanySimilar } from '../components/company/CompanySimilar';
 import { GraphButton } from '../components/graph/GraphButton';
@@ -119,7 +119,7 @@ export const CompanyPage: FC = () => {
         <CompanyRequisites
           data={data}
           focus={focus.data?.fields ? focus.data : null}
-          roles={objectRoleCounts(objects.data?.items ?? [])}
+          roles={objects.data?.roles ?? []}
           compact={reader}
         />
       ),

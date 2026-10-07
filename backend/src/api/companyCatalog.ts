@@ -17,8 +17,9 @@
 
 import { z } from 'zod';
 
+import { eventRowsCte, partRowsCte, touchedCte } from '../companies/counters.js';
 import { membershipCtes } from '../companies/groupMembership.js';
-import { IDS_CTE } from '../companies/identity.js';
+import { IDS_CTE, idsCte } from '../companies/identity.js';
 import { query } from '../db/pool.js';
 import { egrulNamesOf } from '../focus/identity.js';
 import { mapReq, summaryOf } from '../focus/map.js';
@@ -27,7 +28,6 @@ import { registerReadCache } from '../utils/readCaches.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
 import { ttlCache } from '../utils/ttlCache.js';
 
-import { liveMentionSql } from './legacyMentions.js';
 
 export const CATALOG_VIEWS = ['legal', 'groups', 'unidentified'] as const;
 export type CatalogView = (typeof CATALOG_VIEWS)[number];
@@ -143,19 +143,11 @@ const BASE_SQL = `
 
 const ROWS_SQL = `
   WITH ${BASE_SQL},
-  part_rows AS MATERIALIZED (
-    SELECT company_id, project_id, role FROM card_participations_v WHERE is_current
-  ),
-  touched AS MATERIALIZED (
-    SELECT x.company_id, pa.source_item_id AS item_id
-    FROM published_assertions_v pa
-    CROSS JOIN LATERAL (VALUES (pa.subject_company_id), (pa.object_company_id), (pa.counterparty_company_id)) x(company_id)
-    WHERE x.company_id IS NOT NULL
-    UNION
-    SELECT m.entity_id, r.source_item_id
-    FROM mentions m JOIN document_revisions r ON r.legacy_document_id = m.document_id
-    WHERE m.entity_kind = 'company' AND ${liveMentionSql('m')}
-  ),
+  -- Объекты и публикации — тем же правилом, что вкладки карточки и поиск (companies/counters.ts): любое участие
+  -- (в том числе прошлое) самой компании или участника семьи и объекты только из её событий; публикации семьи.
+  ${partRowsCte()},
+  ${eventRowsCte()},
+  ${touchedCte()},
   fam AS MATERIALIZED (
     SELECT 'c' || id AS head, id AS member FROM base
     UNION
@@ -163,10 +155,19 @@ const ROWS_SQL = `
     UNION
     SELECT 'g' || group_ref, member FROM vmem
   ),
+  fam_objs AS MATERIALIZED (
+    SELECT f.head, pr.project_id FROM fam f JOIN part_rows pr ON pr.company_id = f.member
+    UNION
+    SELECT 'c' || er.company_id, er.project_id FROM ev_rows er
+  ),
   fam_parts AS MATERIALIZED (
-    SELECT f.head, array_agg(DISTINCT pr.role ORDER BY pr.role) AS roles, count(DISTINCT pr.project_id)::int AS objects
-    FROM fam f JOIN part_rows pr ON pr.company_id = f.member
-    GROUP BY f.head
+    SELECT head, coalesce(r.roles, '{}') AS roles, coalesce(o.objects, 0) AS objects
+    FROM (
+      SELECT f.head, array_agg(DISTINCT pr.role ORDER BY pr.role) AS roles
+      FROM fam f JOIN part_rows pr ON pr.company_id = f.member
+      GROUP BY f.head
+    ) r
+    FULL JOIN (SELECT head, count(DISTINCT project_id)::int AS objects FROM fam_objs GROUP BY head) o USING (head)
   ),
   fam_pubs AS MATERIALIZED (
     SELECT f.head, count(DISTINCT t.item_id)::int AS publications, max(coalesce(si.published_at, si.first_observed_at)) AS last_at
@@ -293,6 +294,28 @@ export const egrulOf = (row: Pick<IRowSql, 'legal_name' | 'ul_status' | 'ip'>): 
   const payload: Record<string, unknown> =
     row.legal_name !== null || row.ul_status !== null ? { UL: { legalName: row.legal_name, status: row.ul_status } } : { IP: row.ip };
   return { name: egrulNamesOf(payload).short, status: summaryOf(mapReq(payload)).status };
+};
+
+/**
+ * Наименование и статус по ЕГРЮЛ для компаний ids — тем же реквизитом, по которому карточка спрашивает Фокус
+ * (companies/identity.ts), и тем же разбором, что строка каталога: поиск называет компанию так же, как каталог и карточка.
+ */
+const EGRUL_SQL = `
+  WITH ${idsCte('$1::bigint[]')}
+  SELECT i.company_id AS "companyId", fr.legal_name, fr.ul_status, fr.ip
+  FROM ids i
+  JOIN LATERAL (
+    SELECT r.payload->'UL'->'legalName' AS legal_name, r.payload->'UL'->'status' AS ul_status, r.payload->'IP' AS ip
+    FROM focus_records r
+    WHERE r.method = 'req' AND r.identifier_type = i.target_type AND r.identifier = i.target_value
+    ORDER BY r.fetched_at DESC, r.id DESC
+    LIMIT 1
+  ) fr ON true`;
+
+export const loadEgrulNames = async (ids: readonly number[]): Promise<Map<number, { name: string | null; status: string | null }>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await query<{ companyId: number } & Pick<IRowSql, 'legal_name' | 'ul_status' | 'ip'>>(EGRUL_SQL, [[...ids]]);
+  return new Map(rows.map(r => [r.companyId, egrulOf(r)]));
 };
 
 /**

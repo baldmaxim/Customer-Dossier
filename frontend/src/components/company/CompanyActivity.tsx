@@ -1,21 +1,18 @@
-// «Публикации и события по месяцам» на вкладке «Сведения» (signals@3, 05.10.2026). Два ряда — два графика
-// на одной оси месяцев, у каждого своя шкала (dual-axis на одном графике выдумал бы связь рядов). Ряды
-// посчитаны правилами снимка показателей: здесь только форма, сумма и что не вошло — словами (без даты,
-// раньше окна, снимки ДОМ.РФ, даты до квартала). Это форма потока сведений, а не оценка компании (ADR-009):
-// всплеск публикаций — повод открыть публикации, не вывод.
-//
-// Снимок прежних правил рядов не содержит — так и сказано, ничего не досчитывается; показатели не посчитаны —
-// блока нет (это говорит «Источники и даты»).
+// «Публикации и события по месяцам» на вкладке «Сведения» (05.10.2026). Два ряда — два графика на одной оси месяцев,
+// у каждого своя шкала (dual-axis на одном графике выдумал бы связь рядов). С 07.10.2026 ряды — из тех же наборов, что
+// лента публикаций и список событий (publication-stats, stats в ответе событий), а не из снимка показателей: сумма ряда
+// и плитки сходятся. Здесь только форма; что не вошло — словами (без даты, раньше окна, даты до квартала). Это форма
+// потока сведений, а не оценка компании (ADR-009): всплеск публикаций — повод открыть публикации, не вывод.
 
 import { FC } from 'react';
 
 import type { ISignalMonthlySeries } from '../../api/types';
 import { formatCount, formatCountWord, type PluralForms } from '../../lib/format';
-import { formatDate, formatMonth } from '../../lib/labels';
+import { formatMonth } from '../../lib/labels';
 import { ChartData } from '../charts/ChartData';
 import { MonthBars } from '../charts/MonthBars';
 import { Section } from '../ui/Section';
-import { useCompanySignals } from './useCompanyQueries';
+import { useCompanyEvents, useCompanyPublicationStats } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 const PUBLICATIONS: PluralForms = ['публикация', 'публикации', 'публикаций'];
@@ -40,26 +37,20 @@ const coverageText = (series: ISignalMonthlySeries, ofForms: PluralForms): strin
 };
 
 export const CompanyActivity: FC<{ companyId: number }> = ({ companyId }) => {
-  const query = useCompanySignals(companyId);
-  const data = query.data;
-  if (!data?.refresh.active || !data.signals) return null;
-  const pubs = data.signals.media.publicationsByMonth;
-  const events = data.signals.media.eventsByMonth;
+  const pubStats = useCompanyPublicationStats(companyId).data;
+  const eventStats = useCompanyEvents(companyId).data?.stats;
+  // Старый сервер рядов не присылает — блока нет, а не падение.
+  const pubs = pubStats?.byMonth?.buckets ? pubStats.byMonth : undefined;
+  const events = eventStats?.byMonth?.buckets ? eventStats.byMonth : undefined;
+  if (!pubs && !events) return null;
   const title = 'Публикации и события по месяцам';
-
-  if (!pubs && !events) {
-    return (
-      <Section title={title}>
-        <p className={styles.structureMissing}>Помесячные числа появятся после следующего расчёта показателей.</p>
-      </Section>
-    );
-  }
+  const lastMonth = (pubs ?? events)!.buckets.at(-1)?.month;
 
   const months = (pubs ?? events)!.buckets.map(b => b.month);
   const valueAt = (series: ISignalMonthlySeries | undefined, i: number): string => (series ? formatCount(series.buckets[i]?.value ?? 0) : '—');
 
   return (
-    <Section title={title} note={`24 месяца по ${formatDate(data.signals.cutoff)}`}>
+    <Section title={title} note={lastMonth ? `24 месяца по ${formatMonth(lastMonth)}` : '24 месяца'}>
       <div className={styles.activity}>
         {pubs &&
           (pubs.status === 'ok' ? (

@@ -2,18 +2,22 @@
 // «Показателей»). Четыре списка одной формы — объекты, договоры, корпоративные связи, совместное
 // участие; у строки — «Откуда известно» и «Контекст объекта» окнами, без раскрытий под строкой.
 // Договор, корпоративная связь и совместное участие — разные вещи и не сводятся в одно «связана с».
-// Фразы резюме, повторявшие числа «Показателей», сняты; вопросы проверки — одной строкой сверху.
+//
+// Один источник на список (07.10.2026): объекты — те же, что вкладка «Объекты» (/objects, а не снимок показателей на
+// дату расчёта); договоры и корпоративные связи — те же контрагенты, что «С кем связана» и плитка «Связи»
+// (/partners: положительное, состоявшееся или заявленное). Сообщения о договоре в виде плана, возможности или
+// отрицания контрагентом не делают — они отдельной строкой «Не учтено как договор». Совместное участие и вопросы
+// проверки — из резюме компании (dossier-summary).
 
 import { FC, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { IStatement } from '../../api/types';
+import type { IPartnerLink, IStatement } from '../../api/types';
 import { useCan } from '../../hooks/useAuth';
 import { formatCount } from '../../lib/format';
-import { ASSERTION_ROLE_LABELS, ATTRIBUTION_LABELS, REVIEW_LEVEL_LABELS, REVIEW_QUEUE_KIND_LABELS } from '../../lib/labels';
+import { ASSERTION_ROLE_LABELS, ATTRIBUTION_LABELS, REVIEW_QUEUE_KIND_LABELS } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
-import { formatPeriod } from '../../lib/period';
-import { REVIEW_LEVEL_TONE, toneOf } from '../../lib/statusTone';
+import { partnerLinkText } from '../CompanyPartners';
 import { EvidenceButton } from '../EvidenceButton';
 import { LoadingSkeleton } from '../LoadingSkeleton';
 import { Badge } from '../ui/Badge';
@@ -23,7 +27,7 @@ import { Callout } from '../ui/Callout';
 import { EmptyState } from '../ui/EmptyState';
 import { Heading } from '../ui/Heading';
 import { ProjectContextButton } from './ProjectContextButton';
-import { useCompanyProjects, useCompanySignals, useCompanySummary } from './useCompanyQueries';
+import { useCompanyObjects, useCompanyPartners, useCompanySummary } from './useCompanyQueries';
 import styles from './CompanyDetails.module.css';
 
 /** Атрибуция, которую не нужно повторять у каждой строки: группа и так подписана «по сообщениям источников». */
@@ -51,6 +55,30 @@ const Group: FC<{ title: string; caption?: string; children: ReactNode }> = ({ t
   </section>
 );
 
+/** Контрагентов в «Участии и связях»: максимум сервера; сколько всего — counts ответа. */
+const PARTNERS_MAX = 50;
+
+const LinkRows: FC<{ rows: Array<{ key: string; name: string; companyId: number; link: IPartnerLink }> }> = ({ rows }) => (
+  <ul className={styles.rows}>
+    {rows.map(r => (
+      <li key={r.key} className={styles.row}>
+        <div className={styles.rowMain}>
+          <p className={styles.rowTitle}>
+            <Link to={`/company/${r.companyId}`} viewTransition>
+              {r.name}
+            </Link>{' '}
+            — {partnerLinkText(r.link)}
+            {r.link.projectName ? `, ${r.link.projectName}` : ''}
+          </p>
+        </div>
+        <div className={styles.rowActions}>
+          {r.link.assertionId !== null && <EvidenceButton assertionIds={[r.link.assertionId]} lead={`${r.name} — ${partnerLinkText(r.link)}`} />}
+        </div>
+      </li>
+    ))}
+  </ul>
+);
+
 const StatementRows: FC<{ items: IStatement[] }> = ({ items }) => (
   <ul className={styles.rows}>
     {items.map((s, i) => (
@@ -73,40 +101,45 @@ const StatementRows: FC<{ items: IStatement[] }> = ({ items }) => (
 
 export const CompanyRelations: FC<{ companyId: number }> = ({ companyId }) => {
   const canReview = useCan('admin.view');
-  const signals = useCompanySignals(companyId);
   const summary = useCompanySummary(companyId);
-  const projects = useCompanyProjects(companyId);
-  const projectNames = new Map((projects.data?.items ?? []).map(p => [p.id, p.name]));
-  const projectName = (id: number): string => projectNames.get(id) ?? 'объект';
+  const objects = useCompanyObjects(companyId);
+  const partners = useCompanyPartners(companyId, PARTNERS_MAX);
 
-  if (summary.isLoading || signals.isLoading) {
+  if (summary.isLoading || objects.isLoading || partners.isLoading) {
     return <LoadingSkeleton label="Загружаю участие и связи…" lines={4} height="48px" />;
   }
-  if (summary.isError || !summary.data) {
+  const failed = summary.isError ? summary : objects.isError ? objects : partners.isError ? partners : null;
+  if (failed || !summary.data) {
     return (
       <Callout
         tone="danger"
         title="Участие и связи не загрузились"
         action={
-          <Button size="sm" onClick={() => void summary.refetch()}>
+          <Button size="sm" onClick={() => void (failed ?? summary).refetch()}>
             Повторить
           </Button>
         }
       >
-        {describeLoadError(summary.error)}
+        {describeLoadError((failed ?? summary).error)}
       </Callout>
     );
   }
 
-  const experience = signals.data?.signals?.experience ?? null;
-  const participations = experience?.participations ?? [];
-  const notCounted = experience?.notCounted.length ?? 0;
-  const { contracts, corporate, coParticipants } = summary.data.counterparties;
+  // Объекты с названной ролью — свои и застройщиков группы, как вкладка «Объекты».
+  const participations = (objects.data?.items ?? []).filter(o => o.basis === 'participation' && o.roles.length > 0);
+  const links = (partners.data?.items ?? []).flatMap(p => p.links.map((link, i) => ({ key: `${p.companyId}-${link.kind}-${link.assertionId ?? i}`, name: p.name, companyId: p.companyId, link })));
+  const contracts = links.filter(l => l.link.kind === 'contract');
+  const corporate = links.filter(l => l.link.kind === 'corporate');
+  const counted = new Set(links.flatMap(l => (l.link.assertionId !== null ? [l.link.assertionId] : [])));
+  // Сообщения о договоре, которые контрагентом не делают: план, возможность, отрицание (их нет в /partners).
+  const notCounted = summary.data.counterparties.contracts.filter(s => !s.assertionIds.some(id => counted.has(id)));
+  const { coParticipants } = summary.data.counterparties;
   const contradictions = summary.data.contradictions;
   const issues = Object.entries(
     contradictions.reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.kind]: (acc[c.kind] ?? 0) + 1 }), {}),
   ).map(([kind, n]) => `${REVIEW_QUEUE_KIND_LABELS[kind] ?? 'вопрос проверки'} — ${formatCount(n)}`);
   const noLinks = contracts.length === 0 && corporate.length === 0 && coParticipants.length === 0;
+  const linksTruncated = (partners.data?.counts?.companies ?? 0) > (partners.data?.items.length ?? 0);
 
   return (
     <div className={styles.panel}>
@@ -127,32 +160,35 @@ export const CompanyRelations: FC<{ companyId: number }> = ({ companyId }) => {
         </Callout>
       )}
 
-      <Group title="Объекты" caption="участие по сообщениям источников">
+      <Group title="Объекты" caption="участие по сообщениям источников и реестру — как на вкладке «Объекты»">
         {participations.length > 0 ? (
           <ul className={styles.rows}>
-            {participations.map(p => {
-              const name = projectName(p.projectId);
-              const period = formatPeriod(p.validFrom, p.validTo, p.periodPrecision);
+            {participations.map(o => {
+              const roles = o.roles.map(r => `${ASSERTION_ROLE_LABELS[r.role] ?? 'роль не названа'}${r.isCurrent ? '' : ' (в прошлом)'}`).join(', ');
+              const assertionIds = o.roles.flatMap(r => r.assertionIds ?? []);
               return (
-                <li key={p.assertionId} className={styles.row}>
+                <li key={o.projectId} className={styles.row}>
                   <div className={styles.rowMain}>
                     <p className={styles.rowTitle}>
-                      <Link to={`/projects/${p.projectId}`} viewTransition>
-                        {name}
+                      <Link to={`/projects/${o.projectId}`} viewTransition>
+                        {o.name}
                       </Link>{' '}
-                      — {ASSERTION_ROLE_LABELS[p.role] ?? 'роль не названа'}
-                      {p.building && `, ${p.building}`}
-                      {(p.workPackage ?? p.workPackageLabel) && `, ${p.workPackage ?? p.workPackageLabel}`}
+                      — {roles}
                     </p>
-                    <p className={styles.rowMeta}>
-                      <span>{period || 'период неизвестен'}</span>
-                      {p.review !== 'text_grounded' && <Badge tone={toneOf(REVIEW_LEVEL_TONE, p.review)}>{REVIEW_LEVEL_LABELS[p.review] ?? 'не проверено'}</Badge>}
-                      {p.needsRevalidation && <Badge tone="warning">нужен пересмотр</Badge>}
-                    </p>
+                    {o.via && (
+                      <p className={styles.rowMeta}>
+                        <span>
+                          через{' '}
+                          <Link to={`/company/${o.via.companyId}`} viewTransition>
+                            {o.via.name}
+                          </Link>
+                        </span>
+                      </p>
+                    )}
                   </div>
                   <div className={styles.rowActions}>
-                    <EvidenceButton assertionIds={[p.assertionId]} lead={`${name} — ${ASSERTION_ROLE_LABELS[p.role] ?? 'роль не названа'}`} />
-                    <ProjectContextButton companyId={companyId} projectId={p.projectId} projectName={name} />
+                    <EvidenceButton assertionIds={assertionIds} lead={`${o.name} — ${roles}`} />
+                    {!o.via && <ProjectContextButton companyId={companyId} projectId={o.projectId} projectName={o.name} />}
                   </div>
                 </li>
               );
@@ -160,24 +196,25 @@ export const CompanyRelations: FC<{ companyId: number }> = ({ companyId }) => {
           </ul>
         ) : (
           <EmptyState size="sm" icon={false}>
-            {experience
-              ? 'Участие в объектах в собранных публикациях не найдено.'
-              : 'Список участий появится после расчёта показателей.'}
+            Участие в объектах в собранных публикациях и реестре не найдено.
           </EmptyState>
-        )}
-        {notCounted > 0 && (
-          <p className={styles.note}>Не учтено как участие (план, возможность, заявление или отрицание): {formatCount(notCounted)}.</p>
         )}
       </Group>
 
       {contracts.length > 0 && (
-        <Group title="Договоры" caption="по сообщениям источников">
-          <StatementRows items={contracts} />
+        <Group title="Договоры" caption="по сообщениям источников — те же, что «С кем связана»">
+          <LinkRows rows={contracts} />
         </Group>
       )}
       {corporate.length > 0 && (
-        <Group title="Корпоративные связи" caption="по сообщениям источников">
-          <StatementRows items={corporate} />
+        <Group title="Корпоративные связи" caption="по сообщениям источников и реестру">
+          <LinkRows rows={corporate} />
+        </Group>
+      )}
+      {linksTruncated && <p className={styles.note}>Показаны первые {formatCount(PARTNERS_MAX)} контрагентов; остальные — на схеме связей.</p>}
+      {notCounted.length > 0 && (
+        <Group title="Не учтено как договор" caption="план, возможность или отрицание — контрагентом это не делает">
+          <StatementRows items={notCounted} />
         </Group>
       )}
       {coParticipants.length > 0 && (

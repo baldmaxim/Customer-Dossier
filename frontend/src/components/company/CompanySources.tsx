@@ -4,14 +4,15 @@
 // Оговорки те же и теми же словами источника (атрибуция Фокуса и реестра приходит с сервера): правило
 // «у сведений — источник и дата» (ADR-015, этап 20B) не ослаблено, только собрано в одно место.
 //
-// Запросы — из кэша: карточка, Фокус и показатели уже загружены вкладкой и шапкой.
+// Запросы — из кэша: карточка, Фокус, финансы и проверки уже загружены вкладкой и шапкой. Публикации, объекты,
+// события и связи — на сегодня, теми же наборами, что их списки (07.10.2026: снимка показателей на карточке нет).
 
 import { FC } from 'react';
 
 import type { ICompanyResponse } from '../../api/types';
-import { formatDate, formatDateTime } from '../../lib/labels';
+import { formatDate } from '../../lib/labels';
 import { registryDateText } from '../RegistryChanges';
-import { useCompanyChecks, useCompanyFinance, useCompanyFocus, useCompanySignals } from './useCompanyQueries';
+import { useCompanyChecks, useCompanyFinance, useCompanyFocus } from './useCompanyQueries';
 import styles from './Company.module.css';
 
 export interface ICompanySourcesProps {
@@ -23,19 +24,11 @@ export interface ICompanySourcesProps {
 
 export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, identified }) => {
   const focus = useCompanyFocus(companyId, identified);
-  const signals = useCompanySignals(companyId);
   const finance = useCompanyFinance(companyId);
   const checks = useCompanyChecks(companyId);
   const view = focus.data;
-  const refresh = signals.data?.refresh;
   const registry = data.registry;
 
-  let metrics: string | null = null;
-  if (refresh?.active) {
-    metrics = `Публикации, роли, связи и суды посчитаны ${formatDateTime(refresh.active.cutoffAt)}${refresh.stale ? ' — расчёт устарел' : ''}; объекты и события — на сегодня.`;
-  } else if (signals.isSuccess) {
-    metrics = 'Показатели ещё не посчитаны: объекты и события — на сегодня, публикаций пока не видно.';
-  }
   const checkedAt = view?.check?.checkedAt ?? view?.fetchedAt ?? null;
   // Финансы (24B): ГИР БО и ФНС через parser-api.com — строка, только если есть что показать.
   const fin = finance.data;
@@ -79,11 +72,10 @@ export const CompanySources: FC<ICompanySourcesProps> = ({ companyId, data, iden
             {chkChecked ? ` Проверено ${formatDate(chkChecked)}.` : ''}
           </li>
         )}
-        {metrics && (
-          <li>
-            <span className={styles.sourcesLead}>Публикации.</span> {metrics}
-          </li>
-        )}
+        <li>
+          <span className={styles.sourcesLead}>Публикации.</span> Собранные порталом посты и страницы, где компания или
+          юрлицо её группы — сторона сведения; объекты, события и связи — по этим сведениям и реестру, на сегодня.
+        </li>
       </ul>
       <p className={styles.sourcesNote}>Это сведения из открытых публикаций и реестров, а не проверка контрагента и не оценка надёжности.</p>
     </section>

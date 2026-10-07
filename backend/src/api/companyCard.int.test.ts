@@ -199,14 +199,16 @@ describe('объекты компании из событий', () => {
     expect(events.body).toMatchObject({ total: (events.body.items as unknown[]).length, truncated: false });
     expect((events.body.items as unknown[])[0]).not.toHaveProperty('total');
 
-    const projects = await call(`/api/companies/${id}/projects`);
-    expect(projects.status).toBe(200);
-    const rows = projects.body.items as Array<{ id: number; name: string; role: string | null; basis: string }>;
-    expect(rows.filter(p => p.name === 'Бадаевский-Демо')).toEqual([
-      expect.objectContaining({ role: null, basis: 'event' }),
-    ]);
+    // Итоги — в том же ответе и по тому же набору, что список (плитка «События» не расходится со списком).
+    expect(events.body.stats).toMatchObject({ total: (events.body.items as unknown[]).length });
+
+    // Объект только из события (роль не названа) — на вкладке «Объекты»; маршрут /projects снят 07.10.2026.
+    const objects = await call(`/api/companies/${id}/objects`);
+    expect(objects.status).toBe(200);
+    const rows = objects.body.items as Array<{ projectId: number; name: string; roles: unknown[]; basis: string }>;
+    expect(rows.filter(p => p.name === 'Бадаевский-Демо')).toEqual([expect.objectContaining({ roles: [], basis: 'event' })]);
     const project = rows.find(p => p.name === 'Бадаевский-Демо')!;
-    const dossier = await call(`/api/projects/${project.id}/dossier`);
+    const dossier = await call(`/api/projects/${project.projectId}/dossier`);
     const eventStatements = dossier.body.events as Array<{ quotes: Array<{ sourceTitle: string; sourceKey: string; revisionId: number; observedAt: string }> }>;
     expect(eventStatements[0]?.quotes[0]).toMatchObject({ sourceTitle: 'card_demo', sourceKey: 'card_demo', revisionId: expect.any(Number), observedAt: expect.any(String) });
   });

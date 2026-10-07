@@ -84,7 +84,18 @@ interface IDirectRow extends IPartnerLink {
   companyId: number | null;
 }
 
-export const loadCompanyPartners = async (companyId: number, limit: number): Promise<IPartnerRow[]> => {
+export interface IPartnerCounts {
+  /** Контрагентов (разных компаний) по полному набору, а не по показанным строкам. */
+  companies: number;
+  contracts: number;
+  corporate: number;
+}
+
+/**
+ * Контрагенты и их число — одно правило для «С кем связана», плитки «Связи» и «Подробно → Участие и связи»
+ * (07.10.2026: раньше плитка считала снимком показателей без заявлений, а «Участие и связи» — с отрицаниями и планами).
+ */
+export const loadCompanyPartners = async (companyId: number, limit: number): Promise<{ items: IPartnerRow[]; counts: IPartnerCounts }> => {
   const direct = [...(await query<IDirectRow>(DIRECT_SQL, [companyId])), ...(await query<IDirectRow>(REGISTRY_CORPORATE_SQL, [companyId]))];
 
   const byCompany = new Map<number, IPartnerLink[]>();
@@ -97,7 +108,7 @@ export const loadCompanyPartners = async (companyId: number, limit: number): Pro
     const { companyId: other, ...link } = row;
     push(other, link);
   }
-  if (byCompany.size === 0) return [];
+  if (byCompany.size === 0) return { items: [], counts: { companies: 0, contracts: 0, corporate: 0 } };
 
   const names = await query<{ id: number; name: string; city: string | null }>(
     `SELECT id, name, city FROM companies WHERE id = ANY($1::bigint[]) AND merged_into_id IS NULL`,
@@ -105,8 +116,10 @@ export const loadCompanyPartners = async (companyId: number, limit: number): Pro
   );
 
   const weight = (links: IPartnerLink[]): number => links.filter(l => l.kind === 'contract').length;
-  return names
+  const all = names
     .map(c => ({ companyId: c.id, name: c.name, city: c.city, links: byCompany.get(c.id) ?? [] }))
-    .sort((a, b) => weight(b.links) - weight(a.links) || b.links.length - a.links.length || a.name.localeCompare(b.name))
-    .slice(0, limit);
+    .sort((a, b) => weight(b.links) - weight(a.links) || b.links.length - a.links.length || a.name.localeCompare(b.name));
+  const links = all.flatMap(p => p.links);
+  const distinct = (kind: PartnerKind): number => new Set(links.filter(l => l.kind === kind).map(l => l.assertionId)).size;
+  return { items: all.slice(0, limit), counts: { companies: all.length, contracts: distinct('contract'), corporate: distinct('corporate') } };
 };

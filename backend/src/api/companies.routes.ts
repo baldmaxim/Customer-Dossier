@@ -10,12 +10,15 @@ import { z } from 'zod';
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { loadCardExtras } from '../companies/cardExtras.js';
-import { membershipCtes } from '../companies/groupMembership.js';
+import { loadCompanyCounters } from '../companies/counters.js';
+import { loadGroupHeads, loadGroupMembers } from '../companies/groupMembership.js';
 import { loadCompanyBuilders } from './companyBuilders.js';
+import { loadEgrulNames } from './companyCatalog.js';
 import { loadCompanyDelivery } from '../registry/delivery.js';
 import { loadCompanyObjects } from './companyObjects.js';
 import { loadCompanyPartners } from './companyPartners.js';
 import { loadCompanyPublications } from './companyPublications.js';
+import { loadEventStats, loadPublicationStats } from './companyStats.js';
 import { loadCompanyRegistry } from '../registry/read.js';
 import { loadProjectContext } from '../signals/context.js';
 import { refreshState } from '../signals/refresh.js';
@@ -24,6 +27,25 @@ export const companiesRouter = asyncRouter();
 
 /** Событий в карточке — не больше; общее число отдаётся отдельно (total). */
 const EVENTS_LIMIT = 100;
+
+/** Кандидатов берём с запасом: порядок внутри совпадения — по полноте карточки, а она считается после отбора. */
+const SEARCH_OVERFETCH = 3;
+const SEARCH_CANDIDATES_MAX = 150;
+
+interface ISearchRow {
+  id: number;
+  name: string;
+  city: string | null;
+  legalForm: string | null;
+  entityType: string;
+  identifiers: string[];
+  registryGroup: string | null;
+  registryAddress: string | null;
+  matchedAlias: string | null;
+  homonyms: number;
+  exact: boolean;
+  score: number;
+}
 
 const searchSchema = z.object({
   q: z.string().min(2).max(200),
@@ -48,32 +70,18 @@ companiesRouter.get('/', async (req, res) => {
   const digits = parsed.data.q.replace(/[\s-]/g, '');
   const taxId = /^[0-9]{10,15}$/.test(digits) ? digits : null;
 
-  const rows = await query<{
-    id: number;
-    name: string;
-    city: string | null;
-    legalForm: string | null;
-    score: number;
-  }>(
-    // Кандидаты с контекстом для осознанного выбора (этап 08A): вид сущности, реквизиты, совпавший алиас,
-    // объекты и публикации из последнего снимка сигналов. Одноимённые юрлица различаются реквизитами, а не
-    // порядком строк; с 02.10.2026 — ещё группой и юридическим адресом со страницы застройщика ДОМ.РФ и
-    // группой, в которую компания входит: четыре «СЗ ДОНСТРОЙ» из Самары, Иркутска и Ростова иначе неотличимы.
-    // Порядок: совпадение по началу названия — раньше похожих по написанию, внутри — более полные карточки.
-    `WITH ${membershipCtes()},
-     mem_of AS MATERIALIZED (
-       SELECT m.member, string_agg(DISTINCT g.name, ', ') AS names
-       FROM mem m JOIN companies g ON g.id = m.head AND g.merged_into_id IS NULL GROUP BY m.member
-     ),
-     mem_count AS MATERIALIZED (SELECT head, count(DISTINCT member)::int AS n FROM mem GROUP BY head)
-     SELECT * FROM (
+  // Кандидаты — с запасом: порядок внутри одинакового совпадения — по полноте карточки, а её числа считаются ниже.
+  const candidates = await query<ISearchRow>(
+    // Кандидаты с контекстом для осознанного выбора (этап 08A): вид сущности, реквизиты, совпавший алиас.
+    // Одноимённые юрлица различаются реквизитами, а не порядком строк; с 02.10.2026 — ещё группой и юридическим
+    // адресом со страницы застройщика ДОМ.РФ и группой, в которую компания входит: четыре «СЗ ДОНСТРОЙ» из Самары,
+    // Иркутска и Ростова иначе неотличимы. Порядок: совпадение по началу названия — раньше похожих по написанию,
+    // внутри — более полные карточки.
+    `SELECT * FROM (
        SELECT c.id, c.name, c.city, c.legal_form AS "legalForm", c.entity_type AS "entityType",
               coalesce((SELECT array_agg(i.identifier_type || ' ' || i.value ORDER BY i.id) FROM entity_identifiers i
                         WHERE i.company_id = c.id AND i.status = 'active'), '{}') AS identifiers,
-              snap.projects, snap.publications,
               reg.group_name AS "registryGroup", reg.address AS "registryAddress",
-              -- Группа и её участники — общим правилом портала (companies/groupMembership.ts), как у каталога и карточки.
-              mo.names AS "memberOf", mc.n AS members,
               (SELECT a.alias FROM entity_aliases a WHERE a.entity_kind = 'company' AND a.entity_id = c.id
                  AND a.alias_latin % $1 ORDER BY similarity(a.alias_latin, $1) DESC LIMIT 1) AS "matchedAlias",
               (SELECT count(*)::int FROM companies h WHERE h.merged_into_id IS NULL AND h.name_key = c.name_key AND h.id <> c.id) AS homonyms,
@@ -88,12 +96,6 @@ companiesRouter.get('/', async (req, res) => {
                           WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)
               ) END AS score
        FROM companies c
-       LEFT JOIN mem_of mo ON mo.member = c.id
-       LEFT JOIN mem_count mc ON mc.head = c.id
-       LEFT JOIN LATERAL (
-         SELECT s.projects, s.publications FROM company_signal_snapshots s
-         WHERE s.company_id = c.id AND s.refresh_id = (SELECT id FROM signal_active_refresh_v)
-       ) snap ON true
        LEFT JOIN LATERAL (
          SELECT r.payload->'identity'->>'groupName' AS group_name, r.payload->'identity'->>'address' AS address
          FROM registry_records r WHERE r.company_id = c.id AND r.record_type = 'developer'
@@ -116,13 +118,43 @@ companiesRouter.get('/', async (req, res) => {
              SELECT 1 FROM entity_identifiers i WHERE i.company_id = c.id AND i.value = $4::text AND i.status = 'active'))
          )
      ) found
-     ORDER BY (score = 1) DESC, exact DESC, score DESC,
-              coalesce(members, 0) + coalesce(projects, 0) + coalesce(publications, 0) DESC, name
+     ORDER BY (score = 1) DESC, exact DESC, score DESC, name
      LIMIT $3`,
-    [normalized.latin, normalized.key, parsed.data.limit, taxId],
+    [normalized.latin, normalized.key, Math.min(parsed.data.limit * SEARCH_OVERFETCH, SEARCH_CANDIDATES_MAX), taxId],
   );
 
-  res.json({ items: rows });
+  // Числа, группа и наименование — общими правилами (07.10.2026): объекты и публикации — как каталог и вкладки карточки
+  // (companies/counters.ts, с семьёй), группа — companies/groupMembership.ts, имя — по ЕГРЮЛ, как заголовок карточки.
+  // Раньше числа брались из снимка показателей (на дату расчёта, без семьи), и у одной компании в поиске и каталоге
+  // стояли разные числа.
+  const ids = candidates.map(c => c.id);
+  const [counters, heads, members, egrul] = await Promise.all([
+    loadCompanyCounters(getPool(), ids),
+    loadGroupHeads(getPool(), ids),
+    loadGroupMembers(getPool(), ids),
+    loadEgrulNames(ids),
+  ]);
+  const memberOf = new Map<number, string[]>();
+  for (const h of heads) memberOf.set(h.member, [...new Set([...(memberOf.get(h.member) ?? []), h.name])]);
+  const memberCount = new Map<number, Set<number>>();
+  for (const m of members) memberCount.set(m.head, (memberCount.get(m.head) ?? new Set()).add(m.member));
+
+  const items = candidates.map(c => {
+    const counts = counters.get(c.id);
+    return {
+      ...c,
+      egrulName: egrul.get(c.id)?.name ?? null,
+      egrulStatus: egrul.get(c.id)?.status ?? null,
+      projects: counts?.objects ?? 0,
+      publications: counts?.publications ?? 0,
+      memberOf: memberOf.get(c.id)?.join(', ') ?? null,
+      members: memberCount.get(c.id)?.size ?? 0,
+    };
+  });
+  const weight = (i: (typeof items)[number]): number => i.members + i.projects + i.publications;
+  items.sort((a, b) => Number(b.score === 1) - Number(a.score === 1) || Number(b.exact) - Number(a.exact) || b.score - a.score || weight(b) - weight(a) || a.name.localeCompare(b.name, 'ru'));
+
+  res.json({ items: items.slice(0, parsed.data.limit) });
 });
 
 /** Профиль компании. Сигналы — отдельно (/:id/signals); старый индекс риска в карточку не входит. */
@@ -196,30 +228,6 @@ companiesRouter.get('/:id', async (req, res) => {
   res.json({ company, aliases, identifiers, relations, registry, watch, egrul });
 });
 
-/**
- * Объяснимые сигналы (этап 07): последний успешный снимок, срез, версия правил и признак устаревания.
- * Нет снимка — status not_computed, а не пустые «хорошие» значения.
- */
-companiesRouter.get('/:id/signals', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  if (!Number.isFinite(id)) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-  const state = await refreshState();
-  const row = state.active
-    ? await queryOne<{ payload: unknown }>(
-        'SELECT payload FROM company_signal_snapshots WHERE refresh_id = $1 AND company_id = $2',
-        [state.active.id, id],
-      )
-    : null;
-  res.json({
-    status: !state.active ? 'not_computed' : row ? 'ok' : 'not_in_snapshot',
-    refresh: state,
-    signals: row?.payload ?? null,
-  });
-});
-
 const contextSchema = z.object({
   projectId: z.coerce.number().int().positive(),
   /** Явный срез (для воспроизводимости); по умолчанию — срез активного снимка или текущий момент. */
@@ -237,54 +245,6 @@ companiesRouter.get('/:id/context', async (req, res) => {
   const state = await refreshState();
   const cutoff = parsed.data.cutoff ? new Date(parsed.data.cutoff) : state.active ? new Date(state.active.cutoffAt) : new Date();
   res.json(await loadProjectContext(getPool(), id, parsed.data.projectId, cutoff));
-});
-
-/**
- * Объекты, связанные с компанией участием или событием. Событие без утверждения
- * об участии показывает объект в карточке, но не создаёт компании роль.
- */
-companiesRouter.get('/:id/projects', async (req, res) => {
-  const id = Number.parseInt(req.params.id ?? '', 10);
-  if (!Number.isFinite(id)) {
-    res.status(400).json({ error: 'Некорректный id' });
-    return;
-  }
-
-  const rows = await query(
-    `SELECT p.id, p.name, p.kind, p.stage, p.city,
-            p.project_level AS "projectLevel", p.parent_project_id AS "parentProjectId",
-            p.planned_completion AS "plannedCompletion",
-            p.actual_completion  AS "actualCompletion",
-            link.role, link.confidence, link.is_current AS "isCurrent",
-            link.evidence_document_id AS "evidenceDocumentId", link.origin, link.assertion_id AS "assertionId",
-            link.basis,
-            -- контрагенты на том же объекте: кто ещё там работает
-            (SELECT json_agg(json_build_object('id', c2.id, 'name', c2.name, 'role', pp2.role))
-             FROM card_participations_v pp2
-             JOIN companies c2 ON c2.id = pp2.company_id AND c2.merged_into_id IS NULL
-             WHERE pp2.project_id = p.id AND pp2.company_id <> $1 AND pp2.is_current
-            ) AS counterparties
-     FROM (
-       SELECT pp.project_id, pp.role, pp.confidence, pp.is_current, pp.evidence_document_id,
-              pp.origin, pp.assertion_id, 'participation'::text AS basis
-       FROM card_participations_v pp
-       WHERE pp.company_id = $1
-       UNION ALL
-       SELECT DISTINCT e.project_id, NULL::text, NULL::numeric, NULL::boolean,
-              NULL::bigint, 'event'::text, NULL::bigint, 'event'::text
-       FROM card_events_v e
-       WHERE e.company_id = $1 AND e.project_id IS NOT NULL AND e.status <> 'rejected'
-         AND NOT EXISTS (
-           SELECT 1 FROM card_participations_v pp
-           WHERE pp.company_id = e.company_id AND pp.project_id = e.project_id
-         )
-     ) link
-     JOIN projects p ON p.id = link.project_id AND p.merged_into_id IS NULL
-     ORDER BY (link.basis = 'event'), link.is_current DESC NULLS LAST, p.stage, p.name`,
-    [id],
-  );
-
-  res.json({ items: rows });
 });
 
 /**
@@ -342,6 +302,16 @@ companiesRouter.get('/:id/publications', async (req, res) => {
   res.json(page);
 });
 
+/** Итоги ленты публикаций (тот же набор, что лента и каталог): число, 90 дней, последняя, тексты, ряд по месяцам. */
+companiesRouter.get('/:id/publication-stats', async (req, res) => {
+  const id = Number.parseInt(req.params.id ?? '', 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Некорректный id' });
+    return;
+  }
+  res.json(await loadPublicationStats(id));
+});
+
 /**
  * Прямые связи компаний: договоры и корпоративные отношения с утверждением-основанием.
  * Совместное участие находится в списке объектов и не считается связью компаний.
@@ -353,8 +323,7 @@ companiesRouter.get('/:id/partners', async (req, res) => {
     res.status(400).json({ error: 'Некорректный id' });
     return;
   }
-  const items = await loadCompanyPartners(id, Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 12);
-  res.json({ items });
+  res.json(await loadCompanyPartners(id, Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : 12));
 });
 
 /**
@@ -388,7 +357,9 @@ companiesRouter.get('/:id/events', async (req, res) => {
   );
 
   const total = rows[0]?.total ?? 0;
-  res.json({ items: rows.map(({ total: _total, ...row }) => row), total, truncated: total > rows.length });
+  // Итоги — по тому же набору, что список (плитка «События», виды и ряд по месяцам), а не снимком показателей.
+  const stats = await loadEventStats(id);
+  res.json({ items: rows.map(({ total: _total, ...row }) => row), total, truncated: total > rows.length, stats });
 });
 
 /**

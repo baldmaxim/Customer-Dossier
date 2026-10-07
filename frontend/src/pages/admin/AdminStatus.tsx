@@ -59,7 +59,6 @@ const statusHint = (worker: Worker, model: Model, technical: boolean): string =>
     `Сбор ${onOff(worker.ingestEnabled)}${env('INGEST_ENABLED', worker.ingestEnabled)}.`,
     `Разбор ${onOff(worker.pipelineEnabled)}${env('PIPELINE_ENABLED', worker.pipelineEnabled)}.`,
     `Перенос в карточки ${onOff(worker.autoPublish)}${env('REPROCESS_AUTO_PUBLISH', worker.autoPublish)}.`,
-    `Пересчёт показателей: ${worker.metricsAutoRefresh ? 'по расписанию' : 'вручную'}${env('METRICS_AUTO_REFRESH', worker.metricsAutoRefresh)}.`,
     `Повтор упавшего разбора ${onOff(worker.retryEnabled)}${worker.retryEnabled ? `, до ${worker.retryMax} попыток` : ''}${env('REPROCESS_RETRY_ENABLED', worker.retryEnabled)}.`,
     model.ok
       ? 'Модель отвечает.'

@@ -1,7 +1,7 @@
 // Синтетические ответы API для тестов карточки компании (companyPage.test.tsx).
 
 import type { IFakeRoute } from '../test/render';
-import type { IBankruptcyView, ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, IDeliveryHouse, ICompanyFinanceResponse, IFinanceYear, IFocusView, IParserApiDatasetState } from '../api/types';
+import type { IBankruptcyView, ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, IDeliveryHouse, ICompanyFinanceResponse, IEventStats, IFinanceYear, IFocusView, IParserApiDatasetState, IPublicationStats } from '../api/types';
 
 const company = {
   company: { id: 7, name: 'ООО «Мостострой»', city: 'Казань', legalForm: 'ООО', taxId: null, entityType: 'legal_entity' },
@@ -74,22 +74,6 @@ const partner = {
   ],
 };
 
-const projectRow = (over: Record<string, unknown> = {}) => ({
-  id: 55,
-  name: 'Развязка на М-7',
-  kind: 'infrastructure',
-  stage: 'construction',
-  city: 'Казань',
-  plannedCompletion: null,
-  actualCompletion: null,
-  role: 'general_contractor',
-  confidence: 0.9,
-  isCurrent: true,
-  basis: 'participation',
-  counterparties: [{ id: 9, name: 'АО «Мостотрест»', role: 'designer' }],
-  ...over,
-});
-
 export const event = (over: Record<string, unknown> = {}) => ({
   id: 501,
   type: 'construction_start',
@@ -133,99 +117,10 @@ const summary = {
 /** Показатель, посчитанный правилами: число без окна и знаменателя — для плиток сводки хватает. */
 const agg = (value: number) => ({ value, status: 'ok', rule: 'test', window: null, denominator: null, ids: [], idsTruncated: false });
 
-/**
- * Посчитанные показатели signals@2 — только то, что читает «Обзор» (плитки сводки). «Подробно»
- * с этим ответом не открывать: его разделам нужен полный снимок.
- */
-export const computedSignals = {
-  status: 'ok',
-  refresh: {
-    active: { id: 1, rulesVersion: 'signals@2', cutoffAt: '2026-10-01T12:00:00Z', finishedAt: '2026-10-01T12:01:00Z' },
-    lastFailure: null,
-    running: false,
-    stale: false,
-    staleReasons: [],
-  },
-  signals: {
-    experience: { byRole: { general_contractor: agg(1), customer: agg(1) }, counterparties: agg(3), contractsCount: agg(2), corporateCount: agg(1) },
-    media: {
-      publications: agg(14),
-      publications90d: agg(4),
-      latestPublishedAt: { value: '2026-09-30T12:00:00Z', status: 'ok', rule: 'test', sourceItemId: 11 },
-      eventsDated12m: agg(2),
-      legalCasesCount: agg(3),
-      courtRoles: { plaintiff: 1, defendant: 2, other: 0, unknown: 0 },
-    },
-  },
-};
-
-/** Полный снимок показателей — для вкладки «Подробно» («Участие и связи», «Показатели»). */
-export const fullSignals = {
-  ...computedSignals,
-  signals: {
-    rulesVersion: 'signals@3',
-    cutoff: '2026-10-01T12:00:00Z',
-    companyId: 7,
-    identity: {
-      status: 'identified',
-      entityType: 'legal_entity',
-      identifiers: {},
-      aliases: 1,
-      openAmbiguities: 0,
-      pendingMerges: 0,
-      coverage: {
-        publications: agg(14),
-        sources: 3,
-        completeness: { full: 12, excerpt: 2 },
-        legacyUnimported: { participations: 0, events: 0 },
-        note: 'Сведения ограничены собранными публикациями.',
-      },
-    },
-    experience: {
-      projects: { ...agg(1), rule: 'разные объекты, где сообщается об участии компании; id — объекты' },
-      byRole: { general_contractor: agg(1) },
-      byWorkPackage: {},
-      reviewed: { ...agg(0), denominator: 1 },
-      contractsCount: agg(2),
-      corporateCount: agg(1),
-      counterparties: agg(3),
-      participations: [
-        {
-          assertionId: 301, projectId: 55, role: 'general_contractor', building: 'корпус 2', workPackage: null, workPackageLabel: null,
-          validFrom: '2024-03-01', validTo: null, periodPrecision: 'month', review: 'text_grounded', needsRevalidation: false,
-        },
-      ],
-      notCounted: [],
-      contracts: [],
-      note: 'Стоимость объекта участнику не приписывается.',
-    },
-    media: {
-      ...computedSignals.signals.media,
-      publications90d: { ...agg(4), denominator: 14, window: { from: '2026-07-03', to: '2026-10-01', basis: 'publication_date' } },
-      publicationsUndated: agg(0),
-      firstPublishedAt: { value: '2025-01-10T09:00:00Z', status: 'ok', rule: 'самая ранняя публикация', sourceItemId: 3 },
-      observations: 14,
-      families: agg(9),
-      familiesByOrigin: { established: agg(1), named: agg(0), unknown: agg(8) },
-      events: [],
-      eventsBoundary12m: agg(0),
-      eventsUndated: agg(6),
-      eventsUndatedPublished90d: agg(0),
-      eventsFuture: agg(0),
-      eventsByReview: { reviewed: 0, text_grounded: 8, legacy_unreviewed: 0, disputed: 0, rejected: 0 },
-      eventsByType: { court_case: agg(3) },
-      reviewedShare: { ...agg(0), denominator: 8 },
-      legalCases: [{ caseKey: 'case:А40-1/2026', caseNumber: 'А40-1/2026', companyProceduralRole: 'defendant', stages: [] }],
-      notCounted: [],
-      note: 'События — со слов источников.',
-    },
-  },
-};
-
-/** 24 месяца по месяц среза computedSignals (октябрь 2026), значения — с конца ряда. */
+/** 24 месяца по октябрь 2026, значения — с конца ряда (ряд итогов: публикации ленты, события списка). */
 const SERIES_MONTHS = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2026, 9 - (23 - i), 1)).toISOString().slice(0, 7));
 
-const monthSeries = (tail: number[], excluded: Partial<Record<'undated' | 'beforeWindow' | 'future' | 'coarse' | 'registry', number>> = {}) => {
+export const monthSeries = (tail: number[], excluded: Partial<Record<'undated' | 'beforeWindow' | 'future' | 'coarse' | 'registry', number>> = {}) => {
   const values = [...Array(24 - tail.length).fill(0), ...tail] as number[];
   const sum = values.reduce((t, v) => t + v, 0);
   const ex = { undated: 0, beforeWindow: 0, future: 0, coarse: 0, registry: 0, ...excluded };
@@ -238,20 +133,28 @@ const monthSeries = (tail: number[], excluded: Partial<Record<'undated' | 'befor
   };
 };
 
-/** Показатели signals@3: те же числа и ряды по месяцам (публикации и события). */
-export const seriesSignals = {
-  ...computedSignals,
-  refresh: { ...computedSignals.refresh, active: { ...computedSignals.refresh.active, rulesVersion: 'signals@3' } },
-  signals: {
-    ...computedSignals.signals,
-    cutoff: '2026-10-01T12:00:00Z',
-    media: {
-      ...computedSignals.signals.media,
-      publicationsByMonth: monthSeries([3, 0, 5, 2], { undated: 2, registry: 1, beforeWindow: 1 }),
-      eventsByMonth: monthSeries([1, 0, 1], { coarse: 1 }),
-    },
-  },
-};
+/** Итоги ленты публикаций (GET /companies/7/publication-stats) — тот же набор, что лента: две публикации. */
+export const publicationStats = (over: Partial<IPublicationStats> = {}): IPublicationStats => ({
+  total: 2,
+  undated: 0,
+  last90: 2,
+  latestAt: '2026-09-30T12:00:00Z',
+  sources: 1,
+  completeness: { full: 2 },
+  families: { total: 2, established: 0, named: 0, unknown: 2 },
+  byMonth: monthSeries([0, 2]) as IPublicationStats['byMonth'],
+  ...over,
+});
+
+/** Итоги списка событий (stats в ответе GET /companies/7/events): по умолчанию событий нет. */
+export const eventStats = (over: Partial<IEventStats> = {}): IEventStats => ({
+  total: 0,
+  dated12m: 0,
+  undated: 0,
+  byType: [],
+  byMonth: monthSeries([]) as IEventStats['byMonth'],
+  ...over,
+});
 
 /** Объект вкладки «Объекты»: свой, с двумя ролями, без сведений ДОМ.РФ. */
 export const objectRow = (over: Record<string, unknown> = {}) => ({
@@ -296,20 +199,24 @@ export const objectRegistry = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-export const objectsBody = (items: unknown[], members: unknown[] = []) => ({
-  items,
-  members,
-  coverage: { loaded: items.length, total: items.length, truncated: false },
-});
+/** Ответ вкладки «Объекты»: roles — как считает сервер (роли самой компании на её объектах, без объектов СЗ группы). */
+export const objectsBody = (items: unknown[], members: unknown[] = []) => {
+  const counts = new Map<string, number>();
+  for (const o of items as Array<{ via: unknown; roles: Array<{ role: string }> }>) {
+    if (o.via) continue;
+    for (const role of new Set(o.roles.map(r => r.role))) counts.set(role, (counts.get(role) ?? 0) + 1);
+  }
+  return {
+    items,
+    roles: [...counts.entries()].map(([role, count]) => ({ role, count })).sort((a, b) => b.count - a.count || a.role.localeCompare(b.role)),
+    members,
+    coverage: { loaded: items.length, total: items.length, truncated: false },
+  };
+};
 
 export const manyPartners = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ ...partner, companyId: 200 + i, name: `ООО «Партнёр ${i + 1}»`, links: [] }));
 
-const notComputed = {
-  status: 'not_computed',
-  refresh: { active: null, lastFailure: null, running: false, stale: true, staleReasons: [] },
-  signals: null,
-};
 
 /** Сведения ЕГРЮЛ из Контур.Фокуса: по умолчанию Фокус не подключён — шапка и разделы как раньше. */
 export const focusView = (over: Partial<IFocusView> = {}): IFocusView => ({
@@ -486,9 +393,9 @@ export const companyRoutes = ({
   },
   { match: 'GET /api/revisions/21', respond: () => ({ status: 200, body: revision(21, 'Полный текст первого поста.') }) },
   { match: 'GET /api/revisions/22', respond: () => ({ status: 200, body: revision(22, 'Полный текст второго поста.') }) },
-  { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: [partner] } }) },
-  { match: 'GET /api/companies/7/projects', respond: () => ({ status: 200, body: { items: [projectRow(), projectRow({ role: 'customer', counterparties: null })] } }) },
-  { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
+  { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: [partner], counts: { companies: 1, contracts: 1, corporate: 0 } } }) },
+  { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [], total: 0, stats: eventStats() } }) },
+  { match: 'GET /api/companies/7/publication-stats', respond: () => ({ status: 200, body: publicationStats() }) },
   { match: 'GET /api/companies/7/objects', respond: () => ({ status: 200, body: objectsBody([objectRow()]) }) },
   { match: 'GET /api/companies/7/builders', respond: () => ({ status: 200, body: buildersBody() }) },
   { match: 'GET /api/companies/7/finance', respond: () => ({ status: 200, body: financeBody() }) },
@@ -502,7 +409,6 @@ export const companyRoutes = ({
     match: 'GET /api/companies/7/assignment',
     respond: () => ({ status: 200, body: { state: 'unidentified', dismissal: null, portal: [], egrul: [], search: null, focusConfigured: false } }),
   },
-  { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },
   { match: 'GET /api/assertions/', respond: () => ({ status: 404, body: { error: 'нет в тесте' } }) },
   { match: 'GET /api/graph', respond: () => ({ status: 200, body: { nodes: [], edges: [], truncated: false, notes: [] } }) },

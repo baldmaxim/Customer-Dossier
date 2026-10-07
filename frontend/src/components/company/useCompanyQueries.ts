@@ -1,10 +1,12 @@
-// Запросы карточки компании. Ключи общие для всех вкладок: «Обзор» и «Подробно» читают те же
-// объекты, события и показатели — React Query отдаёт их из кэша, а не запрашивает дважды.
+// Запросы карточки компании. Ключи общие для всех вкладок: «Сведения» и «Подробно» читают те же
+// объекты, события, публикации и контрагентов — React Query отдаёт их из кэша, а не запрашивает дважды.
+// Итоги (плитки, полосы, ряды по месяцам) — из тех же наборов, что списки (07.10.2026): снимок показателей
+// карточка больше не читает.
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '../../api/client';
-import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IFocusView, IProjectRow, ISignalsResponse } from '../../api/types';
+import type { ICompanyBuildersResponse, ICompanyChecksResponse, ICompanyDelivery, ICompanyFinanceResponse, ICompanyObjectsResponse, ICompanyResponse, ICompanySummary, IEventRow, IEventStats, IFocusView, IPartnersResponse, IPublicationStats } from '../../api/types';
 
 export interface ISimilarCompany {
   id: number;
@@ -19,12 +21,6 @@ export const useCompany = (companyId: number, enabled: boolean): UseQueryResult<
     queryKey: ['company', companyId],
     queryFn: () => api.get<ICompanyResponse>(`/api/companies/${companyId}`),
     enabled,
-  });
-
-export const useCompanyProjects = (companyId: number): UseQueryResult<{ items: IProjectRow[] }> =>
-  useQuery({
-    queryKey: ['company', companyId, 'projects'],
-    queryFn: () => api.get<{ items: IProjectRow[] }>(`/api/companies/${companyId}/projects`),
   });
 
 /** Объекты вкладки «Объекты» — свои и застройщиков группы, со сводкой ДОМ.РФ. Ключ общий с «Обзором». */
@@ -76,6 +72,8 @@ export interface ICompanyEventsResponse {
   items: IEventRow[];
   total?: number;
   truncated?: boolean;
+  /** Итоги по всему набору списка: плитка, виды и ряд по месяцам (у старого сервера нет). */
+  stats?: IEventStats;
 }
 
 export const useCompanyEvents = (companyId: number): UseQueryResult<ICompanyEventsResponse> =>
@@ -90,10 +88,18 @@ export const useCompanySimilar = (companyId: number): UseQueryResult<{ items: IS
     queryFn: () => api.get<{ items: ISimilarCompany[] }>(`/api/companies/${companyId}/similar`),
   });
 
-export const useCompanySignals = (companyId: number): UseQueryResult<ISignalsResponse> =>
+/** Итоги ленты публикаций: плитка «Публикации», полнота и происхождение текстов, ряд по месяцам. */
+export const useCompanyPublicationStats = (companyId: number): UseQueryResult<IPublicationStats> =>
   useQuery({
-    queryKey: ['company', companyId, 'signals'],
-    queryFn: () => api.get<ISignalsResponse>(`/api/companies/${companyId}/signals`),
+    queryKey: ['company', companyId, 'publication-stats'],
+    queryFn: () => api.get<IPublicationStats>(`/api/companies/${companyId}/publication-stats`),
+  });
+
+/** Контрагенты: limit строк и числа по полному набору (плитка «Связи», «С кем связана», «Участие и связи»). */
+export const useCompanyPartners = (companyId: number, limit: number): UseQueryResult<IPartnersResponse> =>
+  useQuery({
+    queryKey: ['company', companyId, 'partners', limit],
+    queryFn: () => api.get<IPartnersResponse>(`/api/companies/${companyId}/partners?limit=${limit}`),
   });
 
 export const useCompanySummary = (companyId: number): UseQueryResult<ICompanySummary> =>

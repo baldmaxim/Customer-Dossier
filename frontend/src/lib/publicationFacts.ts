@@ -19,6 +19,8 @@ export interface IFactRef {
 
 export interface IFactView {
   key: string;
+  /** Сведение о другом юрлице семьи (СЗ группы): лента компании — по семье, и чьё это сведение, сказано словами. */
+  via: IFactRef | null;
   /** Что сказано: «генподрядчик», «договор генподряда», «Ввод в эксплуатацию». */
   label: string;
   other: IFactRef | null;
@@ -58,6 +60,7 @@ export const factView = (fact: IPublicationFact, index = 0): IFactView => {
       : null;
   return {
     key: `${fact.assertionId ?? 'x'}-${index}`,
+    via: fact.viaCompanyName ? { id: fact.viaCompanyId ?? null, name: fact.viaCompanyName } : null,
     label: labelOf(fact),
     // Корпоративная связь и договор называют вторую сторону; у участия её нет.
     other: fact.otherCompanyName ? { id: fact.otherCompanyId, name: fact.otherCompanyName } : null,
@@ -74,7 +77,7 @@ export const factView = (fact: IPublicationFact, index = 0): IFactView => {
 /** Одной строкой: «генподрядчик · Развязка на М-7», «отрицается: подрядчик (заявление)». */
 export const factViewText = (view: IFactView): string => {
   const body = [view.label, view.other?.name, view.project?.name, view.money].filter(Boolean).join(' · ');
-  return `${view.negated ? 'отрицается: ' : ''}${body}${view.qualifier ? ` (${view.qualifier})` : ''}`;
+  return `${view.via ? `${view.via.name}: ` : ''}${view.negated ? 'отрицается: ' : ''}${body}${view.qualifier ? ` (${view.qualifier})` : ''}`;
 };
 
 export const factText = (fact: IPublicationFact): string => factViewText(factView(fact));

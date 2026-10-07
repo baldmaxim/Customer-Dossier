@@ -7,11 +7,17 @@
 // сегодня; legacy-упоминания добавляются сверху, чтобы старая база не обеднела.
 //
 // Строка ленты — публикация, а не утверждение: одна статья с тремя фактами остаётся
-// одной строкой. Тема (`revision_headlines`) показывается, когда у публикации нет
-// заголовка, и остаётся подписью модели — не заголовком источника и не доказательством.
+// одной строкой. С 07.10.2026 лента — по семье компании (companies/groupMembership.ts), как вкладка «Объекты» и
+// каталог: публикации о СЗ группы — в ленте группы, сведение о СЗ под постом подписано его именем (via). Набор
+// публикаций — тот же фрагмент, что счёт каталога и поиска (companies/counters.ts::touchedCte).
+//
+// Тема (`revision_headlines`) показывается, когда у публикации нет заголовка, и остаётся подписью модели — не
+// заголовком источника и не доказательством.
 
+import { touchedCte } from '../companies/counters.js';
 import { query } from '../db/pool.js';
 import { keysetCursor, parseKeysetCursor } from '../utils/keysetCursor.js';
+import { loadGroupMembers } from './companyObjects.js';
 import { liveMentionSql } from './legacyMentions.js';
 
 /** Что сказано о компании в этой публикации. Одна строка — одно опубликованное утверждение. */
@@ -25,9 +31,12 @@ export interface IPublicationFact {
   status: string | null;
   projectId: number | null;
   projectName: string | null;
-  /** Вторая сторона связи: любая из сторон, кроме самой компании. */
+  /** Вторая сторона связи: любая из сторон, кроме самой компании и её семьи. */
   otherCompanyId: number | null;
   otherCompanyName: string | null;
+  /** Сведение о другом юрлице семьи (СЗ группы), а не о самой компании; null — о ней самой. */
+  viaCompanyId?: number | null;
+  viaCompanyName?: string | null;
   amount: string | null;
   currency: string | null;
   /** Назначение суммы словами подписывает фронт: иск и цена договора — разные числа. */
@@ -84,16 +93,8 @@ export interface IItemRow {
  * момент, когда портал увидел текст, датой публикации не притворяется.
  */
 const ITEMS_SQL = `
-  WITH touched AS (
-    SELECT DISTINCT pa.source_item_id AS item_id
-    FROM published_assertions_v pa
-    WHERE pa.subject_company_id = $1 OR pa.object_company_id = $1 OR pa.counterparty_company_id = $1
-    UNION
-    SELECT DISTINCT r.source_item_id
-    FROM mentions m
-    JOIN document_revisions r ON r.legacy_document_id = m.document_id
-    WHERE m.entity_kind = 'company' AND m.entity_id = $1 AND ${liveMentionSql('m')}
-  )
+  WITH ${touchedCte('$1::bigint[]')},
+  items AS (SELECT DISTINCT item_id FROM touched WHERE company_id = ANY($1::bigint[]))
   SELECT si.id AS "itemId",
          rev.id AS "revisionId",
          rev.legacy_document_id AS "documentId",
@@ -109,7 +110,7 @@ const ITEMS_SQL = `
          rev.completeness::text AS completeness,
          left(rev.body, 300) AS snippet,
          coalesce(si.published_at, si.first_observed_at) AS "sortAt"
-  FROM touched t
+  FROM items t
   JOIN source_items si ON si.id = t.item_id
   JOIN sources s ON s.id = si.source_id
   JOIN LATERAL (
@@ -136,12 +137,19 @@ const FACTS_SQL = `
          pa.status::text AS status,
          coalesce(pa.object_project_id, pa.subject_project_id, pa.context_project_id) AS "projectId",
          p.name AS "projectName",
-         CASE WHEN pa.subject_company_id <> $2::bigint THEN pa.subject_company_id
-              WHEN pa.object_company_id IS NOT NULL AND pa.object_company_id <> $2::bigint THEN pa.object_company_id
-              ELSE pa.counterparty_company_id END AS "otherCompanyId",
-         CASE WHEN pa.subject_company_id <> $2::bigint THEN sc.name
-              WHEN pa.object_company_id IS NOT NULL AND pa.object_company_id <> $2::bigint THEN oc.name
-              ELSE cc.name END AS "otherCompanyName",
+         CASE WHEN pa.subject_company_id <> ALL($2::bigint[]) THEN pa.subject_company_id
+              WHEN pa.object_company_id IS NOT NULL AND pa.object_company_id <> ALL($2::bigint[]) THEN pa.object_company_id
+              WHEN pa.counterparty_company_id <> ALL($2::bigint[]) THEN pa.counterparty_company_id END AS "otherCompanyId",
+         CASE WHEN pa.subject_company_id <> ALL($2::bigint[]) THEN sc.name
+              WHEN pa.object_company_id IS NOT NULL AND pa.object_company_id <> ALL($2::bigint[]) THEN oc.name
+              WHEN pa.counterparty_company_id <> ALL($2::bigint[]) THEN cc.name END AS "otherCompanyName",
+         -- Сторона из семьи, если это не сама компания: сведение о СЗ группы подписывается его именем.
+         CASE WHEN pa.subject_company_id = ANY($2::bigint[]) AND pa.subject_company_id <> $3::bigint THEN pa.subject_company_id
+              WHEN pa.object_company_id = ANY($2::bigint[]) AND pa.object_company_id <> $3::bigint
+                   AND pa.subject_company_id <> $3::bigint THEN pa.object_company_id END AS "viaCompanyId",
+         CASE WHEN pa.subject_company_id = ANY($2::bigint[]) AND pa.subject_company_id <> $3::bigint THEN sc.name
+              WHEN pa.object_company_id = ANY($2::bigint[]) AND pa.object_company_id <> $3::bigint
+                   AND pa.subject_company_id <> $3::bigint THEN oc.name END AS "viaCompanyName",
          pa.value_numeric::text AS amount,
          pa.value_currency AS currency,
          pa.value_type AS "valueType",
@@ -153,8 +161,8 @@ const FACTS_SQL = `
   LEFT JOIN companies oc ON oc.id = pa.object_company_id
   LEFT JOIN companies cc ON cc.id = pa.counterparty_company_id
   WHERE pa.source_item_id = ANY($1::bigint[])
-    AND (pa.subject_company_id = $2::bigint OR pa.object_company_id = $2::bigint
-         OR pa.counterparty_company_id = $2::bigint)
+    AND (pa.subject_company_id = ANY($2::bigint[]) OR pa.object_company_id = ANY($2::bigint[])
+         OR pa.counterparty_company_id = ANY($2::bigint[]))
   ORDER BY pa.source_item_id, pa.id`;
 
 /** Legacy-упоминания: старые данные, где утверждений ещё нет. */
@@ -163,9 +171,15 @@ const LEGACY_SQL = `
          r.source_item_id AS "itemId", m.role, m.quote
   FROM mentions m
   JOIN document_revisions r ON r.legacy_document_id = m.document_id
-  WHERE m.entity_kind = 'company' AND m.entity_id = $2::bigint AND ${liveMentionSql('m')}
+  WHERE m.entity_kind = 'company' AND m.entity_id = ANY($2::bigint[]) AND ${liveMentionSql('m')}
     AND r.source_item_id = ANY($1::bigint[])
   ORDER BY r.source_item_id, m.quote, m.id`;
+
+/** Компания и её семья — тем же правилом, что вкладка «Объекты» (loadGroupMembers делит расчёт с ней). */
+export const companyFamilyIds = async (companyId: number): Promise<number[]> => [
+  companyId,
+  ...(await loadGroupMembers(companyId)).map(m => m.companyId),
+];
 
 export const loadCompanyPublications = async (
   companyId: number,
@@ -173,15 +187,13 @@ export const loadCompanyPublications = async (
   cursor: string | undefined,
 ): Promise<{ items: IPublicationRow[]; nextCursor: string | null }> => {
   const [cursorAt, cursorId] = parseKeysetCursor(cursor);
-  const items = await query<IItemRow>(ITEMS_SQL, [companyId, limit, cursorAt, cursorId]);
+  const family = await companyFamilyIds(companyId);
+  const items = await query<IItemRow>(ITEMS_SQL, [family, limit, cursorAt, cursorId]);
   if (items.length === 0) return { items: [], nextCursor: null };
 
   const ids = items.map(i => i.itemId);
-  const facts = await query<IPublicationFact & { itemId: number }>(FACTS_SQL, [ids, companyId]);
-  const legacy = await query<{ itemId: number; role: string | null; quote: string | null }>(LEGACY_SQL, [
-    ids,
-    companyId,
-  ]);
+  const facts = await query<IPublicationFact & { itemId: number }>(FACTS_SQL, [ids, family, companyId]);
+  const legacy = await query<{ itemId: number; role: string | null; quote: string | null }>(LEGACY_SQL, [ids, family]);
 
   const byItem = new Map<number, IPublicationFact[]>();
   for (const fact of facts) {

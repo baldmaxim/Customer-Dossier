@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, LOCAL_AUTH } from '../hooks/useAuth';
 import { fakeApi, renderWithProviders, renderWithRouter } from '../test/render';
-import { buildersBody, checksBody, companyRoutes, computedSignals, datasetState, deliveryBody, efrsbView, deliveryHouse, financeBody, financeYear, event, fullSignals, manyPartners, objectRegistry, objectRow, objectsBody, seriesSignals } from './companyPage.fixtures';
+import { buildersBody, checksBody, companyRoutes, datasetState, deliveryBody, efrsbView, deliveryHouse, eventStats, financeBody, financeYear, event, manyPartners, monthSeries, objectRegistry, objectRow, objectsBody, publicationStats } from './companyPage.fixtures';
 import { CompanyPage } from './CompanyPage';
 
 /** Карточка читает id из адреса: без Route параметр не появится. */
@@ -192,33 +192,45 @@ describe('Карточка компании', () => {
     await waitFor(() => expect(api.calls.some(c => c.url === '/api/assertions/101')).toBe(true));
   });
 
-  it('сводка не выдумывает числа, когда показатели не посчитаны', async () => {
-    fakeApi(companyRoutes());
-    renderCard();
-
-    expect(await screen.findByText(/Показатели ещё не посчитаны/)).toBeTruthy();
-    const brief = screen.getByRole('heading', { name: 'Коротко о компании' }).closest('section')!;
-    expect(within(brief).getByText('Публикации').nextElementSibling?.textContent).toBe('—');
-    await waitFor(() => expect(within(brief).getByText('Объекты').nextElementSibling?.textContent).toBe('1'));
-    await waitFor(() => expect(within(brief).getByText('События').nextElementSibling?.textContent).toBe('0'));
-    // Числа правил signals@2 без расчёта не появляются: плиток «Связи» и «Суды» нет, а не «0».
-    expect(within(brief).queryByText('Связи')).toBeNull();
-    expect(within(brief).queryByText('Суды')).toBeNull();
-  });
-
-  it('плитки сводки: число, разбивка и ссылка туда, где число расписано', async () => {
-    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: computedSignals })));
+  it('старый сервер без итогов — «—», а не ноль; плитки «Связи» без числа контрагентов нет', async () => {
+    fakeApi([
+      { match: 'GET /api/companies/7/publication-stats', respond: () => ({ status: 404, body: { error: 'нет маршрута' } }) },
+      { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: [] } }) },
+      ...companyRoutes(),
+    ]);
     renderCard();
 
     const brief = (await screen.findByRole('heading', { name: 'Коротко о компании' })).closest('section')!;
-    expect(await within(brief).findByText('показатели на 01.10.2026')).toBeTruthy();
-    const tile = (label: string): HTMLElement => within(brief).getByText(label).closest('div')!;
+    await waitFor(() => expect(within(brief).getByText('Объекты').nextElementSibling?.textContent).toBe('1'));
+    await waitFor(() => expect(within(brief).getByText('События').nextElementSibling?.textContent).toBe('0'));
+    expect(within(brief).getByText('Публикации').nextElementSibling?.textContent).toBe('—');
+    expect(within(brief).queryByText('Связи')).toBeNull();
+    // Плитки «Суды» по публикациям нет вовсе: суды — «Арбитраж» (КАД).
+    expect(within(brief).queryByText('Суды')).toBeNull();
+  });
 
-    expect(within(tile('Публикации')).getByText('14')).toBeTruthy();
+  it('плитки сводки: число — то же, что у списка, куда ведёт плитка; разбивка и ссылка', async () => {
+    fakeApi([
+      { match: 'GET /api/companies/7/publication-stats', respond: () => ({ status: 200, body: publicationStats({ total: 14, last90: 4 }) }) },
+      { match: 'GET /api/companies/7/partners', respond: () => ({ status: 200, body: { items: manyPartners(3), counts: { companies: 3, contracts: 2, corporate: 1 } } }) },
+      {
+        match: 'GET /api/companies/7/events',
+        respond: () => ({ status: 200, body: { items: [event(), event({ id: 502 })], total: 2, stats: eventStats({ total: 2, dated12m: 2 }) } }),
+      },
+      ...companyRoutes(),
+    ]);
+    renderCard();
+
+    const brief = (await screen.findByRole('heading', { name: 'Коротко о компании' })).closest('section')!;
+    const tile = (label: string): HTMLElement => within(brief).getByText(label).closest('div')!;
+    await waitFor(() => expect(within(tile('Публикации')).getByText('14')).toBeTruthy());
     expect(within(tile('Публикации')).getByText('за 90 дней — 4 · последняя 30.09.2026')).toBeTruthy();
-    expect(within(tile('Связи')).getByText('договоров — 2 · корпоративных — 1')).toBeTruthy();
-    expect(within(tile('Суды')).getByText('истец — 1 · ответчик — 2')).toBeTruthy();
-    expect(within(tile('События')).getByText('с датой за 12 мес. — 2')).toBeTruthy();
+    await waitFor(() => expect(within(tile('Связи')).getByText('договоров — 2 · корпоративных — 1')).toBeTruthy());
+    expect(within(tile('Связи')).getByText('3')).toBeTruthy();
+    await waitFor(() => expect(within(tile('События')).getByText('с датой за 12 мес. — 2')).toBeTruthy());
+    expect(within(brief).queryByText('Суды')).toBeNull();
+    // Строки «показатели на …» нет: числа — на сегодня, теми же наборами, что списки.
+    expect(within(brief).queryByText(/показатели на/)).toBeNull();
     // Плитка — строка-ссылка: нажимается целиком.
     expect(tile('Связи').className).toContain('row-link');
 
@@ -227,36 +239,56 @@ describe('Карточка компании', () => {
     expect(href('Все события')).toBe('/company/7?tab=details');
     expect(href('Все публикации')).toBe('/company/7?tab=publications');
     expect(href('Все связи')).toBe('/company/7?tab=details&dtab=links');
-    expect(href('Дела подробно')).toBe('/company/7?tab=details&dtab=numbers');
     // Оценки надёжности в сводке нет (ADR-009).
     expect(within(brief).queryByText(/надёжн.*(высок|низк)|риск/i)).toBeNull();
   });
 
-  it('«Роли, события и тексты»: разбивки посчитанных показателей полосами, пустые названы словами', async () => {
-    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: computedSignals })));
+  it('«Роли, события и тексты»: роли — по объектам вкладки, виды — по списку событий, тексты — по ленте', async () => {
+    fakeApi([
+      {
+        match: 'GET /api/companies/7/events',
+        respond: () => ({ status: 200, body: { items: [], total: 3, stats: eventStats({ total: 3, byType: [{ type: 'court_case', count: 3 }] }) } }),
+      },
+      {
+        match: 'GET /api/companies/7/publication-stats',
+        respond: () => ({ status: 200, body: publicationStats({ completeness: {}, families: { total: 0, established: 0, named: 0, unknown: 0 } }) }),
+      },
+      ...companyRoutes(),
+    ]);
     renderCard();
 
     const section = (await screen.findByRole('heading', { name: 'Роли, события и тексты' })).closest('section')!;
-    const roles = within(section).getByRole('list', { name: 'Роли на объектах' });
-    expect(within(roles).getAllByRole('listitem').map(li => li.textContent)).toEqual(['генподрядчик1', 'заказчик1']);
-    const courts = within(section).getByRole('list', { name: 'Роль в судебных делах' });
-    expect(within(courts).getAllByRole('listitem').map(li => li.textContent)).toEqual(['истец, заявитель или кредитор1', 'ответчик или должник2']);
-    expect(within(section).getByText(/из 3 дел/)).toBeTruthy();
-    expect(within(section).getByText('Нет данных: события по видам, полнота текстов, происхождение текстов.')).toBeTruthy();
-    expect(within(section).getByRole('link', { name: 'Как посчитано' }).getAttribute('href')).toBe('/company/7?tab=details&dtab=numbers');
+    const roles = await within(section).findByRole('list', { name: 'Роли на объектах' });
+    // Порядок — как у сервера: по числу объектов, при равенстве — по роли.
+    expect(within(roles).getAllByRole('listitem').map(li => li.textContent)).toEqual(['заказчик1', 'генподрядчик1']);
+    expect(within(section).getByText(/из 1 объекта компании/)).toBeTruthy();
+    const events = await within(section).findByRole('list', { name: 'События по видам' });
+    expect(within(events).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Судебное дело3']);
+    // Судебных разбивок по публикациям нет: суды — «Суды, ФССП и банкротство» (КАД).
+    expect(within(section).queryByRole('list', { name: 'Роль в судебных делах' })).toBeNull();
+    expect(within(section).getByText('Нет данных: полнота текстов, происхождение текстов.')).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Все события' }).getAttribute('href')).toBe('/company/7?tab=details');
   });
 
-  it('публикации и события по месяцам (signals@3): два графика, что не вошло — словами, числа — таблицей', async () => {
-    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: seriesSignals })));
+  it('публикации и события по месяцам: ряды ленты и списка событий, что не вошло — словами', async () => {
+    fakeApi([
+      {
+        match: 'GET /api/companies/7/publication-stats',
+        respond: () => ({ status: 200, body: publicationStats({ total: 13, byMonth: monthSeries([3, 0, 5, 2], { undated: 2, beforeWindow: 1 }) as never }) }),
+      },
+      {
+        match: 'GET /api/companies/7/events',
+        respond: () => ({ status: 200, body: { items: [], total: 3, stats: eventStats({ total: 3, byMonth: monthSeries([1, 0, 1], { coarse: 1 }) as never }) } }),
+      },
+      ...companyRoutes(),
+    ]);
     renderCard();
 
     const section = (await screen.findByRole('heading', { name: 'Публикации и события по месяцам' })).closest('section')!;
-    const charts = within(section).getAllByRole('img');
+    const charts = await within(section).findAllByRole('img');
     expect(charts).toHaveLength(2);
     expect(charts[0]!.getAttribute('aria-label')).toMatch(/^Публикации, ноябрь 2024 — октябрь 2026: всего 10\sпубликаций, больше всего — сентябрь 2026 \(5\)/);
-    expect(
-      within(section).getByText('учтено 10 из 14 публикаций; не вошли: 1 раньше начала ряда, 2 без даты, 1 — снимки ДОМ.РФ (дата сбора, а не публикации)'),
-    ).toBeTruthy();
+    expect(within(section).getByText('учтено 10 из 13 публикаций; не вошли: 1 раньше начала ряда, 2 без даты')).toBeTruthy();
     expect(within(section).getByText('учтено 2 из 3 событий; не вошли: 1 с датой до квартала или года')).toBeTruthy();
     expect(within(section).queryByRole('table')).toBeNull();
     // Мини-график в плитке «Публикации» — только форма, диктору не читается.
@@ -265,19 +297,16 @@ describe('Карточка компании', () => {
     expect(tile.querySelector('[aria-hidden="true"] > span')).toBeTruthy();
   });
 
-  it('снимок прежних правил — рядов нет, сказано словами, ничего не досчитывается', async () => {
-    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: computedSignals })));
+  it('старый сервер без рядов — блока по месяцам нет, ничего не досчитывается', async () => {
+    fakeApi([
+      { match: 'GET /api/companies/7/publication-stats', respond: () => ({ status: 404, body: { error: 'нет маршрута' } }) },
+      { match: 'GET /api/companies/7/events', respond: () => ({ status: 200, body: { items: [] } }) },
+      ...companyRoutes(),
+    ]);
     renderCard();
-    const section = (await screen.findByRole('heading', { name: 'Публикации и события по месяцам' })).closest('section')!;
-    expect(within(section).getByText('Помесячные числа появятся после следующего расчёта показателей.')).toBeTruthy();
-    expect(within(section).queryByRole('img')).toBeNull();
-  });
-
-  it('показатели не посчитаны — блока разбивок нет, а не пустые полосы', async () => {
-    fakeApi(companyRoutes());
-    renderCard();
-    expect(await screen.findByText(/Показатели ещё не посчитаны/)).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Роли, события и тексты' })).toBeNull();
+    await screen.findByRole('heading', { name: 'Коротко о компании' });
+    await waitFor(() => expect(screen.getByText('События').nextElementSibling?.textContent).toBe('0'));
+    expect(screen.queryByRole('heading', { name: 'Публикации и события по месяцам' })).toBeNull();
   });
 
   it('запись застройщика в реестре — разделом «Сведений»; плитки «Реестр» нет (она обрезала число объектов на 50)', async () => {
@@ -846,12 +875,12 @@ describe('Карточка компании', () => {
     await waitFor(() => expect(document.activeElement?.textContent).toContain('Второй пост'));
   });
 
-  it('«Подробно»: вкладки «События · Участие и связи · Показатели» в адресе; опознания, резюме и схемы нет', async () => {
+  it('«Подробно»: вкладки «События · Участие и связи» в адресе; опознания, резюме, схемы и «Показателей» нет', async () => {
     fakeApi(companyRoutes({ withRegistry: true }));
     const { router } = renderWithRouter(cardRoutes, ['/company/7?tab=details']);
 
     const tabs = await screen.findByRole('tablist', { name: 'Подробно о компании' });
-    expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['События', 'Участие и связи', 'Показатели']);
+    expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['События', 'Участие и связи']);
     expect(await screen.findByText('В собранных публикациях событий компании не найдено.')).toBeTruthy();
     for (const name of ['Опознание', 'Резюме и противоречия', 'Схема связей', 'ЕГРЮЛ — Контур.Фокус']) {
       expect(screen.queryByRole('heading', { name })).toBeNull();
@@ -865,7 +894,11 @@ describe('Карточка компании', () => {
     expect(screen.getByText(/противоречие источников — 1/)).toBeTruthy();
     // В «Проверку» ведёт только тем, кому доступна админка.
     expect(screen.getByRole('link', { name: 'Открыть «Проверку»' }).getAttribute('href')).toBe('/admin/review');
-    expect(screen.getByText('Список участий появится после расчёта показателей.')).toBeTruthy();
+    // Объекты — те же, что вкладка «Объекты»; договор — тот же контрагент, что «С кем связана».
+    const objects = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
+    expect(within(objects).getByRole('link', { name: 'Развязка на М-7' })).toBeTruthy();
+    const contracts = screen.getByRole('heading', { name: 'Договоры' }).closest('section')!;
+    expect(within(contracts).getByRole('link', { name: 'ООО «Дорсервис»' }).closest('li')!.textContent).toContain('субподрядчик, Развязка на М-7');
 
     // Смена вкладки карточки сбрасывает вкладку «Подробно».
     fireEvent.click(screen.getByRole('tab', { name: 'Сведения' }));
@@ -881,13 +914,16 @@ describe('Карточка компании', () => {
           body: { cutoff: '2026-10-01T12:00:00Z', participations: [], projectEvents: [], currentState: [], note: 'Событие объекта — контекст участия.' },
         }),
       },
-      ...replace('GET /api/companies/7/signals', () => ({ status: 200, body: fullSignals })),
+      ...replace('GET /api/companies/7/objects', () => ({
+        status: 200,
+        body: objectsBody([objectRow({ roles: [{ role: 'general_contractor', isCurrent: true, origin: 'published', assertionIds: [301] }] })]),
+      })),
     ]);
     renderCard('/company/7?tab=details&dtab=links');
 
     const objects = (await screen.findByRole('heading', { name: 'Объекты' })).closest('section')!;
-    const row = within(objects).getByRole('link', { name: 'Развязка на М-7' }).closest('li')!;
-    expect(row.textContent).toContain('генподрядчик, корпус 2');
+    const row = (await within(objects).findByRole('link', { name: 'Развязка на М-7' })).closest('li')!;
+    expect(row.textContent).toContain('генподрядчик');
     expect(api.calls.some(c => c.url.startsWith('/api/assertions/') || c.url.includes('/context'))).toBe(false);
 
     fireEvent.click(within(row).getByRole('button', { name: 'Откуда известно' }));
@@ -901,30 +937,12 @@ describe('Карточка компании', () => {
     expect(within(context).getByRole('link', { name: 'Карточка объекта' }).getAttribute('href')).toBe('/projects/55');
   });
 
-  it('«Показатели»: три коротких списка чисел, правило — пояснением у подписи, без раскрывашек', async () => {
-    fakeApi(replace('GET /api/companies/7/signals', () => ({ status: 200, body: fullSignals })));
-    const { container } = renderWithProviders(
-      <Routes>
-        <Route path="/company/:id" element={<CompanyPage />} />
-      </Routes>,
-      '/company/7?tab=details&dtab=numbers',
-    );
-
-    const objects = (await screen.findByRole('heading', { name: 'Объекты и роли' })).closest('section')!;
-    expect(within(objects).getByText('Роли').closest('div')!.textContent).toContain('генподрядчик — 1');
-    // Как считается — пояснением у подписи; внутренних номеров («id — объекты») в нём нет.
-    expect(within(objects).getByRole('button', { name: 'Объектов' }).getAttribute('aria-description')).toBe(
-      'Разные объекты, где сообщается об участии компании.',
-    );
-    const publications = screen.getByRole('heading', { name: 'Публикации' }).closest('section')!;
-    expect(within(publications).getByText('За 90 дней').closest('div')!.textContent).toContain('4 из 14');
-    const events = screen.getByRole('heading', { name: 'События и дела' }).closest('section')!;
-    expect(within(events).getByText('Роль в делах').closest('div')!.textContent).toContain('ответчик или должник — 2');
-    expect(within(events).getByText('По видам').closest('div')!.textContent).toContain('Судебное дело — 3');
-    // Внутренние номера правил читателю не показываются, раскрытий у чисел нет.
-    expect(container.textContent).not.toMatch(/id —/);
-    const panel = screen.getAllByRole('tabpanel').at(-1)!;
-    expect(panel.querySelector('details')).toBeNull();
+  it('старый адрес «Показателей» (?dtab=numbers) открывает «События»: вкладки снимка больше нет', async () => {
+    fakeApi(companyRoutes());
+    renderCard('/company/7?tab=details&dtab=numbers');
+    const tabs = await screen.findByRole('tablist', { name: 'Подробно о компании' });
+    expect(within(tabs).getByRole('tab', { name: 'События' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('heading', { name: 'Объекты и роли' })).toBeNull();
   });
 
   it('читателю «Подробно» не предлагает ссылок в админку', async () => {

@@ -17,7 +17,7 @@
 
 import { FC, ReactNode } from 'react';
 
-import type { ICompanyObject, ICompanyResponse, IFocusView } from '../../api/types';
+import type { ICompanyResponse, IFocusView } from '../../api/types';
 import { ASSERTION_ROLE_LABELS, ENTITY_TYPE_LABELS, IDENTIFIER_TYPE_LABELS, formatDate } from '../../lib/labels';
 import { Badge } from '../ui/Badge';
 import { CopyValue } from '../ui/CopyValue';
@@ -45,16 +45,6 @@ export interface IObjectRoleCount {
   count: number;
 }
 
-/** Сколько своих объектов у компании в каждой роли; объекты СЗ группы — их роль, не её. */
-export const objectRoleCounts = (objects: ICompanyObject[]): IObjectRoleCount[] => {
-  const counts = new Map<string, number>();
-  for (const o of objects) {
-    if (o.via) continue;
-    for (const role of new Set(o.roles.map(r => r.role))) counts.set(role, (counts.get(role) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([role, count]) => ({ role, count })).sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
-};
-
 const roleLabel = ({ role, count }: IObjectRoleCount): string => `${ASSERTION_ROLE_LABELS[role] ?? role} · ${count}`;
 
 const Requisites: FC<{ rows: IRequisite[]; className?: string }> = ({ rows, className }) => (
@@ -71,7 +61,7 @@ const Requisites: FC<{ rows: IRequisite[]; className?: string }> = ({ rows, clas
 export interface ICompanyRequisitesProps {
   data: ICompanyResponse;
   focus?: IFocusView | null;
-  /** Роли компании на своих объектах — ярлыками рядом со статусом. */
+  /** Роли компании на своих объектах (сервер, по всему списку «Объектов») — ярлыками рядом со статусом. */
   roles?: IObjectRoleCount[];
   /** Только ярлыки и короткие реквизиты (читалка). */
   compact?: boolean;

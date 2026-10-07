@@ -5,6 +5,9 @@
 // выглядели одним и тем же, повторённым четыре раза. Город — из карточки, иначе из юридического адреса
 // со страницы застройщика ДОМ.РФ. Похожие по написанию («Дострой» на «донстрой») — после совпавших.
 // Если нашлось по другому написанию — сказано, по какому: иначе непонятно, почему строка здесь.
+//
+// Название — по ЕГРЮЛ, как заголовок карточки и строка каталога; числа объектов и публикаций — те же, что в каталоге и
+// на вкладках карточки (сервер, companies/counters.ts, с семьёй). Имя из публикаций — пояснением, если отличается.
 
 import { FC, Fragment } from 'react';
 import { Link } from 'react-router-dom';
@@ -34,6 +37,9 @@ export const placeFromAddress = (address: string | null | undefined): string | n
 
 const placeOf = (item: ICompanySearchItem): string | null => item.city ?? placeFromAddress(item.registryAddress);
 
+/** Название — по ЕГРЮЛ (как заголовок карточки), иначе имя из публикаций. */
+const titleOf = (item: ICompanySearchItem): string => item.egrulName ?? item.name;
+
 /** Строка под названием: что отличает компанию от одноимённых. Только известное — пустых «—» нет. */
 export const companyFacts = (item: ICompanySearchItem): string | null => {
   const inn = item.identifiers?.find(id => id.startsWith('inn '))?.slice(4) ?? null;
@@ -43,7 +49,8 @@ export const companyFacts = (item: ICompanySearchItem): string | null => {
     ? `${formatCount(item.members)} ${pluralize(item.members, ['застройщик', 'застройщика', 'застройщиков'])} в группе`
     : null;
   const alias = item.matchedAlias && item.matchedAlias !== item.name ? `найдено по «${item.matchedAlias}»` : null;
-  const facts = [item.legalForm, kind, inn ? `ИНН ${inn}` : null, group, members, alias].filter(Boolean);
+  const textName = item.egrulName && item.egrulName !== item.name ? `в публикациях — «${item.name}»` : null;
+  const facts = [item.legalForm, kind, inn ? `ИНН ${inn}` : null, group, members, textName, alias].filter(Boolean);
   return facts.length > 0 ? facts.join(' · ') : null;
 };
 
@@ -58,7 +65,7 @@ export const CompanyResults: FC<ICompanyResultsProps> = ({ items, wide }) => {
           <CardListItem
             key={item.id}
             to={`/company/${item.id}`}
-            title={item.name}
+            title={titleOf(item)}
             meta={[placeOf(item), companyFacts(item)].filter(Boolean).join(' · ') || undefined}
             aside={<CountPair projects={item.projects ?? null} publications={item.publications ?? null} />}
           />
@@ -92,7 +99,7 @@ export const CompanyResults: FC<ICompanyResultsProps> = ({ items, wide }) => {
               <tr className={`row-link ${styles.row}`}>
                 <td>
                   <Link className={`row-link-target ${styles.rowName}`} to={`/company/${item.id}`} viewTransition>
-                    {item.name}
+                    {titleOf(item)}
                   </Link>
                   {facts && <span className={styles.rowNote}>{facts}</span>}
                 </td>

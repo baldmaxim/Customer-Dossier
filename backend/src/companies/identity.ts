@@ -21,9 +21,9 @@ export const companyTaxIdSql = (companyIdExpr: string): string => `(
 /**
  * Реквизиты всех живых компаний для списков и очередей: ИНН — если он один, ОГРН — если он один; несколько разных — NULL;
  * target — по чему спрашивать ЕГРЮЛ (правило pickTarget: ИНН, а без ИНН вовсе — ОГРН). CTE
- * `ids (company_id, inn, ogrn, target_type, target_value)`.
+ * `ids (company_id, inn, ogrn, target_type, target_value)`; companies — необязательный фильтр (массив bigint[]).
  */
-export const IDS_CTE = `
+export const idsCte = (companies?: string): string => `
   ids AS MATERIALIZED (
     SELECT ei.company_id,
            CASE WHEN count(DISTINCT ei.value) FILTER (WHERE ei.identifier_type = 'inn') = 1
@@ -40,6 +40,10 @@ export const IDS_CTE = `
                   THEN min(ei.value) FILTER (WHERE ei.identifier_type IN ('ogrn', 'ogrnip')) END AS target_value
     FROM entity_identifiers ei
     JOIN companies c ON c.id = ei.company_id AND c.merged_into_id IS NULL
-    WHERE ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.identifier_type IN ('inn', 'ogrn', 'ogrnip')
+    WHERE ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.identifier_type IN ('inn', 'ogrn', 'ogrnip')${companies ? `
+      AND ei.company_id = ANY(${companies})` : ''}
     GROUP BY ei.company_id
   )`;
+
+/** Реквизиты всех живых компаний (каталог, очередь Фокуса). */
+export const IDS_CTE = idsCte();

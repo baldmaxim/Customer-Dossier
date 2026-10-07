@@ -12,7 +12,7 @@ import type { ISemanticExtraction } from '../llm/semantic/schema.js';
 import { publishCandidateSet } from '../reprocess/publish.js';
 import { claimNextRun, enqueueRun, processRun } from '../reprocess/runs.js';
 import { answer, company, event, project, relation, semanticProvider } from '../reprocess/semantic/__fixtures__/semanticAnswers.js';
-import { refreshSignals } from './refresh.js';
+import { refreshSignals, refreshState } from './refresh.js';
 import { SIGNAL_RULES_VERSION, type ICompanySignals } from './types.js';
 
 let api: ITestApi;
@@ -51,7 +51,18 @@ const ingest = async (sourceId: number, body: string, respond: ISemanticExtracti
 const idOf = async (table: 'companies' | 'projects', name: string): Promise<number> =>
   (await pool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1 AND merged_into_id IS NULL ORDER BY id LIMIT 1`, [name])).rows[0]!.id;
 
-const signalsOf = async (companyId: number) => api.call('GET', `/api/companies/${companyId}/signals`, undefined);
+/**
+ * Снимок компании на активный срез — как его отдавал маршрут /signals (снят 07.10.2026: карточка снимок больше не читает,
+ * её итоги — живые). Ответ проходит JSON, как раньше через API: даты — строками.
+ */
+const signalsOf = async (companyId: number): Promise<{ status: number; body: Record<string, unknown> }> => {
+  const state = await refreshState();
+  const row = state.active
+    ? ((await pool().query<{ payload: unknown }>('SELECT payload FROM company_signal_snapshots WHERE refresh_id = $1 AND company_id = $2', [state.active.id, companyId])).rows[0] ?? null)
+    : null;
+  const body = { status: !state.active ? 'not_computed' : row ? 'ok' : 'not_in_snapshot', refresh: state, signals: row?.payload ?? null };
+  return { status: 200, body: JSON.parse(JSON.stringify(body)) as Record<string, unknown> };
+};
 
 let cutoff = new Date();
 let alfa = 0;

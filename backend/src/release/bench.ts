@@ -127,10 +127,11 @@ export const validators = {
       if (!Array.isArray(items)) return 'в ответе нет items';
       return items.some(i => (i as { id?: number }).id === companyId) ? null : 'искомая компания не найдена в выдаче';
     }),
-  companyCard: (card: ITestResponse, signals: ITestResponse, companyId: number): ISample => {
+  companyCard: (card: ITestResponse, stats: ITestResponse, companyId: number): ISample => {
     const c = expectStatus(card, 200, () => ((card.body.company as { id?: number } | undefined)?.id === companyId ? null : 'карточка другой компании или пустая'));
     if (!c.ok) return c;
-    return expectStatus(signals, 200, () => (typeof signals.body === 'object' && Object.keys(signals.body).length > 0 ? null : 'пустой ответ сигналов'));
+    // Итоги карточки — живые (publication-stats), снимок показателей на карточке больше не читается (07.10.2026).
+    return expectStatus(stats, 200, () => (typeof stats.body.total === 'number' ? null : 'нет итогов публикаций'));
   },
   summary: (res: ITestResponse): ISample => expectStatus(res, 200, () => (Array.isArray(res.body.summary) ? null : 'в резюме нет summary')),
   graph: (res: ITestResponse): ISample =>
@@ -228,10 +229,10 @@ export const runBench = async (exec: DbExecutor, options: { runs?: number; api?:
         ),
       );
       steps.push(
-        await m({ code: 'company_card', title: 'карточка компании (сведения и сигналы)', required: true }, async () =>
+        await m({ code: 'company_card', title: 'карточка компании (сведения и итоги публикаций)', required: true }, async () =>
           validators.companyCard(
             await api.call('GET', `/api/companies/${company.id}`, undefined),
-            await api.call('GET', `/api/companies/${company.id}/signals`, undefined),
+            await api.call('GET', `/api/companies/${company.id}/publication-stats`, undefined),
             company.id,
           ),
         ),

@@ -1,19 +1,18 @@
 // «С кем связана»: контрагенты компании с видом связи и цитатой-основанием.
 //
 // Договор, корпоративная связь и совместное участие на объекте — разные вещи: две фирмы на
-// одном объекте могут не иметь отношений между собой. Сервер отдаёт первые 12 контрагентов —
-// если их ровно столько, список честно называет себя неполным и ведёт к схеме связей (окном).
+// одном объекте могут не иметь отношений между собой. Сервер отдаёт первые 12 контрагентов и число всех (тот же
+// запрос читает плитка «Связи»): усечённый список называет себя «первые N из M» и ведёт к схеме связей (окном).
 // На обзоре видно первых SHOWN, остальные — «Показать ещё» концовкой блока.
 
 import { CSSProperties, FC, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { api } from '../api/client';
-import type { IPartnerLink, IPartnerRow } from '../api/types';
+import type { IPartnerLink } from '../api/types';
 import { formatCount } from '../lib/format';
 import { ASSERTION_ROLE_LABELS, PARTNER_KIND_HINTS, PARTNER_KIND_LABELS } from '../lib/labels';
 import { describeLoadError } from '../lib/loadError';
+import { useCompanyPartners } from './company/useCompanyQueries';
 import { EvidenceButton } from './EvidenceButton';
 import { GraphButton } from './graph/GraphButton';
 import { LoadingSkeleton } from './LoadingSkeleton';
@@ -24,8 +23,8 @@ import { EmptyState } from './ui/EmptyState';
 import { Section } from './ui/Section';
 import styles from './CompanyPartners.module.css';
 
-/** Сколько контрагентов просим у сервера: ровно столько вернулось — значит, список усечён. */
-const PARTNERS_LIMIT = 12;
+/** Сколько контрагентов просим у сервера; сколько их всего — counts ответа (тот же запрос читает плитка «Связи»). */
+export const PARTNERS_LIMIT = 12;
 /** Контрагентов видно до «Показать ещё». */
 const SHOWN = 6;
 /** Связей одного контрагента на обзоре; остальные — числом. */
@@ -33,7 +32,7 @@ const LINKS_SHOWN = 4;
 
 const KIND_ORDER: Record<string, number> = { contract: 0, corporate: 1 };
 
-const linkText = (link: IPartnerLink): string => {
+export const partnerLinkText = (link: IPartnerLink): string => {
   const role = link.role ? (ASSERTION_ROLE_LABELS[link.role] ?? link.role) : null;
   const own = link.ownRole ? (ASSERTION_ROLE_LABELS[link.ownRole] ?? link.ownRole) : null;
   return role ?? own ?? 'вид связи не назван';
@@ -43,12 +42,10 @@ const linkKey = (partnerId: number, link: IPartnerLink, i: number): string =>
   `${partnerId}-${link.kind}-${link.assertionId ?? `n${i}`}-${link.projectId ?? 0}`;
 
 export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
-  const partners = useQuery({
-    queryKey: ['company', companyId, 'partners'],
-    queryFn: () => api.get<{ items: IPartnerRow[] }>(`/api/companies/${companyId}/partners?limit=${PARTNERS_LIMIT}`),
-  });
+  const partners = useCompanyPartners(companyId, PARTNERS_LIMIT);
   const items = partners.data?.items ?? [];
-  const truncated = items.length >= PARTNERS_LIMIT;
+  const total = partners.data?.counts?.companies ?? items.length;
+  const truncated = total > items.length || (partners.data?.counts === undefined && items.length >= PARTNERS_LIMIT);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? items : items.slice(0, SHOWN);
   const hidden = items.length - visible.length;
@@ -60,7 +57,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
   return (
     <Section
       title="С кем связана"
-      note={truncated ? `первые ${formatCount(PARTNERS_LIMIT)}` : undefined}
+      note={truncated ? `первые ${formatCount(items.length)} из ${formatCount(total)}` : undefined}
       footer={
         (hidden > 0 || truncated) && (
           <>
@@ -122,7 +119,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                           {/* Ярлык без подсказки-кнопки: пояснение видам связи — одно, под списком
                               (у каждой связи своя кнопка «?» давала лишние остановки Tab и мелкие цели). */}
                           <Badge tone="accent">{PARTNER_KIND_LABELS[link.kind] ?? 'связь'}</Badge>
-                          <span className={styles.linkText}>{linkText(link)}</span>
+                          <span className={styles.linkText}>{partnerLinkText(link)}</span>
                           {/* Объект подписан словом: ссылкой того же вида, что имя контрагента, он читался как ещё одна компания. */}
                           {link.projectId !== null && link.projectName && (
                             <span className={styles.project}>
@@ -136,7 +133,7 @@ export const CompanyPartners: FC<{ companyId: number }> = ({ companyId }) => {
                         {/* Цитата — окном и грузится только в открытом окне, а не для всех связей сразу. */}
                         {link.assertionId !== null && (
                           <div>
-                            <EvidenceButton assertionIds={[link.assertionId]} lead={`${partner.name}: ${PARTNER_KIND_LABELS[link.kind] ?? 'связь'} — ${linkText(link)}`} />
+                            <EvidenceButton assertionIds={[link.assertionId]} lead={`${partner.name}: ${PARTNER_KIND_LABELS[link.kind] ?? 'связь'} — ${partnerLinkText(link)}`} />
                           </div>
                         )}
                       </li>

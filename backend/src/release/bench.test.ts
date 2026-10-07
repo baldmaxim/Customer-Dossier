@@ -40,9 +40,10 @@ describe('validators', () => {
     expect(validators.snapshotCreate(res(200, { id: 5, payloadHash: 'h' })).ok).toBe(false);
   });
 
-  it('карточка: сигналы с ошибкой делают шаг неуспешным', () => {
+  it('карточка: итоги публикаций с ошибкой делают шаг неуспешным', () => {
     expect(validators.companyCard(res(200, { company: { id: 7 } }), res(500, { error: 'x' }), 7).ok).toBe(false);
-    expect(validators.companyCard(res(200, { mergedInto: 9 }), res(200, { a: 1 }), 7).ok).toBe(false);
+    expect(validators.companyCard(res(200, { mergedInto: 9 }), res(200, { total: 1 }), 7).ok).toBe(false);
+    expect(validators.companyCard(res(200, { company: { id: 7 } }), res(200, { total: 3 }), 7).ok).toBe(true);
   });
 });
 

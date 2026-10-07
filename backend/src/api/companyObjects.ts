@@ -23,6 +23,8 @@ export interface ICompanyObjectRole {
   role: string;
   isCurrent: boolean;
   origin: string;
+  /** Утверждения-основания роли (у прежней обработки их нет): «Откуда известно» в «Участии и связях». */
+  assertionIds: number[];
 }
 
 /** Свод ДОМ.РФ по домам объекта (registry/houses.ts). */
@@ -44,6 +46,11 @@ export interface ICompanyObject {
 
 export interface ICompanyObjectsResponse {
   items: ICompanyObject[];
+  /**
+   * Роли самой компании на её объектах (объекты СЗ группы — их роли, не её) по всему списку, а не по показанным:
+   * ярлыки шапки и полосы «Роли» — одно число.
+   */
+  roles: Array<{ role: string; count: number }>;
   /** Участники группы, чьи объекты показаны. */
   members: Array<{ companyId: number; name: string }>;
   coverage: { loaded: number; total: number; truncated: boolean };
@@ -52,13 +59,13 @@ export interface ICompanyObjectsResponse {
 /** Связи с объектами: роли компании и участников группы, объекты из событий самой компании. */
 const LINKS_SQL = `
   SELECT link.project_id AS "projectId", link.company_id AS "companyId", link.role, link.is_current AS "isCurrent",
-         link.origin, link.basis, p.name, p.city, p.project_level AS "level"
+         link.origin, link.basis, link.assertion_id AS "assertionId", p.name, p.city, p.project_level AS "level"
   FROM (
-    SELECT pp.project_id, pp.company_id, pp.role, pp.is_current, pp.origin, 'participation'::text AS basis
+    SELECT pp.project_id, pp.company_id, pp.role, pp.is_current, pp.origin, 'participation'::text AS basis, pp.assertion_id
     FROM card_participations_v pp
     WHERE pp.company_id = ANY($1::bigint[])
     UNION ALL
-    SELECT DISTINCT e.project_id, e.company_id, NULL::text, NULL::boolean, NULL::text, 'event'::text
+    SELECT DISTINCT e.project_id, e.company_id, NULL::text, NULL::boolean, NULL::text, 'event'::text, NULL::bigint
     FROM card_events_v e
     WHERE e.company_id = $2 AND e.project_id IS NOT NULL AND e.status <> 'rejected'
       AND NOT EXISTS (
@@ -79,6 +86,7 @@ interface ILinkRow {
   isCurrent: boolean | null;
   origin: string | null;
   basis: 'participation' | 'event';
+  assertionId: number | null;
   name: string;
   city: string | null;
   level: string | null;
@@ -140,8 +148,12 @@ export const loadCompanyObjects = shareInFlight(async (companyId: number): Promi
     if (link.basis === 'participation') object.basis = 'participation';
     if (!link.role) continue;
     const known = object.roles.find(r => r.role === link.role);
-    if (!known) object.roles.push({ role: link.role, isCurrent: Boolean(link.isCurrent), origin: link.origin ?? 'unknown' });
-    else if (link.isCurrent) known.isCurrent = true;
+    if (!known) {
+      object.roles.push({ role: link.role, isCurrent: Boolean(link.isCurrent), origin: link.origin ?? 'unknown', assertionIds: link.assertionId !== null ? [link.assertionId] : [] });
+    } else {
+      if (link.isCurrent) known.isCurrent = true;
+      if (link.assertionId !== null && !known.assertionIds.includes(link.assertionId)) known.assertionIds.push(link.assertionId);
+    }
   }
 
   const ids = [...byProject.keys()];
@@ -168,8 +180,14 @@ export const loadCompanyObjects = shareInFlight(async (companyId: number): Promi
     return a.name.localeCompare(b.name, 'ru');
   });
   const items = sorted.slice(0, OBJECTS_LIMIT);
+  const roleCounts = new Map<string, number>();
+  for (const o of sorted) {
+    if (o.via) continue;
+    for (const role of new Set(o.roles.map(r => r.role))) roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+  }
   return {
     items,
+    roles: [...roleCounts.entries()].map(([role, count]) => ({ role, count })).sort((a, b) => b.count - a.count || a.role.localeCompare(b.role)),
     members: members.filter(m => items.some(o => o.via?.companyId === m.companyId)),
     coverage: { loaded: items.length, total: sorted.length, truncated: sorted.length > items.length },
   };

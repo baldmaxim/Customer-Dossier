@@ -1,6 +1,8 @@
-// Вкладка «Подробно» (06.10.2026, просьба владельца «слишком много на одной странице»): три вкладки вместо
-// длинной страницы разделов с меню-якорями — «События · Участие и связи · Показатели». Вкладка — в адресе
-// (?dtab=, по умолчанию «События»): «Назад» возвращает её, ссылкой из «Сведений» можно попасть в нужную.
+// Вкладка «Подробно» (06.10.2026, просьба владельца «слишком много на одной странице»): вкладки вместо длинной
+// страницы разделов с меню-якорями — «События · Участие и связи». Вкладка — в адресе (?dtab=, по умолчанию «События»):
+// «Назад» возвращает её, ссылкой из «Сведений» можно попасть в нужную. «Показатели» (снимок на дату расчёта) сняты
+// 07.10.2026: их числа повторяли плитки и полосы «Сведений», но по другому правилу и на другую дату; старый адрес
+// ?dtab=numbers открывает «События».
 // Глубже строк — только окнами («Откуда известно», «Контекст объекта», событие); «Опознание» и раздел
 // схемы связей сняты: реквизиты и похожие — в шапке и на «Сведениях», схема — кнопкой в шапке.
 
@@ -10,18 +12,16 @@ import { enumParam, useUrlState } from '../../hooks/useUrlState';
 import { TabPanel } from '../ui/TabPanel';
 import { Tabs } from '../ui/Tabs';
 import { CompanyEvents } from './CompanyEvents';
-import { CompanyNumbers } from './CompanyNumbers';
 import { CompanyRelations } from './CompanyRelations';
 import { useCompanyEvents } from './useCompanyQueries';
 import styles from './CompanyDetails.module.css';
 
-export const DETAIL_TABS = ['events', 'links', 'numbers'] as const;
+export const DETAIL_TABS = ['events', 'links'] as const;
 export type DetailTab = (typeof DETAIL_TABS)[number];
 
 const LABELS: Record<DetailTab, string> = {
   events: 'События',
   links: 'Участие и связи',
-  numbers: 'Показатели',
 };
 
 export const CompanyDetails: FC<{ companyId: number }> = ({ companyId }) => {
@@ -42,7 +42,6 @@ export const CompanyDetails: FC<{ companyId: number }> = ({ companyId }) => {
       <TabPanel idBase={idBase} value={tab} focusable={false}>
         {tab === 'events' && <CompanyEvents companyId={companyId} />}
         {tab === 'links' && <CompanyRelations companyId={companyId} />}
-        {tab === 'numbers' && <CompanyNumbers companyId={companyId} />}
       </TabPanel>
     </div>
   );
