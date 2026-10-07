@@ -62,10 +62,9 @@ const COUNTERS_SQL = `
     UNION
     SELECT head, member FROM mem
   ),
-  members AS MATERIALIZED (SELECT array_agg(DISTINCT member) AS ids FROM fam),
-  ${partRowsCte('(SELECT ids FROM members)')},
+  ${partRowsCte('ARRAY(SELECT DISTINCT member FROM fam)')},
   ${eventRowsCte('$1::bigint[]')},
-  ${touchedCte('(SELECT ids FROM members)')},
+  ${touchedCte('ARRAY(SELECT DISTINCT member FROM fam)')},
   fam_objs AS (
     SELECT f.head, pr.project_id FROM fam f JOIN part_rows pr ON pr.company_id = f.member
     UNION
