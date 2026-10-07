@@ -46,6 +46,13 @@ fi
 
 "${COMPOSE[@]}" up -d db
 
+# Статистика запросов (07.10.2026): расширение — в своей схеме, чтобы release:check не считал его представления
+# таблицами портала. Повтор безвреден; сбой не останавливает выкладку — без статистики портал работает.
+for _ in $(seq 1 60); do "${COMPOSE[@]}" exec -T db pg_isready -U tg_info -d tg_info >/dev/null 2>&1 && break; sleep 1; done
+"${COMPOSE[@]}" exec -T db psql -q -U tg_info -d tg_info -c 'CREATE SCHEMA IF NOT EXISTS monitoring' \
+  -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring' >/dev/null \
+  || echo "предупреждение: pg_stat_statements не включён (статистика запросов недоступна, выкладка продолжается)"
+
 echo "→ план миграций"
 "${COMPOSE[@]}" --profile tools run --rm migrate node dist/db/migrate.js --dry
 echo "→ миграции"

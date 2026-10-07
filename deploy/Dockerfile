@@ -11,7 +11,8 @@
 FROM node:24-alpine AS api-build
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
-RUN npm ci
+# Кэш npm между сборками (07.10.2026): при смене lock-файла пакеты не качаются заново целиком.
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --fund=false
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
 # Тесты и тестовые сиды в образ не идут: в бою их запускать некому и незачем.
@@ -42,7 +43,8 @@ CMD ["node", "dist/index.js"]
 FROM node:24-alpine AS web-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# Кэш npm между сборками (07.10.2026): при смене lock-файла пакеты не качаются заново целиком.
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --fund=false
 COPY frontend/ ./
 RUN npm run build && npm run check:build
 

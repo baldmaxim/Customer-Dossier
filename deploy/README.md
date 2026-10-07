@@ -82,6 +82,7 @@ deploy/release.sh           # выпустить текущий HEAD
 | Запуски разбора | `docker exec tginfo-api node dist/pipeline/cli.js --runs` / `--errors` |
 | Модель видна? | `docker exec tginfo-api node dist/pipeline/cli.js --check` |
 | Контрольные числа | `docker exec tginfo-api node dist/release/cli.js` |
+| Дорогие запросы | `docker exec tginfo-db psql -U tg_info -d tg_info -c "SELECT calls, round(total_exec_time) AS ms, round(mean_exec_time::numeric, 1) AS avg_ms, left(regexp_replace(query, '\s+', ' ', 'g'), 120) FROM monitoring.pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20"` (с 07.10.2026; без значений — параметры заменены `$n`; сброс — `SELECT monitoring.pg_stat_statements_reset()`) |
 
 `npm run …` из CLAUDE.md внутри образа — это `node dist/<тот же путь>.js`: `ingest:once` →
 `dist/ingest/cli.js`, `pipeline:once` → `dist/pipeline/cli.js`, `metrics:refresh` → `dist/metrics/cli.js`,
@@ -280,6 +281,9 @@ docker build -f deploy/Dockerfile --target api -t tginfo-api:$TAG .
 docker build -f deploy/Dockerfile --target web -t tginfo-web:$TAG .
 docker save tginfo-api:$TAG tginfo-web:$TAG | gzip | ssh quantor 'gunzip | docker load'
 ```
+
+`deploy/release.sh` делает то же быстрее (07.10.2026): `zstd -T0` вместо gzip, а интерфейс без правок с работающего
+выпуска (`frontend/`, `tginfo-web.conf`, `Dockerfile`) не собирает и не переносит — ставит на сервере тег на прежний образ.
 
 ### 4. База
 Перенос — раздел «Перенос базы» (база поднимается `IMAGE_TAG=$TAG docker compose -p tginfo up -d db`, после

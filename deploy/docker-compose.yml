@@ -25,7 +25,13 @@ services:
       POSTGRES_USER: tg_info
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?требуется POSTGRES_PASSWORD}
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=ru-RU'
-    command: ['postgres', '-c', 'shared_buffers=96MB', '-c', 'max_connections=30', '-c', 'work_mem=8MB']
+    # 07.10.2026: random_page_cost 1.1 — диск SSD, а 4 (по умолчанию) — оценка для HDD, планировщик избегал индексов;
+    # effective_cache_size — подсказка планировщику о кэше ОС; pg_stat_statements — какие запросы на самом деле дороги
+    # (расширение в схеме monitoring создаёт update.sh, public его не видит). Смена команды пересоздаёт контейнер базы
+    # при выкладке — несколько секунд простоя, данные в томе.
+    command: ['postgres', '-c', 'shared_buffers=96MB', '-c', 'max_connections=30', '-c', 'work_mem=8MB',
+              '-c', 'random_page_cost=1.1', '-c', 'effective_cache_size=256MB',
+              '-c', 'shared_preload_libraries=pg_stat_statements', '-c', 'pg_stat_statements.track=top']
     volumes:
       # С 18-й версии образ хранит данные в /var/lib/postgresql/18/docker и монтирует том
       # на /var/lib/postgresql; прежняя точка /var/lib/postgresql/data не подходит.
