@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDomRfObjectUrl } from './domrfTargets.js';
+import { parseDomRfObjectUrl, retryDelayMinutes } from './domrfTargets.js';
 
 describe('очередь браузерных карточек ДОМ.РФ', () => {
   it('принимает ссылку на объект и убирает параметры отслеживания', () => {
@@ -14,5 +14,11 @@ describe('очередь браузерных карточек ДОМ.РФ', () 
     expect(() => parseDomRfObjectUrl('https://evil.example/сервисы/каталог-новостроек/объект/62087')).toThrow();
     expect(() => parseDomRfObjectUrl('https://наш.дом.рф/portal-kn/api/kn/objects/62087')).toThrow();
     expect(() => parseDomRfObjectUrl('http://наш.дом.рф/сервисы/каталог-новостроек/объект/62087')).toThrow();
+  });
+
+  it('повтор ошибки: паузы растут, с шестой неудачи — раз в сутки', () => {
+    expect([1, 2, 3, 4, 5].map(retryDelayMinutes)).toEqual([2, 4, 8, 16, 32]);
+    expect(retryDelayMinutes(6)).toBe(24 * 60);
+    expect(retryDelayMinutes(71)).toBe(24 * 60);
   });
 });

@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { DomRfTargetError, listProjectDomRfTargets, markDomRfCaptured, registerDomRfTarget } from './domrfTargets.js';
+import { DomRfTargetError, hadContractor, listProjectDomRfTargets, markDomRfCaptured, registerDomRfTarget } from './domrfTargets.js';
 import { importRegistryFile } from './importFile.js';
 import { loadProjectRegistry } from '../../registry/read.js';
 
@@ -378,6 +378,32 @@ describe('импорт файла без сети (T20C-02)', () => {
     } finally {
       fs.rmSync(file, { force: true });
     }
+  });
+
+  it('генподрядчик в последнем снимке: был — пропажа подозрительна, сданный дом без строки — нет', async () => {
+    const s = await registry(registryProfile({ endpoints: { object: 'https://registry-contractor-demo.test/api/object?id={id}' } }, 'registry-contractor-demo.test'), 'registry-contractor-demo.test');
+    const importCapture = async (extra: Record<string, unknown>): Promise<void> => {
+      const file = path.join(os.tmpdir(), `domrf-contractor-${Date.now()}.json`);
+      fs.writeFileSync(file, JSON.stringify({
+        format: 'domrf-browser@1',
+        url: 'https://наш.дом.рф/сервисы/каталог-новостроек/объект/62095',
+        title: 'ЖК Подрядный-Демо',
+        address: 'Москва город',
+        characteristics: [{ label: 'Количество квартир', value: '80' }],
+        ...extra,
+      }), 'utf8');
+      try {
+        expect((await importRegistryFile((await getSourceById(s.id))!, file)).kind).toBe('stored');
+      } finally {
+        fs.rmSync(file, { force: true });
+      }
+    };
+    expect(await hadContractor('62095')).toBe(false);
+    await importCapture({ contractor: 'ООО СУ-ДЕМО (ИНН: 7704412966)' });
+    expect(await hadContractor('62095')).toBe(true);
+    // Новый снимок без строки — решает последний, а не любой из прежних.
+    await importCapture({ status: 'Сдан' });
+    expect(await hadContractor('62095')).toBe(false);
   });
 
   it('карточку ДОМ.РФ со страницы объекта: чужую — отказ с её объектом, снятую без объекта — перечитать для этого', async () => {

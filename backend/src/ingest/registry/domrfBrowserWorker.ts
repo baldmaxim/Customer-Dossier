@@ -43,6 +43,7 @@ import {
 import {
   claimDomRfTarget,
   failDomRfTarget,
+  hadContractor,
   parseDomRfObjectUrl,
   requestRecaptureForDeveloper,
   listCapturedDomRfTargets,
@@ -64,7 +65,15 @@ const MORE_CLICKS_MAX = 60;
  * Три за минуту — около 16 часов на первый обход 2800 компаний, дальше — только новые и месячный пересмотр.
  */
 const SEARCHES_PER_PASS = 3;
-const SEARCH_PAUSE_MS = 4000;
+const PAGE_PAUSE_MS = 4000;
+
+/**
+ * Карточек объектов за проход — так же серией в одном окне (07.10.2026): по одной в минуту очередь из 4 400
+ * карточек шла бы четверо суток. Следующая берётся, только пока серия короче OBJECTS_BUDGET_MS: страница
+ * застройщика с «Показать ещё» бывает длинной, а проход идёт раз в минуту.
+ */
+const OBJECTS_PER_PASS = 3;
+const OBJECTS_BUDGET_MS = 40_000;
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -95,13 +104,26 @@ const open = async (page: Page, url: string): Promise<void> => {
   await page.locator('h1').first().waitFor({ state: 'visible', timeout: 30_000 });
 };
 
+/** Подписи характеристик на странице — без значений: причина ошибки видна в админке «Карточки». */
+const CHARACTERISTIC_LABELS = `[...document.querySelectorAll('[class*="CharacteristicsBlock__Row"] [class*="__Name"]')]
+  .map(element => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 12)`;
+
 const captureObject = async (page: Page, target: Pick<IDomRfTarget, 'url' | 'externalRef'>): Promise<IDomRfBrowserCapture> => {
   await open(page, target.url);
   await page.getByRole('button', { name: 'Все характеристики' }).click({ timeout: 20_000 });
-  await page.getByText('Количество квартир', { exact: true }).first().waitFor({ state: 'visible', timeout: 20_000 });
+  try {
+    await page.getByText('Количество квартир', { exact: true }).first().waitFor({ state: 'visible', timeout: 20_000 });
+  } catch {
+    const labels = await page.evaluate<string[]>(CHARACTERISTIC_LABELS).catch(() => []);
+    throw new Error(`нет строки «Количество квартир»; характеристики на странице: ${labels.length ? labels.join(', ') : 'не найдены'}`);
+  }
+  // Строка генподрядчика бывает ниже характеристик и приходит позже; у многих сданных домов её нет вовсе.
+  await page.getByText(/^Генподрядчики:/).first().waitFor({ state: 'attached', timeout: 5_000 }).catch(() => undefined);
   const capture = (await page.evaluate(script('domrf-browser-capture.js'))) as IDomRfBrowserCapture;
   if (parseDomRfObjectUrl(capture.url).externalRef !== target.externalRef) throw new Error('открылась другая карточка объекта');
-  if (!capture.contractor) throw new Error('на странице не найден генподрядчик; снимок не сохранён');
+  if (!capture.contractor && await hadContractor(target.externalRef)) {
+    throw new Error('генподрядчик пропал со страницы; снимок не сохранён');
+  }
   return capture;
 };
 
@@ -217,36 +239,65 @@ export interface IDomRfPassResult {
   outcome: string;
 }
 
-const captureTarget = async (target: IDomRfTarget): Promise<IDomRfPassResult> => {
+const captureOne = async (page: Page, source: ISource, target: IDomRfTarget): Promise<IDomRfPassResult> => {
   const what = `объект ${target.externalRef}`;
   try {
-    const source = await approvedSource();
-    return await withPage(async page => {
-      const capture = await captureObject(page, target);
-      let developer: IDomRfDeveloperIdentity | null = null;
-      // Фото — с той же открытой карточки, до перехода на страницу застройщика.
-      let note = await capturePhoto(page, target.externalRef);
-      if (capture.developerRef) {
-        // Страница застройщика не открылась — объект всё равно сохраняется; реквизиты придут
-        // со следующим чтением застройщика (requestRecaptureForDeveloper).
-        try {
-          developer = await developerFor(page, source, capture.developerRef);
-        } catch (err) {
-          await ensureDomRfCard('developer', capture.developerRef);
-          note += `; страница застройщика не прочитана: ${message(err)}`;
-        }
+    const capture = await captureObject(page, target);
+    let developer: IDomRfDeveloperIdentity | null = null;
+    // Фото — с той же открытой карточки, до перехода на страницу застройщика.
+    let note = await capturePhoto(page, target.externalRef);
+    if (capture.developerRef) {
+      // Страница застройщика не открылась — объект всё равно сохраняется; реквизиты придут
+      // со следующим чтением застройщика (requestRecaptureForDeveloper).
+      try {
+        developer = await developerFor(page, source, capture.developerRef);
+      } catch (err) {
+        await ensureDomRfCard('developer', capture.developerRef);
+        note += `; страница застройщика не прочитана: ${message(err)}`;
       }
-      if (capture.groupRef) await ensureDomRfCard('group', capture.groupRef);
-      const result = await importRegistryPayload(source, capture, { projectId: target.projectId ?? undefined, developerCard: developer });
-      if (result.kind !== 'stored') throw new Error(result.kind === 'invalid_page' || result.kind === 'config_invalid' ? result.message : `импорт не выполнен: ${result.kind}`);
-      if (result.publishError) throw new Error(`снимок сохранён, но карточка не обновлена: ${result.publishError}`);
-      await setDomRfTargetRefs(target.externalRef, capture.developerRef ?? null, capture.groupRef ?? null);
-      return { what, outcome: `${result.outcome}${developer ? ', застройщик с реквизитами' : ''}${note}` };
-    });
+    }
+    if (capture.groupRef) await ensureDomRfCard('group', capture.groupRef);
+    const result = await importRegistryPayload(source, capture, { projectId: target.projectId ?? undefined, developerCard: developer });
+    if (result.kind !== 'stored') throw new Error(result.kind === 'invalid_page' || result.kind === 'config_invalid' ? result.message : `импорт не выполнен: ${result.kind}`);
+    if (result.publishError) throw new Error(`снимок сохранён, но карточка не обновлена: ${result.publishError}`);
+    await setDomRfTargetRefs(target.externalRef, capture.developerRef ?? null, capture.groupRef ?? null);
+    return { what, outcome: `${result.outcome}${developer ? ', застройщик с реквизитами' : ''}${note}` };
   } catch (err) {
     await failDomRfTarget(target.id, message(err), target.attemptCount + 1);
     return { what, outcome: `ошибка: ${message(err)}` };
   }
+};
+
+/** Серия карточек объектов в одном окне: до OBJECTS_PER_PASS, первая ошибка останавливает серию. */
+const captureTargets = async (first: IDomRfTarget): Promise<IDomRfPassResult[]> => {
+  const results: IDomRfPassResult[] = [];
+  const startedAt = Date.now();
+  let next: IDomRfTarget | null = first;
+  try {
+    const source = await approvedSource();
+    await withPage(async page => {
+      while (next) {
+        const target: IDomRfTarget = next;
+        next = null;
+        const result = await captureOne(page, source, target);
+        results.push(result);
+        if (result.outcome.startsWith('ошибка:') || results.length >= OBJECTS_PER_PASS) return;
+        if (Date.now() - startedAt >= OBJECTS_BUDGET_MS) return;
+        await page.waitForTimeout(PAGE_PAUSE_MS);
+        next = await claimDomRfTarget();
+      }
+    });
+  } catch (err) {
+    // Нет допуска, браузер не запустился или упал между карточками: взятая и не снятая — повтор с паузой.
+    if (next) {
+      const target: IDomRfTarget = next;
+      await failDomRfTarget(target.id, message(err), target.attemptCount + 1);
+      results.push({ what: `объект ${target.externalRef}`, outcome: `ошибка: ${message(err)}` });
+    } else {
+      results.push({ what: 'карточки объектов', outcome: `ошибка: ${message(err)}` });
+    }
+  }
+  return results;
 };
 
 const scanDueCard = async (card: IDomRfCardRow): Promise<IDomRfPassResult> => {
@@ -305,7 +356,7 @@ const searchCompanies = async (first: IDomRfCompanyToSearch): Promise<IDomRfPass
         const result = await searchCompany(page, company);
         results.push(result);
         if (result.outcome.startsWith('ошибка:') || results.length >= SEARCHES_PER_PASS) return;
-        await page.waitForTimeout(SEARCH_PAUSE_MS);
+        await page.waitForTimeout(PAGE_PAUSE_MS);
         next = await claimDomRfCompanySearch();
       }
     });
@@ -365,7 +416,7 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   const objectsFirst = passNo % PAGES_EVERY !== 0;
   if (objectsFirst) {
     const target = await claimDomRfTarget();
-    if (target) return [...prefix, await captureTarget(target)];
+    if (target) return [...prefix, ...(await captureTargets(target))];
   }
   const card = await claimDueDomRfCard();
   if (card) return [...prefix, await scanDueCard(card)];
@@ -374,7 +425,7 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   if (company) return [...prefix, ...(await searchCompanies(company))];
   if (!objectsFirst) {
     const target = await claimDomRfTarget();
-    if (target) return [...prefix, await captureTarget(target)];
+    if (target) return [...prefix, ...(await captureTargets(target))];
   }
   return prefix;
 };

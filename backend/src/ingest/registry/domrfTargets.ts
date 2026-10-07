@@ -286,12 +286,38 @@ export const claimDomRfTarget = async (): Promise<IDomRfTarget | null> => withTr
   return row;
 });
 
+/** Неудач подряд, после которых карточка повторяется раз в сутки. */
+const RETRY_DAILY_AFTER = 6;
+
+/**
+ * Пауза перед повтором: 2, 4, 8, 16, 32 минуты, с шестой неудачи — сутки. При потолке в час 46 карточек,
+ * падающих всегда (40–70 попыток), снова заняли бы почти все проходы, как 06.10, и недельное перечитывание
+ * до снятых карточек не дошло бы. Новая постановка и удачный снимок обнуляют счётчик.
+ */
+export const retryDelayMinutes = (attempts: number): number =>
+  attempts >= RETRY_DAILY_AFTER ? 24 * 60 : 2 ** Math.max(1, attempts);
+
 export const failDomRfTarget = async (id: number, error: string, attempts: number): Promise<void> => {
-  const delayMinutes = Math.min(60, 2 ** Math.min(attempts, 6));
+  const delayMinutes = retryDelayMinutes(attempts);
   await query(
     `UPDATE domrf_targets SET last_error = $2, next_attempt_at = now() + ($3::int * interval '1 minute'),
        updated_at = now() WHERE id = $1`, [id, error.slice(0, 1000), delayMinutes],
   );
+};
+
+/**
+ * В последнем снимке объекта была строка «Генподрядчики». Её нет на странице у многих сданных домов, но если
+ * она была и пропала — скорее недогрузилась страница: такой снимок перетёр бы генподрядчика в «Кто строит».
+ */
+export const hadContractor = async (externalRef: string): Promise<boolean> => {
+  const rows = await query<{ had: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM jsonb_array_elements(r.payload->'fields') f WHERE f->>'label' = 'Генподрядчики') AS had
+     FROM registry_records r
+     WHERE r.record_type = 'object' AND r.external_ref = $1
+     ORDER BY r.fetched_at DESC, r.id DESC LIMIT 1`,
+    [externalRef],
+  );
+  return rows[0]?.had ?? false;
 };
 
 /** Ссылки карточки объекта на страницы застройщика и группы (этап 20D). */
