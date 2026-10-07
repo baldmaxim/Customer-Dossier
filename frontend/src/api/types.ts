@@ -267,6 +267,8 @@ export interface IBuilderObject {
   sources: BuilderSource[];
   isCurrent: boolean;
   registryAsOf: string | null;
+  /** Когда портал прочитал карточку ДОМ.РФ; нет поля — сервер до 07.10.2026. */
+  registryFetchedAt?: string | null;
   lastPublication: string | null;
   mentions: number | null;
 }

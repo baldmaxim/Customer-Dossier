@@ -27,6 +27,8 @@ export interface IBuilderObject {
   isCurrent: boolean;
   /** Дата сведений ДОМ.РФ (или дата снимка, если сайт даты не дал). */
   registryAsOf: string | null;
+  /** Когда портал прочитал карточку ДОМ.РФ (снимок). */
+  registryFetchedAt: string | null;
   /** Последняя публикация, где компания названа в этой роли. */
   lastPublication: string | null;
   /** Сколько записей участия из публикаций; null — только ДОМ.РФ. */
@@ -78,6 +80,7 @@ export interface IRegistryBuilderEntry {
   name: string;
   inn: string | null;
   asOf: string | null;
+  fetchedAt: string | null;
   company: { id: number; name: string } | null;
   match: 'identifier' | 'name' | null;
 }
@@ -99,7 +102,7 @@ export const buildBuilders = (
   const upsert = (
     key: string,
     seed: () => ICompanyBuilder,
-    object: { projectId: number; role: BuilderRole; source: BuilderSource; isCurrent: boolean; registryAsOf?: string | null; lastPublication?: string | null; mentions?: number },
+    object: { projectId: number; role: BuilderRole; source: BuilderSource; isCurrent: boolean; registryAsOf?: string | null; registryFetchedAt?: string | null; lastPublication?: string | null; mentions?: number },
   ): ICompanyBuilder => {
     const builder = byKey.get(key) ?? seed();
     byKey.set(key, builder);
@@ -114,6 +117,7 @@ export const buildBuilders = (
         sources: [],
         isCurrent: false,
         registryAsOf: null,
+        registryFetchedAt: null,
         lastPublication: null,
         mentions: null,
       };
@@ -122,6 +126,7 @@ export const buildBuilders = (
     if (!row.sources.includes(object.source)) row.sources.push(object.source);
     row.isCurrent ||= object.isCurrent;
     row.registryAsOf = later(row.registryAsOf, object.registryAsOf ?? null);
+    row.registryFetchedAt = later(row.registryFetchedAt, object.registryFetchedAt ?? null);
     row.lastPublication = later(row.lastPublication, object.lastPublication ?? null);
     if (object.mentions !== undefined) row.mentions = (row.mentions ?? 0) + object.mentions;
     builder.lastSeen = later(builder.lastSeen, later(object.registryAsOf ?? null, object.lastPublication ?? null));
@@ -151,6 +156,7 @@ export const buildBuilders = (
       source: 'registry',
       isCurrent: true,
       registryAsOf: entry.asOf,
+      registryFetchedAt: entry.fetchedAt,
     });
     if (!builder.registryNames.includes(entry.name)) builder.registryNames.push(entry.name);
     builder.inn ??= entry.inn;
@@ -248,6 +254,7 @@ export const loadCompanyBuilders = async (companyId: number): Promise<ICompanyBu
       projectId: o.projectId,
       ...c,
       asOf: o.registry?.asOf ?? o.registry?.fetchedAt ?? null,
+      fetchedAt: o.registry?.fetchedAt ?? null,
     })),
   );
   const inns = [...new Set(parsed.flatMap(c => (c.inn ? [c.inn] : [])))];
@@ -271,6 +278,7 @@ export const loadCompanyBuilders = async (companyId: number): Promise<ICompanyBu
       name: c.name,
       inn: c.inn,
       asOf: c.asOf,
+      fetchedAt: c.fetchedAt,
       company: viaInn ?? viaName ?? null,
       match: viaInn ? 'identifier' : viaName ? 'name' : null,
     };

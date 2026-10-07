@@ -330,7 +330,7 @@ describe('Карточка компании', () => {
     expect(within(section).getByRole('link', { name: 'Все объекты — 3' }).getAttribute('href')).toBe('/company/7?tab=objects');
   });
 
-  it('кто строит для компании: ДОМ.РФ по ИНН и публикации, своя группа, без карточки — «Найти по ИНН»; плитка сводки', async () => {
+  it('кто строит для компании: строка — имя, роль, число объектов; подробности окном; без карточки — «Добавить компанию», не уход на поиск; плитка сводки', async () => {
     fakeApi(
       replace('GET /api/companies/7/builders', () => ({
         status: 200,
@@ -348,7 +348,7 @@ describe('Карточка компании', () => {
               roles: ['general_contractor'],
               sources: ['registry', 'publications'],
               objects: [
-                { projectId: 60, name: 'Река', role: 'general_contractor', sources: ['registry'], isCurrent: true, registryAsOf: '2026-09-30', lastPublication: null, mentions: null },
+                { projectId: 60, name: 'Река', role: 'general_contractor', sources: ['registry'], isCurrent: true, registryAsOf: '2026-09-30', registryFetchedAt: '2026-10-02T08:00:00Z', lastPublication: null, mentions: null },
                 { projectId: 61, name: 'Парк', role: 'general_contractor', sources: ['publications'], isCurrent: true, registryAsOf: null, lastPublication: '2026-10-01T10:00:00Z', mentions: 3 },
               ],
               lastSeen: '2026-10-01T10:00:00Z',
@@ -374,12 +374,30 @@ describe('Карточка компании', () => {
 
     const section = (await screen.findByRole('heading', { name: 'Кто строит для компании' })).closest('section')!;
     expect(within(section).getByRole('link', { name: 'СУ-10' }).getAttribute('href')).toBe('/company/10');
-    expect(within(section).getByText('найдена по ИНН из ДОМ.РФ')).toBeTruthy();
-    expect(within(section).getByText('в ДОМ.РФ: ООО СУ-10')).toBeTruthy();
-    expect(within(section).getByText(/ДОМ\.РФ на 30\.09\.2026/)).toBeTruthy();
-    expect(within(section).getByText(/публикации: 3, последняя 01\.10\.2026/)).toBeTruthy();
-    expect(within(section).getByRole('link', { name: 'Найти по ИНН' }).getAttribute('href')).toBe('/?q=7704412966');
-    expect(within(section).getByText(/не проверенный договор/)).toBeTruthy();
+    expect(within(section).getByText('на 2 объектах')).toBeTruthy();
+    expect(within(section).getByText('на 1 объекте · карточки в портале нет')).toBeTruthy();
+    // В строке — ни ИНН, ни объектов, ни источников: всё это окном.
+    expect(within(section).queryByText(/7736255508/)).toBeNull();
+    expect(within(section).queryByRole('link', { name: '«Река»' })).toBeNull();
+    expect(within(section).queryByRole('link', { name: 'Найти по ИНН' })).toBeNull();
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Подробнее: СУ-10' }));
+    let dialog = screen.getByRole('dialog', { name: 'СУ-10' });
+    expect(within(dialog).getByText('найдена по ИНН из ДОМ.РФ')).toBeTruthy();
+    expect(within(dialog).getByText('ООО СУ-10')).toBeTruthy();
+    expect(within(dialog).getByRole('heading', { name: 'Объекты — 2' })).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: '«Река»' }).getAttribute('href')).toBe('/projects/60');
+    expect(within(dialog).getByText('ДОМ.РФ — сведения на 30.09.2026, прочитано 02.10.2026')).toBeTruthy();
+    expect(within(dialog).getByText('Публикации: 3, последняя 01.10.2026')).toBeTruthy();
+    expect(within(dialog).getByText(/не проверенный договор/)).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Карточка компании' }).getAttribute('href')).toBe('/company/10');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Подробнее: ООО Новый' }));
+    dialog = await screen.findByRole('dialog', { name: 'ООО Новый' });
+    expect(within(dialog).getByText('В портале нет компании с ИНН 7704412966')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Добавить компанию' })).toBeTruthy();
+    expect(within(dialog).queryByRole('link', { name: 'Карточка компании' })).toBeNull();
 
     const tile = screen.getByText('Генподрядчики').closest('div')!;
     expect(within(tile).getByText('2')).toBeTruthy();

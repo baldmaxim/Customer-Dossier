@@ -14,7 +14,7 @@ const su10 = { id: 10, name: 'СУ-10' };
 describe('кто строит для компании (T24D-02)', () => {
   it('ДОМ.РФ по ИНН и публикация о той же компании — одна строка с двумя источниками', () => {
     const registry: IRegistryBuilderEntry[] = [
-      { projectId: 1, name: 'ООО СУ-10', inn: '7736255508', asOf: '2026-09-30', company: su10, match: 'identifier' },
+      { projectId: 1, name: 'ООО СУ-10', inn: '7736255508', asOf: '2026-09-30', fetchedAt: '2026-10-02T08:00:00.000Z', company: su10, match: 'identifier' },
     ];
     const publications: IPublicationBuilderRow[] = [
       { projectId: 2, companyId: 10, companyName: 'СУ-10', inn: '7736255508', role: 'general_contractor', isCurrent: true, mentions: 3, lastPublication: new Date('2026-10-01T10:00:00Z') },
@@ -31,15 +31,15 @@ describe('кто строит для компании (T24D-02)', () => {
       registryNames: ['ООО СУ-10'],
       lastSeen: '2026-10-01T10:00:00.000Z',
     });
-    expect(item!.objects.map(o => [o.name, o.sources, o.mentions])).toEqual([
-      ['ЖК Акценты', ['publications'], 3],
-      ['ЖК Река', ['registry'], null],
+    expect(item!.objects.map(o => [o.name, o.sources, o.mentions, o.registryFetchedAt])).toEqual([
+      ['ЖК Акценты', ['publications'], 3, null],
+      ['ЖК Река', ['registry'], null, '2026-10-02T08:00:00.000Z'],
     ]);
   });
 
   it('генподрядчик без карточки в портале — по ИНН, без ссылки', () => {
     const registry: IRegistryBuilderEntry[] = [
-      { projectId: 1, name: 'ООО Новый', inn: '7704412966', asOf: null, company: null, match: null },
+      { projectId: 1, name: 'ООО Новый', inn: '7704412966', asOf: null, fetchedAt: null, company: null, match: null },
     ];
     expect(buildBuilders(objects, registry, [], new Set())).toEqual([
       expect.objectContaining({ key: 'inn:7704412966', name: 'ООО Новый', company: null, match: null, inn: '7704412966' }),
@@ -48,7 +48,7 @@ describe('кто строит для компании (T24D-02)', () => {
 
   it('генподрядчик из своей группы помечен: строит своими силами', () => {
     const registry: IRegistryBuilderEntry[] = [
-      { projectId: 1, name: 'ООО СЗ Свой', inn: '7704412966', asOf: null, company: { id: 5, name: 'СЗ Свой' }, match: 'identifier' },
+      { projectId: 1, name: 'ООО СЗ Свой', inn: '7704412966', asOf: null, fetchedAt: null, company: { id: 5, name: 'СЗ Свой' }, match: 'identifier' },
     ];
     expect(buildBuilders(objects, registry, [], new Set([5]))[0]!.inGroup).toBe(true);
   });
