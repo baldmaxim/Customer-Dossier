@@ -12,6 +12,7 @@
 //   --reextract --limit N [--source key] [--doc id]
 //                              поставить запуски по последним редакциям (карточки не меняются)
 //   --retry [--limit N]        новые запуски вместо failed/partial/cancelled и очереди другой конфигурации (прежние не меняются, ссылка previous_run_id)
+//   --retry --stale-only       только ждущие запуски прежней конфигурации (очередь и прерванные) — после смены отпечатка
 //   --preview <набор>          что изменит публикация набора
 //   --publish <набор> [--allow-stale]  опубликовать набор (одна транзакция)
 //   --stats                    состояние legacy-очереди и доля ошибок
@@ -117,7 +118,7 @@ const main = async (): Promise<void> => {
   if (has('--errors')) return showErrors();
   if (has('--merges')) return showMerges();
   if (has('--retry-skipped')) return retrySkipped(has('--all'));
-  if (has('--retry')) return retryRunsCommand(Number(argValue('--limit') ?? 20));
+  if (has('--retry')) return retryRunsCommand(Number(argValue('--limit') ?? 20), { staleOnly: has('--stale-only') });
   if (has('--runs')) return showRuns(Number(argValue('--limit') ?? 20));
   if (has('--queue')) return showReviewQueue(argValue('--kind'), Number(argValue('--limit') ?? 30));
   if (has('--headlines')) return headlinesCommand(Number(argValue('--limit') ?? env.HEADLINE_BATCH_SIZE));

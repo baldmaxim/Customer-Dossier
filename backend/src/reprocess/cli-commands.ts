@@ -102,27 +102,42 @@ export const reextractCommand = async (options: {
   );
 };
 
-export const retryRunsCommand = async (limit: number): Promise<void> => {
-  const provider = lmStudioProvider();
-  const modelIdentityHash = buildFingerprint(provider, defaultChunkerParams()).modelIdentityHash;
+/**
+ * Последние запуски редакций, которые `--retry` заменит новыми. staleOnly — только ждущие запуски прежней
+ * конфигурации (поставленные или прерванные с истёкшей арендой): после смены отпечатка их не берёт исполнитель, а
+ * автопостановка не трогает редакцию с запуском. Упавшие и отменённые (отзыв допуска) staleOnly не трогает.
+ */
+export const runsToRetry = async (limit: number, options: { staleOnly: boolean }): Promise<number[]> => {
+  const modelIdentityHash = buildFingerprint(lmStudioProvider(), defaultChunkerParams()).modelIdentityHash;
   const rows = (
     await getPool().query<{ id: number }>(
       `SELECT er.id FROM extraction_runs er
-       WHERE (er.status IN ('failed', 'partial', 'cancelled')
-              OR (er.status = 'queued' AND er.fingerprint_json->>'modelIdentityHash' IS DISTINCT FROM $2))
+       WHERE ((NOT $3::boolean AND er.status IN ('failed', 'partial', 'cancelled'))
+              OR ((er.status = 'queued' OR (er.status = 'running' AND er.lease_expires_at < now()))
+                  AND er.fingerprint_json->>'modelIdentityHash' IS DISTINCT FROM $2))
          AND NOT EXISTS (
            SELECT 1 FROM extraction_runs newer
            WHERE newer.revision_id = er.revision_id AND newer.id > er.id)
        ORDER BY er.id DESC LIMIT $1`,
-      [Math.min(limit, REEXTRACT_MAX_LIMIT), modelIdentityHash],
+      [Math.min(limit, REEXTRACT_MAX_LIMIT), modelIdentityHash, options.staleOnly],
     )
   ).rows;
+  return rows.map(r => Number(r.id));
+};
+
+export const retryRunsCommand = async (limit: number, options: { staleOnly: boolean } = { staleOnly: false }): Promise<void> => {
+  const provider = lmStudioProvider();
+  const ids = await runsToRetry(limit, options);
   let queued = 0;
-  for (const row of rows) {
-    const result = await retryRun(row.id, provider, 'cli-retry');
+  for (const id of ids) {
+    const result = await retryRun(id, provider, 'cli-retry');
     if (result.outcome === 'queued') queued += 1;
   }
-  console.log(`[retry] новых запусков вместо провалившихся: ${queued} (прежние запуски не изменены)`);
+  console.log(
+    options.staleOnly
+      ? `[retry] запусков прежней конфигурации заменено: ${queued} из ${ids.length} (упавшие и отменённые не тронуты)`
+      : `[retry] новых запусков вместо провалившихся: ${queued} (прежние запуски не изменены)`,
+  );
 };
 
 const printPassResults = (results: IPassResult[]): void => {

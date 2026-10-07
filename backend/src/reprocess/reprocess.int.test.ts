@@ -12,7 +12,8 @@ import { storeDocument } from '../ingest/store.js';
 import type { ILlmResult } from '../llm/client.js';
 import { recordReviewDecision } from '../assertions/repository.js';
 import { PublicationConflictError, previewCandidateSet, publishCandidateSet } from './publish.js';
-import type { IChunkerParams, IModelProvider } from './provider.js';
+import { runsToRetry } from './cli-commands.js';
+import { lmStudioProvider, type IChunkerParams, type IModelProvider } from './provider.js';
 import { RUN_LIST_STATES, revisionStatesSql } from './revisionStates.js';
 import { claimNextRun, enqueueRun, processRun, retryRun, StaleLeaseError, type IRunResult } from './runs.js';
 import { company, event, extraction, fakeProvider, INN_A, INN_B, link, ok, project } from './__fixtures__/extraction.js';
@@ -776,6 +777,47 @@ describe('этап 11: идентичность исполнения, допус
     expect(await runRow(oldId)).toMatchObject({ status: 'cancelled', error: expect.stringMatching(/^config_mismatch/) });
     expect((await runRow((retry as { runId: number }).runId)).previous_run_id).toBe(oldId);
     expect(a.calls).toHaveLength(0);
+  });
+
+  it('прерванный выкладкой запуск прежней конфигурации (running, аренда истекла) заменяется; с живой арендой — нет', async () => {
+    const item = await store(sourceMain, body('stale-running'));
+    const a = fakeProvider(irrelevant, 'stage11-old-running');
+    const b = fakeProvider(irrelevant, 'stage11-new-running');
+    const oldId = await enqueue(item.revisionId, a, small);
+    const claim = await claimNextRun('w-old', { runId: oldId, provider: a, leaseMs: 60_000 });
+    expect(claim).not.toBeNull();
+    // Исполнитель ещё держит аренду — запуск не трогаем.
+    expect((await retryRun(oldId, b, 'test')).outcome).toBe('not_found');
+
+    await pool().query(`UPDATE extraction_runs SET lease_expires_at = now() - interval '1 second' WHERE id = $1`, [oldId]);
+    const retry = await retryRun(oldId, b, 'test');
+    expect(retry.outcome).toBe('queued');
+    const old = (
+      await pool().query<{ status: string; error: string | null; lease_owner: string | null; fencing_token: string }>(
+        'SELECT status, error, lease_owner, fencing_token FROM extraction_runs WHERE id = $1',
+        [oldId],
+      )
+    ).rows[0]!;
+    expect(old).toMatchObject({ status: 'cancelled', lease_owner: null, error: expect.stringMatching(/^config_mismatch/) });
+    expect(Number(old.fencing_token)).toBe(claim!.fencingToken + 1);
+    expect((await runRow((retry as { runId: number }).runId)).previous_run_id).toBe(oldId);
+    expect(a.calls).toHaveLength(0);
+  });
+
+  it('--retry --stale-only отбирает только ждущие запуски прежней конфигурации; упавшие и отменённые — только голый --retry', async () => {
+    const old = fakeProvider(irrelevant, 'stage11-stale-only-old');
+    const staleId = await enqueue((await store(sourceMain, body('stale-only-queued'))).revisionId, old, small);
+    const failedId = await enqueue((await store(sourceMain, body('stale-only-failed'))).revisionId, old, small);
+    await pool().query(`UPDATE extraction_runs SET status = 'failed', finished_at = now(), error = 'тест' WHERE id = $1`, [failedId]);
+    const currentId = await enqueue((await store(sourceMain, body('stale-only-current'))).revisionId, lmStudioProvider(), small);
+
+    const stale = await runsToRetry(200, { staleOnly: true });
+    expect(stale).toContain(staleId);
+    expect(stale).not.toContain(failedId);
+    expect(stale).not.toContain(currentId);
+    const all = await runsToRetry(200, { staleOnly: false });
+    expect(all).toEqual(expect.arrayContaining([staleId, failedId]));
+    expect(all).not.toContain(currentId);
   });
 
   it('T11-03: ИИ-допуск отозван после первого из нескольких чанков — следующий не отправлен, cancelled, набора нет; повтор не ставится', async () => {

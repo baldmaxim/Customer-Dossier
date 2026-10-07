@@ -580,29 +580,34 @@ const finalizeRun = async (
 
 /**
  * Повтор провалившегося, частичного или отменённого запуска — новым запуском со ссылкой на прежний; прежний не меняется.
- * Поставленный, но не начатый запуск другой конфигурации (в т. ч. historical, до этапа 11) заменяется: прежний
- * помечается cancelled с причиной, новый ставится текущей конфигурацией. Ответы прежних чанков в новый запуск не переносятся.
- * Отзыв допуска проверяет enqueueRun: при отозванном допуске повтор не ставится.
+ * Ждущий запуск другой конфигурации (в т. ч. historical, до этапа 11) заменяется: поставленный и не начатый либо
+ * прерванный — running с истёкшей арендой (процесс остановили посреди разбора, а после выкладки исполнитель другой
+ * конфигурации его не берёт). Прежний помечается cancelled с причиной и fencing +1, новый ставится текущей конфигурацией.
+ * Ответы прежних чанков в новый запуск не переносятся. Отзыв допуска проверяет enqueueRun: при отозванном допуске повтор не ставится.
  */
 export const retryRun = async (runId: number, provider: IModelProvider, requestedBy: string): Promise<EnqueueResult> => {
   const run = (
-    await getPool().query<{ revision_id: number; status: string; fingerprint: string; fingerprint_json: { chunker: IChunkerParams } }>(
-      'SELECT revision_id, status, fingerprint, fingerprint_json FROM extraction_runs WHERE id = $1',
+    await getPool().query<{ revision_id: number; status: string; fingerprint: string; fingerprint_json: { chunker: IChunkerParams }; lease_expired: boolean }>(
+      `SELECT revision_id, status, fingerprint, fingerprint_json, coalesce(lease_expires_at < now(), false) AS lease_expired
+       FROM extraction_runs WHERE id = $1`,
       [runId],
     )
   ).rows[0];
   if (!run) return { outcome: 'not_found' };
   const chunker = run.fingerprint_json.chunker ?? defaultChunkerParams();
-  const staleQueued = run.status === 'queued' && buildFingerprint(provider, chunker).fingerprint !== run.fingerprint;
-  if (!['failed', 'partial', 'cancelled'].includes(run.status) && !staleQueued) return { outcome: 'not_found' };
+  const waiting = run.status === 'queued' || (run.status === 'running' && run.lease_expired);
+  const stale = waiting && buildFingerprint(provider, chunker).fingerprint !== run.fingerprint;
+  if (!['failed', 'partial', 'cancelled'].includes(run.status) && !stale) return { outcome: 'not_found' };
 
   return withTransaction(async client => {
     const result = await enqueueRun(client, { revisionId: run.revision_id, provider, chunker, requestedBy, previousRunId: runId });
-    if (staleQueued && result.outcome === 'queued') {
+    if (stale && result.outcome === 'queued') {
+      // fencing +1: прерванный держатель аренды, если вернётся, ничего не запишет.
       await client.query(
-        `UPDATE extraction_runs SET status = 'cancelled', finished_at = now(),
+        `UPDATE extraction_runs SET status = 'cancelled', finished_at = now(), lease_owner = NULL, lease_expires_at = NULL,
+                fencing_token = fencing_token + 1,
                 error = 'config_mismatch: заменён запуском #' || $2::text || ' текущей конфигурации'
-         WHERE id = $1 AND status = 'queued'`,
+         WHERE id = $1 AND (status = 'queued' OR (status = 'running' AND lease_expires_at < now()))`,
         [runId, result.runId],
       );
     }
