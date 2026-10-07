@@ -21,6 +21,7 @@ import { query } from '../db/pool.js';
 import { egrulNamesOf } from '../focus/identity.js';
 import { mapReq, summaryOf } from '../focus/map.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { registerReadCache } from '../utils/readCaches.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
 import { ttlCache } from '../utils/ttlCache.js';
 
@@ -384,8 +385,8 @@ export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogRespons
 
 /**
  * Каталог считается по всей базе, а вкладки и сортировки главной перебирают одни и те же наборы: одинаковый запрос
- * 30 с отдаётся из памяти (07.10.2026). Любое изменение через API (не GET, ответ < 400) сбрасывает кэш сразу —
- * «На контроле», заведение компании, слияние видны без ожидания (app.ts); фоновые сбор и разбор — не позже 30 с.
+ * 30 с отдаётся из памяти (07.10.2026). Любое изменение через API сбрасывает кэш сразу (utils/readCaches.ts) —
+ * «На контроле», заведение компании, слияние видны без ожидания; фоновые сбор и разбор — не позже 30 с.
  */
 const catalogCache = ttlCache(loadCatalog, {
   ttlMs: 30_000,
@@ -393,7 +394,7 @@ const catalogCache = ttlCache(loadCatalog, {
   keyOf: q => JSON.stringify([q.view, q.watch, q.role, q.sort]),
 });
 
-export const invalidateCatalogCache = (): void => catalogCache.clear();
+registerReadCache(catalogCache.clear);
 
 export const catalogRouter = asyncRouter();
 

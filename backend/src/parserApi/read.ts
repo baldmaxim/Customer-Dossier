@@ -27,12 +27,18 @@ export const loadParserApiStates = async (db: DbExecutor, inn: string): Promise<
       `SELECT dataset, outcome, checked_at, next_check_at, attempt_count, last_error FROM parser_api_checks WHERE inn = $1`,
       [inn],
     ),
+    // Последний снимок каждого набора — по индексу (inn, dataset, fetched_at DESC, id DESC), 07.10.2026: DISTINCT ON
+    // вычислял missing из payload каждого прежнего снимка (дела картотеки — крупные), а нужен только последний.
     db.query<{ dataset: ParserApiDataset; fetched_at: Date; complete: boolean; missing: string[] | null }>(
-      `SELECT DISTINCT ON (dataset) dataset, fetched_at, complete,
-              ARRAY(SELECT jsonb_array_elements_text(coalesce(payload->'missing', '[]'::jsonb))) AS missing
-       FROM parser_api_records WHERE inn = $1
-       ORDER BY dataset, fetched_at DESC, id DESC`,
-      [inn],
+      `SELECT d.dataset, r.fetched_at, r.complete,
+              ARRAY(SELECT jsonb_array_elements_text(coalesce(r.payload->'missing', '[]'::jsonb))) AS missing
+       FROM unnest($2::text[]) AS d(dataset)
+       JOIN LATERAL (
+         SELECT fetched_at, complete, payload FROM parser_api_records
+         WHERE inn = $1 AND dataset = d.dataset
+         ORDER BY fetched_at DESC, id DESC LIMIT 1
+       ) r ON true`,
+      [inn, [...PARSER_API_DATASETS]],
     ),
   ]);
   return PARSER_API_DATASETS.map(dataset => {

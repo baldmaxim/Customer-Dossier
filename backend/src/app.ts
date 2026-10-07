@@ -23,7 +23,7 @@ import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
-import { catalogRouter, invalidateCatalogCache } from './api/companyCatalog.js';
+import { catalogRouter } from './api/companyCatalog.js';
 import { companyManageRouter } from './api/companyManage.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { graphRouter } from './api/graph.routes.js';
@@ -31,6 +31,7 @@ import { contractorsRouter } from './api/contractors.routes.js';
 import { manualRouter } from './api/manual.routes.js';
 import { reprocessRouter } from './api/reprocess.routes.js';
 import { revisionsRouter } from './api/revisions.routes.js';
+import { invalidateReadCaches } from './utils/readCaches.js';
 
 export interface ICreateAppOptions {
   allowedOrigins?: readonly string[];
@@ -169,11 +170,11 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   // Локально (AUTH_MODE=none) запрос идёт от локального оператора со всеми правами: защита —
   // loopback, Host и Origin; изменение без правила в таблице прав запрещено и здесь.
   app.use('/api', createAttachAuth(auth), createRequireAccess(auth));
-  // Изменение через API сбрасывает кэш каталога (api/companyCatalog.ts): после ответа, только успешное.
+  // Изменение через API сбрасывает кэши чтения — каталог, «Новое» (utils/readCaches.ts): после ответа, только успешное.
   app.use('/api', (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.on('finish', () => {
-        if (res.statusCode < 400) invalidateCatalogCache();
+        if (res.statusCode < 400) invalidateReadCaches();
       });
     }
     next();

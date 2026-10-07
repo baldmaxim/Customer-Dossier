@@ -119,16 +119,28 @@ interface IShiftRow {
   prev: string;
 }
 
+// Снимки окна и по одному последнему до окна на дом (07.10.2026): lag по ним даёт тот же prev, что по всей истории,
+// а JSON разбирается только у них. Раньше разбирались все снимки всех домов окна — при перечитывании карточек раз
+// в 7 дней это почти весь реестр на каждый запрос ленты. Индексы — миграция 051.
 const SHIFTS_SQL = `
   WITH houses AS (
     SELECT DISTINCT source_id, external_ref FROM registry_records WHERE record_type = 'object' AND fetched_at >= $1
+  ),
+  picked AS (
+    SELECT r.id FROM registry_records r WHERE r.record_type = 'object' AND r.fetched_at >= $1
+    UNION ALL
+    SELECT b.id FROM houses h
+    CROSS JOIN LATERAL (
+      SELECT r.id FROM registry_records r
+      WHERE r.record_type = 'object' AND r.source_id = h.source_id AND r.external_ref = h.external_ref AND r.fetched_at < $1
+      ORDER BY r.fetched_at DESC, r.id DESC LIMIT 1
+    ) b
   ),
   snaps AS (
     SELECT r.id, r.source_id, r.external_ref, r.project_id, r.fetched_at, r.payload->'identity'->>'name' AS name,
            (SELECT f->>'value' FROM jsonb_array_elements(r.payload->'fields') f
              WHERE f->>'label' IN ('Сдача дома', 'Срок сдачи') AND coalesce(f->>'value', '') <> '' LIMIT 1) AS completion
-    FROM registry_records r JOIN houses h USING (source_id, external_ref)
-    WHERE r.record_type = 'object'
+    FROM registry_records r JOIN picked USING (id)
   ),
   ordered AS (
     SELECT *, lag(completion) OVER (PARTITION BY source_id, external_ref ORDER BY fetched_at, id) AS prev FROM snaps
@@ -316,11 +328,12 @@ export const loadNews = async (db: DbExecutor, options: { since: Date; scope: Ne
     }
   }
 
+  // При равном времени — по ключу: порядок строк из базы не задан, и лента не должна переставляться между запросами.
   const all = [
     ...newProjectItems(projects.rows, watched, scope),
     ...shiftItems(shifts.rows, developers, watched, scope),
     ...recordItems(pairs.rows, byInn, watched, scope),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  ].sort((a, b) => b.at.localeCompare(a.at) || a.key.localeCompare(b.key));
   const counts = Object.fromEntries(NEWS_KINDS.map(k => [k, all.filter(i => i.kind === k).length])) as Record<NewsKind, number>;
   const kinds = options.kinds && options.kinds.length > 0 ? new Set(options.kinds) : null;
   return { format: NEWS_VERSION, since: since.toISOString(), scope, items: kinds ? all.filter(i => kinds.has(i.kind)) : all, counts };

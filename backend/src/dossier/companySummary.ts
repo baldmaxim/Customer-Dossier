@@ -96,14 +96,16 @@ export const loadCompanySummary = async (exec: DbExecutor, companyId: number, no
 
   const coParticipants = (
     await exec.query<{ companyId: number; companyName: string; projectId: number; projectName: string; roleOther: string | null; roleThis: string | null }>(
-      `SELECT DISTINCT o.id AS "companyId", o.name AS "companyName", p.id AS "projectId", p.name AS "projectName",
-              CASE WHEN v.company_a_id = $1 THEN v.role_b ELSE v.role_a END AS "roleOther",
-              CASE WHEN v.company_a_id = $1 THEN v.role_a ELSE v.role_b END AS "roleThis"
-       FROM co_participations_v v
-       JOIN companies o ON o.id = CASE WHEN v.company_a_id = $1 THEN v.company_b_id ELSE v.company_a_id END AND o.merged_into_id IS NULL
-       JOIN projects p ON p.id = v.project_id AND p.merged_into_id IS NULL
-       WHERE $1 IN (v.company_a_id, v.company_b_id)
-       ORDER BY p.name, o.name LIMIT 100`,
+      // От участия самой компании, а не через co_participations_v (07.10.2026): условие «$1 IN (a, b)» по виду
+      // с DISTINCT строило все пары всех компаний на каждый запрос. Строки те же — DISTINCT по тем же полям.
+      `SELECT DISTINCT oc.id AS "companyId", oc.name AS "companyName", p.id AS "projectId", p.name AS "projectName",
+              o.role AS "roleOther", me.role AS "roleThis"
+       FROM card_participations_v me
+       JOIN card_participations_v o ON o.project_id = me.project_id AND o.company_id <> me.company_id
+       JOIN companies oc ON oc.id = o.company_id AND oc.merged_into_id IS NULL
+       JOIN projects p ON p.id = me.project_id AND p.merged_into_id IS NULL
+       WHERE me.company_id = $1
+       ORDER BY p.name, oc.name LIMIT 100`,
       [companyId],
     )
   ).rows;

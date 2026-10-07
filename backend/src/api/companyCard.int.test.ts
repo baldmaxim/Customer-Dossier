@@ -14,7 +14,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 
 import { createApp } from '../app.js';
-import { invalidateCatalogCache } from './companyCatalog.js';
+import { invalidateReadCaches } from '../utils/readCaches.js';
 import { closeDb, getPool } from '../db/pool.js';
 import { insertSyntheticSource, resetAndMigrate } from '../__tests__/integration/db.js';
 import { storeDocument } from '../ingest/store.js';
@@ -242,14 +242,14 @@ describe('каталог компаний от юрлица', () => {
 
   it('«на контроле»: имя без ИНН переходит в юрлица, фильтр оставляет только отмеченные', async () => {
     await getPool().query(`INSERT INTO company_watch (company_id, added_by) VALUES ($1, 'test')`, [partnerId]);
-    // Запись мимо API: кэш каталога сбрасывается явно (через API его сбрасывает app.ts).
-    invalidateCatalogCache();
+    // Запись мимо API: кэши чтения сбрасываются явно (через API их сбрасывает app.ts).
+    invalidateReadCaches();
     const watched = await call('/api/catalog/companies?watch=1');
     expect((watched.body.items as Row[]).map(r => r.companyId)).toEqual([partnerId]);
     const all = await call('/api/catalog/companies');
     expect((all.body.items as Row[])[0]).toMatchObject({ companyId: partnerId, watched: true });
     await getPool().query(`UPDATE company_watch SET removed_at = now(), removed_by = 'test' WHERE company_id = $1`, [partnerId]);
-    invalidateCatalogCache();
+    invalidateReadCaches();
   });
 
   it('фильтр роли и неверный вид', async () => {
