@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { getPool, query, queryOne } from '../db/pool.js';
 import { normalizeName } from '../resolve/normalize.js';
 import { loadCardExtras } from '../companies/cardExtras.js';
+import { membershipCtes } from '../companies/groupMembership.js';
 import { loadCompanyBuilders } from './companyBuilders.js';
 import { loadCompanyDelivery } from '../registry/delivery.js';
 import { loadCompanyObjects } from './companyObjects.js';
@@ -59,21 +60,20 @@ companiesRouter.get('/', async (req, res) => {
     // порядком строк; с 02.10.2026 — ещё группой и юридическим адресом со страницы застройщика ДОМ.РФ и
     // группой, в которую компания входит: четыре «СЗ ДОНСТРОЙ» из Самары, Иркутска и Ростова иначе неотличимы.
     // Порядок: совпадение по началу названия — раньше похожих по написанию, внутри — более полные карточки.
-    `SELECT * FROM (
+    `WITH ${membershipCtes()},
+     mem_of AS MATERIALIZED (
+       SELECT m.member, string_agg(DISTINCT g.name, ', ') AS names
+       FROM mem m JOIN companies g ON g.id = m.head AND g.merged_into_id IS NULL GROUP BY m.member
+     ),
+     mem_count AS MATERIALIZED (SELECT head, count(DISTINCT member)::int AS n FROM mem GROUP BY head)
+     SELECT * FROM (
        SELECT c.id, c.name, c.city, c.legal_form AS "legalForm", c.entity_type AS "entityType",
               coalesce((SELECT array_agg(i.identifier_type || ' ' || i.value ORDER BY i.id) FROM entity_identifiers i
                         WHERE i.company_id = c.id AND i.status = 'active'), '{}') AS identifiers,
               snap.projects, snap.publications,
               reg.group_name AS "registryGroup", reg.address AS "registryAddress",
-              (SELECT string_agg(DISTINCT g.name, ', ') FROM assertions a
-                 JOIN companies g ON g.id = a.object_company_id AND g.merged_into_id IS NULL
-                WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.subject_company_id = c.id
-                  AND a.status <> 'rejected'
-                  AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')) AS "memberOf",
-              (SELECT count(DISTINCT a.subject_company_id)::int FROM assertions a
-                WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.object_company_id = c.id
-                  AND a.status <> 'rejected'
-                  AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')) AS members,
+              -- Группа и её участники — общим правилом портала (companies/groupMembership.ts), как у каталога и карточки.
+              mo.names AS "memberOf", mc.n AS members,
               (SELECT a.alias FROM entity_aliases a WHERE a.entity_kind = 'company' AND a.entity_id = c.id
                  AND a.alias_latin % $1 ORDER BY similarity(a.alias_latin, $1) DESC LIMIT 1) AS "matchedAlias",
               (SELECT count(*)::int FROM companies h WHERE h.merged_into_id IS NULL AND h.name_key = c.name_key AND h.id <> c.id) AS homonyms,
@@ -88,6 +88,8 @@ companiesRouter.get('/', async (req, res) => {
                           WHERE a.entity_kind = 'company' AND a.entity_id = c.id), 0)
               ) END AS score
        FROM companies c
+       LEFT JOIN mem_of mo ON mo.member = c.id
+       LEFT JOIN mem_count mc ON mc.head = c.id
        LEFT JOIN LATERAL (
          SELECT s.projects, s.publications FROM company_signal_snapshots s
          WHERE s.company_id = c.id AND s.refresh_id = (SELECT id FROM signal_active_refresh_v)

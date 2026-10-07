@@ -8,6 +8,7 @@
 // Допуск — ИИ-обработка источника наш.дом.рф (ingest/policy.ts): проверяется до прохода и после каждого ответа.
 // Идёт тем же заданием, что разбор и темы: два параллельных запроса к локальной модели делят VRAM.
 
+import { companyTaxIdSql } from '../../companies/identity.js';
 import { env } from '../../config/env.js';
 import { query, queryOne } from '../../db/pool.js';
 import { extractDomRfHint, type ILlmResult } from '../../llm/client.js';
@@ -68,10 +69,7 @@ interface ILinkRow {
 export const loadDomRfHintInput = async (linkId: number): Promise<IDomRfHintInput | null> => {
   const link = await queryOne<ILinkRow>(
     `SELECT l.kind, l.external_ref, l.name, l.details, c.id AS company_id, c.name AS company_name, c.entity_type,
-            (SELECT ei.value FROM entity_identifiers ei
-              WHERE ei.company_id = c.id AND ei.status = 'active' AND ei.validation_status = 'checksum_valid'
-                AND ei.identifier_type IN ('inn', 'ogrn')
-              ORDER BY (ei.identifier_type = 'inn') DESC, ei.id LIMIT 1) AS tax_id,
+            ${companyTaxIdSql('c.id')} AS tax_id,
             d.inn, d.group_name
      FROM domrf_company_links l
      JOIN companies c ON c.id = l.company_id

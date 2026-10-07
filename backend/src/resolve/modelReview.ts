@@ -14,8 +14,9 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { loadGroupHeads, loadGroupMembers } from '../companies/groupMembership.js';
 import { env } from '../config/env.js';
-import { query, queryOne } from '../db/pool.js';
+import { getPool, query, queryOne } from '../db/pool.js';
 import { extractEntityMatch, type ILlmResult } from '../llm/client.js';
 import { ENTITY_MATCH_PROMPT_VERSION, formatEntityMatchInput, type IEntityCard } from '../llm/entityMatch/prompt.js';
 import type { EntityMatchVerdict, IEntityMatch } from '../llm/entityMatch/schema.js';
@@ -94,16 +95,12 @@ const companyExtras = async (companyId: number): Promise<string[]> => {
      ORDER BY p.name LIMIT $2`,
     [companyId, LIST_MAX],
   );
-  const groups = await query<{ name: string; direction: string }>(
-    `SELECT DISTINCT c.name, CASE WHEN a.subject_company_id = $1 THEN 'входит в группу' ELSE 'участник группы' END AS direction
-     FROM assertions a
-     JOIN companies c ON c.id = CASE WHEN a.subject_company_id = $1 THEN a.object_company_id ELSE a.subject_company_id END
-     WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.status <> 'rejected'
-       AND (a.subject_company_id = $1 OR a.object_company_id = $1)
-       AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
-     LIMIT $2`,
-    [companyId, LIST_MAX],
-  );
+  // Группа — общим правилом портала (companies/groupMembership.ts), тем же, что каталог и карточка.
+  const [heads, members] = await Promise.all([loadGroupHeads(getPool(), [companyId]), loadGroupMembers(getPool(), [companyId])]);
+  const groups = [
+    ...heads.map(g => ({ name: g.name, direction: 'входит в группу' })),
+    ...members.map(g => ({ name: g.name, direction: 'участник группы' })),
+  ].slice(0, LIST_MAX);
   const domrf = await query<{ kind: string; name: string | null; inn: string | null; group_name: string | null }>(
     `SELECT l.kind, coalesce(d.name, l.name) AS name, d.inn, d.group_name
      FROM domrf_company_links l LEFT JOIN domrf_cards d ON d.kind = l.kind AND d.external_ref = l.external_ref

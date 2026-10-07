@@ -17,6 +17,8 @@
 
 import { z } from 'zod';
 
+import { membershipCtes } from '../companies/groupMembership.js';
+import { IDS_CTE } from '../companies/identity.js';
 import { query } from '../db/pool.js';
 import { egrulNamesOf } from '../focus/identity.js';
 import { mapReq, summaryOf } from '../focus/map.js';
@@ -89,54 +91,21 @@ export interface ICatalogResponse {
 }
 
 // Кто в чью «семью» входит (05.10.2026, просьба владельца: «СЗ — под главную группу или компанию»):
-//  - mem       — «входит в группу» (corporate_relation/member_of_group) из реестра с действующим доказательством или
-//                из опубликованных наборов, плюс СЗ, чья страница группы в ДОМ.РФ подтверждена как компания портала;
+//  - mem       — пары (участник, группа) по общему правилу портала (companies/groupMembership.ts: «входит в группу» из
+//                реестра или опубликованных наборов плюс СЗ, чья страница группы ДОМ.РФ подтверждена как компания портала);
+//  - ids       — реквизит по общему правилу (companies/identity.ts);
 //  - vgroups   — группы только по реестру ДОМ.РФ: страница группы есть у СЗ, но как компания портала не подтверждена
 //                (решение «Это он» на экране ДОМ.РФ) — показываются строкой без своей карточки;
 //  - base.nested — юрлицо входит в семью: в «Компаниях» оно не отдельной строкой, а внутри главной.
 const BASE_SQL = `
-  ids AS MATERIALIZED (
-    SELECT ei.company_id,
-           min(ei.value) FILTER (WHERE ei.identifier_type = 'inn') AS inn,
-           min(ei.value) FILTER (WHERE ei.identifier_type IN ('ogrn', 'ogrnip')) AS ogrn
-    FROM entity_identifiers ei
-    WHERE ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.identifier_type IN ('inn', 'ogrn', 'ogrnip')
-    GROUP BY ei.company_id
-  ),
+  ${IDS_CTE.trim()},
   watched AS MATERIALIZED (
     SELECT company_id FROM company_watch WHERE removed_at IS NULL
   ),
   dismissed AS MATERIALIZED (
     SELECT company_id FROM company_dismissals WHERE revoked_at IS NULL
   ),
-  reg_dev AS MATERIALIZED (
-    SELECT DISTINCT ON (r.company_id) r.company_id, d.group_ref,
-           coalesce(d.group_name, r.payload->'identity'->>'groupName') AS group_name
-    FROM registry_records r
-    JOIN domrf_cards d ON d.kind = 'developer' AND d.external_ref = r.external_ref
-    JOIN companies c ON c.id = r.company_id AND c.merged_into_id IS NULL
-    WHERE r.record_type = 'developer'
-    ORDER BY r.company_id, r.fetched_at DESC
-  ),
-  group_heads AS MATERIALIZED (
-    SELECT l.external_ref AS group_ref, min(coalesce(c.merged_into_id, c.id)) AS head,
-           count(DISTINCT coalesce(c.merged_into_id, c.id)) AS n
-    FROM domrf_company_links l JOIN companies c ON c.id = l.company_id
-    WHERE l.kind = 'group' AND l.state = 'confirmed'
-    GROUP BY l.external_ref
-  ),
-  mem AS MATERIALIZED (
-    SELECT a.subject_company_id AS member, a.object_company_id AS head
-    FROM assertions a
-    WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.subject_company_id <> a.object_company_id
-      AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
-      AND ((a.origin = 'registry' AND EXISTS (
-              SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
-        OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))
-    UNION
-    SELECT rd.company_id, gh.head FROM reg_dev rd JOIN group_heads gh ON gh.group_ref = rd.group_ref AND gh.n = 1
-    WHERE rd.company_id <> gh.head
-  ),
+  ${membershipCtes().trim()},
   vgroups AS MATERIALIZED (
     SELECT rd.group_ref, max(rd.group_name) AS group_name, array_agg(rd.company_id) AS members
     FROM reg_dev rd
@@ -270,12 +239,12 @@ const ROWS_SQL = `
          f.total,
          fr.legal_name, fr.ul_status, fr.ip
   FROM page f
+  LEFT JOIN ids fi ON fi.company_id = f.company_id
   LEFT JOIN LATERAL (
     SELECT r.payload->'UL'->'legalName' AS legal_name, r.payload->'UL'->'status' AS ul_status, r.payload->'IP' AS ip
     FROM focus_records r
-    WHERE r.method = 'req'
-      AND ((f.inn IS NOT NULL AND r.identifier_type = 'inn' AND r.identifier = f.inn)
-        OR (f.inn IS NULL AND f.ogrn IS NOT NULL AND r.identifier_type = 'ogrn' AND r.identifier = f.ogrn))
+    -- Тот реквизит, по которому карточка спрашивает Фокус (companies/identity.ts, правило pickTarget).
+    WHERE r.method = 'req' AND r.identifier_type = fi.target_type AND r.identifier = fi.target_value
     ORDER BY r.fetched_at DESC, r.id DESC
     LIMIT 1
   ) fr ON true

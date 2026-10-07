@@ -4,12 +4,14 @@
 // Группа → СЗ → объект. На ДОМ.РФ у каждого дома свой специализированный застройщик: «Река» —
 // ООО «СЗ Развитие», группа «Донстрой». Реестр пишет роль застройщика у СЗ и связь «входит в
 // группу» (registry/publish.ts). Карточка группы показывает объекты своих СЗ с пометкой «через …»:
-// это роль участника группы, а не самой группы, и роль группе не приписывается.
+// это роль участника группы, а не самой группы, и роль группе не приписывается. Кто участник — общее
+// правило портала (companies/groupMembership.ts), то же, что у каталога.
 //
 // Сводка ДОМ.РФ — свод по домам объекта (registry/houses.ts: у ЖК десятки домов, у каждого свой статус и срок;
 // раньше бралась страница, изменившаяся последней). Это сведения сайта на дату, а не проверенный факт (атрибуция —
 // на экране). Состояние по событиям — запасной путь без реестра.
 
+import { loadGroupMembers as loadMembersOf } from '../companies/groupMembership.js';
 import { getPool, query } from '../db/pool.js';
 import { housesByProject, loadHouses, summarizeObject, type IObjectRegistrySummary } from '../registry/houses.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
@@ -46,24 +48,6 @@ export interface ICompanyObjectsResponse {
   members: Array<{ companyId: number; name: string }>;
   coverage: { loaded: number; total: number; truncated: boolean };
 }
-
-/**
- * Участники группы: «входит в группу» к этой компании — из опубликованных наборов и из реестра
- * (у реестра свои утверждения с действующим подтверждающим доказательством, как в card_participations_v).
- */
-const MEMBERS_SQL = `
-  SELECT DISTINCT c.id AS "companyId", c.name
-  FROM assertions a
-  JOIN companies c ON c.id = a.subject_company_id AND c.merged_into_id IS NULL
-  WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group'
-    AND a.object_company_id = $1 AND a.subject_company_id <> $1
-    AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
-    AND (
-      (a.origin = 'registry' AND EXISTS (
-        SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
-      OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id)
-    )
-  ORDER BY c.name`;
 
 /** Связи с объектами: роли компании и участников группы, объекты из событий самой компании. */
 const LINKS_SQL = `
@@ -116,8 +100,9 @@ const rank = (o: ICompanyObject): number[] => [
  * Одновременные вызовы одной компании делят расчёт (shareInFlight): результат только читать.
  */
 export const loadGroupMembers = shareInFlight(
-  (companyId: number): Promise<Array<{ companyId: number; name: string }>> =>
-    query<{ companyId: number; name: string }>(MEMBERS_SQL, [companyId]),
+  async (companyId: number): Promise<Array<{ companyId: number; name: string }>> =>
+    // Правило семьи — общее с каталогом (companies/groupMembership.ts): с веткой страницы группы ДОМ.РФ.
+    (await loadMembersOf(getPool(), [companyId])).map(m => ({ companyId: m.member, name: m.name })),
 );
 
 /**

@@ -9,6 +9,7 @@
 // (registry/houses.ts::summarizeObject — тот же, что у карточки на вкладке «Объекты») и сведения каждого дома с его
 // собственной историей.
 
+import { loadGroupHeads } from '../companies/groupMembership.js';
 import type { DbExecutor } from '../db/pool.js';
 import { diffPayloads, type IRegistryFieldChange, type IRegistryPayload } from './changes.js';
 import { houseFacts, summarizeObject, toHouseSnapshot, type IHouse, type IObjectRegistrySummary } from './houses.js';
@@ -106,20 +107,11 @@ const loadCompanyRefs = async (exec: DbExecutor, ids: readonly number[]): Promis
   return new Map(rows.map(r => [r.sourceId, { id: r.id, name: r.name }]));
 };
 
-/** Группа застройщика — по связи «входит в группу» из реестра или из наборов конвейера. */
-const loadGroupCompany = async (exec: DbExecutor, developerId: number): Promise<ICompanyRef | null> =>
-  (
-    await exec.query<ICompanyRef>(
-      `SELECT c.id, c.name
-       FROM assertions a
-       JOIN companies c ON c.id = a.object_company_id AND c.merged_into_id IS NULL
-       WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group' AND a.subject_company_id = $1
-         AND a.status <> 'rejected' AND a.polarity = 'positive'
-         AND EXISTS (SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports')
-       ORDER BY (a.origin = 'registry') DESC, a.id DESC LIMIT 1`,
-      [developerId],
-    )
-  ).rows[0] ?? null;
+/** Группа застройщика — общим правилом портала (companies/groupMembership.ts), тем же, что каталог и карточка. */
+const loadGroupCompany = async (exec: DbExecutor, developerId: number): Promise<ICompanyRef | null> => {
+  const heads = await loadGroupHeads(exec, [developerId]);
+  return heads.length === 1 ? { id: heads[0]!.head, name: heads[0]!.name } : null;
+};
 
 /** Дом объекта на странице объекта: сведения последнего снимка, своя история и карточка его застройщика. */
 export interface IProjectRegistryHouse extends IRegistryView {

@@ -6,6 +6,8 @@
 
 import type { PoolClient } from 'pg';
 
+import { membershipCtes } from '../companies/groupMembership.js';
+import { companyTaxIdSql } from '../companies/identity.js';
 import { env } from '../config/env.js';
 import { execute, query, queryOne, withTransaction } from '../db/pool.js';
 import { tooGenericToSearch } from '../ingest/registry/domrfCompanies.js';
@@ -36,40 +38,21 @@ export class CompanySiteError extends Error {
 }
 
 /** Действующий ИНН (иначе ОГРН) с верной контрольной суммой. */
-const TAX_ID_LATERAL = `LEFT JOIN LATERAL (
-    SELECT ei.value AS tax_id FROM entity_identifiers ei
-    WHERE ei.company_id = c.id AND ei.status = 'active' AND ei.validation_status = 'checksum_valid'
-      AND ei.identifier_type IN ('inn', 'ogrn')
-    ORDER BY (ei.identifier_type = 'inn') DESC, ei.id LIMIT 1) t ON true`;
+/** Реквизит — общим правилом портала (companies/identity.ts): при двух разных ИНН реквизита нет. */
+const TAX_ID_LATERAL = `LEFT JOIN LATERAL (SELECT ${companyTaxIdSql('c.id')} AS tax_id) t ON true`;
 
 /** Роли на объектах — только MATERIALIZED (см. domrfCompanies.ts: иначе вид пересчитывается на каждую компанию). */
 const ROLES_SQL = `SELECT company_id, array_agg(DISTINCT role ORDER BY role) AS roles FROM card_participations_v WHERE is_current GROUP BY company_id`;
 
 /**
- * Группы, в которые входит компания `${alias}.id`: те же условия, что MEMBERS_SQL в api/companyObjects.ts
- * (реестр с действующим доказательством или опубликованное утверждение «входит в группу»).
+ * Пары «участник → группа» — общим правилом портала (companies/groupMembership.ts: с веткой страницы группы ДОМ.РФ, как
+ * у каталога), один раз на взятие из очереди (MATERIALIZED). CTE `membership (member_id, group_id)`.
  */
-const groupsOf = (alias: string): string => `
-  SELECT a.object_company_id AS group_id FROM assertions a
-  WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group'
-    AND a.subject_company_id = ${alias}.id AND a.object_company_id <> ${alias}.id
-    AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
-    AND ((a.origin = 'registry' AND EXISTS (
-           SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
-         OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))`;
+/** Группы одной компании ($1) — константой: проверка SQL (sql-sanity) видит запрос целиком. */
+const MEMBERSHIP_OF_ONE = membershipCtes({ members: 'ARRAY[$1::bigint]' });
 
-/**
- * Пары «участник → группа» по тем же условиям, что groupsOf, — один раз на взятие из очереди (MATERIALIZED):
- * проверка по каждой из тысяч компаний пересчитывала бы представление публикаций на каждую строку.
- */
-const MEMBERSHIP_SQL = `
-  SELECT DISTINCT a.subject_company_id AS member_id, a.object_company_id AS group_id FROM assertions a
-  WHERE a.predicate = 'corporate_relation' AND a.role = 'member_of_group'
-    AND a.subject_company_id <> a.object_company_id
-    AND a.status <> 'rejected' AND a.polarity = 'positive' AND a.modality IN ('reported_fact', 'claim', 'unknown')
-    AND ((a.origin = 'registry' AND EXISTS (
-           SELECT 1 FROM evidence e WHERE e.assertion_id = a.id AND e.status = 'active' AND e.stance = 'supports'))
-         OR EXISTS (SELECT 1 FROM published_assertions_v pa WHERE pa.id = a.id))`;
+const MEMBERSHIP_CTES = `${membershipCtes()},
+  membership AS MATERIALIZED (SELECT member AS member_id, head AS group_id FROM mem)`;
 
 /** СЗ по названию: своего сайта у специализированного застройщика обычно нет — сайт у группы. */
 const SZ_NAME_SQL = `(c.name ~ '^\\s*(СЗ|Сз|сз)(\\s|$)' OR c.name ~* '^\\s*специализированн')`;
@@ -136,7 +119,7 @@ export const claimSiteSearch = async (): Promise<ISiteSearchTarget | null> =>
     const rows = (
       await client.query<ICompanyRow & { attempt_count: number | null }>(
         `WITH roles AS MATERIALIZED (${ROLES_SQL}),
-              membership AS MATERIALIZED (${MEMBERSHIP_SQL})
+              ${MEMBERSHIP_CTES}
          SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id, s.attempt_count,
                 EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id) AS has_members
          FROM companies c
@@ -187,7 +170,7 @@ export const claimSiteSearch = async (): Promise<ISiteSearchTarget | null> =>
 /** Компания для пробы по реквизиту — без очереди и аренды. */
 export const loadSearchTargetByTaxId = async (taxId: string): Promise<ISiteSearchTarget | null> => {
   const row = await queryOne<ICompanyRow>(
-    `WITH membership AS MATERIALIZED (${MEMBERSHIP_SQL})
+    `WITH ${MEMBERSHIP_CTES}
      SELECT c.id AS company_id, c.name, c.legal_form, c.city, c.entity_type, t.tax_id,
             EXISTS (SELECT 1 FROM membership m WHERE m.group_id = c.id) AS has_members
      FROM entity_identifiers ei
@@ -529,12 +512,11 @@ export const loadCompanySites = async (companyId: number): Promise<ICompanySites
     [companyId],
   );
   const familySites = await query<IFamilySite>(
-    `SELECT k.company_id AS "companyId", g.name AS "companyName", k.host, k.url
-     FROM companies c
-     JOIN LATERAL (${groupsOf('c')}) grp ON true
-     JOIN companies g ON g.id = grp.group_id AND g.merged_into_id IS NULL
+    `WITH ${MEMBERSHIP_OF_ONE}
+     SELECT DISTINCT k.company_id AS "companyId", g.name AS "companyName", k.host, k.url
+     FROM mem
+     JOIN companies g ON g.id = mem.head AND g.merged_into_id IS NULL
      JOIN company_site_candidates k ON k.company_id = g.id AND k.state = 'confirmed'
-     WHERE c.id = $1
      ORDER BY g.name, k.host`,
     [companyId],
   );

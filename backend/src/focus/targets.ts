@@ -5,6 +5,7 @@
 // компания не спрашивается, экран говорит почему. Одна и та же пара реквизита у двух карточек
 // (дубль до слияния) — один запрос.
 
+import { IDS_CTE } from '../companies/identity.js';
 import type { DbExecutor } from '../db/pool.js';
 import type { IFocusIdentifier } from './client.js';
 
@@ -33,22 +34,10 @@ export const companyFocusTarget = async (db: DbExecutor, companyId: number): Pro
   return pickTarget(rows);
 };
 
-/** Реквизит каждой живой компании — то же правило, что pickTarget, одним запросом. */
-const TARGETS_SQL = `
-  ids AS MATERIALIZED (
-    SELECT ei.company_id,
-           array_agg(DISTINCT ei.value) FILTER (WHERE ei.identifier_type = 'inn') AS inns,
-           array_agg(DISTINCT ei.value) FILTER (WHERE ei.identifier_type IN ('ogrn', 'ogrnip')) AS ogrns
-    FROM entity_identifiers ei
-    JOIN companies c ON c.id = ei.company_id AND c.merged_into_id IS NULL
-    WHERE ei.status = 'active' AND ei.validation_status = 'checksum_valid' AND ei.identifier_type IN ('inn', 'ogrn', 'ogrnip')
-    GROUP BY ei.company_id
-  ),
+/** Реквизит каждой живой компании — то же правило, что pickTarget, одним запросом (общий CTE companies/identity.ts). */
+const TARGETS_SQL = `${IDS_CTE.trim()},
   targets AS (
-    SELECT company_id,
-           CASE WHEN cardinality(inns) = 1 THEN 'inn' WHEN inns IS NULL AND cardinality(ogrns) = 1 THEN 'ogrn' END AS kind,
-           CASE WHEN cardinality(inns) = 1 THEN inns[1] WHEN inns IS NULL AND cardinality(ogrns) = 1 THEN ogrns[1] END AS value
-    FROM ids
+    SELECT company_id, target_type AS kind, target_value AS value FROM ids
   )`;
 
 /**

@@ -11,8 +11,10 @@
 // Первый снимок компании новостями не считается: это начальная загрузка, а не «появилось». Ленты в базе нет — второй
 // источник правды о тех же фактах разошёлся бы с первым. «Просмотрено до» — в браузере читателя (localStorage):
 // это его удобство, а не данные портала, и читатель по-прежнему ничего не записывает на сервер.
-// Слова — фактами (ADR-009): «срок сдачи сменился», «новое дело», без оценок.
+// Слова — фактами (ADR-009): «срок сдачи сменился», «новое дело», без оценок. «На контроле» — отмеченная компания вместе
+// с её семьёй (companies/groupMembership.ts), правила домов и сроков — общие с карточкой (registry/houses.ts, values.ts).
 
+import { loadGroupMembers } from '../companies/groupMembership.js';
 import type { DbExecutor } from '../db/pool.js';
 import { domRfObjectUrl } from '../ingest/registry/domrfCards.js';
 import type { IDatasetPayload } from '../parserApi/datasets.js';
@@ -318,9 +320,12 @@ export interface INewsFeed {
 /** Лента за окно: все виды, новые сверху. kinds — фильтр вида; счётчики — по всем видам окна. */
 export const loadNews = async (db: DbExecutor, options: { since: Date; scope: NewsScope; kinds?: readonly NewsKind[] }): Promise<INewsFeed> => {
   const { since, scope } = options;
-  const watched = new Set(
-    (await db.query<{ companyId: number }>(`SELECT company_id AS "companyId" FROM company_watch WHERE removed_at IS NULL`)).rows.map(r => r.companyId),
+  const marked = (await db.query<{ companyId: number }>(`SELECT company_id AS "companyId" FROM company_watch WHERE removed_at IS NULL`)).rows.map(
+    r => r.companyId,
   );
+  // «На контроле» — компания и её семья (companies/groupMembership.ts): карточка группы считает объекты и сроки своих СЗ,
+  // и перенос срока у дома СЗ отмеченной группы — новость «на контроле», как в её «Сроках и продажах».
+  const watched = new Set([...marked, ...(await loadGroupMembers(db, marked)).map(m => m.member)]);
   const [projects, shifts, pairs] = await Promise.all([
     db.query<IProjectRow>(NEW_PROJECTS_SQL, [since, PROJECTS_LIMIT]),
     db.query<IShiftRow>(SHIFTS_SQL, [since, [...HOUSE_LABELS.completion]]),

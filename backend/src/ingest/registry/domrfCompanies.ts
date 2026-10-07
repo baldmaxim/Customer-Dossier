@@ -10,6 +10,7 @@
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 
+import { companyTaxIdSql } from '../../companies/identity.js';
 import { query, withTransaction } from '../../db/pool.js';
 import { normalizeName } from '../../resolve/normalize.js';
 import { likePattern } from '../../utils/likePattern.js';
@@ -125,10 +126,8 @@ export interface IDomRfCompanyToSearch {
 }
 
 /** Действующий ИНН (иначе ОГРН) с верной контрольной суммой — им ищется точнее, чем названием. */
-const TAX_ID_SQL = `(SELECT ei.value FROM entity_identifiers ei
-   WHERE ei.company_id = c.id AND ei.status = 'active' AND ei.validation_status = 'checksum_valid'
-     AND ei.identifier_type IN ('inn', 'ogrn')
-   ORDER BY (ei.identifier_type = 'inn') DESC, ei.id LIMIT 1)`;
+/** Реквизит — общим правилом портала (companies/identity.ts): при двух разных ИНН реквизита нет. */
+const TAX_ID_SQL = companyTaxIdSql('c.id');
 
 /**
  * Текущие роли компаний на объектах: заказчики и застройщики ищутся первыми. Подключать только как
