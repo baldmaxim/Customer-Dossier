@@ -5,67 +5,17 @@
 // Окно привязано к адресу, на котором его открыли: переход по ссылке из окна (карточка, имя в цитатах)
 // его закрывает. Граф грузится только в открытом окне.
 
-import { FC, useState } from 'react';
+import { FC, lazy, Suspense, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import type { IGraphNode } from '../../api/types';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { shortenLegalForm } from '../../lib/legalForm';
-import { MQ } from '../../lib/media';
 import { Button, type ButtonSize, type ButtonVariant } from '../ui/Button';
-import { ButtonLink } from '../ui/ButtonLink';
 import { Dialog } from '../ui/Dialog';
 import type { IconName } from '../ui/Icon';
-import { GraphBody } from './GraphBody';
-import { GraphFilters } from './GraphFilters';
-import { centerKey, centerOf, nodeCardHref, type IGraphCenter, type NodeTarget } from './graphModel';
-import { useGraphQuery } from './useGraphQuery';
-import { useLocalGraphState } from './useGraphState';
-import styles from './Graph.module.css';
+import { Loading } from '../ui/Loading';
+import { centerOf } from './graphModel';
 
-const GraphDialogBody: FC<{ initial: IGraphCenter }> = ({ initial }) => {
-  const wide = useMediaQuery(MQ.sm);
-  // На телефоне по умолчанию таблица: схема шире экрана, списком связи читаются лучше.
-  const state = useLocalGraphState(wide ? 'schema' : 'table');
-  const [center, setCenter] = useState<IGraphCenter>(initial);
-  const query = useGraphQuery(center, state.filters);
-  const moved = centerKey(center) !== centerKey(initial);
-  const seed = query.data && !query.isPlaceholderData ? query.data.nodes.find(n => n.seed) : undefined;
-  const centerName = seed ? shortenLegalForm(seed.label) : null;
-  const target: NodeTarget = {
-    kind: 'button',
-    onActivate: (node: IGraphNode) => setCenter({ kind: node.kind, id: node.id }),
-    actionText: 'перестроить схему вокруг этого узла',
-  };
-
-  return (
-    <div className={styles.dialogBody}>
-      <div className={styles.dialogCenter}>
-        <p className={styles.dialogCenterName}>{centerName ? `Связи: ${centerName}` : 'Связи'}</p>
-        {moved && (
-          <>
-            <ButtonLink to={nodeCardHref(center)} variant="link" size="sm" iconEnd="forward">
-              {center.kind === 'company' ? 'Карточка компании' : 'Карточка объекта'}
-            </ButtonLink>
-            <Button variant="link" size="sm" onClick={() => setCenter(initial)}>
-              Вернуть исходную схему
-            </Button>
-          </>
-        )}
-      </div>
-      <GraphFilters state={state} />
-      <GraphBody
-        // Выбранная линия прежнего центра к новому не относится.
-        key={centerKey(center)}
-        query={query}
-        state={state}
-        target={target}
-        centerName={centerName}
-        hint="Нажмите на компанию или объект — схема перестроится вокруг него. Нажмите на линию — увидите цитаты."
-      />
-    </div>
-  );
-};
+/** Код схемы — своим чанком: грузится при первом открытии окна (GraphDialogBody.tsx). */
+const GraphDialogBody = lazy(() => import('./GraphDialogBody').then(m => ({ default: m.GraphDialogBody })));
 
 export interface IGraphButtonProps {
   /** Ровно одно из двух: центр схемы. */
@@ -90,7 +40,9 @@ export const GraphButton: FC<IGraphButtonProps> = ({ companyId, projectId, label
       </Button>
       {/* key — путь: ушли на другую карточку — окно снимается сразу, фокус не возвращается на прежнюю кнопку. */}
       <Dialog key={location.pathname} open={openedAt === location.key} onClose={() => setOpenedAt(null)} title="Схема связей" size="xl">
-        <GraphDialogBody initial={initial} />
+        <Suspense fallback={<Loading variant="block" label="Открываю схему…" />}>
+          <GraphDialogBody initial={initial} />
+        </Suspense>
       </Dialog>
     </>
   );

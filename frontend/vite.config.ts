@@ -56,7 +56,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+          // react-dom/client — отдельный модуль: без него клиентская часть React (~180 КБ) жила в index и скачивалась
+          // заново после каждой выкладки, хотя не меняется (07.10.2026).
+          vendor: ['react', 'react-dom', 'react-dom/client', 'react-router-dom'],
           query: ['@tanstack/react-query'],
         },
       },
