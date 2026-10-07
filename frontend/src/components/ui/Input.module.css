@@ -153,7 +153,8 @@
   appearance: none;
 }
 
-.searchClear {
+.searchClear,
+.clear {
   position: absolute;
   inset-inline-end: 0;
   display: grid;
@@ -168,11 +169,25 @@
 }
 
 @media (hover: hover) {
-  .searchClear:hover {
+  .searchClear:hover,
+  .clear:hover {
     color: var(--text);
   }
 }
 
-.searchClear:focus-visible {
+.searchClear:focus-visible,
+.clear:focus-visible {
   outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+/* Поле с крестиком (TextInput onClear): кнопка поверх правого края, текст до неё не доходит. */
+.clearBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.clearable {
+  padding-inline-end: calc(var(--tap-min) + var(--sp-1));
 }

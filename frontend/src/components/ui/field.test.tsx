@@ -1,5 +1,5 @@
 // Поля формы: метка связана с контролом, подсказка и ошибка — через aria-describedby,
-// ошибка — aria-invalid; флажок — строкой с подписью; поиск — с кнопкой очистки и Esc.
+// ошибка — aria-invalid; флажок — строкой с подписью; поиск — с кнопкой очистки и Esc; TextInput с onClear — крестик.
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
@@ -78,5 +78,29 @@ describe('SearchInput', () => {
     const input = screen.getByRole('searchbox') as HTMLInputElement;
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(input.value).toBe('');
+  });
+});
+
+const ClearableHarness = () => {
+  const [value, setValue] = useState('ivanov');
+  return (
+    <TextInput
+      aria-label="Логин"
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onClear={() => setValue('')}
+      clearLabel="Очистить логин"
+    />
+  );
+};
+
+describe('TextInput onClear', () => {
+  it('крестик у непустого поля очищает его и оставляет фокус; у пустого крестика нет', () => {
+    render(<ClearableHarness />);
+    const input = screen.getByLabelText('Логин') as HTMLInputElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить логин' }));
+    expect(input.value).toBe('');
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole('button', { name: 'Очистить логин' })).toBeNull();
   });
 });

@@ -78,6 +78,8 @@ export const LoginPage: FC<ILoginPageProps> = ({ onLogin, error, errorCode = nul
               spellCheck={false}
               value={login}
               onChange={e => setLogin(e.target.value)}
+              onClear={() => setLogin('')}
+              clearLabel="Очистить логин"
             />
           )}
         </Field>
@@ -91,6 +93,8 @@ export const LoginPage: FC<ILoginPageProps> = ({ onLogin, error, errorCode = nul
               spellCheck={false}
               value={password}
               onChange={e => setPassword(e.target.value)}
+              onClear={() => setPassword('')}
+              clearLabel="Очистить пароль"
             />
           )}
         </Field>

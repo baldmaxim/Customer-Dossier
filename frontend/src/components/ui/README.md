@@ -108,7 +108,7 @@ if (rows.length === 0) return <EmptyState title="Ничего не найден�
 **Поля** — шрифт ≥ 16px, рамка ≥ 3:1, контур фокуса.
 - `Field` — `{ label, hint?, error?, required?, labelHidden?, id? }` + функция-ребёнок с атрибутами для контрола:
   `<Field label="Логин" error={err}>{c => <TextInput {...c} value={v} onChange={…} />}</Field>`.
-- `TextInput` / `Select` / `Textarea` — нативные пропсы + `size?: 'md'|'lg'`, `block?` (по умолчанию во всю ширину), `invalid?`, `ref?`.
+- `TextInput` / `Select` / `Textarea` — нативные пропсы + `size?: 'md'|'lg'`, `block?` (по умолчанию во всю ширину), `invalid?`, `ref?`; у `TextInput` ещё `onClear?`/`clearLabel?` — крестик у непустого поля (новые поля — с ним).
 - `Checkbox` — `{ label, hint?, checked, onChange(checked) }` — строка ≥ 44px, подсказка в описании, не в имени.
 - `SearchInput` — `{ value, onChange(value), label, labelVisible?, onClear?, size? }` — лупа, «Очистить поиск», Esc очищает.
 
