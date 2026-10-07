@@ -15,6 +15,7 @@ import { domRfObjectUrl } from '../ingest/registry/domrfCards.js';
 import { CUSTOMER_SIDE_ROLES } from '../api/companyBuilders.js';
 import { loadCompanyObjects, loadGroupMembers } from '../api/companyObjects.js';
 import type { IRegistryPayload } from './changes.js';
+import { labelsOf, slimRegistryPayloadSql } from './payloadSql.js';
 import { completionEnd, completionKey, parseCompletion, parseCount, parsePercent, parseRubles, parseSoldCount, type ICompletion } from './values.js';
 
 export const DELIVERY_VERSION = 'delivery@1';
@@ -217,9 +218,20 @@ const field = (payload: IRegistryPayload, ...labels: string[]): string | null =>
   return null;
 };
 
+/** Подписи снимка, которые читает сводка сроков и продаж (по приоритету); по ним же SQL отбирает поля. */
+const DELIVERY_LABELS = {
+  status: ['Статус строительства'],
+  completion: ['Сдача дома', 'Срок сдачи'],
+  apartments: ['Количество квартир'],
+  soldPercent: ['Продано квартир', 'Распроданность квартир'],
+  soldCount: ['Продано квартир, количество'],
+  price: ['Средняя цена за 1 м²', 'Средняя цена за м2'],
+} as const;
+
+/** Вся история снимков домов — но из каждого только identity и подписи DELIVERY_LABELS. */
 const HOUSES_SQL = `
   SELECT r.external_ref AS "externalRef", r.project_id AS "projectId", p.name AS "projectName",
-         r.fetched_at AS "fetchedAt", r.as_of AS "asOf", r.payload
+         r.fetched_at AS "fetchedAt", r.as_of AS "asOf", ${slimRegistryPayloadSql('r.payload', '$3')} AS payload
   FROM registry_records r
   LEFT JOIN projects p ON p.id = r.project_id
   WHERE r.record_type = 'object' AND (r.project_id = ANY($1::bigint[]) OR r.company_id = ANY($2::bigint[]))
@@ -235,7 +247,7 @@ export const loadCompanyDelivery = async (db: DbExecutor, companyId: number, now
   const rows = (
     await db.query<{ externalRef: string; projectId: number | null; projectName: string | null; fetchedAt: Date; asOf: string | Date | null; payload: IRegistryPayload }>(
       HOUSES_SQL,
-      [projectIds, companyIds],
+      [projectIds, companyIds, labelsOf(DELIVERY_LABELS)],
     )
   ).rows;
 
@@ -253,12 +265,12 @@ export const loadCompanyDelivery = async (db: DbExecutor, companyId: number, now
     house.snapshots.push({
       fetchedAt: row.fetchedAt.toISOString(),
       asOf,
-      status: field(row.payload, 'Статус строительства'),
-      completion: field(row.payload, 'Сдача дома', 'Срок сдачи'),
-      apartments: field(row.payload, 'Количество квартир'),
-      soldPercent: field(row.payload, 'Продано квартир', 'Распроданность квартир'),
-      soldCount: field(row.payload, 'Продано квартир, количество'),
-      price: field(row.payload, 'Средняя цена за 1 м²', 'Средняя цена за м2'),
+      status: field(row.payload, ...DELIVERY_LABELS.status),
+      completion: field(row.payload, ...DELIVERY_LABELS.completion),
+      apartments: field(row.payload, ...DELIVERY_LABELS.apartments),
+      soldPercent: field(row.payload, ...DELIVERY_LABELS.soldPercent),
+      soldCount: field(row.payload, ...DELIVERY_LABELS.soldCount),
+      price: field(row.payload, ...DELIVERY_LABELS.price),
     });
   }
   return summarizeDelivery([...houses.values()], now);

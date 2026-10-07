@@ -22,6 +22,7 @@ import { egrulNamesOf } from '../focus/identity.js';
 import { mapReq, summaryOf } from '../focus/map.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
+import { ttlCache } from '../utils/ttlCache.js';
 
 export const CATALOG_VIEWS = ['legal', 'groups', 'unidentified'] as const;
 export type CatalogView = (typeof CATALOG_VIEWS)[number];
@@ -144,18 +145,27 @@ const BASE_SQL = `
   vmem AS MATERIALIZED (
     SELECT group_ref, unnest(members) AS member FROM vgroups
   ),
+  -- Признаки «головная» и «внутри семьи» — соединением, а не EXISTS по CTE на каждую компанию (07.10.2026):
+  -- подзапрос в CASE не становится полусоединением и перебирал mem целиком для каждой строки companies.
+  mem_heads AS MATERIALIZED (
+    SELECT DISTINCT head FROM mem
+  ),
+  nested_members AS MATERIALIZED (
+    SELECT member FROM mem UNION SELECT member FROM vmem
+  ),
   base AS MATERIALIZED (
     SELECT c.id, c.name, c.city, c.entity_type, c.name_pending, ids.inn, ids.ogrn, (w.company_id IS NOT NULL) AS watched,
            CASE WHEN c.entity_type = 'group' THEN 'groups'
-                WHEN ids.company_id IS NOT NULL OR w.company_id IS NOT NULL
-                  OR EXISTS (SELECT 1 FROM mem WHERE mem.head = c.id) THEN 'legal'
+                WHEN ids.company_id IS NOT NULL OR w.company_id IS NOT NULL OR mh.head IS NOT NULL THEN 'legal'
                 WHEN d.company_id IS NOT NULL THEN 'dismissed'
                 ELSE 'unidentified' END AS view,
-           (EXISTS (SELECT 1 FROM mem WHERE mem.member = c.id) OR EXISTS (SELECT 1 FROM vmem WHERE vmem.member = c.id)) AS nested
+           (nm.member IS NOT NULL) AS nested
     FROM companies c
     LEFT JOIN ids ON ids.company_id = c.id
     LEFT JOIN watched w ON w.company_id = c.id
     LEFT JOIN dismissed d ON d.company_id = c.id
+    LEFT JOIN mem_heads mh ON mh.head = c.id
+    LEFT JOIN nested_members nm ON nm.member = c.id
     WHERE c.merged_into_id IS NULL
   )`;
 
@@ -199,6 +209,12 @@ const ROWS_SQL = `
     WHERE f.head <> 'c' || f.member
     GROUP BY f.head
   ),
+  -- «Входит в …» — заранее по участнику, а не подзапросом на каждую строку каталога (07.10.2026).
+  parents_of AS MATERIALIZED (
+    SELECT m.member, array_agg(DISTINCT hc.name) AS names
+    FROM mem m JOIN companies hc ON hc.id = m.head
+    GROUP BY m.member
+  ),
   hints AS MATERIALIZED (
     SELECT company_id, count(*)::int AS n FROM (
       SELECT company_id FROM company_name_suggestions
@@ -213,12 +229,13 @@ const ROWS_SQL = `
            b.inn, b.ogrn, b.watched, coalesce(fp.roles, '{}') AS roles, coalesce(fp.objects, 0) AS objects,
            coalesce(fu.publications, 0) AS publications, fu.last_at, coalesce(h.n, 0) AS hints,
            coalesce(fl.list, '[]'::jsonb) AS members,
-           coalesce((SELECT array_agg(DISTINCT hc.name) FROM mem m JOIN companies hc ON hc.id = m.head WHERE m.member = b.id), '{}') AS parents
+           coalesce(po.names, '{}') AS parents
     FROM base b
     LEFT JOIN fam_parts fp ON fp.head = 'c' || b.id
     LEFT JOIN fam_pubs fu ON fu.head = 'c' || b.id
     LEFT JOIN fam_list fl ON fl.head = 'c' || b.id
     LEFT JOIN hints h ON h.company_id = b.id
+    LEFT JOIN parents_of po ON po.member = b.id
     WHERE b.view = $1
       AND (NOT $2::boolean OR b.watched)
       -- СЗ — внутри своей семьи; плоско — только в фильтре «на контроле»: там отмечена сама компания.
@@ -235,13 +252,21 @@ const ROWS_SQL = `
   ),
   filtered AS (
     SELECT * FROM rows_all r WHERE $3::text IS NULL OR $3::text = ANY(r.roles)
+  ),
+  -- Сначала страница, потом Фокус (07.10.2026): порядок от ЕГРЮЛ не зависит, а LATERAL до LIMIT искал снимок
+  -- для каждой отфильтрованной строки. total — по всем отфильтрованным: окно считается до LIMIT.
+  page AS (
+    SELECT f.*, count(*) OVER ()::int AS total
+    FROM filtered f
+    ORDER BY %ORDER%
+    LIMIT $4
   )
   SELECT f.kind, f.company_id AS "companyId", f.group_ref AS "groupRef", f.name, f.city, f.entity_type AS "entityType",
          f.name_pending AS "namePending", f.inn, f.ogrn, f.watched, f.roles, f.objects, f.publications, f.last_at AS "lastAt",
          f.hints, f.members, f.parents,
-         count(*) OVER ()::int AS total,
+         f.total,
          fr.legal_name, fr.ul_status, fr.ip
-  FROM filtered f
+  FROM page f
   LEFT JOIN LATERAL (
     SELECT r.payload->'UL'->'legalName' AS legal_name, r.payload->'UL'->'status' AS ul_status, r.payload->'IP' AS ip
     FROM focus_records r
@@ -251,8 +276,7 @@ const ROWS_SQL = `
     ORDER BY r.fetched_at DESC, r.id DESC
     LIMIT 1
   ) fr ON true
-  ORDER BY %ORDER%
-  LIMIT $4`;
+  ORDER BY %ORDER%`;
 
 /** Порядок: на контроле — первыми (кроме «по названию»), «Без ИНН» — по числу публикаций: о ком больше пишут. */
 export const orderBy = (view: CatalogView, sort: CatalogQuery['sort']): string => {
@@ -315,7 +339,7 @@ const loadCatalogCounts = shareInFlight(
 );
 
 export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogResponse> => {
-  const sql = ROWS_SQL.replace('%ORDER%', orderBy(params.view, params.sort));
+  const sql = ROWS_SQL.replaceAll('%ORDER%', orderBy(params.view, params.sort));
   // Строки и числа вкладок друг от друга не зависят — параллельно (07.10.2026): каждый запрос считает базу заново.
   const [rows, counts] = await Promise.all([
     query<IRowSql>(sql, [params.view, params.watch, params.role === 'any' ? null : params.role, CATALOG_LIMIT]),
@@ -358,6 +382,19 @@ export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogRespons
   };
 };
 
+/**
+ * Каталог считается по всей базе, а вкладки и сортировки главной перебирают одни и те же наборы: одинаковый запрос
+ * 30 с отдаётся из памяти (07.10.2026). Любое изменение через API (не GET, ответ < 400) сбрасывает кэш сразу —
+ * «На контроле», заведение компании, слияние видны без ожидания (app.ts); фоновые сбор и разбор — не позже 30 с.
+ */
+const catalogCache = ttlCache(loadCatalog, {
+  ttlMs: 30_000,
+  max: 32,
+  keyOf: q => JSON.stringify([q.view, q.watch, q.role, q.sort]),
+});
+
+export const invalidateCatalogCache = (): void => catalogCache.clear();
+
 export const catalogRouter = asyncRouter();
 
 catalogRouter.get('/companies', async (req, res) => {
@@ -366,5 +403,5 @@ catalogRouter.get('/companies', async (req, res) => {
     res.status(400).json({ error: 'Некорректные параметры каталога', code: 'bad_query' });
     return;
   }
-  res.json(await loadCatalog(parsed.data));
+  res.json(await catalogCache.get(parsed.data));
 });

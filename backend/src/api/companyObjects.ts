@@ -11,6 +11,7 @@
 
 import { query } from '../db/pool.js';
 import type { IRegistryPayload } from '../registry/changes.js';
+import { labelsOf, slimRegistryPayloadSql } from '../registry/payloadSql.js';
 import { hasPhoto } from '../registry/photos.js';
 import { shareInFlight } from '../utils/shareInFlight.js';
 
@@ -100,12 +101,32 @@ const LINKS_SQL = `
   ) link
   JOIN projects p ON p.id = link.project_id AND p.merged_into_id IS NULL`;
 
+/** Подписи снимка ДОМ.РФ, которые читает сводка объекта (по приоритету); по ним же SQL отбирает поля. */
+const SUMMARY_LABELS = {
+  status: ['Статус строительства'],
+  completion: ['Сдача дома', 'Срок сдачи'],
+  keys: ['Выдача ключей'],
+  apartments: ['Количество квартир'],
+  pricePerSqm: ['Средняя цена за 1 м²', 'Средняя цена за м2'],
+  propertyClass: ['Класс недвижимости'],
+  floors: ['Количество этажей'],
+  sold: ['Распроданность квартир', 'Продано квартир'],
+  contractor: ['Генподрядчики', 'Генподрядчик'],
+  developer: ['Застройщик'],
+  group: ['Группа компаний'],
+} as const;
+
+/** Последний снимок объекта: сначала id (DISTINCT ON считает выражения по каждой строке), потом поля только по нему. */
 const REGISTRY_SQL = `
-  SELECT DISTINCT ON (r.project_id) r.project_id AS "projectId", r.external_ref AS "externalRef", r.as_of AS "asOf",
-         r.fetched_at AS "fetchedAt", r.payload, s.title AS "sourceTitle"
-  FROM registry_records r JOIN sources s ON s.id = r.source_id
-  WHERE r.record_type = 'object' AND r.project_id = ANY($1::bigint[])
-  ORDER BY r.project_id, r.fetched_at DESC`;
+  WITH latest AS (
+    SELECT DISTINCT ON (r.project_id) r.id
+    FROM registry_records r
+    WHERE r.record_type = 'object' AND r.project_id = ANY($1::bigint[])
+    ORDER BY r.project_id, r.fetched_at DESC
+  )
+  SELECT r.project_id AS "projectId", r.external_ref AS "externalRef", r.as_of AS "asOf",
+         r.fetched_at AS "fetchedAt", ${slimRegistryPayloadSql('r.payload', '$2')} AS payload, s.title AS "sourceTitle"
+  FROM latest l JOIN registry_records r ON r.id = l.id JOIN sources s ON s.id = r.source_id`;
 
 /** Состояние по событиям — всего объекта (без корпуса). */
 const STATE_SQL = `
@@ -144,17 +165,17 @@ export const registrySummary = (
     asOf: row.asOf,
     fetchedAt: row.fetchedAt instanceof Date ? row.fetchedAt.toISOString() : row.fetchedAt,
     address: payload.identity.address,
-    status: field(payload, 'Статус строительства'),
-    completion: field(payload, 'Сдача дома', 'Срок сдачи'),
-    keys: field(payload, 'Выдача ключей'),
-    apartments: field(payload, 'Количество квартир'),
-    pricePerSqm: field(payload, 'Средняя цена за 1 м²', 'Средняя цена за м2'),
-    propertyClass: field(payload, 'Класс недвижимости'),
-    floors: field(payload, 'Количество этажей'),
-    sold: field(payload, 'Распроданность квартир', 'Продано квартир'),
-    contractor: field(payload, 'Генподрядчики', 'Генподрядчик'),
-    developer: payload.identity.developer?.name ?? field(payload, 'Застройщик'),
-    group: payload.identity.groupName ?? field(payload, 'Группа компаний'),
+    status: field(payload, ...SUMMARY_LABELS.status),
+    completion: field(payload, ...SUMMARY_LABELS.completion),
+    keys: field(payload, ...SUMMARY_LABELS.keys),
+    apartments: field(payload, ...SUMMARY_LABELS.apartments),
+    pricePerSqm: field(payload, ...SUMMARY_LABELS.pricePerSqm),
+    propertyClass: field(payload, ...SUMMARY_LABELS.propertyClass),
+    floors: field(payload, ...SUMMARY_LABELS.floors),
+    sold: field(payload, ...SUMMARY_LABELS.sold),
+    contractor: field(payload, ...SUMMARY_LABELS.contractor),
+    developer: payload.identity.developer?.name ?? field(payload, ...SUMMARY_LABELS.developer),
+    group: payload.identity.groupName ?? field(payload, ...SUMMARY_LABELS.group),
     hasPhoto: hasPhoto(row.externalRef),
   };
 };
@@ -224,7 +245,7 @@ export const loadCompanyObjects = shareInFlight(async (companyId: number): Promi
     const [registry, states] = await Promise.all([
       query<{ projectId: number; externalRef: string; asOf: string | null; fetchedAt: Date; payload: IRegistryPayload; sourceTitle: string }>(
         REGISTRY_SQL,
-        [ids],
+        [ids, labelsOf(SUMMARY_LABELS)],
       ),
       query<{ projectId: number; state: string; validFrom: string | null }>(STATE_SQL, [ids]),
     ]);

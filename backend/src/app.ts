@@ -23,7 +23,7 @@ import { pgAuthStore } from './auth/pgStore.js';
 import { AuthService } from './auth/service.js';
 import { createHostGuard, createOriginGuard } from './api/guards.js';
 import { companiesRouter } from './api/companies.routes.js';
-import { catalogRouter } from './api/companyCatalog.js';
+import { catalogRouter, invalidateCatalogCache } from './api/companyCatalog.js';
 import { companyManageRouter } from './api/companyManage.routes.js';
 import { entitiesRouter } from './api/entities.routes.js';
 import { graphRouter } from './api/graph.routes.js';
@@ -169,6 +169,15 @@ export const createApp = (options: ICreateAppOptions = {}): express.Express => {
   // Локально (AUTH_MODE=none) запрос идёт от локального оператора со всеми правами: защита —
   // loopback, Host и Origin; изменение без правила в таблице прав запрещено и здесь.
   app.use('/api', createAttachAuth(auth), createRequireAccess(auth));
+  // Изменение через API сбрасывает кэш каталога (api/companyCatalog.ts): после ответа, только успешное.
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.on('finish', () => {
+        if (res.statusCode < 400) invalidateCatalogCache();
+      });
+    }
+    next();
+  });
   for (const [prefix, router] of dataRouters(auth.service, auth.passkeys ?? null)) app.use(`/api${prefix}`, router);
 
   app.use('/api', (_req, res) => {
