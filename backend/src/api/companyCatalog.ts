@@ -21,6 +21,7 @@ import { query } from '../db/pool.js';
 import { egrulNamesOf } from '../focus/identity.js';
 import { mapReq, summaryOf } from '../focus/map.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { shareInFlight } from '../utils/shareInFlight.js';
 
 export const CATALOG_VIEWS = ['legal', 'groups', 'unidentified'] as const;
 export type CatalogView = (typeof CATALOG_VIEWS)[number];
@@ -298,17 +299,28 @@ export const egrulOf = (row: Pick<IRowSql, 'legal_name' | 'ul_status' | 'ip'>): 
   return { name: egrulNamesOf(payload).short, status: summaryOf(mapReq(payload)).status };
 };
 
+/**
+ * Числа вкладок от параметров не зависят. Число на вкладке «Компании» — строк верхнего уровня: СЗ внутри семьи
+ * не считаются, группы только по ДОМ.РФ — да. Одновременные запросы каталога делят расчёт (shareInFlight).
+ */
+const loadCatalogCounts = shareInFlight(
+  (_all: 'all'): Promise<Array<{ view: string; n: number; watched: number }>> =>
+    query<{ view: string; n: number; watched: number }>(
+      `WITH ${BASE_SQL}
+       SELECT view, count(*) FILTER (WHERE view <> 'legal' OR NOT nested)::int AS n, count(*) FILTER (WHERE watched)::int AS watched
+       FROM base GROUP BY view
+       UNION ALL
+       SELECT 'registry_groups', count(*)::int, 0 FROM vgroups`,
+    ),
+);
+
 export const loadCatalog = async (params: CatalogQuery): Promise<ICatalogResponse> => {
   const sql = ROWS_SQL.replace('%ORDER%', orderBy(params.view, params.sort));
-  const rows = await query<IRowSql>(sql, [params.view, params.watch, params.role === 'any' ? null : params.role, CATALOG_LIMIT]);
-  // Число на вкладке «Компании» — строк верхнего уровня: СЗ внутри семьи не считаются, группы только по ДОМ.РФ — да.
-  const counts = await query<{ view: string; n: number; watched: number }>(
-    `WITH ${BASE_SQL}
-     SELECT view, count(*) FILTER (WHERE view <> 'legal' OR NOT nested)::int AS n, count(*) FILTER (WHERE watched)::int AS watched
-     FROM base GROUP BY view
-     UNION ALL
-     SELECT 'registry_groups', count(*)::int, 0 FROM vgroups`,
-  );
+  // Строки и числа вкладок друг от друга не зависят — параллельно (07.10.2026): каждый запрос считает базу заново.
+  const [rows, counts] = await Promise.all([
+    query<IRowSql>(sql, [params.view, params.watch, params.role === 'any' ? null : params.role, CATALOG_LIMIT]),
+    loadCatalogCounts('all'),
+  ]);
   const byView = Object.fromEntries(CATALOG_VIEWS.map(v => [v, counts.find(c => c.view === v)?.n ?? 0])) as Record<CatalogView, number>;
   byView.legal += counts.find(c => c.view === 'registry_groups')?.n ?? 0;
   return {

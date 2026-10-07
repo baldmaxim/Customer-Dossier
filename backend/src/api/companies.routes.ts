@@ -206,36 +206,38 @@ companiesRouter.get('/:id', async (req, res) => {
     return;
   }
 
-  const aliases = await query<{ alias: string; hits: number }>(
-    `SELECT alias, hits FROM entity_aliases
-     WHERE entity_kind = 'company' AND entity_id = $1
-     ORDER BY hits DESC LIMIT 10`,
-    [id],
-  );
-
-  // Реквизиты по типу с происхождением; явные связи (бренд, группа, правопреемник).
-  const identifiers = await query(
-    `SELECT jurisdiction, identifier_type AS "type", value, validation_status AS "validationStatus", origin,
-            source_revision_id AS "sourceRevisionId", valid_from AS "validFrom", valid_to AS "validTo"
-     FROM entity_identifiers WHERE company_id = $1 AND status = 'active' ORDER BY identifier_type, id`,
-    [id],
-  );
-  const relations = await query(
-    `SELECT r.id, r.relation_type AS "relationType", r.status,
-            CASE WHEN r.from_company_id = $1 THEN 'outgoing' ELSE 'incoming' END AS direction,
-            c.id AS "otherCompanyId", c.name AS "otherCompanyName"
-     FROM company_relations r
-     JOIN companies c ON c.id = CASE WHEN r.from_company_id = $1 THEN r.to_company_id ELSE r.from_company_id END
-     WHERE (r.from_company_id = $1 OR r.to_company_id = $1) AND r.status <> 'rejected'
-     ORDER BY r.id`,
-    [id],
-  );
-
-  // Реестр: карточка застройщика и его объекты по снимкам (этап 20B).
-  const registry = await loadCompanyRegistry(getPool(), id);
-  const registryProjects = await loadCompanyRegistryProjects(getPool(), id);
-  // ADR-016: «На контроле» и наименование со статусом по ЕГРЮЛ (заголовок карточки); null — нет.
-  const { watch, egrul } = await loadCardExtras(getPool(), id);
+  // Части карточки друг от друга не зависят — параллельно (07.10.2026): с ответа на этот запрос
+  // экран начинает грузить остальные блоки.
+  const [aliases, identifiers, relations, registry, registryProjects, { watch, egrul }] = await Promise.all([
+    query<{ alias: string; hits: number }>(
+      `SELECT alias, hits FROM entity_aliases
+       WHERE entity_kind = 'company' AND entity_id = $1
+       ORDER BY hits DESC LIMIT 10`,
+      [id],
+    ),
+    // Реквизиты по типу с происхождением; явные связи (бренд, группа, правопреемник).
+    query(
+      `SELECT jurisdiction, identifier_type AS "type", value, validation_status AS "validationStatus", origin,
+              source_revision_id AS "sourceRevisionId", valid_from AS "validFrom", valid_to AS "validTo"
+       FROM entity_identifiers WHERE company_id = $1 AND status = 'active' ORDER BY identifier_type, id`,
+      [id],
+    ),
+    query(
+      `SELECT r.id, r.relation_type AS "relationType", r.status,
+              CASE WHEN r.from_company_id = $1 THEN 'outgoing' ELSE 'incoming' END AS direction,
+              c.id AS "otherCompanyId", c.name AS "otherCompanyName"
+       FROM company_relations r
+       JOIN companies c ON c.id = CASE WHEN r.from_company_id = $1 THEN r.to_company_id ELSE r.from_company_id END
+       WHERE (r.from_company_id = $1 OR r.to_company_id = $1) AND r.status <> 'rejected'
+       ORDER BY r.id`,
+      [id],
+    ),
+    // Реестр: карточка застройщика и его объекты по снимкам (этап 20B).
+    loadCompanyRegistry(getPool(), id),
+    loadCompanyRegistryProjects(getPool(), id),
+    // ADR-016: «На контроле» и наименование со статусом по ЕГРЮЛ (заголовок карточки); null — нет.
+    loadCardExtras(getPool(), id),
+  ]);
   res.json({ company, aliases, identifiers, relations, registry, registryProjects, watch, egrul });
 });
 

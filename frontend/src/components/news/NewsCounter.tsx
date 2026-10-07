@@ -4,13 +4,21 @@
 
 import { FC } from 'react';
 
+import { useAfterDelay } from '../../hooks/useAfterDelay';
 import { formatCount } from '../../lib/format';
 import { isUnseen, useNewsSeen } from './newsSeen';
-import { useNews } from './useNews';
+import { DEFAULT_NEWS_PARAMS, useNews } from './useNews';
 import styles from './NewsCounter.module.css';
 
+/**
+ * Лента считается на сервере из снимков и нескольких запросов — на старте приложения она спорила с запросами
+ * открытой страницы (07.10.2026). Счётчик ждёт пару секунд; уже загруженная лента (страница «Новое») — из кэша сразу.
+ */
+const COUNTER_DELAY_MS = 2500;
+
 export const NewsCounter: FC = () => {
-  const query = useNews();
+  const ready = useAfterDelay(COUNTER_DELAY_MS);
+  const query = useNews(DEFAULT_NEWS_PARAMS, ready);
   const seenUpTo = useNewsSeen();
   const unseen = (query.data?.items ?? []).filter(i => isUnseen(i.at, seenUpTo)).length;
   if (unseen === 0) return null;

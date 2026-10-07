@@ -60,8 +60,9 @@ export const CompanyPage: FC = () => {
   const companyId = Number(id);
   const valid = Number.isInteger(companyId) && companyId > 0;
   const query = useCompany(companyId, valid);
-  // Число объектов — у вкладки: запрос общий с «Обзором» и вкладкой, второго нет.
-  const objects = useCompanyObjects(companyId, valid && query.isSuccess);
+  // Число объектов — у вкладки: запрос общий с «Обзором» и вкладкой, второго нет. Самый тяжёлый запрос карточки и
+  // нужен всегда — идёт сразу, вместе с самой карточкой, а не после неё (07.10.2026).
+  const objects = useCompanyObjects(companyId, valid);
   // Сведения ЕГРЮЛ для шапки — после карточки; не загрузились — шапка без них, ошибку покажет раздел ЕГРЮЛ на «Сведениях».
   const focus = useCompanyFocus(companyId, valid && Boolean(query.data?.company));
   const [tab] = useUrlState('tab', enumParam(TAB_VALUES, 'info'));

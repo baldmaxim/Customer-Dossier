@@ -12,6 +12,7 @@
 import { query } from '../db/pool.js';
 import type { IRegistryPayload } from '../registry/changes.js';
 import { hasPhoto } from '../registry/photos.js';
+import { shareInFlight } from '../utils/shareInFlight.js';
 
 /** Объектов на вкладке: карточка, а не каталог; что не вошло — честно числом. */
 export const OBJECTS_LIMIT = 300;
@@ -169,11 +170,20 @@ const rank = (o: ICompanyObject): number[] => [
   o.roles.some(r => r.isCurrent) ? 0 : 1,
 ];
 
-/** Все участники группы компании — для объектов и для пометки «строит своими силами» (24D). */
-export const loadGroupMembers = (companyId: number): Promise<Array<{ companyId: number; name: string }>> =>
-  query<{ companyId: number; name: string }>(MEMBERS_SQL, [companyId]);
+/**
+ * Все участники группы компании — для объектов и для пометки «строит своими силами» (24D).
+ * Одновременные вызовы одной компании делят расчёт (shareInFlight): результат только читать.
+ */
+export const loadGroupMembers = shareInFlight(
+  (companyId: number): Promise<Array<{ companyId: number; name: string }>> =>
+    query<{ companyId: number; name: string }>(MEMBERS_SQL, [companyId]),
+);
 
-export const loadCompanyObjects = async (companyId: number): Promise<ICompanyObjectsResponse> => {
+/**
+ * Объекты компании. Карточка запрашивает их четырьмя блоками сразу («Объекты», «Кто строит», «Сроки и продажи»,
+ * «Сайт компании») — одновременные вызовы делят один расчёт (shareInFlight): результат только читать.
+ */
+export const loadCompanyObjects = shareInFlight(async (companyId: number): Promise<ICompanyObjectsResponse> => {
   const members = await loadGroupMembers(companyId);
   const memberName = new Map(members.map(m => [m.companyId, m.name]));
   const links = await query<ILinkRow>(LINKS_SQL, [[companyId, ...members.map(m => m.companyId)], companyId]);
@@ -210,15 +220,18 @@ export const loadCompanyObjects = async (companyId: number): Promise<ICompanyObj
 
   const ids = [...byProject.keys()];
   if (ids.length > 0) {
-    const registry = await query<{ projectId: number; externalRef: string; asOf: string | null; fetchedAt: Date; payload: IRegistryPayload; sourceTitle: string }>(
-      REGISTRY_SQL,
-      [ids],
-    );
+    // Сводка ДОМ.РФ и состояние по событиям друг от друга не зависят — параллельно.
+    const [registry, states] = await Promise.all([
+      query<{ projectId: number; externalRef: string; asOf: string | null; fetchedAt: Date; payload: IRegistryPayload; sourceTitle: string }>(
+        REGISTRY_SQL,
+        [ids],
+      ),
+      query<{ projectId: number; state: string; validFrom: string | null }>(STATE_SQL, [ids]),
+    ]);
     for (const row of registry) {
       const object = byProject.get(row.projectId);
       if (object) object.registry = registrySummary(row);
     }
-    const states = await query<{ projectId: number; state: string; validFrom: string | null }>(STATE_SQL, [ids]);
     for (const row of states) {
       const object = byProject.get(row.projectId);
       if (object) object.state = { state: row.state, validFrom: row.validFrom };
@@ -237,4 +250,4 @@ export const loadCompanyObjects = async (companyId: number): Promise<ICompanyObj
     members: members.filter(m => items.some(o => o.via?.companyId === m.companyId)),
     coverage: { loaded: items.length, total: sorted.length, truncated: sorted.length > items.length },
   };
-};
+});

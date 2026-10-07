@@ -492,6 +492,11 @@ export const companyRoutes = ({
   { match: 'GET /api/companies/7/site-projects', respond: () => ({ status: 200, body: { sites: [], projects: [], waiting: 0 } }) },
   { match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: { mode: 'off', candidates: [], familySites: [], search: null } }) },
   { match: 'GET /api/companies/7/similar', respond: () => ({ status: 200, body: { items: [] } }) },
+  // Без своей строки запрос назначения попадал в общий «GET /api/companies/7» и получал тело карточки.
+  {
+    match: 'GET /api/companies/7/assignment',
+    respond: () => ({ status: 200, body: { state: 'unidentified', dismissal: null, portal: [], egrul: [], search: null, focusConfigured: false } }),
+  },
   { match: 'GET /api/companies/7/signals', respond: () => ({ status: 200, body: notComputed }) },
   { match: 'GET /api/companies/7/dossier-summary', respond: () => ({ status: 200, body: summary }) },
   { match: 'GET /api/assertions/', respond: () => ({ status: 404, body: { error: 'нет в тесте' } }) },
