@@ -1,0 +1,58 @@
+/* Ярлык денег OpenRouter в шапке — рядом с кнопками-иконками: та же высота цели и приглушённый цвет,
+   пока остатка хватает; мало — тон предупреждения (статус системы, не оценка компании). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.low {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: var(--fw-medium);
+}
+
+/* Подпись «OpenRouter» — только там, где шапке хватает ширины. */
+.label {
+  display: none;
+}
+
+@media (hover: hover) {
+  .chip:not(.low):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+@media (min-width: 900px) {
+  .label {
+    display: inline;
+  }
+}
+
+/* Телефон боком: меню — полосой 72px слева, в неё входит только сумма. */
+@media (min-width: 600px) and (max-height: 500px) {
+  .label {
+    display: none;
+  }
+
+  .chip {
+    justify-content: center;
+    padding: 0 var(--sp-1);
+    font-size: var(--fs-xs);
+  }
+}

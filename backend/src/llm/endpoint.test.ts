@@ -7,7 +7,7 @@ import { OPENROUTER_BASE_URL } from '../config/llm.js';
 import { EnvValueError } from '../config/parse.js';
 import { buildFingerprint, lmStudioProvider, type IChunkerParams } from '../reprocess/provider.js';
 import { extractHeadline, extractSemantic, llmTimeoutMs, retryPolicyVersion, setAdminLlmApiKey } from './client.js';
-import { checkOpenRouter, checkOpenRouterKey, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
+import { checkOpenRouter, checkOpenRouterKey, fetchOpenRouterSpend, matchesRoute, openRouterRouting, requestHeaders, type ILlmTarget } from './endpoint.js';
 
 const SECRET = 'sk-or-v1-test-secret-value';
 const base = { DATABASE_URL: 'postgresql://u:p@127.0.0.1:1/x' };
@@ -347,5 +347,28 @@ describe('проверка OpenRouter перед проходом', () => {
   it('заголовки: ключ только когда задан', () => {
     expect(requestHeaders({ ...target, apiKey: '' })).toEqual({ 'Content-Type': 'application/json' });
     expect(requestHeaders(target).Authorization).toBe(`Bearer ${SECRET}`);
+  });
+  it('деньги для шапки: остаток и расход ключа, баланс счёта; подпись ключа не уходит, без /credits — счёта нет', async () => {
+    const key = () => json(200, { data: { label: 'sk-or-v1-abc...xyz', limit: 10, limit_remaining: 1.04, usage: 8.96, usage_daily: 0.37, usage_weekly: 7.84, usage_monthly: 8.15 } });
+    const full = fakeFetch({ '/key': key, '/credits': () => json(200, { data: { total_credits: 2210, total_usage: 2156.96 } }) });
+    const result = await fetchOpenRouterSpend(OPENROUTER_BASE_URL, SECRET, 1000, full.impl);
+    expect(result).toEqual({
+      ok: true,
+      spend: {
+        key: { limit: 10, remaining: 1.04, usage: 8.96, daily: 0.37, weekly: 7.84, monthly: 8.15 },
+        account: { credits: 2210, usage: 2156.96 },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('sk-or');
+
+    const noCredits = fakeFetch({ '/key': () => json(200, { data: { limit: null, limit_remaining: null } }), '/credits': () => json(403, {}) });
+    expect(await fetchOpenRouterSpend(OPENROUTER_BASE_URL, SECRET, 1000, noCredits.impl)).toMatchObject({
+      ok: true,
+      spend: { key: { limit: null, remaining: null, daily: null }, account: null },
+    });
+
+    const rejected = fakeFetch({ '/key': () => json(401, {}) });
+    const failed = await fetchOpenRouterSpend(OPENROUTER_BASE_URL, SECRET, 1000, rejected.impl);
+    expect(failed).toEqual({ ok: false, error: 'OpenRouter не принял ключ (HTTP 401)' });
   });
 });

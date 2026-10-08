@@ -350,6 +350,12 @@ export const formatMoney = (amount: number | string, currency: string | null = '
   return `${scaledAmount(value)}${NBSP}${unit}`;
 };
 
+const USD_FORMAT = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Доллары OpenRouter — с центами и без «млн»: «1,04 $», «53,04 $». Неизвестное — прочерк. */
+export const formatUsd = (amount: number | null): string =>
+  amount === null || !Number.isFinite(amount) ? '—' : `${USD_FORMAT.format(amount)}${NBSP}$`;
+
 /** Доля: «83 %». Неизвестное — прочерк. */
 export const formatPercent = (share: number | null): string =>
   share === null || !Number.isFinite(share) ? '—' : PERCENT_FORMAT.format(share);

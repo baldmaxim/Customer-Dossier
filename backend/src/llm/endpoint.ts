@@ -98,6 +98,67 @@ export const checkOpenRouterKey = async (
   }
 };
 
+/** Деньги OpenRouter для шапки портала: у ключа — лимит, остаток и расход по дням, у счёта — пополнено и потрачено. */
+export interface IOpenRouterSpend {
+  key: {
+    /** null — у ключа нет своего лимита, он тратит средства счёта. */
+    limit: number | null;
+    remaining: number | null;
+    usage: number | null;
+    daily: number | null;
+    weekly: number | null;
+    monthly: number | null;
+  };
+  /** null — OpenRouter не отдал баланс счёта этим ключом. */
+  account: { credits: number; usage: number } | null;
+}
+
+export type OpenRouterSpendResult = { ok: true; spend: IOpenRouterSpend } | { ok: false; error: string };
+
+const moneyOrNull = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+/**
+ * Остаток и расход — /key (по ключу) и /credits (по счёту, по возможности). Только числа: подпись ключа
+ * (label — его начало и конец) с сервера не уходит.
+ */
+export const fetchOpenRouterSpend = async (
+  baseUrl: string,
+  apiKey: string,
+  timeoutMs: number,
+  fetchImpl: FetchLike = fetch,
+): Promise<OpenRouterSpendResult> => {
+  const get = (path: string): Promise<Response> =>
+    fetchImpl(`${baseUrl}${path}`, { headers: requestHeaders({ apiKey }), signal: AbortSignal.timeout(timeoutMs) });
+  try {
+    const keyResponse = await get('/key');
+    if (keyResponse.status === 401) return { ok: false, error: 'OpenRouter не принял ключ (HTTP 401)' };
+    if (!keyResponse.ok) return { ok: false, error: `OpenRouter /key: HTTP ${keyResponse.status}` };
+    const key = ((await keyResponse.json()) as { data?: Record<string, unknown> }).data ?? {};
+    const creditsResponse = await get('/credits').catch(() => null);
+    const credits = creditsResponse?.ok
+      ? ((await creditsResponse.json()) as { data?: { total_credits?: unknown; total_usage?: unknown } }).data
+      : undefined;
+    const total = moneyOrNull(credits?.total_credits);
+    const used = moneyOrNull(credits?.total_usage);
+    return {
+      ok: true,
+      spend: {
+        key: {
+          limit: moneyOrNull(key.limit),
+          remaining: moneyOrNull(key.limit_remaining),
+          usage: moneyOrNull(key.usage),
+          daily: moneyOrNull(key.usage_daily),
+          weekly: moneyOrNull(key.usage_weekly),
+          monthly: moneyOrNull(key.usage_monthly),
+        },
+        account: total !== null && used !== null ? { credits: total, usage: used } : null,
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+};
+
 /**
  * Проверка перед проходом конвейера (worker.probeModel) и для экрана. Список моделей OpenRouter публичен
  * и о ключе ничего не говорит: без этой проверки запуски падали бы с 401/402, и после REPROCESS_RETRY_MAX

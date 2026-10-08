@@ -9,10 +9,11 @@ import { z } from 'zod';
 import { actorOfContext, LOCAL_CONTEXT } from '../auth/service.js';
 import { env } from '../config/env.js';
 import { OPENROUTER_BASE_URL } from '../config/llm.js';
-import { checkLlmConnection, modelProbeTimeoutMs } from '../llm/client.js';
-import { checkOpenRouterKey } from '../llm/endpoint.js';
+import { checkLlmConnection, llmTarget, modelProbeTimeoutMs } from '../llm/client.js';
+import { checkOpenRouterKey, fetchOpenRouterSpend, type IOpenRouterSpend } from '../llm/endpoint.js';
 import { clearLlmKey, loadStoredLlmKey, normalizeLlmKey, saveLlmKey } from '../settings/llmKey.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
+import { ttlCache } from '../utils/ttlCache.js';
 
 const keySchema = z.object({ key: z.string().max(1024) }).strict();
 
@@ -35,7 +36,31 @@ const sendSaveError = (res: Response, code: keyof typeof SAVE_ERRORS): void => {
   res.status(status).json({ error, code });
 };
 
+export type LlmSpendView =
+  | { available: true; spend: IOpenRouterSpend; checkedAt: string }
+  | { available: false; reason: 'not_openrouter' | 'no_key' | 'unreachable'; error: string | null };
+
+/**
+ * Деньги OpenRouter для шапки (08.10.2026): шапку видит каждая открытая вкладка оператора, поэтому ответ
+ * OpenRouter живёт минуту в памяти; смена ключа сбрасывает его сразу. Ошибка не запоминается.
+ */
+const spendCache = ttlCache<string, LlmSpendView>(
+  async () => {
+    const target = llmTarget();
+    if (target.provider !== 'openrouter') return { available: false, reason: 'not_openrouter', error: null };
+    if (target.apiKey === '') return { available: false, reason: 'no_key', error: null };
+    const result = await fetchOpenRouterSpend(target.baseUrl, target.apiKey, CHECK_TIMEOUT_MS);
+    if (!result.ok) return { available: false, reason: 'unreachable', error: result.error };
+    return { available: true, spend: result.spend, checkedAt: new Date().toISOString() };
+  },
+  { ttlMs: 60_000, max: 1, keyOf: () => 'spend' },
+);
+
 export const llmRouter = asyncRouter();
+
+llmRouter.get('/llm/spend', async (_req, res) => {
+  res.json(await spendCache.get('spend'));
+});
 
 llmRouter.get('/llm', async (_req, res) => {
   const key = await loadStoredLlmKey();
@@ -69,9 +94,12 @@ llmRouter.put('/llm/key', async (req, res) => {
     sendSaveError(res, saved.code);
     return;
   }
+  spendCache.clear();
   res.json({ key: saved.status, check: { verdict: check.verdict, error: check.error ?? null } });
 });
 
 llmRouter.delete('/llm/key', async (req, res) => {
-  res.json({ key: await clearLlmKey(actorOf(req)) });
+  const key = await clearLlmKey(actorOf(req));
+  spendCache.clear();
+  res.json({ key });
 });

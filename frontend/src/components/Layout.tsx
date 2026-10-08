@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useRouteFocus } from '../hooks/useRouteFocus';
 import { useTheme } from '../hooks/useTheme';
 import { BackBar } from './BackBar';
+import { LlmSpend } from './LlmSpend';
 import { inSection, navFor, type INavItem } from './navItems';
 import { NewsCounter } from './news/NewsCounter';
 import { Icon } from './ui/Icon';
@@ -78,6 +79,7 @@ export const Layout: FC<ILayoutProps> = ({ children }) => {
           </nav>
 
           <div className={styles.tools}>
+            <LlmSpend />
             <button type="button" className={styles.tool} onClick={toggle} aria-label={themeLabel} title={themeLabel}>
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size="md" />
             </button>

@@ -1495,6 +1495,26 @@ export interface ILlmKeySaved {
   check: { verdict: LlmKeyVerdict; error: string | null };
 }
 
+/** Деньги OpenRouter для шапки (GET /api/admin/llm/spend). Суммы — доллары, как их считает OpenRouter. */
+export interface IOpenRouterSpend {
+  key: {
+    /** null — у ключа нет своего лимита, он тратит средства счёта. */
+    limit: number | null;
+    remaining: number | null;
+    usage: number | null;
+    /** Расход за текущие сутки, неделю и месяц по UTC. */
+    daily: number | null;
+    weekly: number | null;
+    monthly: number | null;
+  };
+  /** null — OpenRouter не отдал баланс счёта этим ключом. */
+  account: { credits: number; usage: number } | null;
+}
+
+export type LlmSpendView =
+  | { available: true; spend: IOpenRouterSpend; checkedAt: string }
+  | { available: false; reason: 'not_openrouter' | 'no_key' | 'unreachable'; error: string | null };
+
 // ─── Контур.Фокус (ADR-015) ──────────────────────────────────────────────────
 
 /** Ключ Фокуса устроен как ключ OpenRouter: источник, четыре последних символа, кто и когда задал. */
