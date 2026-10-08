@@ -1,0 +1,41 @@
+/* «Сроки и продажи — ДОМ.РФ»: сведения слева, полосы (статусы, сдача по годам) справа, когда блок шире 40rem.
+   Ширина — блока, а не окна: в колонке «Сведений» он уже экрана. Уже — полосы под сведениями, отчёркнуты линией:
+   без отступа и черты они читались продолжением списка. */
+.section {
+  container-type: inline-size;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.facts {
+  min-width: 0;
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--sp-4) var(--sp-5);
+  align-content: start;
+  min-width: 0;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+@container (min-width: 40rem) {
+  .layout {
+    grid-template-columns: minmax(0, 3fr) minmax(14rem, 2fr);
+  }
+
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0;
+    padding-inline-start: var(--sp-4);
+    border-top: none;
+    border-inline-start: 1px solid var(--border);
+  }
+}
