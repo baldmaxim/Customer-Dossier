@@ -313,6 +313,19 @@ export const failDomRfTarget = async (id: number, error: string, attempts: numbe
 };
 
 /**
+ * Сайт не открыл страницу (защита Servicepipe, недоступность) — карточка ни при чём: аренда снимается без счёта
+ * попытки и без ошибки, карточка остаётся на своём месте в очереди. Иначе за время блокировки каждая ждущая
+ * карточка записывалась бы в ошибки и уходила в конец очереди.
+ */
+export const releaseDomRfTarget = async (id: number): Promise<void> => {
+  await query(
+    `UPDATE domrf_targets SET attempt_count = greatest(attempt_count - 1, 0), next_attempt_at = NULL, updated_at = now()
+     WHERE id = $1`,
+    [id],
+  );
+};
+
+/**
  * В последнем снимке объекта была строка «Генподрядчики». Её нет на странице у многих сданных домов, но если
  * она была и пропала — скорее недогрузилась страница: такой снимок перетёр бы генподрядчика в «Кто строит».
  */

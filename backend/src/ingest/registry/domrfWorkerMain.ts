@@ -25,7 +25,8 @@ const main = async (): Promise<void> => {
     setInterval(() => undefined, 3_600_000);
     return;
   }
-  startDomRfBrowserWorker(controller.signal);
+  // Зависший проход (браузер не вернул управление) — выход с ошибкой: restart: unless-stopped поднимет процесс заново.
+  startDomRfBrowserWorker(controller.signal, () => process.exit(1));
   console.log('[domrf] браузерный сбор ДОМ.РФ запущен: карточки из очереди, страницы застройщиков и групп, затем поиск компаний портала');
 };
 

@@ -45,6 +45,7 @@ import {
   failDomRfTarget,
   hadContractor,
   parseDomRfObjectUrl,
+  releaseDomRfTarget,
   requestRecaptureForDeveloper,
   listCapturedDomRfTargets,
   setDomRfTargetRefs,
@@ -98,10 +99,53 @@ const withPage = async <T>(fn: (page: Page) => Promise<T>): Promise<T> => {
   }
 };
 
+/**
+ * Сайт не пустил браузер: ответа нет вовсе или пришла пустая страница проверки Servicepipe (без заголовка и текста,
+ * cookie rndcaptcha). Так было 08.10.2026 с утра: каждая карточка падала по тайм-ауту. Капчу не обходим — ждём.
+ */
+export class DomRfUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DomRfUnavailableError';
+  }
+}
+
+/** Пауза всего работника, пока сайт не пускает: 15 мин, затем вдвое, не дольше 2 ч; удачная страница её снимает. */
+const BLOCK_PAUSE_MIN_MS = 15 * 60_000;
+const BLOCK_PAUSE_MAX_MS = 2 * 60 * 60_000;
+let blockPauseMs = 0;
+let pausedUntil = 0;
+
+const siteBlocked = (reason: string): DomRfUnavailableError => {
+  blockPauseMs = Math.min(BLOCK_PAUSE_MAX_MS, blockPauseMs ? blockPauseMs * 2 : BLOCK_PAUSE_MIN_MS);
+  pausedUntil = Date.now() + blockPauseMs;
+  return new DomRfUnavailableError(`сайт не открыл страницу (${reason}); работник ждёт ${Math.round(blockPauseMs / 60_000)} мин`);
+};
+
+/** Вызов страницы для диагностики — с пределом: у page.evaluate своего тайм-аута нет, зависшая вкладка держала бы проход. */
+const settleWithin = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([promise.catch(() => fallback), new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
+/** Пустая страница — проверка защиты, а не карточка. */
+const isBlankPage = async (page: Page): Promise<boolean> =>
+  !(await settleWithin(page.evaluate<boolean>('Boolean(document.title.trim() || document.body?.innerText.trim())'), 5_000, false));
+
 const open = async (page: Page, url: string): Promise<void> => {
-  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  let response;
+  try {
+    response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') throw siteBlocked('нет ответа 45 с');
+    throw err;
+  }
   if (response?.status() !== 200) throw new Error(`страница ДОМ.РФ ответила HTTP ${response?.status() ?? 'без ответа'}`);
-  await page.locator('h1').first().waitFor({ state: 'visible', timeout: 30_000 });
+  try {
+    await page.locator('h1').first().waitFor({ state: 'visible', timeout: 30_000 });
+  } catch (err) {
+    if (await isBlankPage(page)) throw siteBlocked('пустая страница проверки');
+    throw err;
+  }
+  blockPauseMs = 0;
 };
 
 /** Подписи характеристик на странице — без значений: причина ошибки видна в админке «Карточки». */
@@ -114,7 +158,7 @@ const captureObject = async (page: Page, target: Pick<IDomRfTarget, 'url' | 'ext
   try {
     await page.getByText('Количество квартир', { exact: true }).first().waitFor({ state: 'visible', timeout: 20_000 });
   } catch {
-    const labels = await page.evaluate<string[]>(CHARACTERISTIC_LABELS).catch(() => []);
+    const labels = await settleWithin(page.evaluate<string[]>(CHARACTERISTIC_LABELS), 5_000, []);
     throw new Error(`нет строки «Количество квартир»; характеристики на странице: ${labels.length ? labels.join(', ') : 'не найдены'}`);
   }
   // Строка генподрядчика бывает ниже характеристик и приходит позже; у многих сданных домов её нет вовсе.
@@ -263,7 +307,8 @@ const captureOne = async (page: Page, source: ISource, target: IDomRfTarget): Pr
     await setDomRfTargetRefs(target.externalRef, capture.developerRef ?? null, capture.groupRef ?? null);
     return { what, outcome: `${result.outcome}${developer ? ', застройщик с реквизитами' : ''}${note}` };
   } catch (err) {
-    await failDomRfTarget(target.id, message(err), target.attemptCount + 1);
+    if (err instanceof DomRfUnavailableError) await releaseDomRfTarget(target.id);
+    else await failDomRfTarget(target.id, message(err), target.attemptCount + 1);
     return { what, outcome: `ошибка: ${message(err)}` };
   }
 };
@@ -407,6 +452,8 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
       prefix.push({ what: 'связи с группами', outcome: `записано ${groups.linked}, снято ${groups.withdrawn}` });
     }
   }
+  // Сайт не пускает браузер — работа с базой выше идёт, страницы не открываются до конца паузы.
+  if (Date.now() < pausedUntil) return prefix;
   passNo += 1;
   // Каждый второй шаг (кроме шагов страниц застройщиков) — добор фото у снятых раньше объектов, пока такие есть.
   if (passNo % 2 === 1 && passNo % PAGES_EVERY !== 0) {
@@ -430,17 +477,32 @@ export const runDomRfBrowserPass = async (): Promise<IDomRfPassResult[]> => {
   return prefix;
 };
 
-/** Один обработчик на сервер: база выдаёт отдельную аренду для каждого процесса. */
-export const startDomRfBrowserWorker = (signal: AbortSignal): void => {
+/**
+ * Проход дольше этого — завис: после падения вкладки (Target crashed) или страницы проверки вызовы Playwright
+ * без своего тайм-аута не возвращаются, и флаг running молча останавливал работника на часы (06–08.10.2026).
+ * Самый длинный честный проход — три карточки со страницами застройщиков — укладывается в несколько минут.
+ */
+const PASS_HANG_MS = 15 * 60_000;
+
+/**
+ * Один обработчик на сервер: база выдаёт отдельную аренду для каждого процесса. onHang — что делать с зависшим
+ * проходом: отдельный процесс работника выходит, и Docker его перезапускает; внутри API — только запись в лог.
+ */
+export const startDomRfBrowserWorker = (signal: AbortSignal, onHang?: () => void): void => {
   let running = false;
   const tick = async (): Promise<void> => {
     if (running || signal.aborted) return;
     running = true;
+    const watchdog = setTimeout(() => {
+      console.error(`[domrf] проход идёт дольше ${PASS_HANG_MS / 60_000} мин — завис`);
+      onHang?.();
+    }, PASS_HANG_MS);
     try {
       for (const result of await runDomRfBrowserPass()) console.log(`[domrf] ${result.what}: ${result.outcome}`);
     } catch (err) {
       console.error('[domrf] проход упал:', message(err));
     } finally {
+      clearTimeout(watchdog);
       running = false;
     }
   };
