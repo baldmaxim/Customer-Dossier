@@ -152,14 +152,26 @@ const open = async (page: Page, url: string): Promise<void> => {
 const CHARACTERISTIC_LABELS = `[...document.querySelectorAll('[class*="CharacteristicsBlock__Row"] [class*="__Name"]')]
   .map(element => element.textContent.replace(/\\s+/g, ' ').trim()).filter(Boolean).slice(0, 12)`;
 
+/**
+ * У нежилых объектов (лофты, МФЦ, паркинги) строки «Количество квартир» нет — характеристики при этом загружены
+ * целиком: «Класс недвижимости, Сдача дома, …, Количество этажей» (08.10.2026, 24 карточки). Такой снимок — без квартир.
+ */
+const LOADED_WITHOUT_FLATS = 'Количество этажей';
+
 const captureObject = async (page: Page, target: Pick<IDomRfTarget, 'url' | 'externalRef'>): Promise<IDomRfBrowserCapture> => {
   await open(page, target.url);
-  await page.getByRole('button', { name: 'Все характеристики' }).click({ timeout: 20_000 });
+  const expand = page.getByRole('button', { name: 'Все характеристики' });
+  await expand.click({ timeout: 20_000 }).catch(async (err: unknown) => {
+    // Кнопки нет — короткая карточка, характеристики уже на странице: решает проверка подписей ниже.
+    if (await settleWithin(expand.count(), 5_000, 1)) throw err;
+  });
   try {
     await page.getByText('Количество квартир', { exact: true }).first().waitFor({ state: 'visible', timeout: 20_000 });
   } catch {
     const labels = await settleWithin(page.evaluate<string[]>(CHARACTERISTIC_LABELS), 5_000, []);
-    throw new Error(`нет строки «Количество квартир»; характеристики на странице: ${labels.length ? labels.join(', ') : 'не найдены'}`);
+    if (!labels.includes(LOADED_WITHOUT_FLATS)) {
+      throw new Error(`нет строки «Количество квартир»; характеристики на странице: ${labels.length ? labels.join(', ') : 'не найдены'}`);
+    }
   }
   // Строка генподрядчика бывает ниже характеристик и приходит позже; у многих сданных домов её нет вовсе.
   await page.getByText(/^Генподрядчики:/).first().waitFor({ state: 'attached', timeout: 5_000 }).catch(() => undefined);

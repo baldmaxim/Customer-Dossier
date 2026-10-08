@@ -12,7 +12,8 @@
       }))
       .filter(item => item.label && item.value),
   );
-  if (!characteristics.some(item => item.label === 'Количество квартир')) {
+  // У нежилого объекта квартир нет — тогда признак загруженных характеристик «Количество этажей».
+  if (!characteristics.some(item => item.label === 'Количество квартир' || item.label === 'Количество этажей')) {
     throw new Error('Сначала раскройте «Все характеристики» и дождитесь загрузки карточки');
   }
   const title = text(document.querySelector('h1'));
