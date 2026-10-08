@@ -7,9 +7,11 @@
 // по ключу названия (normalizeName, 'project'): точно или одно начинается с другого (как loadRegistryLookalikes).
 
 import { loadCompanyObjects } from '../api/companyObjects.js';
+import { env } from '../config/env.js';
 import { query, queryOne } from '../db/pool.js';
 import type { ISiteProject, SiteProjectStatus } from '../llm/siteProjects/schema.js';
-import { projectKey } from './projects.js';
+import { sitePhotoViews, type ISitePhotoView } from './photos.js';
+import { latestSitePages, projectKey } from './projects.js';
 
 /** «Новое» — впервые увиденное на сайте за столько дней и отсутствующее на портале. */
 export const NEW_PROJECT_DAYS = 90;
@@ -26,6 +28,8 @@ export interface ISiteProjectSighting {
   /** Самый ранний ответ модели с этим проектом по всем снимкам сайта. */
   firstSeenAt: string;
   host: string;
+  /** Фото проекта с этого сайта (photos.ts); null — не нашлось или ещё не скачано. */
+  photo: ISitePhotoView | null;
 }
 
 export interface IPortalObject {
@@ -49,6 +53,8 @@ export interface ICompanySiteProjectRow {
   isNew: boolean;
   /** Объект портала с тем же названием; null — на портале его нет. */
   match: IPortalObject | null;
+  /** Фото с сайта компании: GET /api/site-photos/:sourceId/:id. */
+  photo: ISitePhotoView | null;
 }
 
 const keysMatch = (a: string, b: string): boolean =>
@@ -73,7 +79,11 @@ export const classifyProjects = (sightings: readonly ISiteProjectSighting[], por
       continue;
     }
     const best = detail(s.project) > detail(known.project) ? s : known;
-    byKey.set(key, { ...best, firstSeenAt: s.firstSeenAt < known.firstSeenAt ? s.firstSeenAt : known.firstSeenAt });
+    byKey.set(key, {
+      ...best,
+      firstSeenAt: s.firstSeenAt < known.firstSeenAt ? s.firstSeenAt : known.firstSeenAt,
+      photo: best.photo ?? (best === s ? known.photo : s.photo),
+    });
   }
   const portalKeys = portal.map(o => ({ object: o, key: projectKey(o.name) })).filter(o => o.key !== '');
   const newSince = now.getTime() - NEW_PROJECT_DAYS * 24 * 60 * 60 * 1000;
@@ -93,6 +103,7 @@ export const classifyProjects = (sightings: readonly ISiteProjectSighting[], por
       firstSeenAt: s.firstSeenAt,
       isNew: match === null && new Date(s.firstSeenAt).getTime() >= newSince,
       match,
+      photo: s.photo,
     };
   });
   const rank = (r: ICompanySiteProjectRow): number => (r.isNew ? 0 : r.match === null ? 1 : 2);
@@ -129,7 +140,7 @@ interface ISiteRow {
 
 const toIso = (value: Date | string): string => (value instanceof Date ? value.toISOString() : value);
 
-export const loadCompanySiteProjects = async (companyId: number, now: Date = new Date()): Promise<ICompanySiteProjects> => {
+export const loadCompanySiteProjects = async (companyId: number, now: Date = new Date(), photoDir: string = env.SITE_PHOTO_DIR): Promise<ICompanySiteProjects> => {
   const sites = await query<ISiteRow>(
     `SELECT DISTINCT ON (k.source_id) k.host, k.url, k.source_id AS "sourceId", s.status, s.health,
             s.health_reason AS "healthReason", s.last_ok_at AS "lastOkAt"
@@ -157,22 +168,8 @@ export const loadCompanySiteProjects = async (companyId: number, now: Date = new
       pages: urls.length,
     });
     if (urls.length === 0) continue;
-    const pages = await query<{ id: number; url: string; title: string | null; fetchedAt: Date }>(
-      `SELECT DISTINCT ON (url) id, url, title, fetched_at AS "fetchedAt"
-       FROM company_site_pages WHERE source_id = $1 AND url = ANY($2::text[])
-       ORDER BY url, fetched_at DESC, id DESC`,
-      [site.sourceId, urls],
-    );
-    const latest = await query<{ pageId: number; projects: ISiteProject[] }>(
-      `SELECT DISTINCT ON (page_id) page_id AS "pageId", projects
-       FROM company_site_extractions WHERE page_id = ANY($1::bigint[]) AND outcome = 'ok'
-       ORDER BY page_id, created_at DESC, id DESC`,
-      [pages.map(p => p.id)],
-    );
-    const done = await query<{ pageId: number }>(`SELECT DISTINCT page_id AS "pageId" FROM company_site_extractions WHERE page_id = ANY($1::bigint[])`, [
-      pages.map(p => p.id),
-    ]);
-    waiting += pages.filter(p => !done.some(d => d.pageId === p.id)).length;
+    const pages = await latestSitePages(site.sourceId, urls);
+    waiting += pages.filter(p => !p.extracted).length;
     // «Впервые на сайте» — по всем принятым ответам по этому сайту, со всех снимков.
     const history = await query<{ projects: ISiteProject[]; createdAt: Date }>(
       `SELECT e.projects, e.created_at AS "createdAt"
@@ -189,9 +186,9 @@ export const loadCompanySiteProjects = async (companyId: number, now: Date = new
         if (!known || at < known) first.set(key, at);
       }
     }
+    const photos = sitePhotoViews(site.sourceId, photoDir);
     for (const page of pages) {
-      const answer = latest.find(l => l.pageId === page.id);
-      for (const project of answer?.projects ?? []) {
+      for (const project of page.projects ?? []) {
         sightings.push({
           project,
           pageUrl: page.url,
@@ -199,6 +196,7 @@ export const loadCompanySiteProjects = async (companyId: number, now: Date = new
           seenAt: toIso(page.fetchedAt),
           firstSeenAt: first.get(projectKey(project.name)) ?? toIso(page.fetchedAt),
           host: site.host,
+          photo: photos.get(projectKey(project.name)) ?? null,
         });
       }
     }

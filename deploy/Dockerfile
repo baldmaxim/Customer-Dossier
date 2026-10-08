@@ -32,9 +32,9 @@ COPY docs/migrations /app/docs/migrations
 # Воркер ДОМ.РФ читает выражение разбора DOM из backend/scripts во время работы. Сам браузер
 # в образ не входит (Playwright на Alpine не поддерживает Chromium): DOMRF_BROWSER_ENABLED=false.
 COPY backend/scripts ./scripts
-# Точка тома tg_photos: пустой именованный том при первом подключении получает владельца из образа —
-# без этого каталог принадлежит root, и API под node не может записать картинку.
-RUN mkdir -p /data/tg-photos && chown node:node /data/tg-photos
+# Точки томов tg_photos и site_photos: пустой именованный том при первом подключении получает владельца из
+# образа — без этого каталог принадлежит root, и API под node не может записать картинку.
+RUN mkdir -p /data/tg-photos /data/site-photos && chown node:node /data/tg-photos /data/site-photos
 USER node
 EXPOSE 4100
 CMD ["node", "dist/index.js"]

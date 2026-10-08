@@ -25,6 +25,7 @@ import { loadStoredFocusKey } from './settings/focusKey.js';
 import { startParserApiScheduler } from './parserApi/scheduler.js';
 import { loadStoredParserApiKey } from './settings/parserApiKey.js';
 import { runSiteCheckPass, runSiteSearchPass } from './companySites/search.js';
+import { runSitePhotoPass } from './companySites/photos.js';
 import { runSiteProjectsPass } from './companySites/projects.js';
 import { syncCompanySiteSources } from './companySites/sources.js';
 
@@ -58,6 +59,10 @@ const startIngestScheduler = (signal: AbortSignal): void => {
       // Подтверждённые до 25B сайты получают источник чтения (решение оператора уже было).
       const attached = await syncCompanySiteSources();
       if (attached > 0) console.log(`[company-site] сайтов поставлено в чтение: ${attached}`);
+      // Фото проектов с прочитанных сайтов: сеть к тем же сайтам — в тике сбора, без SITE_PHOTO_DIR — ничего.
+      for (const p of await runSitePhotoPass()) {
+        console.log(`[site-photo] ${p.host}: сохранено ${p.saved}, не удалось ${p.failed}${p.storageError ? ` — заметка не записана: ${p.storageError}` : ''}`);
+      }
       for (const c of checks) console.log(`[site-check] ${c.host}: ${c.check.status}${c.check.innOnPage ? ', ИНН на сайте' : ''}`);
     } catch (err) {
       console.error(`[ingest] проход упал: ${err instanceof Error ? err.message : String(err)}`);

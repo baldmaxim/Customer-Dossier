@@ -36,6 +36,7 @@ tginfo-api ─► адреса openrouter.ai ─awg0─► nl3 ─► OpenRouter
 | Резервные копии | `/opt/portals/tg-info/backups/tg_info-*.dump` | cron `/etc/cron.d/tginfo-backup`, 03:47, 14 дней |
 | Фото объектов ДОМ.РФ | том `tginfo_registry_photos` (`/data/photos` в `domrf` и `api`) | в копию не входят: снимаются с сайта заново (ADR-012 п. 35) |
 | Картинки постов Telegram | том `tginfo_tg_photos` (`/data/tg-photos` в `api`) | WebP до 1280 px, ~30–80 КБ; в копию не входят — оригинал в канале (ADR-007, дополнение 06.10.2026) |
+| Фото проектов с сайтов компаний | том `tginfo_site_photos` (`/data/site-photos` в `api`) | WebP до 1280 px и заметки `pages.json`/`photos.json` по номеру источника; в копию не входят — оригинал на сайте (08.10.2026) |
 | Туннель Telegram | `/etc/amnezia/amneziawg/awg0.conf`, `awg-quick@awg0` | клиент `amnezia-awg2` на nl3 |
 | Туннель модели | пользователь `llmtunnel`, `/etc/ssh/sshd_config.d/tginfo-llmtunnel.conf`, ufw на `br-tginfo` | ключ — с домашнего ПК |
 | Домашний ПК | `C:\ProgramData\tginfo\` (ключ, `known_hosts`, `llm-tunnel.ps1`), задача «TG_Info LLM tunnel» | держит туннель к LM Studio |

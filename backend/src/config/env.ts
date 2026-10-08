@@ -220,6 +220,10 @@ export const parseEnv = (source: EnvSource) => {
     SITE_PROJECTS_BATCH_SIZE: parsePositiveInt('SITE_PROJECTS_BATCH_SIZE', source.SITE_PROJECTS_BATCH_SIZE, 5),
     // Сколько символов страницы видит модель: каталог ЖК обычно в начале, хвост — подвал и формы.
     SITE_PROJECTS_INPUT_CHARS: parsePositiveInt('SITE_PROJECTS_INPUT_CHARS', source.SITE_PROJECTS_INPUT_CHARS, 12000),
+    // Фото проектов с сайтов компаний (08.10.2026): каталог сжатых копий (WebP, до 1280 px) и заметок о картинках
+    // прочитанных страниц. Пусто — картинки не запоминаются, не скачиваются и не отдаются. На сервере — том
+    // site_photos (deploy/docker-compose.yml). В резервную копию базы не входят: фото — не сведения, оригинал на сайте.
+    SITE_PHOTO_DIR: optional(source, 'SITE_PHOTO_DIR', ''),
     // Схема связей — ядро продукта, у неё свой флаг. false — маршрут /api/graph отключён.
     GRAPH_ENABLED: parseStrictBool('GRAPH_ENABLED', source.GRAPH_ENABLED, true),
     // Снимки досье и выгрузки (этап 08B). Экраны сняты с портала; API и данные целы.

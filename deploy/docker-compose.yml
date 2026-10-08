@@ -76,6 +76,8 @@ services:
       <<: *api-fixed
       # Фото публикаций Telegram (06.10.2026): сжатые копии картинок постов t.me/s/ — пишет и читает только api.
       TG_PHOTO_DIR: /data/tg-photos
+      # Фото проектов с сайтов компаний (08.10.2026): сжатые копии с подтверждённых сайтов — пишет и читает только api.
+      SITE_PHOTO_DIR: /data/site-photos
     # Сбор и разбор идут в процессе API: SIGTERM — и минута на то, чтобы закрыть транзакции.
     stop_grace_period: 60s
     depends_on:
@@ -87,10 +89,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    # Фото объектов только читает: снимает их работник ДОМ.РФ. Картинки Telegram пишет сам — при сборе каналов.
+    # Фото объектов только читает: снимает их работник ДОМ.РФ. Картинки Telegram и фото проектов с сайтов компаний
+    # пишет сам — при сборе.
     volumes:
       - registry_photos:/data/photos:ro
       - tg_photos:/data/tg-photos
+      - site_photos:/data/site-photos
     mem_limit: 448m
     networks: [internal]
 
@@ -133,6 +137,8 @@ volumes:
   registry_photos:
   # Картинки постов Telegram: вне базы и резервных копий, как фото ДОМ.РФ — не сведения, оригинал остаётся в канале.
   tg_photos:
+  # Фото проектов с сайтов компаний: так же вне базы и резервных копий — оригинал на сайте компании.
+  site_photos:
 
 networks:
   internal:

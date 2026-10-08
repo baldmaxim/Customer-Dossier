@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import type { SharpOptions } from 'sharp';
 
 import { env } from '../../config/env.js';
-import { NetworkPolicyError, safeFetchBytes, type SafeTransport } from '../../net/safeFetch.js';
+import { NetworkPolicyError, safeFetchBytes, type ISourceNetworkPolicy, type SafeTransport } from '../../net/safeFetch.js';
 import { loadSharp } from '../../utils/sharp.js';
 import { MAX_POST_IMAGES, TELEGRAM_CDN_POLICY, type ITelegramImage } from '../telegramWeb.js';
 
@@ -114,13 +114,22 @@ export const compressImage = async (input: Buffer): Promise<{ bytes: Buffer; wid
 
 const sleep = (ms: number): Promise<void> => (ms > 0 ? new Promise(resolve => setTimeout(resolve, ms)) : Promise.resolve());
 
-const describeError = (err: unknown): string => {
+export const describeImageError = (err: unknown): string => {
   if (err instanceof NetworkPolicyError) return `${err.kind}: ${err.message}`;
   return err instanceof Error ? err.message.slice(0, 200) : 'ошибка';
 };
 
-const downloadImage = async (url: string, userAgent: string, transport: SafeTransport | undefined): Promise<Buffer> => {
-  const res = await safeFetchBytes(url, TELEGRAM_CDN_POLICY, { headers: { 'user-agent': userAgent } }, transport ? { transport } : {});
+/**
+ * Картинка по адресу в пределах политики источника: ответ 200 с типом image/* (или без типа) и непустым телом.
+ * Общая для картинок постов и фото проектов с сайтов компаний (companySites/photos.ts).
+ */
+export const downloadImage = async (
+  url: string,
+  policy: ISourceNetworkPolicy,
+  headers: Record<string, string>,
+  transport: SafeTransport | undefined,
+): Promise<Buffer> => {
+  const res = await safeFetchBytes(url, policy, { headers }, transport ? { transport } : {});
   if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
   const type = String(res.headers['content-type'] ?? '');
   if (type !== '' && !type.toLowerCase().startsWith('image/')) throw new Error(`ответ ${type.split(';')[0]} — не картинка`);
@@ -166,7 +175,7 @@ export const savePostImages = async (
       requests += 1;
       const attempts = (before?.attempts ?? 0) + 1;
       try {
-        const compressed = await compressImage(await downloadImage(image.url, userAgent, options.transport));
+        const compressed = await compressImage(await downloadImage(image.url, TELEGRAM_CDN_POLICY, { 'user-agent': userAgent }, options.transport));
         fs.mkdirSync(itemDir(post.itemId, dir), { recursive: true });
         writeAtomic(imagePath(post.itemId, n, dir), compressed.bytes);
         byIndex.set(n, {
@@ -182,7 +191,7 @@ export const savePostImages = async (
         });
         stats.saved += 1;
       } catch (err) {
-        byIndex.set(n, { n, kind: image.kind, status: 'failed', attempts, width: null, height: null, bytes: null, sha256: null, error: describeError(err) });
+        byIndex.set(n, { n, kind: image.kind, status: 'failed', attempts, width: null, height: null, bytes: null, sha256: null, error: describeImageError(err) });
         stats.failed += 1;
       }
     }
@@ -197,7 +206,7 @@ export const savePostImages = async (
       writeAtomic(metaPath(post.itemId, dir), JSON.stringify(meta));
     } catch (err) {
       // Заметка не записалась — картинки поста доберутся заново при следующем чтении; сбор текста не прерывается.
-      stats.storageError = describeError(err);
+      stats.storageError = describeImageError(err);
     }
   }
   return stats;

@@ -41,3 +41,33 @@
   line-height: var(--lh-text);
   overflow-wrap: break-word;
 }
+
+/* Проект с фото с сайта: снимок слева, текст справа. Ширина снимка вне шкалы отступов — это размер картинки:
+   96px на телефоне оставляет тексту больше половины строки при 360px, 160px от 600px — как превью в списках. */
+.withPhoto {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+.photoLink {
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+.photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+
+@media (min-width: 600px) {
+  .withPhoto {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+}

@@ -2,7 +2,13 @@
 // главной с баллом, обход — на подменённом транспорте: проба ничего не пишет, сайт на одном JS — словами, сбой
 // одной страницы проектов — «частично», отзыв допуска во время записи — policy_blocked.
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { readSitePageImages } from '../../companySites/photos.js';
 
 import type { SafeTransport } from '../../net/safeFetch.js';
 import { setSiteTransportForTests } from '../sites/fetcher.js';
@@ -119,6 +125,25 @@ describe('обход сайта компании', () => {
     // /zhk-ostrov закрыт robots.txt — не запрашивался.
     expect(report.coverage).toMatchObject({ mode: 'company_site', robots: 'read', pages: [HOME, 'https://www.demo-stroy.ru/projects/'] });
     expect(saved[1]?.text).toContain('квартал «Берег»');
+  });
+
+  it('картинки прочитанных страниц — заметкой в каталоге фото (с флагом главной); проба её не пишет', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-pages-'));
+    try {
+      setSiteTransportForTests(transport);
+      routes.set(HOME, ok(HOME_HTML.replace('<main>', '<main><div><img src="/upload/ostrov.jpg"><b>ЖК «Остров»</b></div>')));
+      routes.set('https://www.demo-stroy.ru/projects/', ok(page('Проекты', '<meta property="og:image" content="/upload/all.jpg">Все проекты')));
+      await crawlCompanySite(source(), { dryRun: true }, async () => 'saved', noPause, dir);
+      expect(readSitePageImages(9, dir)).toBeNull();
+      await crawlCompanySite(source(), {}, async () => 'saved', noPause, dir);
+      const stored = readSitePageImages(9, dir);
+      expect(stored?.pages.map(p => [p.url, p.home, p.og, p.images.map(i => [i.url, i.caption])])).toEqual([
+        [HOME, true, null, [['https://www.demo-stroy.ru/upload/ostrov.jpg', 'ЖК «Остров»']]],
+        ['https://www.demo-stroy.ru/projects/', false, 'https://www.demo-stroy.ru/upload/all.jpg', []],
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('проба ничего не пишет; robots запрещает главную — blocked', async () => {

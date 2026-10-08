@@ -1,11 +1,12 @@
 // «С сайта компании» на вкладке «Объекты» (этап 25B, ADR-018): проекты, которые компания называет своими на
 // подтверждённом сайте, — с цитатой и страницей. Отмечено, чего на портале нет и что появилось недавно: так новый
 // объект Заказчика виден раньше, чем о нём напишут каналы или появится запись ДОМ.РФ. Это слова самой компании на
-// дату — не проверенный факт и не канон: карточки объектов из них не строятся.
+// дату — не проверенный факт и не канон: карточки объектов из них не строятся. Фото проекта — сжатая копия с портала
+// (сопоставлена по названию на сайте), а не ссылка на сайт: браузер читателя к третьим сайтам не ходит.
 
-import { FC } from 'react';
+import { FC, useState } from 'react';
 
-import type { ICompanySiteProjectRow, ICompanySiteRead } from '../../api/types';
+import type { ICompanySiteProjectRow, ICompanySiteRead, ISiteProjectPhoto } from '../../api/types';
 import { formatCount } from '../../lib/format';
 import { SITE_PROJECT_STATUS_LABELS, SOURCE_HEALTH_LABELS, formatDate, formatDateTime } from '../../lib/labels';
 import { describeLoadError } from '../../lib/loadError';
@@ -29,37 +30,59 @@ export const siteReadText = (site: ICompanySiteRead): string => {
   return site.status === 'active' ? 'ещё не прочитан — портал прочитает его в ближайшие минуты' : 'чтение на паузе';
 };
 
-const ProjectRow: FC<{ row: ICompanySiteProjectRow }> = ({ row }) => (
-  <li className={styles.item}>
-    <Cluster gap={2} align="center">
-      {row.match ? (
-        <ButtonLink to={`/projects/${row.match.projectId}`} variant="link" size="sm">
-          {row.name}
-        </ButtonLink>
-      ) : (
-        <span className={styles.host}>{row.name}</span>
+const sitePhotoUrl = (photo: ISiteProjectPhoto, thumb = false): string => `/api/site-photos/${photo.sourceId}/${photo.id}${thumb ? '?w=640' : ''}`;
+
+const ProjectRow: FC<{ row: ICompanySiteProjectRow }> = ({ row }) => {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photo = photoFailed ? null : row.photo;
+  return (
+    <li className={photo ? styles.withPhoto : undefined}>
+      {photo && (
+        <a className={styles.photoLink} href={sitePhotoUrl(photo)} target="_blank" rel="noreferrer noopener" aria-label={`Фото «${row.name}» с сайта ${row.host} — открыть крупно`}>
+          <img
+            className={styles.photo}
+            src={sitePhotoUrl(photo, true)}
+            alt=""
+            width={photo.width}
+            height={photo.height}
+            loading="lazy"
+            decoding="async"
+            onError={() => setPhotoFailed(true)}
+          />
+        </a>
       )}
-      {row.isNew && (
-        <Badge tone="accent" hint={`Впервые на сайте ${formatDate(row.firstSeenAt)}`}>
-          новое
-        </Badge>
-      )}
-      {!row.match && <Badge tone="info">нет на портале</Badge>}
-      {row.status !== 'unknown' && <Badge>{SITE_PROJECT_STATUS_LABELS[row.status]}</Badge>}
-      {row.completion && <Badge>сдача: {row.completion}</Badge>}
-    </Cluster>
-    <p className={styles.muted}>
-      {[row.city, row.address].filter(Boolean).join(', ')}
-      {row.city || row.address ? ' · ' : ''}
-      со страницы{' '}
-      <a href={row.pageUrl} target="_blank" rel="noreferrer noopener">
-        {row.pageTitle ?? row.host}
-      </a>{' '}
-      на {formatDate(row.seenAt)}
-    </p>
-    <p className={styles.quote}>«{row.quote}»</p>
-  </li>
-);
+      <div className={styles.item}>
+        <Cluster gap={2} align="center">
+          {row.match ? (
+            <ButtonLink to={`/projects/${row.match.projectId}`} variant="link" size="sm">
+              {row.name}
+            </ButtonLink>
+          ) : (
+            <span className={styles.host}>{row.name}</span>
+          )}
+          {row.isNew && (
+            <Badge tone="accent" hint={`Впервые на сайте ${formatDate(row.firstSeenAt)}`}>
+              новое
+            </Badge>
+          )}
+          {!row.match && <Badge tone="info">нет на портале</Badge>}
+          {row.status !== 'unknown' && <Badge>{SITE_PROJECT_STATUS_LABELS[row.status]}</Badge>}
+          {row.completion && <Badge>сдача: {row.completion}</Badge>}
+        </Cluster>
+        <p className={styles.muted}>
+          {[row.city, row.address].filter(Boolean).join(', ')}
+          {row.city || row.address ? ' · ' : ''}
+          со страницы{' '}
+          <a href={row.pageUrl} target="_blank" rel="noreferrer noopener">
+            {row.pageTitle ?? row.host}
+          </a>{' '}
+          на {formatDate(row.seenAt)}
+        </p>
+        <p className={styles.quote}>«{row.quote}»</p>
+      </div>
+    </li>
+  );
+};
 
 export const CompanySiteProjects: FC<{ companyId: number }> = ({ companyId }) => {
   const query = useSiteProjects(companyId);

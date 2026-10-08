@@ -3,10 +3,13 @@
 // (auth/routePolicy.ts): поиск стоит денег, а подтверждённый сайт в 25B станет источником.
 // Сети здесь нет: поиск ставит компанию в начало очереди, проверку делает проход в тике сбора.
 
+import fs from 'node:fs';
+
 import type { Response } from 'express';
 import { z } from 'zod';
 
 import { env } from '../config/env.js';
+import { sitePhotoFile } from '../companySites/photos.js';
 import { loadCompanySiteProjects } from '../companySites/readModel.js';
 import { siteSearchMode } from '../companySites/search.js';
 import {
@@ -20,6 +23,7 @@ import {
   requestSiteSearch,
   type CompanySitesFilter,
 } from '../companySites/store.js';
+import { parseThumbWidth, photoThumb } from '../registry/photoThumbs.js';
 import { asyncRouter } from '../utils/asyncRouter.js';
 import { actorOf } from './auth.js';
 
@@ -63,6 +67,39 @@ companySitesRouter.get('/companies/:id/site-projects', async (req, res) => {
     return;
   }
   res.json(await loadCompanySiteProjects(id));
+});
+
+/**
+ * Фото проекта с сайта компании (companySites/photos.ts): сжатая копия с портала, а не ссылка на сайт — браузер
+ * читателя к третьим сайтам не ходит. Кэш браузера — сутки, ETag — sha256 копии; ?w=640 — для строки списка.
+ */
+companySitesRouter.get('/site-photos/:sourceId/:photoId', async (req, res) => {
+  const sourceId = idOf(req.params.sourceId);
+  const photo = sourceId === null ? null : sitePhotoFile(sourceId, String(req.params.photoId));
+  if (!photo) {
+    res.status(404).json({ error: 'Фото нет' });
+    return;
+  }
+  const width = parseThumbWidth(req.query.w);
+  const etag = `"${photo.meta.sha256}${width ? `-w${width}` : ''}"`;
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('ETag', etag);
+  if (width) {
+    try {
+      res.type('image/webp').send(await photoThumb(photo.file, width));
+      return;
+    } catch (err) {
+      // Копия не получилась — отдаём файл как есть: строка без фото хуже тяжёлой.
+      console.warn(`[site-photo] уменьшенная копия ${photo.meta.id}: ${err instanceof Error ? err.message : String(err)}`);
+      res.setHeader('ETag', `"${photo.meta.sha256}"`);
+    }
+  }
+  res.type('image/webp');
+  fs.createReadStream(photo.file).on('error', () => res.destroy()).pipe(res);
 });
 
 companySitesRouter.get('/admin/company-sites/summary', async (_req, res) => {

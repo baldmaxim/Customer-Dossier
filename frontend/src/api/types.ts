@@ -2234,6 +2234,15 @@ export interface ICompanySiteProjectRow {
   isNew: boolean;
   /** Объект портала с тем же названием. */
   match: { projectId: number; name: string } | null;
+  /** Фото проекта с сайта — сжатая копия на портале (GET /api/site-photos/:sourceId/:id); null — не нашлось. */
+  photo: ISiteProjectPhoto | null;
+}
+
+export interface ISiteProjectPhoto {
+  sourceId: number;
+  id: string;
+  width: number;
+  height: number;
 }
 
 export interface ICompanySiteRead {

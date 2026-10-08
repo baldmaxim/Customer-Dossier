@@ -2,10 +2,14 @@
 // текста. Образец — обход реестра (ingest/registry/crawler.ts): тот же отчёт ICrawlReport, исходы запроса — те же
 // слова (403 — blocked, 429 — rate_limited, сеть — network), а не «на сайте ничего нет».
 //
+// Картинки страниц (og:image и картинки с подписью) запоминаются файлом рядом с фото проектов, а не в снимке: чьё это
+// фото, решает проход фото (companySites/photos.ts), когда модель назовёт проекты. Сбой записи чтения не меняет.
+//
 // Чего здесь нет намеренно: обхода сайта (глубина — одна ссылка от главной), выполнения JS (страница только на JS —
 // parser_degraded словами), записи в document_revisions (разбор публикаций extract@3 эти тексты не берёт).
 
 import { env } from '../../config/env.js';
+import { saveSitePageImages, sitePhotosEnabled } from '../../companySites/photos.js';
 import { pageText } from '../../companySites/verify.js';
 import { fetchSitePage, type SiteFetchResult } from '../sites/fetcher.js';
 import { fatalFromFetch, type ICrawlOptions, type ICrawlReport } from '../sites/crawler.js';
@@ -17,6 +21,7 @@ import {
   parseCompanySiteProfile,
   type ICompanySiteProfile,
 } from './profile.js';
+import { pageImages, type IPageImages } from './images.js';
 import { projectLinks } from './links.js';
 import { NO_RULES, parseRobots, robotsAllows, type IRobotsRules } from './robots.js';
 import { SiteCollectRevokedError, saveSitePage, type ISitePage, type SavePageOutcome } from './store.js';
@@ -41,6 +46,8 @@ export const crawlCompanySite = async (
   save: PageSaver = saveSitePage,
   /** Пауза между запросами; тесты подставляют мгновенную, чтобы не ждать delayMs. */
   pause: (ms: number) => Promise<void> = sleep,
+  /** Каталог фото сайтов: картинки страниц запоминаются только при заданном. */
+  photoDir: string = env.SITE_PHOTO_DIR,
 ): Promise<ICrawlReport> => {
   const report: ICrawlReport = {
     outcome: 'ok',
@@ -128,6 +135,9 @@ export const crawlCompanySite = async (
   }
 
   const pages: ISitePage[] = [{ url: home.finalUrl, title: main.title, text: main.text }];
+  const images = new Map<string, IPageImages>();
+  const withImages = sitePhotosEnabled(photoDir) && !dryRun;
+  if (withImages) images.set(home.finalUrl, pageImages(home.text, home.finalUrl, policy, true));
   const links = projectLinks(home.text, home.finalUrl, policy, maxPages - 1).filter(l => robotsAllows(rules, pathOf(l.url)));
   report.coverage.links = links.length;
   for (const link of links) {
@@ -144,6 +154,7 @@ export const crawlCompanySite = async (
     }
     const parsed = pageText(page.text);
     pages.push({ url: page.finalUrl, title: parsed.title, text: parsed.text });
+    if (withImages && !images.has(page.finalUrl)) images.set(page.finalUrl, pageImages(page.text, page.finalUrl, policy, false));
   }
 
   report.counts.found = pages.length;
@@ -174,6 +185,13 @@ export const crawlCompanySite = async (
     }
   }
   report.coverage.pages = read;
+  if (withImages) {
+    try {
+      saveSitePageImages(source.id, read.flatMap(url => images.get(url) ?? []), photoDir);
+    } catch (err) {
+      report.errors.push(`картинки страниц не записаны: ${err instanceof Error ? err.message.slice(0, 200) : 'ошибка'}`);
+    }
+  }
   if (report.counts.failed > 0) {
     report.outcome = 'partial';
     report.healthReason = `не прочитано страниц проектов: ${report.counts.failed}`;

@@ -89,13 +89,14 @@ describe('проход по страницам', () => {
 
 describe('сверка с порталом', () => {
   const now = new Date('2026-10-06T12:00:00Z');
-  const seen = (name: string, firstSeenAt: string, over: Partial<ISiteProject> = {}): ISiteProjectSighting => ({
+  const seen = (name: string, firstSeenAt: string, over: Partial<ISiteProject> = {}, photo: ISiteProjectSighting['photo'] = null): ISiteProjectSighting => ({
     project: p({ name, ...over }),
     pageUrl: 'https://demo.ru/projects',
     pageTitle: 'Проекты',
     seenAt: '2026-10-06T10:00:00Z',
     firstSeenAt,
     host: 'demo.ru',
+    photo,
   });
 
   it('совпадение по ключу точно или префиксом; новое — нет на портале и впервые ≤ 90 дней; дубль — подробнейший', () => {
@@ -120,5 +121,18 @@ describe('сверка с порталом', () => {
       ['ЖК «Остров»', false, 1],
     ]);
     expect(rows[1]?.firstSeenAt).toBe('2026-08-01T00:00:00Z');
+  });
+
+  it('фото проекта остаётся, даже если подробнейшая строка — с другой страницы, где фото нет', () => {
+    const photo = { sourceId: 3, id: '0123456789abcdef', width: 800, height: 600 };
+    const rows = classifyProjects(
+      [
+        seen('Символ', '2026-09-30T00:00:00Z', { status: 'unknown', completion: null }, photo),
+        seen('Квартал «Символ»', '2026-08-01T00:00:00Z', { status: 'completed', completion: '2024' }),
+      ],
+      [],
+      now,
+    );
+    expect(rows.map(r => [r.name, r.photo])).toEqual([['Квартал «Символ»', photo]]);
   });
 });

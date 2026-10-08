@@ -41,6 +41,38 @@ export const pagesToExtract = async (limit: number): Promise<IPageToExtract[]> =
     [limit, env.LMSTUDIO_MODEL, SITE_PROJECTS_PROMPT_VERSION],
   );
 
+export interface ILatestSitePage {
+  id: number;
+  url: string;
+  title: string | null;
+  fetchedAt: Date;
+  /** Проекты последнего принятого ответа модели; null — принятого ответа нет. */
+  projects: ISiteProject[] | null;
+  /** Модель страницу уже разбирала (с любым исходом). */
+  extracted: boolean;
+}
+
+/**
+ * Последний снимок каждого адреса сайта и последний принятый ответ модели о нём — одно правило для «С сайта
+ * компании» (readModel.ts) и фото проектов (photos.ts).
+ */
+export const latestSitePages = async (sourceId: number, urls: readonly string[]): Promise<ILatestSitePage[]> =>
+  urls.length === 0
+    ? []
+    : query<ILatestSitePage>(
+        `SELECT p.id, p.url, p.title, p.fetched_at AS "fetchedAt", e.projects,
+                EXISTS (SELECT 1 FROM company_site_extractions x WHERE x.page_id = p.id) AS extracted
+         FROM (SELECT DISTINCT ON (url) id, url, title, fetched_at
+               FROM company_site_pages WHERE source_id = $1 AND url = ANY($2::text[])
+               ORDER BY url, fetched_at DESC, id DESC) p
+         LEFT JOIN LATERAL (
+           SELECT projects FROM company_site_extractions
+           WHERE page_id = p.id AND outcome = 'ok'
+           ORDER BY created_at DESC, id DESC LIMIT 1) e ON true
+         ORDER BY p.url`,
+        [sourceId, urls],
+      );
+
 /** Ключ проекта для дублей и сравнения с порталом: «ЖК «Остров»» и «Остров» — один ключ. */
 export const projectKey = (name: string): string => normalizeName(name, 'project').key;
 

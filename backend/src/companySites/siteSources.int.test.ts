@@ -3,14 +3,22 @@
 // тот же хост у второй компании — тот же источник; «Отвязать» последнего — пауза и отзыв. Подтверждённые до 25B
 // получают источник проходом синхронизации. Снимок страницы — только при смене текста и только при допуске;
 // источник со снимками не удаляется. Проход модели берёт последний снимок страницы и пишет ответ строкой; карточка
-// сверяет проекты сайта с объектами компании. Сети и модели нет: ответ модели подставлен.
+// сверяет проекты сайта с объектами компании; фото проекта берётся по тому же ответу модели и видно в строке
+// проекта. Сети и модели нет: ответ модели и картинка подставлены.
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getPool } from '../db/pool.js';
 import { resetAndMigrate } from '../__tests__/integration/db.js';
 import { deleteSource } from '../ingest/sources.js';
 import { SiteCollectRevokedError, saveSitePage } from '../ingest/companySite/store.js';
+import type { SafeTransport } from '../net/safeFetch.js';
+import { runSitePhotoPass, saveSitePageImages } from './photos.js';
 import { SITE_PROJECTS_PG_DEPS, pagesToExtract, runSiteProjectsPass } from './projects.js';
 import { loadCompanySiteProjects } from './readModel.js';
 import { syncCompanySiteSources } from './sources.js';
@@ -120,6 +128,32 @@ describe('сайт компании — источник чтения', () => {
       ['ЖК «Остров-2»', false, 'ЖК Остров-2'],
     ]);
     expect(read.waiting).toBe(0);
+  });
+
+  it('фото проектов: проход берёт тот же ответ модели, что карточка; сохранённое фото — в строке проекта', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-photos-int-'));
+    try {
+      saveSitePageImages(sourceId, [
+        { url: HOME, home: true, og: null, images: [{ url: 'https://www.demo-stroy.ru/upload/ostrov.jpg', alt: 'ЖК «Остров»', caption: '' }] },
+        { url: PROJECTS, home: false, og: null, images: [{ url: 'https://www.demo-stroy.ru/upload/bereg.jpg', alt: '', caption: 'ЖК «Берег» скоро' }] },
+      ], dir);
+      const image = await sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
+      const calls: string[] = [];
+      const transport: SafeTransport = async url => {
+        calls.push(url.toString());
+        return { status: 200, headers: { 'content-type': 'image/jpeg' }, body: image };
+      };
+      expect(await runSitePhotoPass({ dir, transport, delayMs: 0 })).toEqual([{ sourceId, host: 'demo-stroy.ru', saved: 1, failed: 0 }]);
+      // «Остров» на главной модель не называла: его картинка ничья.
+      expect(calls).toEqual(['https://www.demo-stroy.ru/upload/bereg.jpg']);
+      const read = await loadCompanySiteProjects(alpha, new Date(), dir);
+      expect(read.projects.map(p => [p.name, p.photo ? `${p.photo.width}×${p.photo.height}` : null])).toEqual([
+        ['ЖК «Берег»', '800×600'],
+        ['ЖК «Остров-2»', null],
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('«Отвязать»: пока сайт подтверждён у другой компании — читается; отвязан последний — пауза и отзыв', async () => {

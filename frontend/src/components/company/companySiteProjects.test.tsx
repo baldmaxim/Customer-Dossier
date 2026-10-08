@@ -1,7 +1,7 @@
 // «С сайта компании» на вкладке «Объекты» (этап 25B): нет подтверждённого сайта — блока нет; проекты с отметками
 // «новое» и «нет на портале», совпавший — ссылкой на объект портала; сайт не прочитан — словами.
 
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ICompanySiteProjectRow, ICompanySiteProjects } from '../../api/types';
@@ -22,6 +22,7 @@ const row = (over: Partial<ICompanySiteProjectRow> = {}): ICompanySiteProjectRow
   firstSeenAt: '2026-10-01T10:00:00Z',
   isNew: true,
   match: null,
+  photo: null,
   ...over,
 });
 
@@ -44,6 +45,20 @@ describe('проекты с сайта компании', () => {
     expect(screen.getByRole('link', { name: 'ЖК «Остров»' }).getAttribute('href')).toBe('/projects/42');
     expect(screen.getByText('«ЖК «Берег» — скоро старт продаж»')).toBeTruthy();
     expect(screen.getByText(/Страниц ждут разбора: 1/)).toBeTruthy();
+  });
+
+  it('фото проекта — уменьшенная копия с портала ссылкой на крупное; не загрузилось — строка без фото', async () => {
+    const photo = { sourceId: 3, id: '0123456789abcdef', width: 800, height: 600 };
+    serve({ sites: [SITE], projects: [row({ photo }), row({ name: 'ЖК «Остров»' })], waiting: 0 });
+    renderWithProviders(<CompanySiteProjects companyId={7} />);
+    const link = await screen.findByRole('link', { name: 'Фото «ЖК «Берег»» с сайта demo.ru — открыть крупно' });
+    expect(link.getAttribute('href')).toBe('/api/site-photos/3/0123456789abcdef');
+    const img = link.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('/api/site-photos/3/0123456789abcdef?w=640');
+    expect(screen.queryByRole('link', { name: /Фото «ЖК «Остров»»/ })).toBeNull();
+    fireEvent.error(img!);
+    expect(screen.queryByRole('link', { name: /Фото «ЖК «Берег»»/ })).toBeNull();
+    expect(screen.getByText('ЖК «Берег»')).toBeTruthy();
   });
 
   it('подтверждённого сайта нет — блока нет; сайт не прочитан — словами с причиной', async () => {
