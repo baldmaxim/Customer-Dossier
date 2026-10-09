@@ -115,4 +115,11 @@ describe('сайт компании на карточке', () => {
     expect(await screen.findByText('сайт группы «ГК Демо»')).toBeTruthy();
     expect(screen.getByText('Сайт не искали: поиск сайтов выключен.')).toBeTruthy();
   });
+
+  it('поиск выключен — оператору «Искать сейчас» не предлагается, «Указать вручную» остаётся', async () => {
+    fakeApi([{ match: 'GET /api/companies/7/site', respond: () => ({ status: 200, body: body({ mode: 'off', candidates: [], search: null }) }) }]);
+    renderWithProviders(as(['portal.read', 'sources.manage'], <CompanySite companyId={7} companyName="ООО Демо" />));
+    expect(await screen.findByRole('button', { name: 'Указать вручную… — ООО Демо' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Искать (сейчас|снова)/ })).toBeNull();
+  });
 });

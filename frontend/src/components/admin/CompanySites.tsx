@@ -128,7 +128,7 @@ export const CompanySites: FC = () => {
                       searched={Boolean(row.search?.searchedAt)}
                       busy={actions.busy}
                       onManual={url => actions.manual(row.companyId, url)}
-                      onSearch={() => actions.search(row.companyId)}
+                      onSearch={list.mode === 'on' ? () => actions.search(row.companyId) : undefined}
                     />
                   )}
                 </Stack>

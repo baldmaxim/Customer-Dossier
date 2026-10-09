@@ -109,7 +109,7 @@ export const CompanySite: FC<{ companyId: number; companyName: string }> = ({ co
               searched={Boolean(data.search?.searchedAt)}
               busy={actions.busy}
               onManual={url => actions.manual(companyId, url)}
-              onSearch={() => actions.search(companyId)}
+              onSearch={data.mode === 'on' ? () => actions.search(companyId) : undefined}
             />
           )}
         </Stack>

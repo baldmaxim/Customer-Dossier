@@ -147,7 +147,8 @@ interface ISiteControlsProps {
   searched: boolean;
   busy: boolean;
   onManual: (url: string) => void;
-  onSearch: () => void;
+  /** Нет — поиск сайтов выключен на сервере: «Искать снова» только поставила бы компанию в очередь, которая не идёт. */
+  onSearch?: () => void;
 }
 
 /** «Искать снова» и «Указать вручную» — ярлычками: адрес оператора сразу становится сайтом компании. */
@@ -167,10 +168,12 @@ export const SiteControls: FC<ISiteControlsProps> = ({ companyName, searched, bu
         <Button variant="chip" onClick={() => setOpen(!open)} aria-expanded={open}>
           Указать вручную…<VisuallyHidden> — {companyName}</VisuallyHidden>
         </Button>
-        <Button variant="chip" disabled={busy} onClick={onSearch}>
-          {searched ? 'Искать снова' : 'Искать сейчас'}
-          <VisuallyHidden> — {companyName}</VisuallyHidden>
-        </Button>
+        {onSearch && (
+          <Button variant="chip" disabled={busy} onClick={onSearch}>
+            {searched ? 'Искать снова' : 'Искать сейчас'}
+            <VisuallyHidden> — {companyName}</VisuallyHidden>
+          </Button>
+        )}
       </Cluster>
       {open && (
         <form onSubmit={submit}>
